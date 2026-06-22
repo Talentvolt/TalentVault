@@ -1,0 +1,538 @@
+{% extends "layouts/recruiter_base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}Edit Job{% else %}Post a New Job{% endif %} | TalentVault{% endblock %}
+
+{% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<!-- Tagify CSS -->
+<link href="https://cdn.jsdelivr.net/npm/@yaireo/tagify/dist/tagify.css" rel="stylesheet" type="text/css" />
+<style>
+    .ck-editor__editable { min-height: 300px; }
+    .select2-container--bootstrap-5 .select2-selection { border-radius: 0.375rem; min-height: 38px; display: flex; align-items: center; }
+    .card { border-radius: 12px; }
+    .form-label { font-weight: 600; color: #444; }
+    .invalid-feedback { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'frontend:jobs' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Jobs</a>
+    <h3 class="fw-bold mt-2 m-0">{% if object %}Edit Job{% else %}Post a New Job{% endif %}</h3>
+</div>
+
+{% if form.errors %}
+<div class="alert alert-danger shadow-sm border-0 mb-4">
+    <h6 class="fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>Please fix the following errors:</h6>
+    <ul class="mb-0">
+        {% for field, errors in form.errors.items %}
+            {% for error in errors %}
+                <li><strong>{{ field|title }}:</strong> {{ error }}</li>
+            {% endfor %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <form method="POST" enctype="multipart/form-data" id="jobForm">
+            {% csrf_token %}
+            
+            <!-- Basic Info Card -->
+            <div class="card p-4 border-0 shadow-sm mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-info-circle me-2"></i>Basic Information</h5>
+                
+                <div class="mb-3">
+                    <label class="form-label">Job Title <span class="text-danger">*</span></label>
+                    <select name="title" id="id_title" class="form-select select2-title {% if form.title.errors %}is-invalid{% endif %}" required>
+                        {% if object %}<option value="{{ object.title }}" selected>{{ object.title }}</option>{% endif %}
+                    </select>
+                    {% if form.title.errors %}<div class="invalid-feedback d-block">{{ form.title.errors.0 }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Client Company</label>
+                    <select name="client" id="id_client" class="form-select {% if form.client.errors %}is-invalid{% endif %}">
+                        <option value="" {% if not object.client %}selected{% endif %}>Select Client (Optional)</option>
+                        {% for choice in form.fields.client.queryset %}
+                            <option value="{{ choice.id }}" {% if object.client.id == choice.id or form.client.value == choice.id or form.initial.client == choice.id %}selected{% endif %}>{{ choice.company_name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.client.errors %}<div class="invalid-feedback d-block">{{ form.client.errors.0 }}</div>{% endif %}
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Location <span class="text-danger">*</span></label>
+                        <select name="location" id="id_location" class="form-select select2-location {% if form.location.errors %}is-invalid{% endif %}" required>
+                            {% if object %}<option value="{{ object.location }}" selected>{{ object.location }}</option>{% endif %}
+                        </select>
+                        {% if form.location.errors %}<div class="invalid-feedback d-block">{{ form.location.errors.0 }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Job Type</label>
+                        <select name="job_type" class="form-select {% if form.job_type.errors %}is-invalid{% endif %}">
+                            <option value="FULL_TIME" {% if object.job_type == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
+                            <option value="PART_TIME" {% if object.job_type == 'PART_TIME' %}selected{% endif %}>Part Time</option>
+                            <option value="CONTRACT" {% if object.job_type == 'CONTRACT' %}selected{% endif %}>Contract</option>
+                            <option value="FREELANCE" {% if object.job_type == 'FREELANCE' %}selected{% endif %}>Freelance</option>
+                            <option value="REMOTE" {% if object.job_type == 'REMOTE' %}selected{% endif %}>Remote</option>
+                        </select>
+                        {% if form.job_type.errors %}<div class="invalid-feedback d-block">{{ form.job_type.errors.0 }}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Requirements Card -->
+            <div class="card p-4 border-0 shadow-sm mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-briefcase me-2"></i>Experience & Skills</h5>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Min Experience (Years)</label>
+                        <select name="min_experience" id="id_min_experience" class="form-select select2-exp {% if form.min_experience.errors %}is-invalid{% endif %}">
+                            {% for i in "x"|ljust:"31" %}
+                                <option value="{{ forloop.counter0 }}" {% if object.min_experience == forloop.counter0 %}selected{% endif %}>{{ forloop.counter0 }} Year{% if forloop.counter0 != 1 %}s{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.min_experience.errors %}<div class="invalid-feedback d-block">{{ form.min_experience.errors.0 }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Max Experience (Years)</label>
+                        <select name="max_experience" id="id_max_experience" class="form-select select2-exp {% if form.max_experience.errors %}is-invalid{% endif %}">
+                            {% for i in "x"|ljust:"30" %}
+                                <option value="{{ forloop.counter }}" {% if object.max_experience == forloop.counter %}selected{% endif %}>{{ forloop.counter }} Year{% if forloop.counter != 1 %}s{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.max_experience.errors %}<div class="invalid-feedback d-block">{{ form.max_experience.errors.0 }}</div>{% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Assets Required</label>
+                    <input name="assets_required" id="assets_required_tags" class="form-control {% if form.assets_required.errors %}is-invalid{% endif %}" value="{% if object %}{{ object.assets_required|join:',' }}{% endif %}">
+                    <div class="form-text">Press enter after each asset (e.g. Bike, Laptop)</div>
+                    {% if form.assets_required.errors %}<div class="invalid-feedback d-block">{{ form.assets_required.errors.0 }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Skills Required</label>
+                    <input name="skills_tags" id="skills_tags" class="form-control {% if form.skills_tags.errors %}is-invalid{% endif %}" value="{{ initial.skills_tags|default:'' }}">
+                    <div class="form-text">Press enter after each skill (e.g. Python, React)</div>
+                    {% if form.skills_tags.errors %}<div class="invalid-feedback d-block">{{ form.skills_tags.errors.0 }}</div>{% endif %}
+                </div>
+            </div>
+
+            <!-- Compensation Card -->
+            <div class="card p-4 border-0 shadow-sm mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-currency-dollar me-2"></i>Compensation (LPA)</h5>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Currency</label>
+                        <input type="text" name="currency" class="form-control" value="INR" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Min Salary</label>
+                        <select name="min_salary" id="id_min_salary" class="form-select salary-select select2-salary {% if form.min_salary.errors %}is-invalid{% endif %}">
+                            {% for choice in salary_choices %}
+                                <option value="{{ choice.value }}" {% if object.min_salary == choice.value %}selected{% endif %}>{{ choice.label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.min_salary.errors %}<div class="invalid-feedback d-block">{{ form.min_salary.errors.0 }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Max Salary</label>
+                        <select name="max_salary" id="id_max_salary" class="form-select salary-select select2-salary {% if form.max_salary.errors %}is-invalid{% endif %}">
+                            {% for choice in salary_choices %}
+                                <option value="{{ choice.value }}" {% if object.max_salary == choice.value %}selected{% endif %}>{{ choice.label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.max_salary.errors %}<div class="invalid-feedback d-block">{{ form.max_salary.errors.0 }}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Description Card -->
+            <div class="card p-4 border-0 shadow-sm mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-justify-left me-2"></i>Job Description</h5>
+                
+                <div class="mb-4">
+                    <label class="form-label">Upload JD/Resume for Matching</label>
+                    <input type="file" name="jd_file" id="jd_file_input" class="form-control" accept=".pdf,.docx,.txt">
+                    <div class="form-text">Uploading a JD helps our AI suggest the best matching candidates.</div>
+                    
+                    <!-- New Preview Controls -->
+                    <div id="file_preview_controls" class="mt-3 d-none">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <button type="button" id="btn_preview_file" class="btn btn-sm btn-info text-white" data-bs-toggle="modal" data-bs-target="#previewModal"><i class="bi bi-eye"></i> Preview File</button>
+                            <button type="button" id="btn_remove_file" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Remove</button>
+                        </div>
+                        <div class="p-3 bg-light rounded border border-light">
+                            <div class="fw-bold small text-secondary mb-1">File Name: <span id="meta_file_name" class="text-dark"></span></div>
+                            <div class="fw-bold small text-secondary mb-1">Size: <span id="meta_file_size" class="text-dark"></span></div>
+                            <div class="fw-bold small text-secondary mb-0 d-none" id="meta_file_pages_container">Pages: <span id="meta_file_pages" class="text-dark"></span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Detailed Description <span class="text-danger">*</span></label>
+                    <textarea name="description" id="description_editor" class="form-control {% if form.description.errors %}is-invalid{% endif %}">{{ object.description|default:'' }}</textarea>
+                    {% if form.description.errors %}<div class="invalid-feedback d-block">{{ form.description.errors.0 }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mb-5">
+                <button type="submit" name="draft" class="btn btn-outline-secondary px-4 py-2">Save as Draft</button>
+                <button type="submit" name="publish" class="btn btn-primary px-5 py-2 fw-bold">Publish Job</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Preview Modal -->
+    <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header bg-light">
+            <h5 class="modal-title fw-bold" id="previewModalLabel"><i class="bi bi-file-earmark-text me-2"></i>File Preview</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body bg-secondary bg-opacity-10 text-center p-4" id="preview_content_area">
+              <!-- Preview rendered here -->
+          </div>
+          <div class="modal-footer bg-light">
+            <a href="#" id="btn_download_preview" class="btn btn-primary" download><i class="bi bi-download me-2"></i> Download</a>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column Helper -->
+    <div class="col-lg-4">
+        <div class="card p-4 border-0 bg-white shadow-sm sticky-top" style="top: 20px;">
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-lightbulb"></i> Tips for a great job post</h6>
+            <ul class="text-sm text-secondary ps-3 mb-0">
+                <li class="mb-3">Use a clear job title that candidates actually search for.</li>
+                <li class="mb-3">Mention specific responsibilities to filter out unqualified applicants.</li>
+                <li class="mb-3">Highlight unique benefits and company culture.</li>
+                <li>Adding skills as tags improves the accuracy of our AI matching engine.</li>
+            </ul>
+            
+            <hr class="my-4">
+            
+            <div id="matching_candidates_preview" class="mt-2">
+                <h6 class="fw-bold mb-3">AI Match Preview</h6>
+                <div class="text-center py-4 bg-light rounded-3">
+                    <i class="bi bi-stars text-primary fs-3 d-block mb-2"></i>
+                    <p class="small text-muted mb-0">Fill in details or upload JD to see matching candidates.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- jQuery, Select2, Tagify, CKEditor -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@yaireo/tagify"></script>
+<script src="https://cdn.ckeditor.com/ckeditor5/36.0.1/classic/ckeditor.js"></script>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<!-- Mammoth.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    $(document).ready(function() {
+        const jdInput = document.getElementById('jd_file_input');
+        const controls = document.getElementById('file_preview_controls');
+        const nameMeta = document.getElementById('meta_file_name');
+        const sizeMeta = document.getElementById('meta_file_size');
+        const pagesMetaContainer = document.getElementById('meta_file_pages_container');
+        const pagesMeta = document.getElementById('meta_file_pages');
+        const previewArea = document.getElementById('preview_content_area');
+        const btnRemove = document.getElementById('btn_remove_file');
+        const btnDownload = document.getElementById('btn_download_preview');
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function resetPreview() {
+            controls.classList.add('d-none');
+            nameMeta.textContent = '';
+            sizeMeta.textContent = '';
+            pagesMetaContainer.classList.add('d-none');
+            previewArea.innerHTML = '';
+            btnDownload.removeAttribute('href');
+        }
+
+        if (jdInput) {
+            jdInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    controls.classList.remove('d-none');
+                    nameMeta.textContent = file.name;
+                    sizeMeta.textContent = formatBytes(file.size);
+                    pagesMetaContainer.classList.add('d-none');
+                    previewArea.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+                    
+                    const objectUrl = URL.createObjectURL(file);
+                    btnDownload.href = objectUrl;
+                    btnDownload.download = file.name;
+
+                    const fileType = file.name.split('.').pop().toLowerCase();
+                    const reader = new FileReader();
+
+                    if (fileType === 'pdf') {
+                        reader.onload = function() {
+                            const typedarray = new Uint8Array(this.result);
+                            pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                                pagesMetaContainer.classList.remove('d-none');
+                                pagesMeta.textContent = pdf.numPages;
+                                previewArea.innerHTML = ''; 
+                                
+                                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                                    pdf.getPage(pageNum).then(function(page) {
+                                        const scale = 1.5;
+                                        const viewport = page.getViewport({scale: scale});
+                                        const canvas = document.createElement('canvas');
+                                        const ctx = canvas.getContext('2d');
+                                        canvas.height = viewport.height;
+                                        canvas.width = viewport.width;
+                                        canvas.className = 'mb-3 shadow-sm bg-white';
+                                        canvas.style.maxWidth = '100%';
+                                        
+                                        const renderContext = {
+                                            canvasContext: ctx,
+                                            viewport: viewport
+                                        };
+                                        previewArea.appendChild(canvas);
+                                        page.render(renderContext);
+                                    });
+                                }
+                            }).catch(function() {
+                                previewArea.innerHTML = '<div class="alert alert-danger">Error rendering PDF</div>';
+                            });
+                        };
+                        reader.readAsArrayBuffer(file);
+                    } else if (fileType === 'docx') {
+                        reader.onload = function(event) {
+                            const arrayBuffer = event.target.result;
+                            mammoth.convertToHtml({arrayBuffer: arrayBuffer})
+                                .then(function(result) {
+                                    previewArea.innerHTML = '<div class="bg-white p-4 text-start shadow-sm mx-auto" style="max-width: 800px;">' + result.value + '</div>';
+                                })
+                                .catch(function() {
+                                    previewArea.innerHTML = '<div class="alert alert-danger">Error rendering DOCX</div>';
+                                });
+                        };
+                        reader.readAsArrayBuffer(file);
+                    } else if (fileType === 'txt') {
+                        reader.onload = function(event) {
+                            previewArea.innerHTML = '<pre class="bg-white p-4 text-start shadow-sm mx-auto overflow-auto" style="max-width: 800px; white-space: pre-wrap; font-family: inherit;">' + event.target.result + '</pre>';
+                        };
+                        reader.readAsText(file);
+                    } else {
+                        previewArea.innerHTML = '<div class="alert alert-warning">Preview not available for this file type.</div>';
+                    }
+                } else {
+                    resetPreview();
+                }
+            });
+
+            btnRemove.addEventListener('click', function() {
+                jdInput.value = '';
+                resetPreview();
+            });
+        }
+
+        const jobTitles = [
+            {
+                text: 'IT & SOFTWARE',
+                children: [
+                    { id: 'Software Engineer', text: 'Software Engineer' },
+                    { id: 'Full Stack Developer', text: 'Full Stack Developer' },
+                    { id: 'MERN Stack Developer', text: 'MERN Stack Developer' },
+                    { id: 'MEAN Stack Developer', text: 'MEAN Stack Developer' },
+                    { id: 'Python Developer', text: 'Python Developer' },
+                    { id: 'Java Developer', text: 'Java Developer' },
+                    { id: 'React Developer', text: 'React Developer' },
+                    { id: 'DevOps Engineer', text: 'DevOps Engineer' },
+                    { id: 'Data Scientist', text: 'Data Scientist' },
+                    { id: 'QA Engineer', text: 'QA Engineer' }
+                ]
+            },
+            {
+                text: 'SALES',
+                children: [
+                    { id: 'Sales Executive', text: 'Sales Executive' },
+                    { id: 'Sales Manager', text: 'Sales Manager' },
+                    { id: 'Business Development Executive', text: 'Business Development Executive' }
+                ]
+            },
+            {
+                text: 'HR',
+                children: [
+                    { id: 'HR Executive', text: 'HR Executive' },
+                    { id: 'HR Manager', text: 'HR Manager' },
+                    { id: 'Recruiter', text: 'Recruiter' },
+                    { id: 'Talent Acquisition Specialist', text: 'Talent Acquisition Specialist' }
+                ]
+            },
+            {
+                text: 'MARKETING',
+                children: [
+                    { id: 'Digital Marketing Executive', text: 'Digital Marketing Executive' },
+                    { id: 'SEO Executive', text: 'SEO Executive' },
+                    { id: 'Social Media Manager', text: 'Social Media Manager' }
+                ]
+            },
+            {
+                text: 'PHARMA',
+                children: [
+                    { id: 'Pharmacist', text: 'Pharmacist' },
+                    { id: 'Medical Representative', text: 'Medical Representative' },
+                    { id: 'Clinical Research Associate', text: 'Clinical Research Associate' }
+                ]
+            },
+            {
+                text: 'HEALTHCARE',
+                children: [
+                    { id: 'Doctor', text: 'Doctor' },
+                    { id: 'Nurse', text: 'Nurse' },
+                    { id: 'Lab Technician', text: 'Lab Technician' }
+                ]
+            },
+            {
+                text: 'CIVIL',
+                children: [
+                    { id: 'Civil Engineer', text: 'Civil Engineer' },
+                    { id: 'Site Engineer', text: 'Site Engineer' }
+                ]
+            },
+            {
+                text: 'MECHANICAL',
+                children: [
+                    { id: 'Mechanical Engineer', text: 'Mechanical Engineer' },
+                    { id: 'Design Engineer', text: 'Design Engineer' }
+                ]
+            }
+        ];
+
+        $('.select2-title').select2({
+            theme: 'bootstrap-5',
+            tags: true,
+            data: jobTitles,
+            placeholder: 'Search or type job title...',
+            width: '100%'
+        });
+
+        $('.select2-location').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Search for city, district or state...',
+            width: '100%',
+            tags: true,
+            ajax: {
+                url: '{% url "frontend:location_search" %}',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term
+                    };
+                },
+                processResults: function (data) {
+                    return {
+                        results: data.results
+                    };
+                },
+                cache: true
+            },
+            minimumInputLength: 2
+        });
+
+        $('.select2-exp').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select years',
+            width: '100%'
+        });
+
+        $('.select2-salary').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select salary',
+            width: '100%'
+        });
+
+        // Initialize Tagify for Assets
+        var assetsInput = document.querySelector('#assets_required_tags');
+        if (assetsInput) {
+            new Tagify(assetsInput, {
+                whitelist: ["Bike", "Driving License", "Aadhaar Card", "PAN Card", "Laptop"],
+                dropdown: {
+                    maxItems: 20,
+                    classname: "tags-look",
+                    enabled: 0,
+                    closeOnSelect: false
+                },
+                originalInputValueFormat: valuesArr => valuesArr.map(item => item.value).join(','),
+                transformTag: function(tagData) {
+                    var val = tagData.value.toLowerCase();
+                    var cleanVal = tagData.value.replace(/^[🏍🪪📄🚗📱💻✏️]\s*/, '');
+                    if (val.includes('bike')) tagData.value = '🏍 ' + cleanVal;
+                    else if (val.includes('driving license') || val.includes('license')) tagData.value = '🪪 ' + cleanVal;
+                    else if (val.includes('aadhaar') || val.includes('pan card') || val.includes('passport')) tagData.value = '📄 ' + cleanVal;
+                    else if (val.includes('vehicle') || val.includes('car')) tagData.value = '🚗 ' + cleanVal;
+                    else if (val.includes('phone') || val.includes('mobile')) tagData.value = '📱 ' + cleanVal;
+                    else if (val.includes('laptop')) tagData.value = '💻 ' + cleanVal;
+                    else if (!tagData.value.match(/^[🏍🪪📄🚗📱💻✏️]/)) tagData.value = '✏️ ' + tagData.value;
+                }
+            });
+        }
+
+        // Initialize Tagify for Skills
+        var input = document.querySelector('#skills_tags');
+        new Tagify(input, {
+            whitelist: ["Python", "Java", "React", "Node.js", "SQL", "AWS", "Docker", "Machine Learning"],
+            dropdown: {
+                maxItems: 20,
+                classname: "tags-look",
+                enabled: 0,
+                closeOnSelect: false
+            }
+        });
+
+        // Initialize CKEditor
+        ClassicEditor
+            .create(document.querySelector('#description_editor'), {
+                toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote', '|', 'undo', 'redo']
+            })
+            .then(editor => {
+                if (!editor.getData()) {
+                    editor.setData(`
+                        <h3>Responsibilities</h3><ul><li>...</li></ul>
+                        <h3>Requirements</h3><ul><li>...</li></ul>
+                        <h3>Skills Required</h3><ul><li>...</li></ul>
+                        <h3>Benefits</h3><ul><li>...</li></ul>
+                        <h3>About Company</h3><p>...</p>
+                    `);
+                }
+            })
+            .catch(error => { console.error(error); });
+    });
+</script>
+{% endblock %}

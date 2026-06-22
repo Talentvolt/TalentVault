@@ -1,0 +1,96 @@
+from django.urls import path
+from .views import (
+    DashboardView,
+    RoleRedirectView,
+    CandidateDashboardView,
+    RecruiterDashboardView,
+    AdminDashboardView,
+    JobsView,
+    JobCreateView,
+    JobUpdateView,
+    JobDeleteView,
+    LocationSearchView,
+    CandidateSearchView,
+    CandidateDetailView,
+    CandidateUpdateView,
+    CandidateDeleteView,
+    CandidateRejectView,
+    AddToPipelineView,
+    PublicCandidateProfileView,
+    ATSPipelineView,
+    UpdateApplicationStageView,
+    UpdateApplicationStageDirectView,
+    CompleteTaskView,
+    InterviewsView,
+    InterviewCalendarEventsView,
+    AnalyticsView,
+    SettingsView,
+    JobActionView,
+    ResumeParserView,
+    EmailCampaignsView,
+    ExportCandidatesView,
+    ExportJobsView,
+    ExportInterviewsView,
+    CandidateJSONEditView,
+    CandidateAIAssistView,
+    CandidateVersionRollbackView,
+    CandidateDuplicateView,
+    CandidateExportPDFView,
+    CandidateResumePreviewView,
+    CandidateResumeDownloadView,
+    PublicCandidateResumePreviewView,
+    PublicCandidateResumeDownloadView
+)
+
+app_name = 'frontend'
+
+urlpatterns = [
+    path('', RoleRedirectView.as_view(), name='dashboard'),
+    path('dashboard/candidate/', CandidateDashboardView.as_view(), name='candidate_dashboard'),
+    path('dashboard/recruiter/', RecruiterDashboardView.as_view(), name='recruiter_dashboard'),
+    path('dashboard/recruiter/complete-task/', CompleteTaskView.as_view(), name='complete_task'),
+    path('dashboard/admin/', AdminDashboardView.as_view(), name='admin_dashboard'),
+    
+    path('jobs/', JobsView.as_view(), name='jobs'),
+    path('jobs/new/', JobCreateView.as_view(), name='job_create'),
+    path('jobs/<uuid:pk>/edit/', JobUpdateView.as_view(), name='job_edit'),
+    path('jobs/<uuid:pk>/delete/', JobDeleteView.as_view(), name='job_delete'),
+    path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
+    
+    path('location-search/', LocationSearchView.as_view(), name='location_search'),
+    
+    path('candidates/', CandidateSearchView.as_view(), name='candidate_search'),
+    path('candidates/<uuid:pk>/', CandidateDetailView.as_view(), name='candidate_detail'),
+    path('candidates/<uuid:pk>/edit/', CandidateUpdateView.as_view(), name='candidate_edit'),
+    path('candidates/<uuid:id>/delete/', CandidateDeleteView.as_view(), name='candidate_delete'),
+    path('candidates/<uuid:pk>/reject/', CandidateRejectView.as_view(), name='candidate_reject'),
+    path('candidates/<uuid:pk>/add-to-pipeline/', AddToPipelineView.as_view(), name='add_to_pipeline'),
+    
+    # Resume Intelligence API Endpoints
+    path('candidates/<uuid:pk>/edit-json/', CandidateJSONEditView.as_view(), name='candidate_edit_json'),
+    path('candidates/<uuid:pk>/ai-improve/', CandidateAIAssistView.as_view(), name='candidate_ai_improve'),
+    path('candidates/<uuid:pk>/rollback/', CandidateVersionRollbackView.as_view(), name='candidate_rollback'),
+    path('candidates/<uuid:pk>/duplicates/', CandidateDuplicateView.as_view(), name='candidate_duplicates'),
+    path('candidates/<uuid:pk>/export/', CandidateExportPDFView.as_view(), name='candidate_export_pdf'),
+    
+    # Resume Preview & Download
+    path('candidates/<uuid:pk>/resume/preview/', CandidateResumePreviewView.as_view(), name='candidate_resume_preview'),
+    path('candidates/<uuid:pk>/resume/download/', CandidateResumeDownloadView.as_view(), name='candidate_resume_download'),
+    
+    path('share/candidate/<uuid:pk>/', PublicCandidateProfileView.as_view(), name='public_candidate_profile'),
+    path('share/candidate/<uuid:pk>/resume-preview/', PublicCandidateResumePreviewView.as_view(), name='share_resume_preview'),
+    path('share/candidate/<uuid:pk>/resume-download/', PublicCandidateResumeDownloadView.as_view(), name='share_resume_download'),
+    path('pipeline/', ATSPipelineView.as_view(), name='ats_pipeline'),
+    path('pipeline/update-stage/', UpdateApplicationStageView.as_view(), name='update_application_stage'),
+    path('pipeline/update-stage/<uuid:app_id>/', UpdateApplicationStageDirectView.as_view(), name='update_application_stage_direct'),
+    path('interviews/', InterviewsView.as_view(), name='interviews'),
+    path('interviews/events/', InterviewCalendarEventsView.as_view(), name='interview_calendar_events'),
+    path('analytics/', AnalyticsView.as_view(), name='analytics'),
+    path('settings/', SettingsView.as_view(), name='settings'),
+    path('resume-parser/', ResumeParserView.as_view(), name='resume_parser'),
+    path('email-campaigns/', EmailCampaignsView.as_view(), name='email_campaigns'),
+    
+    path('export/candidates/', ExportCandidatesView.as_view(), name='export_candidates'),
+    path('export/jobs/', ExportJobsView.as_view(), name='export_jobs'),
+    path('export/interviews/', ExportInterviewsView.as_view(), name='export_interviews'),
+]

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Job | TalentVault{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'frontend:jobs' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Jobs</a>
+    <h3 class="fw-bold mt-2 m-0">Delete Job</h3>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card p-4 border-0 shadow-sm">
+            <p>Are you sure you want to delete the job <strong>"{{ object.title }}"</strong>?</p>
+            <form method="POST">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Confirm Delete</button>
+                <a href="{% url 'frontend:jobs' %}" class="btn btn-outline-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

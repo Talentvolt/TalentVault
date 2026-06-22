@@ -1,0 +1,80 @@
+{% extends "layouts/recruiter_base.html" %}
+
+{% block title %}Resume Parser | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold m-0">Advanced Resume Parser</h3>
+    <p class="text-secondary small m-0">Fast extraction & duplicate detection</p>
+</div>
+
+<div class="row g-4">
+    <!-- Single/Bulk Upload -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white border-bottom fw-bold py-3">
+                <i class="bi bi-file-earmark-arrow-up me-2 text-primary"></i>Upload Resumes
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-4 text-center p-5 border-2 border-dashed rounded-3 bg-light">
+                        <i class="bi bi-cloud-upload fs-1 text-secondary mb-2"></i>
+                        <h6>Select PDF, DOCX or ZIP</h6>
+                        <input type="file" name="resume" class="form-control mt-3" accept=".pdf,.docx">
+                        <div class="form-text mt-2">Maximum file size: 10MB</div>
+                    </div>
+
+                    <div class="mb-4 text-center p-4 border rounded bg-primary bg-opacity-10">
+                        <h6>Bulk Upload (ZIP)</h6>
+                        <input type="file" name="resumes_zip" class="form-control mt-2" accept=".zip">
+                        <div class="form-text mt-2 text-primary">Upload up to 100+ resumes in a single ZIP.</div>
+                    </div>
+
+                    <div class="form-check form-switch mb-4">
+                        <input class="form-check-input" type="checkbox" name="overwrite" id="overwriteSwitch">
+                        <label class="form-check-label fw-bold" for="overwriteSwitch">Overwrite existing profiles</label>
+                        <div class="form-text">If checked, existing candidates with same Email/Mobile will be updated. Otherwise, they will be skipped and logged.</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-3 fw-bold">
+                        <i class="bi bi-lightning-charge me-2"></i> Start Parsing
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extraction Info -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0 bg-dark text-white h-100">
+            <div class="card-header border-bottom border-secondary fw-bold py-3">
+                <i class="bi bi-info-circle me-2"></i>Extraction Engine
+            </div>
+            <div class="card-body p-4">
+                <p class="small text-secondary">Our parser extracts the following fields automatically:</p>
+                <div class="row g-2">
+                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Name & Contact</span></div>
+                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Skills & Expertise</span></div>
+                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Experience Years</span></div>
+                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Current CTC</span></div>
+                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Notice Period</span></div>
+                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Location</span></div>
+                </div>
+                
+                <hr class="border-secondary my-4">
+                
+                <h6 class="fw-bold"><i class="bi bi-shield-check me-2 text-success"></i>Duplicate Policy</h6>
+                <p class="small text-secondary mb-0">System checks for unique <strong>Email</strong> and <strong>Mobile Number</strong> before creating records.</p>
+                <div class="mt-3 p-3 rounded bg-secondary bg-opacity-25 border border-secondary">
+                    <div class="d-flex justify-content-between">
+                        <span class="small">Total Duplicates Found Today:</span>
+                        <span class="fw-bold">{{ duplicates_found_today|default:"0" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

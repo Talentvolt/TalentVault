@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Job Management | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold m-0"><i class="bi bi-briefcase me-2"></i>Job Management</h3>
+    <div class="d-flex gap-2">
+        <div class="btn-group">
+            <button class="btn btn-light border btn-sm">Active ({{ active_count|default:0 }})</button>
+            <button class="btn btn-light border btn-sm">Draft ({{ draft_count|default:0 }})</button>
+            <button class="btn btn-light border btn-sm">On Hold ({{ on_hold_count|default:0 }})</button>
+        </div>
+        <a href="{% url 'frontend:job_create' %}" class="btn btn-primary btn-sm px-3"><i class="bi bi-plus-lg me-1"></i> Post New Job</a>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4 py-3">Job Title</th>
+                        <th class="py-3">Client / Company</th>
+                        <th class="py-3">Salary Range</th>
+                        <th class="py-3 text-center">Applications</th>
+                        <th class="py-3">Status</th>
+                        <th class="pe-4 py-3 text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold">{{ job.title }}</div>
+                            <div class="text-secondary x-small">{{ job.location }} | {{ job.get_job_type_display }}</div>
+                        </td>
+                        <td><span class="small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</span></td>
+                        <td><span class="small fw-medium">{{ job.currency }} {{ job.min_salary|floatformat:0 }} - {{ job.max_salary|floatformat:0 }}</span></td>
+                        <td class="text-center">
+                            <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="badge bg-primary bg-opacity-10 text-primary text-decoration-none">
+                                {{ job.app_count|default:0 }} Apps
+                            </a>
+                        </td>
+                        <td>
+                            {% if job.status == 'ACTIVE' %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Open</span>
+                            {% elif job.status == 'DRAFT' %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">Draft</span>
+                            {% elif job.status == 'ON_HOLD' %}
+                                <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1">On Hold</span>
+                            {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">{{ job.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-end">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                                    <li><a class="dropdown-item py-2" href="{% url 'frontend:job_edit' job.id %}"><i class="bi bi-pencil me-2"></i> Edit</a></li>
+                                    <li>
+                                        <form method="POST" action="{% url 'frontend:job_action' job.id 'clone' %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item py-2 text-primary"><i class="bi bi-copy me-2"></i> Clone</button>
+                                        </form>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% if job.status != 'CLOSED' %}
+                                    <li>
+                                        <form method="POST" action="{% url 'frontend:job_action' job.id 'close' %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item py-2 text-warning"><i class="bi bi-slash-circle me-2"></i> Close Job</button>
+                                        </form>
+                                    </li>
+                                    {% endif %}
+                                    <li>
+                                        <form method="POST" action="{% url 'frontend:job_delete' job.id %}" onsubmit="return confirm('Are you sure you want to delete this job?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item py-2 text-danger"><i class="bi bi-trash me-2"></i> Delete</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-secondary">No jobs found. Start by posting a new job.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

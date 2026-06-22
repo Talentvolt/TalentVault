@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Edit Candidate | TalentVault{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'frontend:candidate_detail' object.id %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Profile</a>
+    <h3 class="fw-bold mt-2 m-0">Edit Candidate Profile</h3>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card p-4 border-0 shadow-sm">
+            <form method="POST">
+                {% csrf_token %}
+                {{ form|crispy }}
+                <div class="d-flex justify-content-end gap-2 border-top pt-4 mt-4">
+                    <a href="{% url 'frontend:candidate_detail' object.id %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary px-4">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

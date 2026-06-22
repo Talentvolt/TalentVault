@@ -1,0 +1,33 @@
+# Local env file containing database credentials
+.env
+
+# Virtual environment folder
+venv/
+venv_windows/
+ENV/
+env/
+
+# Django media and static collected files
+media/
+static_collected/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database files
+db.sqlite3
+db_backup.sqlite3
+*.db
+*.sqlite
+
+# IDE configs
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

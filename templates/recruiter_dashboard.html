@@ -1,0 +1,328 @@
+{% extends "layouts/recruiter_base.html" %}
+
+{% block title %}Recruiter Dashboard | TalentVault{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        cursor: pointer;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+        border-color: rgba(37, 99, 235, 0.3) !important;
+    }
+    .clickable-row-item {
+        transition: background-color 0.15s ease;
+    }
+    .clickable-row-item:hover {
+        background-color: rgba(243, 244, 246, 0.7);
+    }
+    .hover-success:hover {
+        color: #198754 !important;
+    }
+    .task-complete-btn {
+        transition: transform 0.1s ease;
+    }
+    .task-complete-btn:hover {
+        transform: scale(1.15);
+    }
+
+    /* Modern pill button like LinkedIn/Notion */
+    .modern-add-btn {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        padding: 8px 24px !important;
+        border-radius: 50px !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .modern-add-btn:hover, .modern-add-btn:focus {
+        background-color: #1d4ed8 !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+        transform: translateY(-1px) !important;
+    }
+    .modern-add-btn::after {
+        display: inline-block;
+        margin-left: 0.255em;
+        vertical-align: 0.255em;
+        content: "";
+        border-top: 0.3em solid;
+        border-right: 0.3em solid transparent;
+        border-bottom: 0;
+        border-left: 0.3em solid transparent;
+    }
+
+    /* Custom Dropdown styling */
+    .custom-dropdown-menu {
+        z-index: 9999 !important;
+        position: absolute !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+        border-radius: 12px !important;
+        width: 240px !important;
+        margin-top: 10px !important; /* Margin below the button */
+        border: 1px solid rgba(0, 0, 0, 0.05) !important;
+        padding: 8px 0 !important;
+        background-color: #ffffff !important;
+    }
+    .custom-dropdown-item {
+        padding: 10px 20px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: #374151 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        transition: all 0.2s ease !important;
+        border-radius: 0 !important;
+        border: none !important;
+        background: transparent !important;
+    }
+    .custom-dropdown-item:hover {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+    }
+    .bg-purple { background-color: #6f42c1 !important; color: white !important; }
+    .bg-teal { background-color: #20c997 !important; color: white !important; }
+    .bg-dark-green { background-color: #0f5132 !important; color: white !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Dashboard Header -->
+<div class="d-flex justify-content-between align-items-center mb-4 position-relative">
+    <div>
+        <h3 class="fw-bold m-0">Recruiter Dashboard</h3>
+        <p class="text-secondary small mb-0">ATS Overview & Action Center</p>
+    </div>
+    
+    <!-- Top Center Add Button -->
+    <div class="position-absolute start-50 translate-middle-x" style="z-index: 9999;">
+        <div class="dropdown">
+            <button class="btn modern-add-btn dropdown-toggle" type="button" id="topAddDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                + Add
+            </button>
+            <ul class="dropdown-menu custom-dropdown-menu border-0" aria-labelledby="topAddDropdown">
+                <li><a class="dropdown-item custom-dropdown-item" href="{% url 'frontend:job_create' %}">📄 Post Job</a></li>
+                <li><a class="dropdown-item custom-dropdown-item" href="{% url 'frontend:resume_parser' %}">📂 Bulk Resume Upload</a></li>
+                <li><a class="dropdown-item custom-dropdown-item" href="{% url 'frontend:resume_parser' %}">📑 Parse Resume</a></li>
+                <li><a class="dropdown-item custom-dropdown-item" href="{% url 'frontend:candidate_search' %}">👤 Add Candidate</a></li>
+                <li><a class="dropdown-item custom-dropdown-item" href="{% url 'frontend:interviews' %}">📅 Schedule Interview</a></li>
+                <li><a class="dropdown-item custom-dropdown-item" href="{% url 'frontend:email_campaigns' %}">📧 Send Email Campaign</a></li>
+            </ul>
+        </div>
+    </div>
+    
+    <div>
+        <span class="text-secondary small fw-medium"><i class="bi bi-clock me-1"></i> {{ timezone_now|date:"l, F d, Y" }}</span>
+    </div>
+</div>
+
+<!-- Top Row Widgets -->
+<div class="row g-4 mb-4">
+    <!-- 1. Total Interviews -->
+    <div class="col-lg-4 col-md-6">
+        <div class="card dashboard-card shadow-sm border-0 rounded-3" style="height: 380px;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar-event me-2 text-primary"></i> Total Interviews <span class="badge bg-primary bg-opacity-10 text-primary ms-2">{{ total_interviews_count }}</span></span>
+                <a href="{% url 'frontend:interviews' %}" class="text-primary text-decoration-none small fw-medium">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="card-body py-2 px-3" style="overflow-y: auto; height: calc(100% - 60px);">
+                {% for interview in upcoming_interviews %}
+                <a href="{% url 'frontend:interviews' %}" class="text-decoration-none text-dark d-block clickable-row-item rounded p-2">
+                    <div class="d-flex align-items-start gap-3 py-1">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded p-2 text-center" style="width: 48px; min-width: 48px;">
+                            <div class="x-small fw-bold text-uppercase">{{ interview.start_time|date:"M" }}</div>
+                            <div class="fs-5 fw-bold leading-none">{{ interview.start_time|date:"d" }}</div>
+                        </div>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="fw-bold text-truncate small">{{ interview.application.candidate.full_name|default:interview.application.candidate.user.email }}</div>
+                            <div class="text-secondary text-truncate x-small">{{ interview.application.job.title }}</div>
+                            <div class="text-muted x-small mt-1">
+                                <i class="bi bi-clock me-1"></i> {{ interview.start_time|date:"H:i" }} | <span class="badge bg-light text-dark border">{{ interview.get_interview_type_display }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
+                    <i class="bi bi-calendar-x fs-1 text-secondary mb-2"></i>
+                    <p class="text-secondary small mb-0">No interviews scheduled</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 2. My Tasks -->
+    <div class="col-lg-4 col-md-6">
+        <div class="card dashboard-card shadow-sm border-0 rounded-3" style="height: 380px;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-check2-square me-2 text-success"></i> My Tasks</span>
+                <a href="{% url 'frontend:candidate_search' %}" class="text-success text-decoration-none small fw-medium">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="card-body py-2 px-3" style="overflow-y: auto; height: calc(100% - 60px);">
+                {% for task in recruiter_tasks %}
+                <div class="d-flex align-items-center gap-3 py-3 border-bottom clickable-row-item px-2 rounded">
+                    <div class="flex-shrink-0">
+                        <form method="POST" action="{% url 'frontend:complete_task' %}" class="m-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="task_type" value="{{ task.task_type }}">
+                            <input type="hidden" name="object_id" value="{{ task.object_id }}">
+                            <button type="submit" class="btn btn-sm btn-link p-0 text-secondary task-complete-btn" title="Mark Task Complete">
+                                <i class="bi bi-circle fs-5 hover-success"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <div class="fw-bold text-truncate small">{{ task.title }}</div>
+                        <div class="text-secondary text-truncate x-small">{{ task.subtitle }}</div>
+                    </div>
+                    <div class="flex-shrink-0 text-end">
+                        <span class="badge {{ task.badge_class }} rounded px-2 py-1 x-small">{{ task.badge }}</span>
+                        <div class="text-muted x-small mt-1">{{ task.due }}</div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
+                    <i class="bi bi-check-all fs-1 text-success mb-2"></i>
+                    <p class="text-secondary small mb-0">No tasks left! You are all caught up.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 3. Mails From Candidates -->
+    <div class="col-lg-4 col-md-12">
+        <div class="card dashboard-card shadow-sm border-0 rounded-3" style="height: 380px;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-envelope me-2 text-info"></i> Mails From Candidates</span>
+                <a href="{% url 'frontend:email_campaigns' %}" class="text-info text-decoration-none small fw-medium">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="card-body py-2 px-3" style="overflow-y: auto; height: calc(100% - 60px);">
+                {% for mail in candidate_mails %}
+                <a href="{% url 'frontend:email_campaigns' %}" class="text-decoration-none text-dark d-block clickable-row-item rounded p-2 border-bottom">
+                    <div class="d-flex align-items-start gap-3 py-1">
+                        <div class="avatar-sm bg-info text-white rounded-circle p-2 text-center" style="width: 32px; height: 32px; line-height: 16px; min-width: 32px;">
+                            {{ mail.recipient_email|slice:":1"|upper }}
+                        </div>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-truncate small">{{ mail.recipient_email }}</span>
+                                <span class="text-muted x-small">{{ mail.created_at|date:"M d" }}</span>
+                            </div>
+                            <div class="text-dark fw-medium text-truncate small">{{ mail.subject }}</div>
+                            <div class="text-secondary text-truncate x-small">{{ mail.body }}</div>
+                        </div>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
+                    <i class="bi bi-mailbox fs-1 text-secondary mb-2"></i>
+                    <p class="text-secondary small mb-0">No emails from candidates found</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Row Widgets -->
+<div class="row g-4">
+    <!-- 4. Applicant Status (Pipeline) -->
+    <div class="col-lg-4 col-md-6">
+        <div class="card dashboard-card shadow-sm border-0 rounded-3" style="height: 380px;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-kanban me-2 text-warning"></i> Applicant Status (Pipeline)</span>
+                <a href="{% url 'frontend:ats_pipeline' %}" class="text-warning text-decoration-none small fw-medium">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="card-body py-2 px-3" style="overflow-y: auto; height: calc(100% - 60px);">
+                {% for item in pipeline_counts %}
+                <a href="{% url 'frontend:ats_pipeline' %}" class="text-decoration-none text-dark d-block clickable-row-item rounded px-2 py-2 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold small">{{ item.label }}</span>
+                        <span class="badge {{ item.badge_class }} rounded-pill small">{{ item.count }}</span>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar {{ item.badge_class }}" role="progressbar" style="width: {% if item.count > 0 %}100%{% else %}0%{% endif %};" aria-valuenow="{% if item.count > 0 %}100{% else %}0{% endif %}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 5. Job Applicants -->
+    <div class="col-lg-4 col-md-6">
+        <div class="card dashboard-card shadow-sm border-0 rounded-3" style="height: 380px;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-briefcase me-2 text-danger"></i> Job Applicants</span>
+                <a href="{% url 'frontend:jobs' %}" class="text-danger text-decoration-none small fw-medium">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="card-body py-2 px-3" style="overflow-y: auto; height: calc(100% - 60px);">
+                {% for job in job_applicants %}
+                <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="text-decoration-none text-dark d-block clickable-row-item rounded p-2 border-bottom">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="overflow-hidden">
+                            <div class="fw-bold text-truncate small">{{ job.title }}</div>
+                            <div class="text-secondary text-truncate x-small"><i class="bi bi-geo-alt me-1"></i> {{ job.location }} | {% if job.is_remote %}Remote{% else %}On-Site{% endif %} | Avg ATS Score: <span class="fw-bold text-primary">{{ job.avg_ats_score|floatformat:0|default:"0" }}%</span></div>
+                        </div>
+                        <div class="text-end flex-shrink-0">
+                            <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-2 small fw-bold">{{ job.applicant_count }} Applicants</span>
+                            <div class="text-muted x-small mt-1">Status: Active</div>
+                        </div>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5">
+                    <i class="bi bi-folder-x fs-1 text-secondary mb-2"></i>
+                    <p class="text-secondary small mb-0">No active jobs found</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 6. Referrals -->
+    <div class="col-lg-4 col-md-12">
+        <div class="card dashboard-card shadow-sm border-0 rounded-3" style="height: 380px;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-person-check me-2 text-secondary"></i> Referrals</span>
+                <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none small fw-medium">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="card-body py-2 px-3" style="overflow-y: auto; height: calc(100% - 60px);">
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-4">
+                    <div class="fs-1 text-secondary mb-2"><i class="bi bi-people"></i></div>
+                    <h3 class="fw-bold text-dark">{{ referrals_count|default:"0" }}</h3>
+                    <p class="text-secondary small">Total Candidate Referrals</p>
+                    <div class="mt-3 p-3 bg-light rounded-3 w-100 border text-start">
+                        <div class="d-flex justify-content-between mb-2 x-small">
+                            <span class="text-secondary">Pending Referral Checks:</span>
+                            <span class="fw-bold">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between x-small">
+                            <span class="text-secondary">Referrals Converted to Hires:</span>
+                            <span class="fw-bold text-success">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dynamic Auto-Refresh Counts from Database every 30 seconds
+    setTimeout(function() {
+        location.reload();
+    }, 30000);
+</script>
+{% endblock %}

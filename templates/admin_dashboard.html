@@ -1,0 +1,92 @@
+{% extends "layouts/admin_base.html" %}
+
+{% block title %}Admin Dashboard | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold m-0">Admin Control Center</h3>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card p-3 border-bottom border-primary border-4 shadow-sm h-100 text-center">
+            <p class="text-secondary text-sm fw-medium text-uppercase mb-1">Total Users</p>
+            <h2 class="fw-bold m-0 text-primary">{{ total_users|default:"0" }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 border-bottom border-success border-4 shadow-sm h-100 text-center">
+            <p class="text-secondary text-sm fw-medium text-uppercase mb-1">Active Recruiters</p>
+            <h2 class="fw-bold m-0 text-success">{{ total_recruiters|default:"0" }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 border-bottom border-warning border-4 shadow-sm h-100 text-center">
+            <p class="text-secondary text-sm fw-medium text-uppercase mb-1">Open Jobs</p>
+            <h2 class="fw-bold m-0 text-warning">{{ open_jobs|default:"0" }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 border-bottom border-info border-4 shadow-sm h-100 text-center">
+            <p class="text-secondary text-sm fw-medium text-uppercase mb-1">Placements</p>
+            <h2 class="fw-bold m-0 text-info">{{ placements|default:"0" }}</h2>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- System Activity -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white border-bottom py-3">
+                <span class="fw-bold"><i class="bi bi-activity me-2"></i>System-wide Applicants</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3 small">Candidate</th>
+                                <th class="py-3 small">Job</th>
+                                <th class="py-3 small">Status</th>
+                                <th class="px-4 py-3 text-end small">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for app in recent_applicants %}
+                            <tr>
+                                <td class="px-4">
+                                    <div class="fw-bold small">{{ app.candidate.user.get_full_name|default:app.candidate.user.email }}</div>
+                                </td>
+                                <td><span class="small">{{ app.job.title }}</span></td>
+                                <td><span class="badge {{ app.badge_class }} small">{{ app.get_stage_display }}</span></td>
+                                <td class="px-4 text-end"><span class="text-secondary small">{{ app.created_at|date:"M d" }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-secondary">No recent applications.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Access -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom fw-bold py-3">Admin Quick Links</div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/admin/accounts/user/" class="btn btn-outline-dark text-start"><i class="bi bi-person-gear me-2"></i> Manage Users</a>
+                    <a href="/admin/jobs/job/" class="btn btn-outline-dark text-start"><i class="bi bi-briefcase me-2"></i> Audit Job Posts</a>
+                    <a href="{% url 'frontend:analytics' %}" class="btn btn-outline-dark text-start"><i class="bi bi-graph-up me-2"></i> System Analytics</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

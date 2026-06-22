@@ -1,0 +1,169 @@
+import re
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
+from apps.core.models import BaseAppModel
+from django.conf import settings
+from django.core.validators import FileExtensionValidator
+
+def validate_candidate_name(value):
+    if not value:
+        return
+    val = value.strip()
+    if val.isdigit():
+        raise ValidationError("Candidate name cannot be a numeric string.")
+    if re.match(r'^\+?\d[\d\s-]{8,}$', val):
+        raise ValidationError("Candidate name cannot be a phone number.")
+    if '@' in val:
+        raise ValidationError("Candidate name cannot contain email addresses.")
+    if val.lower().startswith('http'):
+        raise ValidationError("Candidate name cannot be a URL.")
+    if 'linkedin' in val.lower() or 'github' in val.lower():
+        raise ValidationError("Candidate name cannot contain linkedin or github links.")
+    # Reject if it's a phone number with formats like (+91) 9953699195 or similar
+    digits_only = re.sub(r'[^\d+]', '', val)
+    if len(digits_only) >= 8 and digits_only.replace('+', '').isdigit():
+        raise ValidationError("Candidate name cannot be a phone number.")
+
+class CandidateProfile(BaseAppModel):
+    """
+    Detailed profile for a Candidate.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='candidate_profile')
+    full_name = models.CharField(max_length=255, blank=True, null=True, db_index=True, validators=[validate_candidate_name])
+    summary = models.TextField(blank=True)
+    resume = models.FileField(
+        upload_to='resumes/', 
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'doc', 'docx'])],
+        null=True, 
+        blank=True
+    )
+    current_company = models.CharField(max_length=255, blank=True, null=True)
+    current_designation = models.CharField(max_length=255, blank=True, null=True)
+    location = models.CharField(max_length=100, db_index=True)
+    total_experience = models.DecimalField(max_digits=4, decimal_places=1, default=0.0, help_text="Total experience in years")
+    current_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    expected_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    notice_period = models.PositiveIntegerField(default=30, help_text="Notice period in days")
+    is_immediate_joiner = models.BooleanField(default=False)
+    linkedin_url = models.URLField(blank=True, null=True)
+    portfolio_url = models.URLField(blank=True, null=True)
+    ats_score = models.PositiveIntegerField(default=0, db_index=True, help_text="Calculated ATS suitability score (0-100)")
+    
+    # Resume Intelligence Engine fields
+    original_file = models.FileField(upload_to='resumes/original/', null=True, blank=True)
+    parsed_json = models.JSONField(default=dict, blank=True)
+    current_version = models.IntegerField(default=1)
+    ocr_engine = models.CharField(max_length=50, blank=True, null=True)
+    ocr_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    resume_type = models.CharField(max_length=50, blank=True, null=True)
+    resume_versions = models.JSONField(default=dict, blank=True)
+    audit_logs = models.JSONField(default=list, blank=True)
+    edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='edited_profiles')
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def ats_score_badge_class(self):
+        score = self.ats_score
+        if score >= 90:
+            return "bg-success text-white"
+        elif score >= 75:
+            return "bg-primary text-white"
+        elif score >= 60:
+            return "bg-warning text-dark"
+        else:
+            return "bg-danger text-white"
+
+    class Meta:
+        verbose_name = _('candidate profile')
+        verbose_name_plural = _('candidate profiles')
+
+    def __str__(self):
+        return self.full_name or self.user.email
+
+class DuplicateResumeLog(BaseAppModel):
+    email = models.EmailField(db_index=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    filename = models.CharField(max_length=255)
+    action_taken = models.CharField(max_length=50, choices=[('SKIPPED', 'Skipped'), ('UPDATED', 'Updated')])
+    
+    class Meta:
+        ordering = ['-created_at']
+
+class CandidateSkill(BaseAppModel):
+    """
+    Skills possessed by a Candidate.
+    """
+    profile = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='skills')
+    skill_name = models.CharField(max_length=100, db_index=True)
+    years_of_experience = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
+    proficiency = models.CharField(max_length=20, choices=[
+        ('BEGINNER', 'Beginner'),
+        ('INTERMEDIATE', 'Intermediate'),
+        ('EXPERT', 'Expert'),
+    ], default='INTERMEDIATE')
+
+    class Meta:
+        unique_together = ('profile', 'skill_name')
+        verbose_name = _('candidate skill')
+        verbose_name_plural = _('candidate skills')
+
+class Experience(BaseAppModel):
+    """
+    Work experience entries for a Candidate.
+    """
+    profile = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='experiences')
+    company_name = models.CharField(max_length=255)
+    designation = models.CharField(max_length=255)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    is_current = models.BooleanField(default=False)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-start_date']
+        verbose_name = _('experience')
+        verbose_name_plural = _('experiences')
+
+class Education(BaseAppModel):
+    """
+    Educational background for a Candidate.
+    """
+    profile = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='educations')
+    institution = models.CharField(max_length=255)
+    degree = models.CharField(max_length=255)
+    field_of_study = models.CharField(max_length=255, blank=True, null=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    percentage_or_cgpa = models.CharField(max_length=20, blank=True, null=True)
+
+    class Meta:
+        ordering = ['-end_date']
+        verbose_name = _('education')
+        verbose_name_plural = _('educations')
+
+class Project(BaseAppModel):
+    """
+    Projects completed by a Candidate.
+    """
+    profile = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='projects')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    link = models.URLField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = _('project')
+        verbose_name_plural = _('projects')
+
+class Certification(BaseAppModel):
+    """
+    Certifications earned by a Candidate.
+    """
+    profile = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='certifications')
+    name = models.CharField(max_length=255)
+    issuing_organization = models.CharField(max_length=255, blank=True, null=True)
+    issue_date = models.DateField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('certification')
+        verbose_name_plural = _('certifications')

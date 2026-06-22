@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}{{ client.company_name }} | Client Details | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <a href="{% url 'clients:client_list' %}" class="text-secondary text-decoration-none fw-medium">
+            <i class="bi bi-arrow-left"></i> Back to Clients
+        </a>
+        <div class="d-flex align-items-center gap-3 mt-2">
+            <h3 class="fw-bold m-0">{{ client.company_name }}</h3>
+            {% if client.status == 'ACTIVE' %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Active</span>
+            {% else %}
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">Inactive</span>
+            {% endif %}
+        </div>
+        <p class="text-secondary m-0 mt-1">
+            <i class="bi bi-geo-alt me-1"></i>
+            {% if client.city or client.state or client.country %}
+                {{ client.city|default:"" }}{% if client.city and client.state %}, {% endif %}{{ client.state|default:"" }}{% if client.state and client.country %}, {% endif %}{{ client.country|default:"" }}
+            {% else %}
+                No location specified
+            {% endif %}
+        </p>
+    </div>
+    
+    <div class="d-flex gap-2">
+        <a href="{% url 'clients:client_edit' client.id %}" class="btn btn-outline-primary btn-sm px-3">
+            <i class="bi bi-pencil me-1"></i> Edit Client
+        </a>
+        <a href="{% url 'clients:client_delete' client.id %}" class="btn btn-outline-danger btn-sm px-3">
+            <i class="bi bi-trash me-1"></i> Delete
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Details -->
+    <div class="col-lg-5">
+        <!-- Contact SPOC Card -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="fw-bold m-0"><i class="bi bi-person-badge text-primary me-2"></i>Contact Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless align-middle mb-0 small">
+                    <tbody>
+                        <tr>
+                            <td class="text-secondary fw-medium py-2" style="width: 35%;">SPOC / HR Name:</td>
+                            <td class="text-dark fw-semibold py-2">{{ client.spoc_name }}</td>
+                        </tr>
+                        {% if client.designation %}
+                        <tr>
+                            <td class="text-secondary fw-medium py-2">Designation:</td>
+                            <td class="text-dark py-2">{{ client.designation }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td class="text-secondary fw-medium py-2">Email:</td>
+                            <td class="py-2">
+                                {% if client.email %}
+                                <a href="mailto:{{ client.email }}" class="text-primary text-decoration-none">{{ client.email }}</a>
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary fw-medium py-2">Phone Number:</td>
+                            <td class="text-dark py-2">{{ client.phone_number|default:"N/A" }}</td>
+                        </tr>
+                        {% if client.website %}
+                        <tr>
+                            <td class="text-secondary fw-medium py-2">Website:</td>
+                            <td class="py-2">
+                                <a href="{{ client.website }}" target="_blank" class="text-primary text-decoration-none">
+                                    {{ client.website }} <i class="bi bi-box-arrow-up-right small ms-1"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Company Metadata Card -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="fw-bold m-0"><i class="bi bi-info-circle text-primary me-2"></i>Company Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless align-middle mb-0 small">
+                    <tbody>
+                        <tr>
+                            <td class="text-secondary fw-medium py-2" style="width: 35%;">Industry:</td>
+                            <td class="py-2"><span class="badge bg-light text-dark border">{{ client.get_industry_display }}</span></td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary fw-medium py-2">Company Size:</td>
+                            <td class="text-dark py-2">{{ client.get_company_size_display }} employees</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary fw-medium py-2">Date Added:</td>
+                            <td class="text-dark py-2">{{ client.created_at|date:"M d, Y, g:i a" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Notes Card -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="fw-bold m-0"><i class="bi bi-sticky text-primary me-2"></i>Notes</h5>
+            </div>
+            <div class="card-body">
+                {% if client.notes %}
+                    <p class="text-dark small mb-0" style="white-space: pre-line;">{{ client.notes }}</p>
+                {% else %}
+                    <p class="text-muted small mb-0">No notes available for this client.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Jobs -->
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold m-0"><i class="bi bi-briefcase text-primary me-2"></i>Associated Jobs</h5>
+                <a href="{% url 'frontend:job_create' %}?client_id={{ client.id }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Add Job</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4 py-3">Job Title</th>
+                                <th class="py-3">Location</th>
+                                <th class="py-3">Status</th>
+                                <th class="pe-4 py-3 text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in jobs %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark">{{ job.title }}</div>
+                                    <div class="text-secondary x-small">{{ job.get_job_type_display }}</div>
+                                </td>
+                                <td>{{ job.location }}</td>
+                                <td>
+                                    {% if job.status == 'ACTIVE' %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5">Open</span>
+                                    {% elif job.status == 'DRAFT' %}
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-0.5">Draft</span>
+                                    {% elif job.status == 'ON_HOLD' %}
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-0.5">On Hold</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-0.5">{{ job.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="pe-4 text-end">
+                                    <a href="{% url 'frontend:job_edit' job.id %}" class="btn btn-sm btn-light border p-1 px-2" title="Edit Job">
+                                        <i class="bi bi-pencil small text-secondary"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-secondary">
+                                    <i class="bi bi-briefcase fs-2 d-block mb-2 text-secondary-50"></i>
+                                    No jobs associated with this client.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

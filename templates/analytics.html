@@ -1,0 +1,130 @@
+{% extends "layouts/recruiter_base.html" %}
+
+{% block title %}Recruitment Analytics | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold m-0"><i class="bi bi-graph-up-arrow me-2"></i>Recruitment Insights</h3>
+    <div class="dropdown">
+        <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i> Export Data
+        </button>
+        <ul class="dropdown-menu shadow border-0">
+            <li><a class="dropdown-item" href="{% url 'frontend:export_candidates' %}">Candidates (CSV)</a></li>
+            <li><a class="dropdown-item" href="{% url 'frontend:export_jobs' %}">Jobs (CSV)</a></li>
+            <li><a class="dropdown-item" href="{% url 'frontend:export_interviews' %}">Interviews (CSV)</a></li>
+        </ul>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Hiring Funnel -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom fw-bold py-3">Hiring Funnel Efficiency</div>
+            <div class="card-body">
+                <canvas id="funnelChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <!-- Top Skills -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white border-bottom fw-bold py-3">Top Talent Skills</div>
+            <div class="card-body">
+                <canvas id="skillsChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Placements -->
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white border-bottom fw-bold py-3">Source of Candidates</div>
+            <div class="card-body">
+                <canvas id="sourceChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <!-- Performance Metric -->
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 bg-primary text-white">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center py-5">
+                <h6 class="text-uppercase fw-bold opacity-75 mb-3">Overall Placement Rate</h6>
+                <h1 class="display-3 fw-bold mb-0">88%</h1>
+                <p class="small opacity-75 mt-2">Conversion from Selected to Joined</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Funnel Chart
+    const ctxFunnel = document.getElementById('funnelChart').getContext('2d');
+    new Chart(ctxFunnel, {
+        type: 'bar',
+        data: {
+            labels: {{ funnel_labels|safe }},
+            datasets: [{
+                label: 'Applications',
+                data: {{ funnel_values|safe }},
+                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false } }, y: { grid: { display: false } } }
+        }
+    });
+
+    // Skills Chart
+    const ctxSkills = document.getElementById('skillsChart').getContext('2d');
+    new Chart(ctxSkills, {
+        type: 'polarArea',
+        data: {
+            labels: {{ skill_labels|safe }},
+            datasets: [{
+                data: {{ skill_values|safe }},
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.7)',
+                    'rgba(16, 185, 129, 0.7)',
+                    'rgba(245, 158, 11, 0.7)',
+                    'rgba(239, 68, 68, 0.7)',
+                    'rgba(139, 92, 246, 0.7)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+
+    // Source Chart
+    const ctxSource = document.getElementById('sourceChart').getContext('2d');
+    new Chart(ctxSource, {
+        type: 'doughnut',
+        data: {
+            labels: {{ source_labels|safe }},
+            datasets: [{
+                data: {{ source_values|safe }},
+                backgroundColor: ['#0077b5', '#2563eb', '#10b981', '#f59e0b']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'right' } },
+            cutout: '70%'
+        }
+    });
+</script>
+{% endblock %}
