@@ -206,147 +206,183 @@ def process_resume_file(file_obj, filename, overwrite=False):
         logger.error(f"[PARSER NLP FAILURE] Failed running NLP parser: {str(e)}", exc_info=True)
         return None, "NLP_FAILED"
     
-    email = info['email']
-    phone = info['phone']
+    email = info.get('email', '')
+    phone = info.get('phone', '')
     
+    # Normalize placeholders
+    if email == "candidate@example.com":
+        email = ""
+    if phone == "9876543210":
+        phone = ""
+        
     if not email:
-        email = f"unknown_{abs(hash(text))}@example.com"
-        
-    # Check for duplicates
-    existing_user = User.objects.filter(Q(email=email) | Q(phone_number=phone)).first()
-    
-    if existing_user and not overwrite:
-        DuplicateResumeLog.objects.create(
-            email=email,
-            phone=phone,
-            filename=filename,
-            action_taken='SKIPPED'
-        )
-        logger.warning(f"[PARSER DUPLICATE] Candidate already exists (skipped): {email} / {phone}")
-        return None, "DUPLICATE"
-        
-    if existing_user and overwrite:
-        user = existing_user
-        if phone: user.phone_number = phone
-        user.save()
-        DuplicateResumeLog.objects.create(
-            email=email,
-            phone=phone,
-            filename=filename,
-            action_taken='UPDATED'
-        )
-        logger.info(f"[PARSER DUPLICATE] Candidate already exists (overwriting): {email}")
-    else:
-        user, _ = User.objects.get_or_create(
-            email=email,
-            defaults={'role': User.Role.CANDIDATE, 'phone_number': phone}
-        )
-        if _:
-            user.set_unusable_password()
-            user.save()
-        
-    profile, created = CandidateProfile.objects.get_or_create(user=user)
-    
-    candidate_name = info.get('name', '')
-    if not ResumeIntelligenceService.is_valid_name(candidate_name):
-        candidate_name = ResumeIntelligenceService.extract_candidate_name(text)
-        
-    profile.full_name = candidate_name
-    profile.summary = parsed_data['summary']
-    profile.location = info['location'] or "Unknown"
-    profile.current_salary = parsed_data.get('current_ctc')
-    profile.expected_salary = parsed_data.get('expected_ctc')
-    profile.notice_period = parsed_data.get('notice_period', 30)
-    profile.total_experience = info['total_experience']
-    
-    profile.current_company = info.get('current_company')
-    profile.current_designation = info.get('current_designation') or "Professional"
+        # Avoid using absolute hash without dynamic text to generate a unique but reproducible identifier
+        email = f"unknown_{abs(hash(text or filename))}@example.com"
 
-    # Save fields for Resume Intelligence
-    profile.parsed_json = parsed_data
-    profile.ocr_engine = ocr_result["engine"]
-    profile.ocr_confidence = Decimal(str(ocr_result["confidence"]))
-    profile.resume_type = ocr_result["resume_type"]
-    
-    # Store initial Version 1
-    v1_data = {
-        "version": 1,
-        "label": "Original Resume",
-        "data": parsed_data,
-        "created_at": datetime.now().isoformat(),
-        "created_by": "System OCR Parser"
-    }
-    profile.resume_versions = {"1": v1_data}
-    profile.current_version = 1
-    profile.audit_logs = [{
-        "action": "Parsed original resume using " + ocr_result["engine"],
-        "timestamp": datetime.now().isoformat(),
-        "user": "System"
-    }]
-    
-    # Save the original file content
+    logger.info(f"[PARSER CONTACTS] Extracted Email: {email}, Extracted Phone: {phone}")
+    print(f"[PARSER CONTACTS] Extracted Email: {email}, Extracted Phone: {phone}")
+        
     try:
-        profile.resume.save(filename, ContentFile(file_bytes), save=False)
-        profile.original_file.save("original_" + filename, ContentFile(file_bytes), save=False)
+        from django.db import transaction
+        with transaction.atomic():
+            # Check for duplicates:
+            # Match on email (which is unique) OR match on phone number ONLY if we have a valid, non-empty phone number
+            if phone:
+                existing_user = User.objects.filter(Q(email=email) | Q(phone_number=phone)).first()
+            else:
+                existing_user = User.objects.filter(email=email).first()
+            
+            if existing_user and not overwrite:
+                DuplicateResumeLog.objects.create(
+                    email=email,
+                    phone=phone,
+                    filename=filename,
+                    action_taken='SKIPPED'
+                )
+                logger.warning(f"[PARSER DUPLICATE] Candidate already exists (skipped): {email} / {phone}")
+                print(f"[PARSER DUPLICATE] Candidate already exists (skipped): {email} / {phone}")
+                return None, "DUPLICATE"
+                
+            if existing_user and overwrite:
+                user = existing_user
+                if phone: 
+                    user.phone_number = phone
+                user.save()
+                DuplicateResumeLog.objects.create(
+                    email=email,
+                    phone=phone,
+                    filename=filename,
+                    action_taken='UPDATED'
+                )
+                logger.info(f"[PARSER DUPLICATE] Candidate already exists (overwriting): {email}")
+                print(f"[PARSER DUPLICATE] Candidate already exists (overwriting): {email}")
+            else:
+                user, created_user = User.objects.get_or_create(
+                    email=email,
+                    defaults={'role': User.Role.CANDIDATE, 'phone_number': phone if phone else None}
+                )
+                if created_user:
+                    user.set_unusable_password()
+                    user.save()
+                logger.info(f"[PARSER DB USER] User record {'created' if created_user else 'retrieved'}: {user.email}")
+                print(f"[PARSER DB USER] User record {'created' if created_user else 'retrieved'}: {user.email}")
+                
+            profile, created_profile = CandidateProfile.objects.get_or_create(user=user)
+            
+            candidate_name = info.get('name', '')
+            if not ResumeIntelligenceService.is_valid_name(candidate_name):
+                candidate_name = ResumeIntelligenceService.extract_candidate_name(text)
+                
+            profile.full_name = candidate_name
+            profile.summary = parsed_data.get('summary', '')
+            profile.location = info.get('location') or "Unknown"
+            profile.current_salary = parsed_data.get('current_ctc')
+            profile.expected_salary = parsed_data.get('expected_ctc')
+            profile.notice_period = parsed_data.get('notice_period', 30)
+            profile.total_experience = info.get('total_experience', 0.0)
+            
+            profile.current_company = info.get('current_company')
+            profile.current_designation = info.get('current_designation') or "Professional"
+
+            # Save fields for Resume Intelligence
+            profile.parsed_json = parsed_data
+            profile.ocr_engine = ocr_result.get("engine", "None")
+            profile.ocr_confidence = Decimal(str(ocr_result.get("confidence", 0.0)))
+            profile.resume_type = ocr_result.get("resume_type", "UNKNOWN")
+            
+            # Store initial Version 1
+            v1_data = {
+                "version": 1,
+                "label": "Original Resume",
+                "data": parsed_data,
+                "created_at": datetime.now().isoformat(),
+                "created_by": "System OCR Parser"
+            }
+            profile.resume_versions = {"1": v1_data}
+            profile.current_version = 1
+            profile.audit_logs = [{
+                "action": "Parsed original resume using " + ocr_result.get("engine", "None"),
+                "timestamp": datetime.now().isoformat(),
+                "user": "System"
+            }]
+            
+            # Save the original file content
+            try:
+                profile.resume.save(filename, ContentFile(file_bytes), save=False)
+                profile.original_file.save("original_" + filename, ContentFile(file_bytes), save=False)
+                logger.info(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
+                print(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
+            except Exception as e:
+                logger.error(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}", exc_info=True)
+                print(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}")
+            
+            profile.save()
+            logger.info(f"[PARSER DB PROFILE] CandidateProfile saved successfully for: {profile.full_name} (ID: {profile.id})")
+            print(f"[PARSER DB PROFILE] CandidateProfile saved successfully for: {profile.full_name} (ID: {profile.id})")
+            
+            # Clear and update related data
+            profile.skills.all().delete()
+            for skill in parsed_data.get('skills', []):
+                CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.title())
+                
+            profile.experiences.all().delete()
+            for exp in parsed_data.get('experience', []):
+                Experience.objects.create(
+                    profile=profile,
+                    company_name=exp.get('company', '')[:100],
+                    designation=exp.get('designation', '')[:100],
+                    description=exp.get('description', ''),
+                    start_date=parse_date_robust(exp.get('start_date'), datetime.now().date()),
+                    end_date=parse_date_robust(exp.get('end_date'), datetime.now().date())
+                )
+                
+            profile.educations.all().delete()
+            for edu in parsed_data.get('education', []):
+                Education.objects.create(
+                    profile=profile,
+                    institution=edu.get('institution', '')[:100],
+                    degree=edu.get('degree', '')[:100],
+                    field_of_study=edu.get('field_of_study', '')[:100],
+                    start_date=parse_date_robust(edu.get('start_date'), datetime.now().date()),
+                    end_date=parse_date_robust(edu.get('end_date'), datetime.now().date())
+                )
+                
+            profile.projects.all().delete()
+            for proj in parsed_data.get('projects', []):
+                Project.objects.create(
+                    profile=profile,
+                    title=proj.get('title', '')[:255],
+                    description=proj.get('description', ''),
+                    link=proj.get('link', '')
+                )
+                
+            profile.certifications.all().delete()
+            for cert in parsed_data.get('certifications', []):
+                Certification.objects.create(
+                    profile=profile,
+                    name=cert.get('name', '')[:255],
+                    issuing_organization=cert.get('issuing_organization', '')[:255],
+                    issue_date=parse_date_robust(cert.get('issue_date'), datetime.now().date())
+                )
+                
+            # Calculate and save ATS suitability score
+            try:
+                from services.candidate_matching_service import CandidateMatchingService
+                CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
+            except Exception as e:
+                logger.error(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}", exc_info=True)
+                print(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}")
+            
+            logger.info(f"[PARSER COMPLETED] Candidate Profile created/updated successfully: {profile.id}")
+            print(f"[PARSER COMPLETED] Candidate Profile created successfully: ID={profile.id}, Name={profile.full_name}")
+            return profile, "SUCCESS"
+            
     except Exception as e:
-        logger.error(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}", exc_info=True)
-    
-    profile.save()
-    
-    # Clear and update related data
-    profile.skills.all().delete()
-    for skill in parsed_data['skills']:
-        CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.title())
-        
-    profile.experiences.all().delete()
-    for exp in parsed_data['experience']:
-        Experience.objects.create(
-            profile=profile,
-            company_name=exp['company'][:100],
-            designation=exp['designation'][:100],
-            description=exp['description'],
-            start_date=parse_date_robust(exp.get('start_date'), datetime.now().date()),
-            end_date=parse_date_robust(exp.get('end_date'), datetime.now().date())
-        )
-        
-    profile.educations.all().delete()
-    for edu in parsed_data['education']:
-        Education.objects.create(
-            profile=profile,
-            institution=edu['institution'][:100],
-            degree=edu['degree'][:100],
-            field_of_study=edu['field_of_study'][:100],
-            start_date=parse_date_robust(edu.get('start_date'), datetime.now().date()),
-            end_date=parse_date_robust(edu.get('end_date'), datetime.now().date())
-        )
-        
-    profile.projects.all().delete()
-    for proj in parsed_data['projects']:
-        Project.objects.create(
-            profile=profile,
-            title=proj['title'][:255],
-            description=proj['description'],
-            link=proj['link']
-        )
-        
-    profile.certifications.all().delete()
-    for cert in parsed_data['certifications']:
-        Certification.objects.create(
-            profile=profile,
-            name=cert['name'][:255],
-            issuing_organization=cert['issuing_organization'][:255],
-            issue_date=parse_date_robust(cert.get('issue_date'), datetime.now().date())
-        )
-        
-    # Calculate and save ATS suitability score
-    try:
-        from services.candidate_matching_service import CandidateMatchingService
-        CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
-    except Exception as e:
-        logger.error(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}", exc_info=True)
-    
-    logger.info(f"[PARSER COMPLETED] Candidate Profile created/updated successfully: {profile.id}")
-    return profile, "SUCCESS"
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"[PARSER DATABASE SAVE FAILURE] Failed saving candidate database records for {filename}: {str(e)}\n{tb}", exc_info=True)
+        print(f"[PARSER DATABASE SAVE FAILURE] Exception Traceback in process_resume_file:\n{tb}")
+        return None, "SAVE_FAILED"
 
 def handle_resume_upload(uploaded_file, overwrite=False):
     results = {'created': [], 'duplicates': 0, 'errors': 0}
