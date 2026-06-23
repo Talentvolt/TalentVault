@@ -55,7 +55,7 @@
                         {% if selected_job and match_details %}
                         <span class="badge {{ match_details.badge_class }} px-3 py-2 rounded-pill fw-bold" style="font-size: 13px;">ATS Score: {{ match_details.total_score }}% ({{ match_details.match_label }})</span>
                         {% else %}
-                        <span class="badge bg-secondary px-3 py-2 rounded-pill fw-bold text-white" style="font-size: 13px;">No Job Match Calculated</span>
+                        <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-2 rounded-pill fw-bold" style="font-size: 13px;">Base Suitability: {{ candidate.ats_score }}% ATS</span>
                         {% endif %}
                     </div>
                     <p class="text-primary fw-medium mb-3">

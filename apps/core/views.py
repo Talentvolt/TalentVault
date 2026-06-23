@@ -89,6 +89,36 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         
         # Current Database counts/objects
         context['timezone_now'] = timezone.now()
+        from apps.candidates.models import CandidateProfile
+        from apps.applications.models import Application
+        from apps.notifications.models import EmailLog
+        from django.utils import timezone as django_timezone
+        
+        context['total_candidates_count'] = CandidateProfile.objects.count()
+        context['open_jobs_count'] = Job.objects.filter(status='ACTIVE').count()
+        context['total_emails_count'] = EmailLog.objects.count()
+        
+        # New applications count (last 7 days)
+        seven_days_ago = django_timezone.now() - django_timezone.timedelta(days=7)
+        context['new_applications_count'] = Application.objects.filter(created_at__gte=seven_days_ago).count()
+        
+        # Interviews scheduled for today
+        today_date = django_timezone.now().date()
+        context['interviews_today_count'] = Interview.objects.filter(start_time__date=today_date).count()
+        
+        # Recent Job Openings
+        context['recent_jobs'] = Job.objects.filter(status='ACTIVE').order_by('-created_at')[:5]
+        
+        # Candidates added over last 7 days (for line chart)
+        candidates_by_day = []
+        for i in range(6, -1, -1):
+            day = today_date - django_timezone.timedelta(days=i)
+            count = CandidateProfile.objects.filter(created_at__date=day).count()
+            candidates_by_day.append({
+                'day': day.strftime("%a"),
+                'count': count
+            })
+        context['candidates_by_day'] = candidates_by_day
         
         # 1. Total Interviews (Scheduled Interviews)
         context['upcoming_interviews'] = Interview.objects.filter(
@@ -122,6 +152,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
                 'object_id': str(interview.id)
             })
         context['recruiter_tasks'] = tasks
+        context['total_tasks_count'] = len(tasks)
         
         # 3. Mails From Candidates (Latest Candidate messages/logs)
         context['candidate_mails'] = EmailLog.objects.all().order_by('-created_at')[:10]
@@ -214,10 +245,36 @@ class JobsView(LoginRequiredMixin, ListView):
     model = Job
     template_name = 'jobs.html'
     context_object_name = 'jobs'
-    queryset = Job.objects.annotate(
-        app_count=Count('applications'),
-        interview_count=Count('applications__interviews')
-    ).order_by('-created_at')
+    paginate_by = 10
+
+    def get_queryset(self):
+        queryset = Job.objects.annotate(
+            app_count=Count('applications'),
+            interview_count=Count('applications__interviews')
+        )
+        
+        # Search
+        q = self.request.GET.get('q', '')
+        if q:
+            queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q))
+            
+        # Filters
+        status = self.request.GET.get('status', '')
+        if status:
+            queryset = queryset.filter(status=status)
+            
+        job_type = self.request.GET.get('job_type', '')
+        if job_type:
+            queryset = queryset.filter(job_type=job_type)
+            
+        # Sorting
+        sort_by = self.request.GET.get('sort_by', '-created_at')
+        if sort_by in ['title', '-title', 'created_at', '-created_at', 'app_count', '-app_count']:
+            queryset = queryset.order_by(sort_by)
+        else:
+            queryset = queryset.order_by('-created_at')
+            
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -225,6 +282,22 @@ class JobsView(LoginRequiredMixin, ListView):
         context['draft_count'] = Job.objects.filter(status='DRAFT').count()
         context['on_hold_count'] = Job.objects.filter(status='ON_HOLD').count()
         context['closed_count'] = Job.objects.filter(status='CLOSED').count()
+        
+        # Preserve search, filter and sort inputs in template
+        context['q'] = self.request.GET.get('q', '')
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['selected_job_type'] = self.request.GET.get('job_type', '')
+        context['selected_sort'] = self.request.GET.get('sort_by', '-created_at')
+        
+        context['job_types'] = [
+            ('FULL_TIME', 'Full Time'),
+            ('PART_TIME', 'Part Time'),
+            ('CONTRACT', 'Contract'),
+            ('FREELANCE', 'Freelance'),
+            ('REMOTE', 'Remote'),
+        ]
+        context['statuses'] = Job.JobStatus.choices
+        
         return context
 
 from apps.jobs.models import Job, JobSkill

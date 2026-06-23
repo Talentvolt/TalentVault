@@ -51,10 +51,11 @@ class User(AbstractUser, UUIDModel, TimeStampedModel):
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
-        default=Role.CANDIDATE,
+        default=Role.RECRUITER,
         db_index=True
     )
 
+    profile_picture = models.URLField(max_length=500, blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     is_verified = models.BooleanField(default=False)
 

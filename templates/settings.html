@@ -1,10 +1,159 @@
 {% extends "layouts/recruiter_base.html" %}
 
-{% block title %}Settings | TalentVault{% endblock %}
+{% block title %}Cockpit Settings | TalentVault{% endblock %}
 
 {% block content %}
-<div class="card p-4 border-0 shadow-sm mt-4">
-    <h3 class="fw-bold mb-3">Settings</h3>
-    <p class="text-secondary">Platform settings will be available here.</p>
+<div class="mb-4 fade-in">
+    <h3 class="fw-bold m-0"><i class="bi bi-gear me-2"></i>Cockpit Settings</h3>
+    <p class="text-secondary small mt-1">Manage your recruiter profile, company details, notifications, and interface themes.</p>
 </div>
+
+<div class="row g-4 fade-in">
+    <!-- Left Column: Navigation Tabs -->
+    <div class="col-lg-3">
+        <div class="card border-0 shadow-sm p-3">
+            <div class="nav flex-column nav-pills gap-2" id="settings-tabs" role="tablist">
+                <button class="nav-link active text-start py-2.5 px-3 rounded-3" id="profile-tab" data-bs-toggle="pill" data-bs-target="#profile-panel" type="button" role="tab"><i class="bi bi-person me-2"></i>Profile Settings</button>
+                <button class="nav-link text-start py-2.5 px-3 rounded-3" id="company-tab" data-bs-toggle="pill" data-bs-target="#company-panel" type="button" role="tab"><i class="bi bi-building me-2"></i>Company Settings</button>
+                <button class="nav-link text-start py-2.5 px-3 rounded-3" id="theme-tab" data-bs-toggle="pill" data-bs-target="#theme-panel" type="button" role="tab"><i class="bi bi-palette me-2"></i>Theme Switcher</button>
+                <button class="nav-link text-start py-2.5 px-3 rounded-3" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab"><i class="bi bi-bell me-2"></i>Notifications</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Tab Panels -->
+    <div class="col-lg-9">
+        <div class="tab-content" id="settings-panels">
+            <!-- Profile Settings Panel -->
+            <div class="tab-pane fade show active" id="profile-panel" role="tabpanel">
+                <div class="card border-0 shadow-sm p-4">
+                    <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-person me-2"></i>Profile Settings</h5>
+                    
+                    <div class="d-flex align-items-center gap-4 mb-4 pb-4 border-bottom">
+                        <img src="{{ request.user.profile_picture|default:'https://ui-avatars.com/api/?name='|add:request.user.email|add:'&background=2563eb&color=fff' }}" class="rounded-circle border" width="80" height="80" alt="Avatar">
+                        <div>
+                            <h6 class="fw-bold m-0">{{ request.user.get_full_name|default:"Recruiter Account" }}</h6>
+                            <p class="text-secondary small m-0">{{ request.user.email }}</p>
+                            <span class="badge bg-primary bg-opacity-10 text-primary mt-2">Connected with Google</span>
+                        </div>
+                    </div>
+                    
+                    <form onsubmit="event.preventDefault(); alert('Profile preferences updated (Mock)');">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">First Name</label>
+                                <input type="text" class="form-control" value="{{ request.user.first_name }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Last Name</label>
+                                <input type="text" class="form-control" value="{{ request.user.last_name }}" readonly>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small fw-semibold">Email Address</label>
+                            <input type="email" class="form-control" value="{{ request.user.email }}" readonly>
+                            <div class="form-text text-secondary">Contact details are synchronized automatically via Google credentials.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4">Save Profile Settings</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Company Settings Panel -->
+            <div class="tab-pane fade" id="company-panel" role="tabpanel">
+                <div class="card border-0 shadow-sm p-4">
+                    <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-building me-2"></i>Company Settings</h5>
+                    <form onsubmit="event.preventDefault(); alert('Company settings saved (Mock)');">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Company Name</label>
+                                <input type="text" class="form-control" value="TalentVault Client Organization" placeholder="e.g. Acme Corp">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Website</label>
+                                <input type="url" class="form-control" value="https://talentvault.com" placeholder="e.g. https://acme.com">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Industry</label>
+                                <select class="form-select">
+                                    <option selected>Software Product</option>
+                                    <option>IT Services</option>
+                                    <option>Healthcare</option>
+                                    <option>Finance & Banking</option>
+                                    <option>Others</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">HQ Location</label>
+                                <input type="text" class="form-control" value="Remote / San Francisco" placeholder="e.g. San Francisco, CA">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4">Save Company Details</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Theme Switcher Panel -->
+            <div class="tab-pane fade" id="theme-panel" role="tabpanel">
+                <div class="card border-0 shadow-sm p-4">
+                    <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-palette me-2"></i>Theme Switcher</h5>
+                    <p class="text-secondary small mb-4">Select your preferred interface styling mode.</p>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card border-0 p-3 text-center bg-light cursor-pointer hover-scale border border-primary border-opacity-10" onclick="setThemeMode('light')">
+                                <i class="bi bi-sun fs-2 text-warning mb-2"></i>
+                                <h6 class="fw-bold m-0">Light Theme</h6>
+                                <p class="text-secondary small mt-1 mb-0">Clean, soft look optimized for daylight operations.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-0 p-3 text-center text-white bg-dark cursor-pointer hover-scale" onclick="setThemeMode('dark')">
+                                <i class="bi bi-moon fs-2 text-info mb-2"></i>
+                                <h6 class="fw-bold m-0 text-white">Dark Theme</h6>
+                                <p class="text-secondary small mt-1 mb-0">Premium dark cockpit designed for coding recruiters.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notifications Panel -->
+            <div class="tab-pane fade" id="notifications-panel" role="tabpanel">
+                <div class="card border-0 shadow-sm p-4">
+                    <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-bell me-2"></i>Notification Preferences</h5>
+                    
+                    <form onsubmit="event.preventDefault(); alert('Notification settings saved (Mock)');">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="notif-email" checked>
+                            <label class="form-check-label fw-medium small" for="notif-email">Email notifications for scheduled interviews</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="notif-candidate" checked>
+                            <label class="form-check-label fw-medium small" for="notif-candidate">Alerts for new applicant applications in pipeline</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="notif-digest">
+                            <label class="form-check-label fw-medium small" for="notif-digest">Weekly candidate analytics report digest email</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4 mt-2">Save Preferences</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function setThemeMode(mode) {
+        document.documentElement.setAttribute('data-theme', mode);
+        localStorage.setItem('theme', mode);
+        if (typeof updateThemeIcons === 'function') {
+            updateThemeIcons(mode);
+        }
+        alert('Theme set to ' + mode);
+    }
+</script>
 {% endblock %}

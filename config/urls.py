@@ -21,11 +21,15 @@ router.register(r'candidates/education', EducationViewSet, basename='candidate-e
 router.register(r'applications', ApplicationViewSet, basename='application')
 router.register(r'interviews', InterviewViewSet, basename='interview')
 
+from apps.accounts.views import CustomLoginView, CustomLogoutView, SignupView
+
 urlpatterns = [
     # Frontend Dashboard UI
     path('', include('apps.core.urls', namespace='frontend')),
     path("clients/", include(("apps.clients.urls", "clients"), namespace="clients")),
-    path('accounts/', include('django.contrib.auth.urls')),
+    path('accounts/login/', CustomLoginView.as_view(), name='account_login'),
+    path('accounts/logout/', CustomLogoutView.as_view(), name='account_logout'),
+    path('accounts/signup/', SignupView.as_view(), name='account_signup'),
 
     path('admin/', admin.site.urls),
     

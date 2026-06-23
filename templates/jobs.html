@@ -3,19 +3,74 @@
 {% block title %}Job Management | TalentVault{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold m-0"><i class="bi bi-briefcase me-2"></i>Job Management</h3>
+<div class="d-flex justify-content-between align-items-center mb-4 fade-in">
+    <h3 class="fw-bold m-0"><i class="bi bi-briefcase me-2 text-primary"></i>Job Management</h3>
     <div class="d-flex gap-2">
         <div class="btn-group">
-            <button class="btn btn-light border btn-sm">Active ({{ active_count|default:0 }})</button>
-            <button class="btn btn-light border btn-sm">Draft ({{ draft_count|default:0 }})</button>
-            <button class="btn btn-light border btn-sm">On Hold ({{ on_hold_count|default:0 }})</button>
+            <span class="btn btn-light border btn-sm">Active ({{ active_count|default:0 }})</span>
+            <span class="btn btn-light border btn-sm">Draft ({{ draft_count|default:0 }})</span>
+            <span class="btn btn-light border btn-sm">On Hold ({{ on_hold_count|default:0 }})</span>
         </div>
         <a href="{% url 'frontend:job_create' %}" class="btn btn-primary btn-sm px-3"><i class="bi bi-plus-lg me-1"></i> Post New Job</a>
     </div>
 </div>
 
-<div class="card shadow-sm border-0">
+<!-- Filters & Sorting Card -->
+<div class="card shadow-sm border-0 mb-4 fade-in">
+    <div class="card-body">
+        <form method="GET" class="row g-3 align-items-end">
+            <!-- Search -->
+            <div class="col-md-3">
+                <label for="q" class="form-label small fw-semibold text-secondary">Search</label>
+                <input type="text" name="q" id="q" class="form-control form-control-sm" placeholder="Title or description..." value="{{ q }}">
+            </div>
+            
+            <!-- Status Filter -->
+            <div class="col-md-2">
+                <label for="status" class="form-label small fw-semibold text-secondary">Status</label>
+                <select name="status" id="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for value, name in statuses %}
+                        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Job Type Filter -->
+            <div class="col-md-2">
+                <label for="job_type" class="form-label small fw-semibold text-secondary">Job Type</label>
+                <select name="job_type" id="job_type" class="form-select form-select-sm">
+                    <option value="">All Types</option>
+                    {% for value, name in job_types %}
+                        <option value="{{ value }}" {% if selected_job_type == value %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Sort By -->
+            <div class="col-md-3">
+                <label for="sort_by" class="form-label small fw-semibold text-secondary">Sort By</label>
+                <select name="sort_by" id="sort_by" class="form-select form-select-sm">
+                    <option value="-created_at" {% if selected_sort == '-created_at' %}selected{% endif %}>Newest First</option>
+                    <option value="created_at" {% if selected_sort == 'created_at' %}selected{% endif %}>Oldest First</option>
+                    <option value="title" {% if selected_sort == 'title' %}selected{% endif %}>Title A-Z</option>
+                    <option value="-title" {% if selected_sort == '-title' %}selected{% endif %}>Title Z-A</option>
+                    <option value="-app_count" {% if selected_sort == '-app_count' %}selected{% endif %}>Most Applicants</option>
+                    <option value="app_count" {% if selected_sort == 'app_count' %}selected{% endif %}>Least Applicants</option>
+                </select>
+            </div>
+            
+            <!-- Actions -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-filter me-1"></i>Filter</button>
+                <a href="{% url 'frontend:jobs' %}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Jobs Table Card -->
+<div class="card shadow-sm border-0 fade-in">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -33,13 +88,17 @@
                     {% for job in jobs %}
                     <tr>
                         <td class="ps-4">
-                            <div class="fw-bold">{{ job.title }}</div>
+                            <div class="fw-bold text-dark">{{ job.title }}</div>
                             <div class="text-secondary x-small">{{ job.location }} | {{ job.get_job_type_display }}</div>
                         </td>
-                        <td><span class="small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</span></td>
-                        <td><span class="small fw-medium">{{ job.currency }} {{ job.min_salary|floatformat:0 }} - {{ job.max_salary|floatformat:0 }}</span></td>
+                        <td>
+                            <span class="small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</span>
+                        </td>
+                        <td>
+                            <span class="small fw-medium">{{ job.currency }} {{ job.min_salary|floatformat:0 }} - {{ job.max_salary|floatformat:0 }}</span>
+                        </td>
                         <td class="text-center">
-                            <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="badge bg-primary bg-opacity-10 text-primary text-decoration-none">
+                            <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="badge bg-primary bg-opacity-10 text-primary text-decoration-none px-2.5 py-1.5 rounded-pill">
                                 {{ job.app_count|default:0 }} Apps
                             </a>
                         </td>
@@ -88,12 +147,45 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-5 text-secondary">No jobs found. Start by posting a new job.</td>
+                        <td colspan="6" class="text-center py-5 text-secondary">
+                            <i class="bi bi-briefcase fs-1 d-block mb-3 text-secondary-50"></i>
+                            No jobs found matching the search criteria.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <span class="small text-secondary">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} jobs</span>
+            <nav>
+                <ul class="pagination pagination-sm m-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_job_type %}&job_type={{ selected_job_type }}{% endif %}{% if selected_sort %}&sort_by={{ selected_sort }}{% endif %}">Previous</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_job_type %}&job_type={{ selected_job_type }}{% endif %}{% if selected_sort %}&sort_by={{ selected_sort }}{% endif %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_job_type %}&job_type={{ selected_job_type }}{% endif %}{% if selected_sort %}&sort_by={{ selected_sort }}{% endif %}">Next</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Next</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
