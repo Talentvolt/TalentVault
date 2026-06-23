@@ -429,77 +429,281 @@ class ResumeIntelligenceService:
 
         # Section-based extraction
         current_section = None
-        work_history = []
-        education_history = []
-        projects = []
-        certifications = []
+        work_lines = []
+        edu_lines = []
+        project_lines = []
+        cert_lines = []
 
         for line in lines:
             l = line.lower()
-            if any(h in l for h in ["experience", "work history", "employment"]):
+            
+            # Detect section transitions
+            is_heading = False
+            if any(h in l for h in ["work experience", "experience", "employment history", "work history", "professional experience"]):
                 current_section = 'WORK'
-                continue
-            elif any(h in l for h in ["education", "academic", "university", "college"]):
+                is_heading = True
+            elif any(h in l for h in ["education", "academic", "university", "college", "academic background"]):
                 current_section = 'EDU'
-                continue
-            elif any(h in l for h in ["projects", "personal projects"]):
+                is_heading = True
+            elif any(h in l for h in ["projects", "personal projects", "academic projects"]):
                 current_section = 'PROJECT'
-                continue
+                is_heading = True
             elif any(h in l for h in ["certifications", "licenses", "certificates"]):
                 current_section = 'CERT'
+                is_heading = True
+            elif any(h in l for h in ["skills", "languages", "hobbies", "profile summary", "key skills", "interests", "summary"]):
+                current_section = 'OTHER'
+                is_heading = True
+
+            if is_heading:
                 continue
 
-            if current_section == 'WORK' and len(work_history) < 5:
-                # Look for designation/company clues
-                if len(line) > 5: work_history.append(line)
-            elif current_section == 'EDU' and len(education_history) < 4:
-                if len(line) > 5: education_history.append(line)
-            elif current_section == 'PROJECT' and len(projects) < 4:
-                if len(line) > 5: projects.append(line)
-            elif current_section == 'CERT' and len(certifications) < 4:
-                if len(line) > 5: certifications.append(line)
+            if current_section == 'WORK':
+                work_lines.append(line)
+            elif current_section == 'EDU':
+                edu_lines.append(line)
+            elif current_section == 'PROJECT':
+                project_lines.append(line)
+            elif current_section == 'CERT':
+                cert_lines.append(line)
 
-        # Parse detailed lists
+        # 1. Parse Work Experiences
+        date_range_regex = re.compile(
+            r'\b(\d{1,2}[-/]\d{2,4}|19\d\d|20\d\d|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-/ ]?\d{2,4})\s*[-–to\s]+\s*(\d{1,2}[-/]\d{2,4}|present|current|today|19\d\d|20\d\d|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-/ ]?\d{2,4})\b',
+            re.IGNORECASE
+        )
+
+        designation_keywords = [
+            'manager', 'developer', 'executive', 'engineer', 'lead', 'associate', 'specialist', 'director', 
+            'analyst', 'consultant', 'officer', 'administrator', 'coordinator', 'technician', 'representative', 
+            'intern', 'programmer', 'architect', 'head', 'founder', 'co-founder', 'ceo', 'cto', 'supervisor',
+            'leader', 'operator', 'agent', 'specialist', 'strategist', 'consultant', 'advisor', 'expert'
+        ]
+
+        description_start_keywords = [
+            "manage", "lead", "maintain", "achieve", "collaborate", "oversaw", "responsible", 
+            "experience", "rectifying", "improving", "training", "coaching", "publishing", 
+            "handling", "headed", "interacting", "streamline", "establish", "launch", "elevate", 
+            "identify", "resolve", "implement", "redesign", "coordinate", "ensure", "support",
+            "developed", "designed", "built", "created", "worked", "assisted", "monitored",
+            "analyzed", "facilitated", "supervised"
+        ]
+
+        def is_designation_line(line_val):
+            if line_val.strip().startswith(('-', '•', '*', '+')):
+                return False
+            lower_l = line_val.lower()
+            if len(line_val) > 100:
+                return False
+            return any(re.search(r'\b' + re.escape(kw) + r'\b', lower_l) for kw in designation_keywords)
+
+        def is_description_line(line_val):
+            line_clean = line_val.strip().lstrip('-•*+ ').strip()
+            if not line_clean:
+                return True
+            first_w = line_clean.split()[0].lower()
+            if line_val.strip().startswith(('-', '•', '*', '+')):
+                return True
+            if first_w in description_start_keywords:
+                return True
+            if len(line_val) > 120 or line_val.endswith(('.', ';')):
+                return True
+            return False
+
+        work_blocks = []
+        current_block = {
+            "header_lines": [],
+            "date_line": "",
+            "description_lines": []
+        }
+
+        for line in work_lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+                
+            is_date = bool(date_range_regex.search(line_str))
+            is_desc = is_description_line(line_str)
+            is_desig = is_designation_line(line_str)
+            
+            if is_date and current_block["date_line"]:
+                work_blocks.append(current_block)
+                current_block = {"header_lines": [], "date_line": "", "description_lines": []}
+            elif is_desig and current_block["description_lines"]:
+                work_blocks.append(current_block)
+                current_block = {"header_lines": [], "date_line": "", "description_lines": []}
+                
+            if is_date:
+                current_block["date_line"] = line_str
+            elif is_desc:
+                current_block["description_lines"].append(line_str)
+            else:
+                current_block["header_lines"].append(line_str)
+                
+        if current_block["header_lines"] or current_block["date_line"] or current_block["description_lines"]:
+            work_blocks.append(current_block)
+
         experiences = []
-        for exp in work_history:
-            parts = exp.split('|') if '|' in exp else [exp]
-            designation = parts[0].strip() if len(parts) > 0 else "Role"
-            company = parts[1].strip() if len(parts) > 1 else "Company"
-            desc = parts[2].strip() if len(parts) > 2 else exp
+        for block in work_blocks:
+            description = "\n".join(block["description_lines"])
+            
+            start_date_val = "2022-01-01"
+            end_date_val = "2024-01-01"
+            if block["date_line"]:
+                match = date_range_regex.search(block["date_line"])
+                if match:
+                    start_date_val = match.group(1).strip() if match.group(1) else "2022-01-01"
+                    end_date_val = match.group(2).strip() if match.group(2) else "Present"
+            
+            designation = "Role"
+            company = "Company"
+            
+            headers = [h.strip() for h in block["header_lines"] if h.strip()]
+            
+            designation_line = ""
+            designation_idx = -1
+            for idx, h in enumerate(headers):
+                if is_designation_line(h):
+                    designation_line = h
+                    designation_idx = idx
+                    break
+                    
+            if designation_line:
+                designation = designation_line
+                other_headers = [h for i, h in enumerate(headers) if i != designation_idx]
+                if other_headers:
+                    company = other_headers[0]
+            else:
+                if len(headers) == 1:
+                    designation = headers[0]
+                elif len(headers) >= 2:
+                    designation = headers[0]
+                    company = headers[1]
+                    
+            for sep in [" at ", " @ ", " - ", " | ", " , "]:
+                if sep in designation:
+                    parts = designation.split(sep, 1)
+                    designation = parts[0].strip()
+                    company = parts[1].strip()
+                    break
+                    
+            company = re.sub(r'\s*\([^)]*\)', '', company).strip()
+            designation = re.sub(r'\s*\([^)]*\)', '', designation).strip()
+            
             experiences.append({
-                "designation": designation,
-                "company": company,
-                "description": desc,
-                "start_date": "2022-01-01",
-                "end_date": "2024-01-01"
+                "designation": designation or "Role",
+                "company": company or "Company",
+                "description": description,
+                "start_date": start_date_val,
+                "end_date": end_date_val
             })
 
+        # 2. Parse Educations
         educations = []
-        for edu in education_history:
-            parts = edu.split('|') if '|' in edu else [edu]
-            degree = parts[0].strip() if len(parts) > 0 else "Degree"
-            institution = parts[1].strip() if len(parts) > 1 else "Institution"
+        edu_degree_keywords = ['mba', 'pgdm', 'b.com', 'bcom', 'b.tech', 'btech', 'b.e.', 'be', 'bsc', 'b.sc', 'msc', 'm.sc', 'phd', 'doctor', 'bachelor', 'master', 'diploma']
+        
+        edu_blocks = []
+        current_edu = {"header_lines": [], "year_line": ""}
+        
+        for line in edu_lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            is_year = bool(re.search(r'\b(19\d\d|20\d\d)\b', line_str))
+            
+            if is_year and current_edu["year_line"]:
+                edu_blocks.append(current_edu)
+                current_edu = {"header_lines": [], "year_line": ""}
+                
+            if is_year:
+                current_edu["year_line"] = line_str
+            else:
+                current_edu["header_lines"].append(line_str)
+                
+        if current_edu["header_lines"] or current_edu["year_line"]:
+            edu_blocks.append(current_edu)
+            
+        for block in edu_blocks:
+            degree = "Degree"
+            institution = "Institution"
+            
+            headers = [h.strip() for h in block["header_lines"] if h.strip()]
+            if len(headers) == 1:
+                degree = headers[0]
+            elif len(headers) >= 2:
+                line1 = headers[0]
+                line2 = headers[1]
+                
+                is_deg1 = any(kw in line1.lower() for kw in edu_degree_keywords)
+                is_deg2 = any(kw in line2.lower() for kw in edu_degree_keywords)
+                
+                if is_deg1 and not is_deg2:
+                    degree = line1
+                    institution = line2
+                elif is_deg2 and not is_deg1:
+                    degree = line2
+                    institution = line1
+                else:
+                    degree = line1
+                    institution = line2
+                    
+            year_val = block["year_line"] or "2020"
             educations.append({
-                "degree": degree,
-                "institution": institution,
-                "field_of_study": "Information Technology",
-                "start_date": "2018-01-01",
-                "end_date": "2022-01-01"
+                "degree": degree or "Degree",
+                "institution": institution or "Institution",
+                "field_of_study": "General",
+                "start_date": f"{year_val}-01-01" if year_val.isdigit() else "2018-01-01",
+                "end_date": f"{year_val}-01-01" if year_val.isdigit() else "2022-01-01"
             })
 
+        # 3. Parse Projects
         projs = []
-        for prj in projects:
+        proj_blocks = []
+        current_proj = []
+        for line in project_lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if line_str.startswith(('-', '•', '*', '+')) and current_proj:
+                current_proj.append(line_str)
+            else:
+                if len(current_proj) >= 2:
+                    proj_blocks.append(current_proj)
+                    current_proj = []
+                current_proj.append(line_str)
+        if current_proj:
+            proj_blocks.append(current_proj)
+            
+        for block in proj_blocks:
+            title = block[0] if block else "Project"
+            desc = "\n".join(block[1:]) if len(block) > 1 else title
             projs.append({
-                "title": prj[:100],
-                "description": prj,
+                "title": title[:100],
+                "description": desc,
                 "link": ""
             })
 
+        # 4. Parse Certifications
         certs = []
-        for crt in certifications:
+        cert_blocks = []
+        current_cert = []
+        for line in cert_lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if len(current_cert) >= 2:
+                cert_blocks.append(current_cert)
+                current_cert = []
+            current_cert.append(line_str)
+        if current_cert:
+            cert_blocks.append(current_cert)
+            
+        for block in cert_blocks:
+            c_name = block[0] if block else "Certification"
+            org = block[1] if len(block) > 1 else "Accredited Body"
             certs.append({
-                "name": crt[:100],
-                "issuing_organization": "Accredited Body",
+                "name": c_name[:100],
+                "issuing_organization": org,
                 "issue_date": "2023-06-01"
             })
 
@@ -510,6 +714,12 @@ class ResumeIntelligenceService:
             total_exp = float(exp_match.group(1))
         else:
             total_exp = float(len(experiences) * 1.5)
+
+        # Print raw extracted experience JSON and final saved experience JSON (for user logs)
+        print("--- [RAW EXTRACTED EXPERIENCE JSON] ---")
+        print(json.dumps(experiences, indent=2))
+        print("--- [FINAL SAVED EXPERIENCE JSON] ---")
+        print(json.dumps(experiences, indent=2))
 
         return {
             "personal_info": {

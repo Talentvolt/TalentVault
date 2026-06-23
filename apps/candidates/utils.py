@@ -21,7 +21,7 @@ def parse_date_robust(date_str, default=None):
         return default
     date_str = date_str.strip()
     # Try various formats
-    formats = ["%Y-%m-%d", "%Y-%m", "%Y", "%d-%m-%Y", "%d/%m/%Y", "%m/%Y", "%b %Y", "%B %Y"]
+    formats = ["%Y-%m-%d", "%Y-%m", "%Y", "%d-%m-%Y", "%d/%m/%Y", "%m/%Y", "%m-%Y", "%b %Y", "%B %Y", "%b-%Y", "%B-%Y"]
     for fmt in formats:
         try:
             return datetime.strptime(date_str, fmt).date()
