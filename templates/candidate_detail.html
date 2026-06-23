@@ -103,20 +103,32 @@
 
         <!-- Experience -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3">Work Experience</h5>
-            <div class="timeline">
+            <h5 class="fw-bold mb-4">Work Experience</h5>
+            <div class="work-experience-timeline">
                 {% for exp in candidate.experiences.all %}
-                <div class="d-flex gap-3 mb-4">
-                    <div class="flex-shrink-0">
-                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-2">
-                            <i class="bi bi-briefcase"></i>
+                <div class="row experience-entry mb-4 pb-4 border-bottom border-light-subtle align-items-start" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
+                    <!-- LEFT COLUMN: Employment Period & Duration -->
+                    <div class="col-md-3 pe-md-4 mb-2 mb-md-0">
+                        <div class="fw-bold text-dark text-nowrap" style="font-size: 0.95rem;">
+                            {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
                         </div>
+                        <div class="x-small text-muted fw-semibold mt-1 experience-duration-text"></div>
                     </div>
-                    <div>
-                        <h6 class="fw-bold mb-0">{{ exp.company_name }}</h6>
-                        <div class="text-primary small mb-1">{{ exp.designation }}</div>
-                        <div class="text-secondary x-small mb-2">{{ exp.start_date|date:"M Y"|default:"N/A" }} - {{ exp.end_date|date:"M Y"|default:"Present" }}</div>
-                        <p class="text-secondary small mb-0">{{ exp.description }}</p>
+                    
+                    <!-- RIGHT COLUMN: Title, Company, Description -->
+                    <div class="col-md-9 border-start border-light-subtle ps-md-4 position-relative">
+                        <!-- Timeline bullet marker -->
+                        <div class="position-absolute bg-secondary bg-opacity-25 rounded-circle" style="width: 8px; height: 8px; left: -4px; top: 8px;"></div>
+                        
+                        <h6 class="fw-bold text-dark mb-1">
+                            {{ exp.designation }} <span class="text-secondary fw-normal">at</span> {{ exp.company_name }}
+                        </h6>
+                        
+                        <div class="text-secondary x-small mb-3 d-flex align-items-center gap-1">
+                            <i class="bi bi-geo-alt"></i> <span>{{ candidate.location|default:"New Delhi, India" }}</span>
+                        </div>
+                        
+                        <div class="text-secondary small mb-0 lh-base" style="white-space: pre-wrap; font-size: 0.88rem;">{{ exp.description|default:"" }}</div>
                     </div>
                 </div>
                 {% empty %}
@@ -124,6 +136,40 @@
                 {% endfor %}
             </div>
         </div>
+
+        <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            document.querySelectorAll('.experience-entry').forEach(function(el) {
+                var startStr = el.getAttribute('data-start-date');
+                var endStr = el.getAttribute('data-end-date');
+                if (!startStr || startStr === 'None') return;
+                
+                var start = new Date(startStr);
+                var end = (endStr === 'present' || !endStr || endStr === 'None') ? new Date() : new Date(endStr);
+                
+                var totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+                if (totalMonths <= 0) {
+                    totalMonths = 1;
+                }
+                
+                var years = Math.floor(totalMonths / 12);
+                var months = totalMonths % 12;
+                
+                var durationText = "";
+                if (years > 0) {
+                    durationText += years + " year" + (years > 1 ? "s" : "") + " ";
+                }
+                if (months > 0) {
+                    durationText += months + " month" + (months > 1 ? "s" : "");
+                }
+                
+                var durationSpan = el.querySelector('.experience-duration-text');
+                if (durationSpan && durationText.trim() !== "") {
+                    durationSpan.textContent = "(" + durationText.trim() + ")";
+                }
+            });
+        });
+        </script>
 
         <!-- Education -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
