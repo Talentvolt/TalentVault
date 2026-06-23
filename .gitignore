@@ -10,6 +10,8 @@ env/
 # Django media and static collected files
 media/
 static_collected/
+staticfiles/
+
 
 # Python cache files
 __pycache__/
