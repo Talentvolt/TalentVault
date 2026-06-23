@@ -248,9 +248,9 @@
             </div>
             <div class="row g-2">
                 <div class="col-6">
-                    <button type="button" class="btn btn-primary w-100 py-2 fw-bold text-xs" data-bs-toggle="modal" data-bs-target="#resumePreviewModal">
+                    <a href="{% url 'frontend:candidate_resume_preview' candidate.id %}" target="_blank" class="btn btn-primary w-100 py-2 fw-bold text-xs">
                         <i class="bi bi-eye me-2"></i>Preview Resume
-                    </button>
+                    </a>
                 </div>
                 <div class="col-6">
                     <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-success w-100 py-2 fw-bold text-xs">
@@ -261,7 +261,7 @@
             {% elif resume_missing %}
             <div class="text-center py-3 text-secondary mb-3">
                 <i class="bi bi-file-earmark-exclamation fs-1 text-warning"></i>
-                <div class="mt-2 fw-bold text-warning">Resume file missing. Re-upload required.</div>
+                <div class="mt-2 fw-bold text-warning">Resume not found. Please re-upload.</div>
             </div>
             <div class="row g-2">
                 <div class="col-6">
@@ -522,17 +522,21 @@
       <div class="modal-body text-center">
         <p class="text-secondary small mb-4">Generate a read-only public link for this candidate.</p>
         
-        <div class="input-group mb-4">
-            <input type="text" id="shareLinkInput" class="form-control" value="http://127.0.0.1:8000{% url 'frontend:public_candidate_profile' candidate.id %}" readonly>
+        <div class="input-group mb-3">
+            <input type="text" id="shareLinkInput" class="form-control" value="{{ public_share_url }}" readonly>
             <button class="btn btn-primary" type="button" onclick="copyShareLink()"><i class="bi bi-clipboard me-1"></i> Copy Link</button>
+        </div>
+        
+        <div class="mb-4">
+            <a href="{{ public_share_url }}" target="_blank" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-box-arrow-up-right me-1"></i> Open shared profile in new tab</a>
         </div>
         
         <div class="row g-2 mb-3">
             <div class="col-6">
-                <a href="mailto:anamikashkla.2020technologies@gmail.com?subject=Candidate Profile - {{ candidate.full_name|default:candidate.user.email }}&body=Hi,%0D%0A%0D%0APlease review the candidate profile below:%0D%0A%0D%0Ahttp://127.0.0.1:8000{% url 'frontend:public_candidate_profile' candidate.id %}%0D%0A%0D%0AResume and profile details are available in TalentVault.%0D%0A%0D%0ARegards,%0D%0ARecruiter" class="btn btn-outline-secondary w-100"><i class="bi bi-envelope me-2"></i> Send via Email</a>
+                <a href="mailto:?subject=Candidate Profile - {{ candidate.full_name|default:candidate.user.email }}&body=Hi,%0D%0A%0D%0APlease review the candidate profile below:%0D%0A%0D%0A{{ public_share_url }}%0D%0A%0D%0AResume and profile details are available in TalentVault.%0D%0A%0D%0ARegards,%0D%0ARecruiter" class="btn btn-outline-secondary w-100"><i class="bi bi-envelope me-2"></i> Send via Email</a>
             </div>
             <div class="col-6">
-                <a href="https://api.whatsapp.com/send?text=Hi,%0APlease review this candidate profile:%0A%0Ahttp://127.0.0.1:8000{% url 'frontend:public_candidate_profile' candidate.id %}%0A%0ARegards,%0ARecruiter" target="_blank" class="btn btn-outline-success w-100"><i class="bi bi-whatsapp me-2"></i> Share on WhatsApp</a>
+                <a href="https://api.whatsapp.com/send?text=Hi,%0APlease review this candidate profile:%0A%0A{{ public_share_url }}%0A%0ARegards,%0ARecruiter" target="_blank" class="btn btn-outline-success w-100"><i class="bi bi-whatsapp me-2"></i> Share on WhatsApp</a>
             </div>
         </div>
         
@@ -776,7 +780,11 @@ function copyShareLink() {
     var copyText = document.getElementById("shareLinkInput");
     copyText.select();
     copyText.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(copyText.value);
+    try {
+        navigator.clipboard.writeText(copyText.value);
+    } catch (err) {
+        document.execCommand("copy");
+    }
     alert("Copied the link: " + copyText.value);
 }
 

@@ -584,6 +584,11 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
         context['resume_exists'] = resume_exists
         context['resume_missing'] = resume_missing
         
+        from django.urls import reverse
+        context['public_share_url'] = self.request.build_absolute_uri(
+            reverse('frontend:public_candidate_profile', kwargs={'pk': self.object.pk})
+        )
+        
         return context
 
 class CandidateUpdateView(LoginRequiredMixin, UpdateView):
