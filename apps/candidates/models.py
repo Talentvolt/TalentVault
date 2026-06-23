@@ -62,6 +62,17 @@ class CandidateProfile(BaseAppModel):
     edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='edited_profiles')
     edited_at = models.DateTimeField(null=True, blank=True)
 
+    # Immutable original resume fields
+    raw_resume_text = models.TextField(blank=True, default="")
+    original_experience_json = models.JSONField(default=list, blank=True)
+    original_skills = models.JSONField(default=list, blank=True)
+    original_summary = models.TextField(blank=True, default="")
+
+    # AI improved fields
+    ai_summary = models.TextField(blank=True, default="")
+    ai_skills = models.JSONField(default=list, blank=True)
+    ai_experience_rewrite = models.JSONField(default=list, blank=True)
+
     @property
     def ats_score_badge_class(self):
         score = self.ats_score

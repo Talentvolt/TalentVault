@@ -91,6 +91,111 @@ class ResumeIntelligenceService:
         return True
 
     @staticmethod
+    def normalize_date_to_string(date_str: str, default_year: int = None, is_end: bool = False) -> str:
+        if not date_str or not isinstance(date_str, str):
+            return None
+        
+        val = date_str.strip().lower()
+        if val in ["present", "current", "today", "now", "ongoing"]:
+            return "Present"
+            
+        # Clean up the string a bit
+        val_clean = re.sub(r'[^\w\s\-/]', ' ', val).strip()
+        
+        # Months mapping
+        months = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+            'january': 1, 'february': 2, 'march': 3, 'april': 4, 'june': 6,
+            'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+        
+        # Pattern: Month (word) and Year (4-digit)
+        m_word_year = re.search(r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-/]*(\d{4})\b', val, re.I)
+        if m_word_year:
+            m_str = m_word_year.group(1).lower()
+            y_str = m_word_year.group(2)
+            month = months.get(m_str, 1)
+            year = int(y_str)
+            day = 28 if (is_end and month == 2) else (30 if is_end and month in [4,6,9,11] else (31 if is_end else 1))
+            if is_end and month == 2:
+                if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+                    day = 29
+            return f"{year:04d}-{month:02d}-{day:02d}"
+            
+        # Pattern: MM/YYYY or MM-YYYY or M/YYYY or M-YYYY
+        m_digits_year = re.search(r'\b(\d{1,2})[\s\-/]+(\d{4})\b', val)
+        if m_digits_year:
+            month = int(m_digits_year.group(1))
+            year = int(m_digits_year.group(2))
+            if 1 <= month <= 12:
+                day = 28 if (is_end and month == 2) else (30 if is_end and month in [4,6,9,11] else (31 if is_end else 1))
+                if is_end and month == 2:
+                    if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+                        day = 29
+                return f"{year:04d}-{month:02d}-{day:02d}"
+
+        # Pattern: YYYY-MM-DD or YYYY/MM/DD
+        m_full_date = re.search(r'\b(\d{4})[\s\-/]+(\d{1,2})[\s\-/]+(\d{1,2})\b', val)
+        if m_full_date:
+            year = int(m_full_date.group(1))
+            month = int(m_full_date.group(2))
+            day = int(m_full_date.group(3))
+            if 1 <= month <= 12 and 1 <= day <= 31:
+                return f"{year:04d}-{month:02d}-{day:02d}"
+
+        # Pattern: DD-MM-YYYY or DD/MM/YYYY
+        m_reverse_date = re.search(r'\b(\d{1,2})[\s\-/]+(\d{1,2})[\s\-/]+(\d{4})\b', val)
+        if m_reverse_date:
+            day = int(m_reverse_date.group(1))
+            month = int(m_reverse_date.group(2))
+            year = int(m_reverse_date.group(3))
+            if 1 <= month <= 12 and 1 <= day <= 31:
+                return f"{year:04d}-{month:02d}-{day:02d}"
+
+        # Pattern: Just YYYY (4-digit)
+        m_year_only = re.search(r'\b(19\d\d|20\d\d)\b', val)
+        if m_year_only:
+            year = int(m_year_only.group(1))
+            month = 12 if is_end else 1
+            day = 31 if is_end else 1
+            return f"{year:04d}-{month:02d}-{day:02d}"
+
+        if default_year:
+            month = 12 if is_end else 1
+            day = 31 if is_end else 1
+            return f"{default_year:04d}-{month:02d}-{day:02d}"
+            
+        return None
+
+    @staticmethod
+    def calculate_experience_years_from_dates(start_str: str, end_str: str) -> float:
+        if not start_str:
+            return 0.0
+        
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d").date()
+        except Exception:
+            return 0.0
+            
+        if not end_str or end_str.strip().lower() in ["present", "current", "today", "now", "ongoing"]:
+            end_dt = datetime.now().date()
+        else:
+            try:
+                end_dt = datetime.strptime(end_str, "%Y-%m-%d").date()
+            except Exception:
+                end_dt = datetime.now().date()
+                
+        if start_dt > end_dt:
+            return 0.0
+            
+        delta_days = (end_dt - start_dt).days
+        years = delta_days / 365.25
+        if years < 0:
+            return 0.0
+        return round(years, 2)
+
+    @staticmethod
     def clean_camel_case_name(name: str) -> str:
         if not name or not isinstance(name, str):
             return name
@@ -367,8 +472,8 @@ class ResumeIntelligenceService:
         email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text)
         email = email_match.group(0) if email_match else ""
 
-        phone_match = re.search(r'(\+?\d{1,3}[- ]?)?\d{10}', text)
-        phone = phone_match.group(0) if phone_match else ""
+        phone_match = re.search(r'(?:\+?\d{1,3}[- ]?)?(?:\d[- ]?){9}\d', text)
+        phone = re.sub(r'[\s-]', '', phone_match.group(0))[-10:] if phone_match else ""
 
         linkedin_match = re.search(r'(linkedin\.com/in/[\w-]+)', text, re.I)
         linkedin = linkedin_match.group(0) if linkedin_match else ""
@@ -545,19 +650,6 @@ class ResumeIntelligenceService:
 
         experiences = []
         for block in work_blocks:
-            description = "\n".join(block["description_lines"])
-            
-            start_date_val = "2022-01-01"
-            end_date_val = "2024-01-01"
-            if block["date_line"]:
-                match = date_range_regex.search(block["date_line"])
-                if match:
-                    start_date_val = match.group(1).strip() if match.group(1) else "2022-01-01"
-                    end_date_val = match.group(2).strip() if match.group(2) else "Present"
-            
-            designation = "Role"
-            company = "Company"
-            
             headers = [h.strip() for h in block["header_lines"] if h.strip()]
             
             designation_line = ""
@@ -567,7 +659,30 @@ class ResumeIntelligenceService:
                     designation_line = h
                     designation_idx = idx
                     break
-                    
+            
+            has_date = bool(block["date_line"])
+            
+            # Reject if no dates AND no designation keywords found in headers (must be merged into previous block)
+            if not has_date and not designation_line:
+                extra_desc = "\n".join(block["header_lines"] + block["description_lines"])
+                if extra_desc.strip():
+                    if experiences:
+                        experiences[-1]["description"] = (experiences[-1]["description"] + "\n" + extra_desc).strip()
+                continue
+                
+            start_date_val = ""
+            end_date_val = ""
+            if block["date_line"]:
+                match = date_range_regex.search(block["date_line"])
+                if match:
+                    raw_start = match.group(1).strip() if match.group(1) else ""
+                    raw_end = match.group(2).strip() if match.group(2) else ""
+                    start_date_val = ResumeIntelligenceService.normalize_date_to_string(raw_start, is_end=False) or ""
+                    end_date_val = ResumeIntelligenceService.normalize_date_to_string(raw_end, is_end=True) or ""
+            
+            designation = ""
+            company = ""
+            
             if designation_line:
                 designation = designation_line
                 other_headers = [h for i, h in enumerate(headers) if i != designation_idx]
@@ -586,13 +701,20 @@ class ResumeIntelligenceService:
                     designation = parts[0].strip()
                     company = parts[1].strip()
                     break
+            
+            if designation.lower() == "role":
+                designation = ""
+            if company.lower() == "company":
+                company = ""
                     
             company = re.sub(r'\s*\([^)]*\)', '', company).strip()
             designation = re.sub(r'\s*\([^)]*\)', '', designation).strip()
             
+            description = "\n".join(block["description_lines"]).strip()
+            
             experiences.append({
-                "designation": designation or "Role",
-                "company": company or "Company",
+                "designation": designation,
+                "company": company,
                 "description": description,
                 "start_date": start_date_val,
                 "end_date": end_date_val
@@ -707,13 +829,14 @@ class ResumeIntelligenceService:
                 "issue_date": "2023-06-01"
             })
 
-        # Calculate experience years heuristic
+        # Calculate experience years strictly from parsed start/end dates
         total_exp = 0.0
-        exp_match = re.search(r'(\d+)\+?\s*Years?', text, re.I)
-        if exp_match:
-            total_exp = float(exp_match.group(1))
-        else:
-            total_exp = float(len(experiences) * 1.5)
+        for exp in experiences:
+            s_date = exp.get("start_date")
+            e_date = exp.get("end_date")
+            if s_date:
+                total_exp += ResumeIntelligenceService.calculate_experience_years_from_dates(s_date, e_date)
+        total_exp = round(total_exp, 2)
 
         # Print raw extracted experience JSON and final saved experience JSON (for user logs)
         print("--- [RAW EXTRACTED EXPERIENCE JSON] ---")

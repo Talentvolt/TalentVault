@@ -58,9 +58,9 @@ def test_priority_4_ocr_layout_heading():
     # Priority 4: If first line is valid, but doesn't pass priority 3 due to some reason, wait, first line is OCR Layout heading.
     # Actually, if the first line is valid, Priority 3 will return it anyway. But what if Priority 3 line is checked:
     # First text line that is valid according to our validator.
-    text = "MyHeading\n+919953699195"
+    text = "My Heading\n+919953699195"
     name = ResumeIntelligenceService.extract_candidate_name(text)
-    assert name == "MyHeading"
+    assert name == "My Heading"
 
 def test_priority_5_fallback_unknown():
     # Priority 5: Everything is invalid
@@ -76,7 +76,7 @@ def test_priority_5_fallback_unknown():
 def test_process_resume_proper_name(mock_ocr):
     # Setup mock OCR output with a proper name at the beginning
     mock_ocr.return_value = {
-        "text": "Laxmi Sudharshan\nlaxmi@example.com\n+91 98765 43210\nExperience: Python Developer",
+        "text": "Laxmi Sudharshan\nlaxmi@example.com\n+91 98765 43211\nExperience: Python Developer",
         "engine": "pdfplumber",
         "confidence": 98.0,
         "resume_type": "EDITABLE_PDF"
@@ -89,7 +89,7 @@ def test_process_resume_proper_name(mock_ocr):
     assert profile is not None
     assert profile.full_name == "Laxmi Sudharshan"
     assert profile.user.email == "laxmi@example.com"
-    assert profile.user.phone_number == "9876543210"
+    assert profile.user.phone_number == "9876543211"
 
 @pytest.mark.django_db
 @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')

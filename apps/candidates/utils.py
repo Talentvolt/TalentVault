@@ -290,6 +290,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
             profile.ocr_confidence = Decimal(str(ocr_result.get("confidence", 0.0)))
             profile.resume_type = ocr_result.get("resume_type", "UNKNOWN")
             
+            # Store original fields
+            profile.raw_resume_text = text
+            profile.original_experience_json = parsed_data.get('experience', [])
+            profile.original_skills = parsed_data.get('skills', [])
+            profile.original_summary = parsed_data.get('summary', '')
+            
             # Store initial Version 1
             v1_data = {
                 "version": 1,
@@ -332,8 +338,8 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     company_name=exp.get('company', '')[:100],
                     designation=exp.get('designation', '')[:100],
                     description=exp.get('description', ''),
-                    start_date=parse_date_robust(exp.get('start_date'), datetime.now().date()),
-                    end_date=parse_date_robust(exp.get('end_date'), datetime.now().date())
+                    start_date=parse_date_robust(exp.get('start_date'), None),
+                    end_date=parse_date_robust(exp.get('end_date'), None)
                 )
                 
             profile.educations.all().delete()
@@ -343,8 +349,8 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     institution=edu.get('institution', '')[:100],
                     degree=edu.get('degree', '')[:100],
                     field_of_study=edu.get('field_of_study', '')[:100],
-                    start_date=parse_date_robust(edu.get('start_date'), datetime.now().date()),
-                    end_date=parse_date_robust(edu.get('end_date'), datetime.now().date())
+                    start_date=parse_date_robust(edu.get('start_date'), None),
+                    end_date=parse_date_robust(edu.get('end_date'), None)
                 )
                 
             profile.projects.all().delete()
@@ -362,7 +368,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     profile=profile,
                     name=cert.get('name', '')[:255],
                     issuing_organization=cert.get('issuing_organization', '')[:255],
-                    issue_date=parse_date_robust(cert.get('issue_date'), datetime.now().date())
+                    issue_date=parse_date_robust(cert.get('issue_date'), None)
                 )
                 
             # Calculate and save ATS suitability score

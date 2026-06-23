@@ -3,7 +3,63 @@
 {% block title %}Candidate Profile | TalentVault{% endblock %}
 
 {% block content %}
-<<div class="mb-4 d-flex justify-content-between align-items-center">
+<style>
+/* Transitions and Hovers */
+.btn, .card, .badge, .experience-entry, .avatar-xl {
+    transition: all 0.2s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+}
+.card-hover-shadow:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+.btn-outline-primary:hover, .btn-outline-info:hover, .btn-outline-danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Sticky top actions bar similar to Workable */
+.sticky-action-bar {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0 0 12px 12px;
+    padding: 16px 24px !important;
+    margin-left: -20px;
+    margin-right: -20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+/* Skeleton Loading Screens */
+.skeleton {
+    animation: skeleton-shimmer 1.4s ease-in-out infinite alternate;
+}
+@keyframes skeleton-shimmer {
+    0% {
+        background-color: #f2f2f2;
+        opacity: 0.6;
+    }
+    100% {
+        background-color: #e6e6e6;
+        opacity: 1;
+    }
+}
+.skeleton-text {
+    border-radius: 4px;
+}
+.skeleton-title {
+    border-radius: 4px;
+}
+</style>
+
+<div class="mb-4 d-flex justify-content-between align-items-center sticky-action-bar">
     <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Talent Vault</a>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
@@ -306,20 +362,22 @@
             <label class="form-label x-small fw-bold text-uppercase text-secondary">Version History</label>
             <div class="version-timeline d-flex flex-column gap-2 mb-3">
                 {% for ver in versions_list %}
-                <div class="d-flex justify-content-between align-items-center border p-2 rounded bg-light">
+                <div class="d-flex justify-content-between align-items-center border p-2 rounded bg-light {% if selected_version_id == ver.version %}border-primary bg-primary-subtle{% endif %} card-hover-shadow" style="cursor: pointer; transition: all 0.2s ease-in-out;" onclick="window.location.href='?version={{ ver.version }}'">
                     <div>
                         <div class="fw-bold x-small text-dark">{{ ver.label }}</div>
                         <div class="text-secondary" style="font-size: 10px;">{{ ver.created_by }} | {{ ver.created_at|slice:":10" }}</div>
                     </div>
-                    {% if candidate.current_version == ver.version %}
-                        <span class="badge bg-success text-white x-small">Active</span>
-                    {% else %}
-                        <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="m-0">
-                            {% csrf_token %}
-                            <input type="hidden" name="version_id" value="{{ ver.version }}">
-                            <button type="submit" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold text-xs" style="font-size: 10px;">Rollback</button>
-                        </form>
-                    {% endif %}
+                    <div>
+                        {% if candidate.current_version == ver.version %}
+                            <span class="badge bg-success text-white x-small">Active</span>
+                        {% else %}
+                            <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="m-0 d-inline-block" onclick="event.stopPropagation();">
+                                {% csrf_token %}
+                                <input type="hidden" name="version_id" value="{{ ver.version }}">
+                                <button type="submit" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold text-xs" style="font-size: 10px;">Rollback</button>
+                            </form>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -1011,6 +1069,37 @@ function saveStructuredResume() {
 }
 
 function previewAIImprovement() {
+    // Show modal immediately with loading skeletons
+    const modalEl = document.getElementById('aiImprovePreviewModal');
+    const myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    myModal.show();
+    
+    document.getElementById('ai_proposed_summary').innerHTML = `
+        <div class="skeleton skeleton-text" style="width: 100%; height: 12px; margin-bottom: 6px;"></div>
+        <div class="skeleton skeleton-text" style="width: 95%; height: 12px; margin-bottom: 6px;"></div>
+        <div class="skeleton skeleton-text" style="width: 90%; height: 12px; margin-bottom: 6px;"></div>
+    `;
+    
+    document.getElementById('ai_proposed_skills').innerHTML = `
+        <span class="skeleton badge px-3 py-2 text-transparent text-nowrap" style="width: 80px; height: 28px; display: inline-block;">&nbsp;</span>
+        <span class="skeleton badge px-3 py-2 text-transparent text-nowrap" style="width: 60px; height: 28px; display: inline-block;">&nbsp;</span>
+        <span class="skeleton badge px-3 py-2 text-transparent text-nowrap" style="width: 90px; height: 28px; display: inline-block;">&nbsp;</span>
+    `;
+    
+    document.getElementById('ai_proposed_work').innerHTML = `
+        <div class="border p-2 rounded mb-2">
+            <div class="skeleton skeleton-title" style="width: 40%; height: 14px; margin-bottom: 8px;"></div>
+            <div class="skeleton skeleton-text" style="width: 90%; height: 10px; margin-bottom: 4px;"></div>
+            <div class="skeleton skeleton-text" style="width: 70%; height: 10px;"></div>
+        </div>
+    `;
+    
+    document.getElementById('ai_proposed_certs').innerHTML = `
+        <div class="border p-2 rounded mb-2">
+            <div class="skeleton skeleton-title" style="width: 50%; height: 14px;"></div>
+        </div>
+    `;
+
     fetch('{% url "frontend:candidate_ai_improve" candidate.id %}', {
         method: 'POST',
         headers: {
@@ -1041,7 +1130,7 @@ function previewAIImprovement() {
             data.experience.forEach(exp => {
                 const item = document.createElement('div');
                 item.className = 'border p-2 rounded mb-2';
-                item.innerHTML = `<strong>${exp.designation} @ ${exp.company}</strong><br><span class="x-small text-muted">${exp.description}</span>`;
+                item.innerHTML = `<strong>${exp.designation || 'Role'} @ ${exp.company || 'Company'}</strong><br><span class="x-small text-muted">${exp.description}</span>`;
                 workDiv.appendChild(item);
             });
 
@@ -1054,13 +1143,14 @@ function previewAIImprovement() {
                 item.innerHTML = `<strong>${cert.name}</strong> - ${cert.issuing_organization}`;
                 certsDiv.appendChild(item);
             });
-
-            // Show modal
-            const myModal = new bootstrap.Modal(document.getElementById('aiImprovePreviewModal'));
-            myModal.show();
         } else {
             alert('AI proposal extraction failed.');
+            myModal.hide();
         }
+    })
+    .catch(err => {
+        alert('Error connecting to AI service.');
+        myModal.hide();
     });
 }
 </script>

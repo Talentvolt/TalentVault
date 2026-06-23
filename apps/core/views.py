@@ -525,6 +525,32 @@ class CandidateSearchView(LoginRequiredMixin, ListView):
         context['object_list'] = candidates_list
         return context
 
+class MockQuerySet:
+    def __init__(self, items):
+        self.items = items
+    def all(self):
+        return self.items
+    def exists(self):
+        return len(self.items) > 0
+    def count(self):
+        return len(self.items)
+
+class CandidateProfileWrapper:
+    def __init__(self, original, data_overrides, rel_overrides):
+        self._original = original
+        self._data_overrides = data_overrides
+        self._rel_overrides = rel_overrides
+
+    def __getattr__(self, name):
+        if name in self._rel_overrides:
+            return self._rel_overrides[name]
+        if name in self._data_overrides:
+            return self._data_overrides[name]
+        return getattr(self._original, name)
+
+    def __str__(self):
+        return str(self._original)
+
 class CandidateDetailView(LoginRequiredMixin, DetailView):
     model = CandidateProfile
     template_name = 'candidate_detail.html'
@@ -532,6 +558,8 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         from apps.jobs.models import Job
+        from datetime import datetime, date
+        
         context = super().get_context_data(**kwargs)
         
         import logging
@@ -562,6 +590,165 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
             if res["is_duplicate"]:
                 duplicates.append(res)
         context['duplicates'] = duplicates
+        
+        # Determine which version to preview (default to 1)
+        version_param = self.request.GET.get('version')
+        selected_version_id = 1
+        if version_param:
+            try:
+                selected_version_id = int(version_param)
+            except ValueError:
+                selected_version_id = 1
+                
+        version_str = str(selected_version_id)
+        if self.object.resume_versions and version_str in self.object.resume_versions:
+            version_data = self.object.resume_versions[version_str]["data"]
+        else:
+            if self.object.resume_versions and "1" in self.object.resume_versions:
+                version_data = self.object.resume_versions["1"]["data"]
+                selected_version_id = 1
+            else:
+                # Reconstruct version data from database fields if versions are empty
+                version_data = {
+                    "personal_info": {
+                        "name": self.object.full_name,
+                        "current_company": self.object.current_company,
+                        "current_designation": self.object.current_designation,
+                        "total_experience": float(self.object.total_experience),
+                        "location": self.object.location,
+                    },
+                    "summary": self.object.summary,
+                    "skills": [s.skill_name for s in self.object.skills.all()],
+                    "experience": [
+                        {
+                            "company": e.company_name,
+                            "designation": e.designation,
+                            "start_date": e.start_date.strftime("%Y-%m-%d") if e.start_date else "",
+                            "end_date": e.end_date.strftime("%Y-%m-%d") if e.end_date else ("Present" if e.is_current else ""),
+                            "description": e.description,
+                        } for e in self.object.experiences.all()
+                    ],
+                    "education": [
+                        {
+                            "institution": ed.institution,
+                            "degree": ed.degree,
+                            "field_of_study": ed.field_of_study,
+                            "start_date": ed.start_date.strftime("%Y-%m-%d") if ed.start_date else "",
+                            "end_date": ed.end_date.strftime("%Y-%m-%d") if ed.end_date else "",
+                        } for ed in self.object.educations.all()
+                    ],
+                    "projects": [
+                        {
+                            "title": p.title,
+                            "description": p.description,
+                            "link": p.link,
+                        } for p in self.object.projects.all()
+                    ],
+                    "certifications": [
+                        {
+                            "name": c.name,
+                            "issuing_organization": c.issuing_organization,
+                            "issue_date": c.issue_date.strftime("%Y-%m-%d") if c.issue_date else "",
+                        } for c in self.object.certifications.all()
+                    ]
+                }
+                selected_version_id = 1
+
+        context['selected_version_id'] = selected_version_id
+
+        def str_to_date(date_str):
+            if not date_str:
+                return None
+            if isinstance(date_str, date):
+                return date_str
+            if isinstance(date_str, datetime):
+                return date_str.date()
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
+            except Exception:
+                from apps.candidates.utils import parse_date_robust
+                return parse_date_robust(date_str, None)
+
+        display_experiences = []
+        for exp in version_data.get('experience', []):
+            s_date = str_to_date(exp.get('start_date'))
+            e_date = str_to_date(exp.get('end_date'))
+            is_curr = exp.get('end_date') == 'Present' or e_date is None
+            display_experiences.append({
+                'company_name': exp.get('company') or exp.get('company_name') or '',
+                'designation': exp.get('designation') or exp.get('title') or '',
+                'description': exp.get('description') or '',
+                'start_date': s_date,
+                'end_date': e_date,
+                'is_current': is_curr,
+            })
+
+        display_educations = []
+        for edu in version_data.get('education', []):
+            s_date = str_to_date(edu.get('start_date'))
+            e_date = str_to_date(edu.get('end_date'))
+            display_educations.append({
+                'institution': edu.get('institution') or '',
+                'degree': edu.get('degree') or '',
+                'field_of_study': edu.get('field_of_study') or '',
+                'start_date': s_date,
+                'end_date': e_date,
+            })
+
+        class MockSkillObj:
+            def __init__(self, name):
+                self.skill_name = name
+
+        display_skills = []
+        for sk in version_data.get('skills', []):
+            if isinstance(sk, dict):
+                display_skills.append(MockSkillObj(sk.get('skill_name') or sk.get('name') or ''))
+            else:
+                display_skills.append(MockSkillObj(sk))
+
+        display_projects = []
+        for proj in version_data.get('projects', []):
+            display_projects.append({
+                'title': proj.get('title') or '',
+                'description': proj.get('description') or '',
+                'link': proj.get('link') or '',
+            })
+
+        display_certifications = []
+        for cert in version_data.get('certifications', []):
+            i_date = str_to_date(cert.get('issue_date'))
+            display_certifications.append({
+                'name': cert.get('name') or '',
+                'issuing_organization': cert.get('issuing_organization') or '',
+                'issue_date': i_date,
+            })
+
+        info = version_data.get('personal_info', {})
+        display_full_name = info.get('name') or self.object.full_name
+        display_summary = version_data.get('summary') or self.object.summary
+        display_current_company = info.get('current_company') or self.object.current_company
+        display_current_designation = info.get('current_designation') or self.object.current_designation
+        display_total_experience = info.get('total_experience') or self.object.total_experience
+        display_location = info.get('location') or self.object.location
+
+        rel_overrides = {
+            'experiences': MockQuerySet(display_experiences),
+            'educations': MockQuerySet(display_educations),
+            'projects': MockQuerySet(display_projects),
+            'certifications': MockQuerySet(display_certifications),
+            'skills': MockQuerySet(display_skills),
+        }
+        data_overrides = {
+            'full_name': display_full_name,
+            'summary': display_summary,
+            'current_company': display_current_company,
+            'current_designation': display_current_designation,
+            'total_experience': display_total_experience,
+            'location': display_location,
+            'parsed_json': version_data,
+        }
+        wrapped_candidate = CandidateProfileWrapper(self.object, data_overrides, rel_overrides)
+        context['candidate'] = wrapped_candidate
         
         # Version control timeline variables
         versions_list = sorted(list(self.object.resume_versions.values()), key=lambda x: x["version"])
@@ -1395,6 +1582,11 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             profile.current_company = info.get("current_company", profile.current_company)
             profile.current_designation = info.get("current_designation", profile.current_designation)
             
+            # Save AI Improved fields separately
+            profile.ai_summary = improved_data.get("summary", "")
+            profile.ai_skills = improved_data.get("skills", [])
+            profile.ai_experience_rewrite = improved_data.get("experience", [])
+            
             new_ver_num = profile.current_version + 1
             v_data = {
                 "version": new_ver_num,
@@ -1413,6 +1605,8 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             })
             profile.save()
             
+            from apps.candidates.utils import parse_date_robust
+            
             # Sync Skills relation
             profile.skills.all().delete()
             for sk in improved_data.get("skills", []):
@@ -1421,11 +1615,8 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             # Sync Experiences relation
             profile.experiences.all().delete()
             for exp in improved_data.get("experience", []):
-                try:
-                    s_date = datetime.strptime(exp.get("start_date"), "%Y-%m-%d").date() if exp.get("start_date") else None
-                    e_date = datetime.strptime(exp.get("end_date"), "%Y-%m-%d").date() if exp.get("end_date") else None
-                except Exception:
-                    s_date, e_date = None, None
+                s_date = parse_date_robust(exp.get("start_date"), None)
+                e_date = parse_date_robust(exp.get("end_date"), None)
                 Experience.objects.create(
                     profile=profile,
                     company_name=exp.get("company", "Company")[:100],
@@ -1438,11 +1629,8 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             # Sync Education relation
             profile.educations.all().delete()
             for edu in improved_data.get("education", []):
-                try:
-                    s_date = datetime.strptime(edu.get("start_date"), "%Y-%m-%d").date() if edu.get("start_date") else None
-                    e_date = datetime.strptime(edu.get("end_date"), "%Y-%m-%d").date() if edu.get("end_date") else None
-                except Exception:
-                    s_date, e_date = None, None
+                s_date = parse_date_robust(edu.get("start_date"), None)
+                e_date = parse_date_robust(edu.get("end_date"), None)
                 Education.objects.create(
                     profile=profile,
                     institution=edu.get("institution", "Institution")[:100],
@@ -1503,13 +1691,12 @@ class CandidateVersionRollbackView(LoginRequiredMixin, View):
         for sk in data.get("skills", []):
             CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title())
             
+        from apps.candidates.utils import parse_date_robust
+
         profile.experiences.all().delete()
         for exp in data.get("experience", []):
-            try:
-                s_date = datetime.strptime(exp.get("start_date"), "%Y-%m-%d").date() if exp.get("start_date") else None
-                e_date = datetime.strptime(exp.get("end_date"), "%Y-%m-%d").date() if exp.get("end_date") else None
-            except Exception:
-                s_date, e_date = None, None
+            s_date = parse_date_robust(exp.get("start_date"), None)
+            e_date = parse_date_robust(exp.get("end_date"), None)
             Experience.objects.create(
                 profile=profile,
                 company_name=exp.get("company", "Company")[:100],
@@ -1521,11 +1708,8 @@ class CandidateVersionRollbackView(LoginRequiredMixin, View):
             
         profile.educations.all().delete()
         for edu in data.get("education", []):
-            try:
-                s_date = datetime.strptime(edu.get("start_date"), "%Y-%m-%d").date() if edu.get("start_date") else None
-                e_date = datetime.strptime(edu.get("end_date"), "%Y-%m-%d").date() if edu.get("end_date") else None
-            except Exception:
-                s_date, e_date = None, None
+            s_date = parse_date_robust(edu.get("start_date"), None)
+            e_date = parse_date_robust(edu.get("end_date"), None)
             Education.objects.create(
                 profile=profile,
                 institution=edu.get("institution", "Institution")[:100],
@@ -1546,10 +1730,7 @@ class CandidateVersionRollbackView(LoginRequiredMixin, View):
             
         profile.certifications.all().delete()
         for cert in data.get("certifications", []):
-            try:
-                i_date = datetime.strptime(cert.get("issue_date"), "%Y-%m-%d").date() if cert.get("issue_date") else None
-            except Exception:
-                i_date = None
+            i_date = parse_date_robust(cert.get("issue_date"), None)
             Certification.objects.create(
                 profile=profile,
                 name=cert.get("name", "Certification")[:255],
