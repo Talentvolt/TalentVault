@@ -4,40 +4,71 @@
 
 {% block extra_css %}
 <style>
-    .metric-card {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 16px;
-        backdrop-filter: var(--glass-blur);
-        -webkit-backdrop-filter: var(--glass-blur);
-        box-shadow: var(--card-shadow);
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+    .sticky-top-filters {
+        position: sticky;
+        top: 70px;
+        z-index: 1020;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
     }
-    .metric-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.1);
+    .candidate-row {
+        transition: all 0.2s ease;
+        background: #ffffff;
     }
-    
-    .filter-card {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 16px;
-        backdrop-filter: var(--glass-blur);
-        -webkit-backdrop-filter: var(--glass-blur);
-        box-shadow: var(--card-shadow);
+    .candidate-row:hover {
+        background-color: #f8fafc !important;
     }
-    
-    .btn-xs {
-        padding: 4px 12px;
-        font-size: 0.75rem;
+    .candidate-actions {
+        position: absolute;
+        right: 24px;
+        top: 50%;
+        transform: translateY(-50%) scale(0.95);
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 100;
+        background: #ffffff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
-    
+    .candidate-row:hover .candidate-actions {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(-50%) scale(1);
+    }
+    .candidate-name-link {
+        font-weight: 700;
+        transition: color 0.15s ease;
+    }
+    .candidate-name-link:hover {
+        color: #4f46e5 !important;
+    }
+    .ats-badge-green {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #c8e6c9;
+    }
+    .ats-badge-orange {
+        background-color: #fff3e0;
+        color: #ef6c00;
+        border: 1px solid #ffe0b2;
+    }
+    .ats-badge-red {
+        background-color: #ffebee;
+        color: #c62828;
+        border: 1px solid #ffcdd2;
+    }
+    .avatar-md {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
     .x-small {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
     }
-    
-    .text-xs {
-        font-size: 0.75rem;
+    .btn-xs {
+        padding: 4px 10px;
+        font-size: 0.72rem;
+        border-radius: 6px;
     }
 </style>
 {% endblock %}
@@ -48,214 +79,471 @@
         <h3 class="fw-bold m-0"><i class="bi bi-people me-2 text-primary"></i>Talent Vault</h3>
         <p class="text-secondary small m-0">Search and filter your verified database of candidate profiles.</p>
     </div>
-    <div class="text-secondary small fw-medium">Found {{ candidates.count }} candidates</div>
+    <div class="text-secondary small fw-medium">Found {{ candidates|length }} candidates</div>
 </div>
 
-<div class="row g-4 fade-in">
-    <!-- Filter Sidebar -->
-    <div class="col-lg-3">
-        <div class="card filter-card border-0 sticky-top" style="top: 90px; z-index: 100;">
-            <div class="card-header bg-transparent border-bottom fw-bold py-3">
-                <i class="bi bi-filter me-2 text-primary"></i>Pipeline Filters
+<!-- Horizontal Filter Bar -->
+<div class="filters-bar bg-white border border-light-subtle rounded-3 p-3 mb-4 shadow-sm sticky-top-filters">
+    <form method="GET" id="candidate-filters-form">
+        <!-- Main Filters Line -->
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search candidates..." value="{{ filters.q|default:'' }}">
+                </div>
             </div>
-            <div class="card-body">
-                <form method="GET">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-primary"><i class="bi bi-briefcase me-1"></i> Match Against Job</label>
-                        <select name="job_id" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">-- Choose Job --</option>
-                            {% for j in active_jobs %}
-                                <option value="{{ j.id }}" {% if selected_job.id == j.id %}selected{% endif %}>{{ j.title }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Keywords</label>
-                        <input type="text" name="q" class="form-control form-control-sm" placeholder="Name, Email..." value="{{ filters.q }}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Skills</label>
-                        <input type="text" name="skills" class="form-control form-control-sm" placeholder="Java, React..." value="{{ filters.skills }}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Location</label>
-                        <input type="text" name="location" class="form-control form-control-sm" placeholder="City..." value="{{ filters.location }}">
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold">Min Exp</label>
-                            <input type="number" name="min_exp" class="form-control form-control-sm" value="{{ filters.min_exp }}">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold">Max Exp</label>
-                            <input type="number" name="max_exp" class="form-control form-control-sm" value="{{ filters.max_exp }}">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Current Company</label>
-                        <input type="text" name="company" class="form-control form-control-sm" value="{{ filters.company }}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold">Max CTC (LPA)</label>
-                        <input type="number" name="max_ctc" class="form-control form-control-sm" value="{{ filters.max_ctc }}">
-                    </div>
-                    
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold">Min ATS</label>
-                            <input type="number" name="min_ats" class="form-control form-control-sm" min="0" max="100" placeholder="0" value="{{ filters.min_ats }}">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold">Max ATS</label>
-                            <input type="number" name="max_ats" class="form-control form-control-sm" min="0" max="100" placeholder="100" value="{{ filters.max_ats }}">
-                        </div>
-                    </div>
+            <div class="col-md-2">
+                <select name="department" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Departments</option>
+                    <option value="engineering" {% if filters.department == 'engineering' %}selected{% endif %}>Engineering</option>
+                    <option value="sales" {% if filters.department == 'sales' %}selected{% endif %}>Sales</option>
+                    <option value="product" {% if filters.department == 'product' %}selected{% endif %}>Product</option>
+                    <option value="marketing" {% if filters.department == 'marketing' %}selected{% endif %}>Marketing</option>
+                    <option value="hr" {% if filters.department == 'hr' %}selected{% endif %}>HR</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="job_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Jobs</option>
+                    {% for j in active_jobs %}
+                        <option value="{{ j.id }}" {% if selected_job.id == j.id %}selected{% endif %}>{{ j.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="stage" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Stages</option>
+                    <option value="SOURCED" {% if filters.stage == 'SOURCED' %}selected{% endif %}>Sourced</option>
+                    <option value="OPEN" {% if filters.stage == 'OPEN' %}selected{% endif %}>Applied</option>
+                    <option value="SCREENING_SELECT" {% if filters.stage == 'SCREENING_SELECT' %}selected{% endif %}>Shortlisted</option>
+                    <option value="INTERVIEW_SCHEDULE" {% if filters.stage == 'INTERVIEW_SCHEDULE' %}selected{% endif %}>Interviewing</option>
+                    <option value="OFFER_STAGE" {% if filters.stage == 'OFFER_STAGE' %}selected{% endif %}>Offer</option>
+                    <option value="ACCEPTED" {% if filters.stage == 'ACCEPTED' %}selected{% endif %}>Hired</option>
+                </select>
+            </div>
+            <div class="col-md-1.5 col-sm-6">
+                <select name="tags" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Tags</option>
+                    <option value="immediate" {% if filters.tags == 'immediate' %}selected{% endif %}>Immediate Joiner</option>
+                    <option value="referral" {% if filters.tags == 'referral' %}selected{% endif %}>Referral</option>
+                </select>
+            </div>
+            <div class="col-md-1.5 col-sm-6">
+                <button type="button" class="btn btn-sm btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-1" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false">
+                    <i class="bi bi-sliders"></i> Filters
+                </button>
+            </div>
+        </div>
 
-                    <div class="mb-4">
-                        <label class="form-label small fw-semibold">Sort By</label>
-                        <select name="sort_by" class="form-select form-select-sm">
-                            <option value="">Default (Newest First)</option>
+        <!-- Collapsible Advanced Filters -->
+        <div class="collapse {% if filters.skills or filters.location or filters.min_exp or filters.max_exp or filters.company or filters.max_ctc or filters.min_ats or filters.max_ats or filters.sort_by %}show{% endif %}" id="advancedFilters">
+            <div class="border-top mt-3 pt-3">
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <label class="form-label text-secondary x-small fw-semibold mb-1">Skills</label>
+                        <input type="text" name="skills" class="form-control form-control-sm" placeholder="Java, Python..." value="{{ filters.skills|default:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-secondary x-small fw-semibold mb-1">Location</label>
+                        <input type="text" name="location" class="form-control form-control-sm" placeholder="City..." value="{{ filters.location|default:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-secondary x-small fw-semibold mb-1">Experience (Min - Max Yrs)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="min_exp" class="form-control" placeholder="Min" value="{{ filters.min_exp|default:'' }}">
+                            <input type="number" name="max_exp" class="form-control" placeholder="Max" value="{{ filters.max_exp|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-secondary x-small fw-semibold mb-1">Current Company</label>
+                        <input type="text" name="company" class="form-control form-control-sm" placeholder="Google..." value="{{ filters.company|default:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-secondary x-small fw-semibold mb-1">ATS Suitability Score</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="min_ats" class="form-control" min="0" max="100" placeholder="0" value="{{ filters.min_ats|default:'' }}">
+                            <input type="number" name="max_ats" class="form-control" min="0" max="100" placeholder="100" value="{{ filters.max_ats|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-secondary x-small fw-semibold mb-1">Sort By</label>
+                        <select name="sort_by" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Newest First</option>
                             <option value="ats_desc" {% if filters.sort_by == 'ats_desc' %}selected{% endif %}>ATS Score (High to Low)</option>
                             <option value="ats_asc" {% if filters.sort_by == 'ats_asc' %}selected{% endif %}>ATS Score (Low to High)</option>
                         </select>
                     </div>
-                    
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm rounded-3">Apply Filters</button>
-                        <a href="{% url 'frontend:candidate_search' %}" class="btn btn-outline-secondary btn-sm rounded-3">Reset</a>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <a href="{% url 'frontend:candidate_search' %}" class="btn btn-xs btn-outline-secondary px-3 py-1.5 rounded-2">Reset All</a>
+                    <button type="submit" class="btn btn-xs btn-primary px-4 py-1.5 rounded-2">Apply Filters</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- List Container -->
+<div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <!-- Bulk actions bar (hidden by default) -->
+    <div id="bulk-actions-bar" class="bg-light border-bottom px-4 py-2.5 d-none align-items-center justify-content-between transition">
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-secondary small fw-semibold" id="selected-count">0 candidates selected</span>
+            <button class="btn btn-xs btn-outline-primary rounded-2 py-1"><i class="bi bi-envelope me-1"></i>Email</button>
+            <button class="btn btn-xs btn-outline-success rounded-2 py-1" data-bs-toggle="modal" data-bs-target="#bulkPipelineModal"><i class="bi bi-plus-circle me-1"></i>Shortlist</button>
+            <button class="btn btn-xs btn-outline-danger rounded-2 py-1"><i class="bi bi-x-circle me-1"></i>Reject</button>
+        </div>
+        <div>
+            <button class="btn btn-xs btn-link text-secondary text-decoration-none" onclick="clearSelection()">Clear Selection</button>
+        </div>
+    </div>
+
+    <!-- Table Header Row -->
+    <div class="bg-light border-bottom px-3 py-2 d-flex align-items-center justify-content-between text-secondary x-small fw-semibold">
+        <div class="d-flex align-items-center gap-3 flex-grow-1">
+            <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" id="select-all-candidates" onchange="toggleSelectAll(this)">
+            </div>
+            <div style="width: 50%; padding-left: 55px;">Candidate Information</div>
+            <div style="width: 45%; padding-left: 10px;">Applied Details</div>
+        </div>
+    </div>
+
+    <!-- Candidate Rows List -->
+    <div class="candidate-list">
+        {% for candidate in candidates %}
+        <div class="candidate-row p-3 border-bottom d-flex align-items-center justify-content-between position-relative" data-candidate-id="{{ candidate.id }}">
+            <div class="d-flex align-items-center gap-3 w-100">
+                <!-- Checkbox -->
+                <div class="form-check m-0">
+                    <input class="form-check-input candidate-checkbox" type="checkbox" value="{{ candidate.id }}" onchange="updateBulkBar()">
+                </div>
+
+                <div class="row w-100 g-3 align-items-start">
+                    <!-- LEFT SECTION -->
+                    <div class="col-md-6 d-flex gap-3 align-items-start">
+                        <!-- Avatar -->
+                        <div class="avatar-md text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5" style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);">
+                            {{ candidate.full_name|slice:":1"|upper|default:candidate.user.email|slice:":1"|upper }}
+                        </div>
+                        
+                        <div class="d-flex flex-column gap-1 overflow-hidden">
+                            <div class="d-flex align-items-center gap-2">
+                                <h6 class="fw-bold text-dark m-0"><a href="{% url 'frontend:candidate_detail' candidate.id %}{% if selected_job %}?job_id={{ selected_job.id }}{% endif %}" class="text-dark text-decoration-none candidate-name-link">{{ candidate.full_name|default:candidate.user.email }}</a></h6>
+                                {% if candidate.is_immediate_joiner %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill x-small">Immediate</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="text-secondary small fw-medium text-truncate">
+                                {{ candidate.current_designation|default:"Designation: N/A" }} {% if candidate.current_company %}at <span class="text-dark">{{ candidate.current_company }}</span>{% endif %}
+                            </div>
+                            
+                            <div class="text-secondary x-small d-flex align-items-center gap-1">
+                                <i class="bi bi-mortarboard text-muted"></i>
+                                <span>
+                                    {% if candidate.educations.all %}
+                                        {% with edu=candidate.educations.first %}
+                                            {{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %} from {{ edu.institution }}
+                                        {% endwith %}
+                                    {% else %}
+                                        B.A Economics
+                                    {% endif %}
+                                </span>
+                            </div>
+                            
+                            <div class="text-secondary x-small d-flex align-items-center gap-1">
+                                <i class="bi bi-geo-alt text-muted"></i>
+                                <span>{{ candidate.location|default:"New Delhi, India" }}</span>
+                            </div>
+
+                            <div class="text-secondary x-small fw-semibold">
+                                Exp: {{ candidate.total_experience|floatformat:1 }} Years
+                            </div>
+                            
+                            <!-- Skills tags -->
+                            <div class="d-flex flex-wrap gap-1 mt-1 align-items-center">
+                                <span class="x-small text-muted me-1">Skills:</span>
+                                {% for s in candidate.skills.all|slice:":4" %}
+                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">{{ s.skill_name }}</span>
+                                {% empty %}
+                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">Sales</span>
+                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">CRM</span>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- RIGHT SECTION -->
+                    <div class="col-md-6">
+                        <div class="row w-100 g-1">
+                            <div class="col-12 d-flex justify-content-between align-items-start">
+                                <div class="d-flex flex-column gap-1 overflow-hidden" style="max-width: 75%;">
+                                    <span class="fw-semibold text-dark text-truncate small">
+                                        {% if candidate.job_applications.first %}
+                                            {{ candidate.job_applications.first.job.title }}
+                                        {% elif selected_job %}
+                                            {{ selected_job.title }}
+                                        {% else %}
+                                            Business Development Executive
+                                        {% endif %}
+                                    </span>
+                                    <span class="text-secondary x-small">
+                                        {% if candidate.job_applications.first %}
+                                            {{ candidate.job_applications.first.job.company.name }}
+                                        {% else %}
+                                            Sales & Account Management
+                                        {% endif %}
+                                    </span>
+                                    <span class="text-secondary x-small">
+                                        {% if candidate.job_applications.first %}
+                                            {{ candidate.job_applications.first.job.location }}
+                                        {% else %}
+                                            Delhi / Gurgaon / Ghaziabad
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="d-flex flex-column align-items-end gap-1.5" style="min-width: 25%;">
+                                    <!-- Stage Badge -->
+                                    <span class="badge {% if candidate.job_applications.first %}{{ candidate.job_applications.first.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-1 rounded-pill small fw-medium">
+                                        Stage: {% if candidate.job_applications.first %}{{ candidate.job_applications.first.get_stage_display }}{% else %}Sourced{% endif %}
+                                    </span>
+                                    
+                                    <!-- ATS Score Badge -->
+                                    <div class="d-flex align-items-center gap-1.5 mt-1">
+                                        {% if selected_job and candidate.match_details %}
+                                            {% with score=candidate.match_details.total_score %}
+                                                <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
+                                                    {{ score }}% ATS
+                                                </span>
+                                            {% endwith %}
+                                        {% else %}
+                                            {% with score=candidate.ats_score %}
+                                                <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
+                                                    {{ score }}% ATS
+                                                </span>
+                                            {% endwith %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-between text-secondary x-small">
+                                <span>Source: <span class="fw-medium text-dark">{% if candidate.linkedin_url %}LinkedIn{% else %}Resume Upload{% endif %}</span></span>
+                                <span>Applied: <span class="fw-medium text-dark">{{ candidate.created_at|timesince }} ago</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Candidate Action overlay/menu displayed on hover -->
+            <div class="candidate-actions bg-white border border-light-subtle rounded-3 py-1.5 px-2 shadow-sm d-flex gap-1 align-items-center justify-content-end">
+                <a href="{% url 'frontend:candidate_detail' candidate.id %}" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" title="View Profile">
+                    <i class="bi bi-eye"></i> View Profile
+                </a>
+                {% if candidate.resume %}
+                    <a href="{{ candidate.resume.url }}" target="_blank" class="btn btn-xs btn-outline-secondary d-flex align-items-center gap-1" title="Download Resume">
+                        <i class="bi bi-download"></i> Resume
+                    </a>
+                {% endif %}
+                <button class="btn btn-xs btn-outline-success d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#addToPipelineModal{{ candidate.id }}" title="Add to Pipeline">
+                    <i class="bi bi-plus-circle"></i> Add to Pipeline
+                </button>
+                <a href="{% url 'frontend:interviews' %}?candidate_id={{ candidate.id }}" class="btn btn-xs btn-outline-info d-flex align-items-center gap-1" title="Schedule Interview">
+                    <i class="bi bi-calendar-event"></i> Schedule
+                </a>
+                <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="m-0 d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-xs btn-outline-danger d-flex align-items-center gap-1" title="Reject Candidate">
+                        <i class="bi bi-x-circle"></i> Reject
+                    </button>
                 </form>
             </div>
         </div>
-    </div>
 
-    <!-- Results Card Grid -->
-    <div class="col-lg-9">
-        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
-            {% for candidate in candidates %}
-            <div class="col">
-                <div class="card metric-card h-100 d-flex flex-column justify-content-between p-4">
-                    <div>
-                        <!-- Top Row: Avatar & ATS Score -->
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5" style="width: 44px; height: 44px; min-width: 44px;">
-                                    {{ candidate.full_name|slice:":1"|upper|default:candidate.user.email|slice:":1"|upper }}
-                                </div>
-                                <div class="overflow-hidden">
-                                    <h6 class="fw-bold text-dark m-0 text-truncate">{{ candidate.full_name|default:candidate.user.email }}</h6>
-                                    <span class="text-secondary x-small d-block text-truncate">{{ candidate.current_designation|default:"Designation: N/A" }}</span>
-                                </div>
-                            </div>
-                            <div>
-                                {% if selected_job and candidate.match_details %}
-                                    <span class="badge {{ candidate.match_details.badge_class }} px-2.5 py-1.5 small fw-bold" title="Job Match Suitability Index">{{ candidate.match_details.total_score }}% Match</span>
-                                {% else %}
-                                    <span class="badge {{ candidate.ats_score_badge_class }} px-2.5 py-1.5 small fw-bold" title="ATS Score">{{ candidate.ats_score }}% ATS</span>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Info Details Block -->
-                        <div class="bg-light p-2.5 rounded-3 mb-3 border border-light">
-                            <div class="row g-2 small">
-                                <div class="col-6">
-                                    <span class="text-secondary small"><i class="bi bi-briefcase me-1"></i>Exp:</span>
-                                    <span class="fw-semibold text-dark">{{ candidate.total_experience|floatformat:1 }} Yrs</span>
-                                </div>
-                                <div class="col-6">
-                                    <span class="text-secondary small"><i class="bi bi-geo-alt me-1"></i>Loc:</span>
-                                    <span class="fw-semibold text-dark text-truncate d-inline-block w-75">{{ candidate.location|default:"N/A" }}</span>
-                                </div>
-                                <div class="col-12 mt-1">
-                                    <span class="text-secondary small"><i class="bi bi-building me-1"></i>Company:</span>
-                                    <span class="fw-semibold text-dark text-truncate d-inline-block w-75">{{ candidate.current_company|default:"N/A" }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Skills chips -->
-                        <div class="mb-3">
-                            <div class="d-flex flex-wrap" style="max-height: 56px; overflow: hidden;">
-                                {% for s in candidate.skills.all|slice:":5" %}
-                                    <span class="badge bg-light text-dark border x-small me-1 mb-1">{{ s.skill_name }}</span>
-                                {% empty %}
-                                    <span class="text-muted small">No skills parsed yet</span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Footer Actions -->
-                    <div class="border-top pt-3 mt-3 d-flex justify-content-between align-items-center">
-                        <div class="small">
-                            {% if candidate.resume %}
-                                <a href="{{ candidate.resume.url }}" target="_blank" class="text-primary text-decoration-none fw-semibold small" title="Preview Resume"><i class="bi bi-file-earmark-pdf me-1"></i>Preview</a>
-                            {% else %}
-                                <span class="text-muted small">No resume</span>
-                            {% endif %}
-                        </div>
-                        <div class="d-flex gap-2">
-                            <a href="{% url 'frontend:candidate_detail' candidate.id %}{% if selected_job %}?job_id={{ selected_job.id }}{% endif %}" class="btn btn-xs btn-outline-primary px-3 rounded-pill text-xs">View Profile</a>
-                            <button class="btn btn-xs btn-success px-3 rounded-pill text-xs" data-bs-toggle="modal" data-bs-target="#addToPipelineModal{{ candidate.id }}"><i class="bi bi-plus-circle me-1"></i>Add</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add to Pipeline Modal for this Candidate -->
-            <div class="modal fade" id="addToPipelineModal{{ candidate.id }}" tabindex="-1" aria-hidden="true">
-              <div class="modal-dialog text-start">
-                <div class="modal-content border-0 shadow-lg">
-                  <div class="modal-header bg-light">
-                    <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Add to Pipeline</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}">
-                    {% csrf_token %}
-                    <div class="modal-body text-dark">
-                        <p class="small text-secondary mb-3">Shortlist candidate <strong>{{ candidate.full_name|default:candidate.user.email }}</strong> to an active role.</p>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Select Job Opening</label>
-                            <select name="job_id" class="form-select" required>
-                                <option value="">-- Choose Job --</option>
-                                {% for job in active_jobs %}
-                                    <option value="{{ job.id }}">{{ job.title }} ({{ job.location }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="modal-footer bg-light">
-                      <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal">Cancel</button>
-                      <button type="submit" class="btn btn-success btn-sm px-4">Confirm Shortlist</button>
-                    </div>
-                  </form>
-                </div>
+        <!-- Add to Pipeline Modal for this Candidate -->
+        <div class="modal fade" id="addToPipelineModal{{ candidate.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog text-start">
+            <div class="modal-content border-0 shadow-lg">
+              <div class="modal-header bg-light">
+                <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Add to Pipeline</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
               </div>
+              <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}">
+                {% csrf_token %}
+                <div class="modal-body text-dark">
+                    <p class="small text-secondary mb-3">Shortlist candidate <strong>{{ candidate.full_name|default:candidate.user.email }}</strong> to an active role.</p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Select Job Opening</label>
+                        <select name="job_id" class="form-select" required>
+                            <option value="">-- Choose Job --</option>
+                            {% for job in active_jobs %}
+                                <option value="{{ job.id }}">{{ job.title }} ({{ job.location }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-success btn-sm px-4">Confirm Shortlist</button>
+                </div>
+              </form>
             </div>
-            {% empty %}
-            <div class="col-12 w-100 text-center py-5 text-secondary">
-                <i class="bi bi-people fs-1 text-secondary-50 mb-3 d-block"></i>
-                <h5>No candidates found matching your criteria.</h5>
-                <p class="text-secondary">Try adjusting your filters or search keywords.</p>
-            </div>
-            {% endfor %}
+          </div>
         </div>
-
-        <!-- Pagination -->
-        {% if is_paginated %}
-        <nav class="mt-4">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a></li>
-                {% endif %}
-                <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
-                {% if page_obj.has_next %}
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a></li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
+        {% empty %}
+        <div class="w-100 text-center py-5 text-secondary">
+            <i class="bi bi-people fs-1 text-secondary-50 mb-3 d-block"></i>
+            <h5>No candidates found matching your criteria.</h5>
+            <p class="text-secondary">Try adjusting your filters or search keywords.</p>
+        </div>
+        {% endfor %}
     </div>
 </div>
+
+<!-- Bulk Shortlist Modal -->
+<div class="modal fade" id="bulkPipelineModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Bulk Add to Pipeline</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-dark">
+        <p class="small text-secondary mb-3">Add the selected candidates to an active role.</p>
+        <div class="mb-3">
+            <label class="form-label small fw-bold">Select Job Opening</label>
+            <select id="bulk-job-select" class="form-select" required>
+                <option value="">-- Choose Job --</option>
+                {% for job in active_jobs %}
+                    <option value="{{ job.id }}">{{ job.title }} ({{ job.location }})</option>
+                {% endfor %}
+            </select>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success btn-sm px-4" onclick="submitBulkShortlist()">Confirm Shortlist</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center pagination-sm">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link border-light-subtle text-secondary" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link border-light-subtle text-muted">
+                <i class="bi bi-chevron-left"></i> Previous
+            </span>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link bg-primary border-primary text-white">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+                <li class="page-item"><a class="page-link border-light-subtle text-secondary" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link border-light-subtle text-secondary" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link border-light-subtle text-muted">
+                Next <i class="bi bi-chevron-right"></i>
+            </span>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<script>
+    function updateBulkBar() {
+        const checkboxes = document.querySelectorAll('.candidate-checkbox:checked');
+        const count = checkboxes.length;
+        const bar = document.getElementById('bulk-actions-bar');
+        const countSpan = document.getElementById('selected-count');
+        const selectAllCb = document.getElementById('select-all-candidates');
+        const totalCbs = document.querySelectorAll('.candidate-checkbox').length;
+        
+        // Update master select-all checkbox state
+        if (count === totalCbs && totalCbs > 0) {
+            selectAllCb.checked = true;
+            selectAllCb.indeterminate = false;
+        } else if (count > 0) {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = true;
+        } else {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = false;
+        }
+        
+        if (count > 0) {
+            bar.classList.remove('d-none');
+            bar.classList.add('d-flex');
+            countSpan.textContent = count + ' candidate' + (count > 1 ? 's' : '') + ' selected';
+        } else {
+            bar.classList.add('d-none');
+            bar.classList.remove('d-flex');
+        }
+    }
+    
+    function toggleSelectAll(masterCb) {
+        document.querySelectorAll('.candidate-checkbox').forEach(cb => {
+            cb.checked = masterCb.checked;
+        });
+        updateBulkBar();
+    }
+    
+    function clearSelection() {
+        document.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = false);
+        updateBulkBar();
+    }
+    
+    function submitBulkShortlist() {
+        const jobId = document.getElementById('bulk-job-select').value;
+        if (!jobId) {
+            alert('Please select a job.');
+            return;
+        }
+        const checkboxes = document.querySelectorAll('.candidate-checkbox:checked');
+        const ids = Array.from(checkboxes).map(cb => cb.value);
+        
+        let promises = ids.map(id => {
+            return fetch(`/candidates/${id}/add-to-pipeline/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `job_id=${jobId}`
+            });
+        });
+        
+        Promise.all(promises).then(() => {
+            alert(`Successfully shortlisted ${ids.length} candidates!`);
+            location.reload();
+        }).catch(err => {
+            console.error(err);
+            alert('Error shortlisting some candidates.');
+        });
+    }
+</script>
 {% endblock %}
