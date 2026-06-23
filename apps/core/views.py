@@ -533,6 +533,10 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         from apps.jobs.models import Job
         context = super().get_context_data(**kwargs)
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[DETAIL_VIEW] Recruiter {self.request.user.email} accessed candidate profile: {self.object.id} ({self.object.full_name})")
         context['active_jobs'] = Job.objects.filter(status='ACTIVE')
         context['stage_choices'] = Application.ApplicationStage.choices
         
