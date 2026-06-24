@@ -31,3 +31,11 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
             'linkedin_url', 'portfolio_url', 'skills', 'experiences', 'educations', 'created_at'
         )
         read_only_fields = ('id', 'created_at')
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if instance.current_salary is not None:
+            ret['current_salary'] = instance.current_salary_lpa
+        if instance.expected_salary is not None:
+            ret['expected_salary'] = instance.expected_salary_lpa
+        return ret

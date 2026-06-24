@@ -79,11 +79,11 @@
                         <div class="row mb-0 bg-light p-3 rounded-3">
                             <div class="col-md-3">
                                 <div class="text-secondary small text-uppercase fw-bold">Current CTC</div>
-                                <div class="fw-bold">₹{{ candidate.current_salary|default:"0"|floatformat:1 }}</div>
+                                <div class="fw-bold">{{ candidate.current_salary_lpa }}</div>
                             </div>
                             <div class="col-md-3">
                                 <div class="text-secondary small text-uppercase fw-bold">Expected CTC</div>
-                                <div class="fw-bold">₹{{ candidate.expected_salary|default:"0"|floatformat:1 }}</div>
+                                <div class="fw-bold">{{ candidate.expected_salary_lpa }}</div>
                             </div>
                             <div class="col-md-3">
                                 <div class="text-secondary small text-uppercase fw-bold">Notice Period</div>

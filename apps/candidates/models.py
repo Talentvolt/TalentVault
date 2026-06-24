@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from apps.core.models import BaseAppModel
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
+from utils.salary_formatter import format_salary_lpa
 
 def validate_candidate_name(value):
     if not value:
@@ -49,6 +50,14 @@ class CandidateProfile(BaseAppModel):
     linkedin_url = models.URLField(blank=True, null=True)
     portfolio_url = models.URLField(blank=True, null=True)
     ats_score = models.PositiveIntegerField(default=0, db_index=True, help_text="Calculated ATS suitability score (0-100)")
+
+    @property
+    def current_salary_lpa(self):
+        return format_salary_lpa(self.current_salary)
+
+    @property
+    def expected_salary_lpa(self):
+        return format_salary_lpa(self.expected_salary)
     
     # Resume Intelligence Engine fields
     original_file = models.FileField(upload_to='resumes/original/', null=True, blank=True)

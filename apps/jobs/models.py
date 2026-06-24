@@ -3,6 +3,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.models import BaseAppModel
 from apps.companies.models import Company
 from django.conf import settings
+from utils.salary_formatter import format_salary_lpa
 
 class Job(BaseAppModel):
     """
@@ -48,6 +49,24 @@ class Job(BaseAppModel):
     
     is_remote = models.BooleanField(default=False)
     application_deadline = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def min_salary_lpa(self):
+        return format_salary_lpa(self.min_salary)
+
+    @property
+    def max_salary_lpa(self):
+        return format_salary_lpa(self.max_salary)
+
+    @property
+    def salary_range_lpa(self):
+        if self.min_salary and self.max_salary:
+            return f"{self.min_salary_lpa} - {self.max_salary_lpa}"
+        elif self.min_salary:
+            return self.min_salary_lpa
+        elif self.max_salary:
+            return self.max_salary_lpa
+        return "Not Specified"
     
     class Meta:
         verbose_name = _('job')

@@ -21,6 +21,14 @@ class JobSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ('id', 'created_at')
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if instance.min_salary is not None:
+            ret['min_salary'] = instance.min_salary_lpa
+        if instance.max_salary is not None:
+            ret['max_salary'] = instance.max_salary_lpa
+        return ret
+
     def create(self, validated_data):
         skills_data = validated_data.pop('skills', [])
         job = Job.objects.create(**validated_data)

@@ -2,33 +2,180 @@
 
 {% block title %}Job Management | TalentVault{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Styling to improve table UI & make it smooth like Workable */
+    .jobs-table-card {
+        border-radius: 16px;
+        overflow: visible !important; /* Allow dropdown to overflow */
+        border: none;
+        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
+        background: #ffffff;
+    }
+    
+    .table-responsive {
+        overflow: visible !important; /* Ensure dropdown menus are visible */
+    }
+    
+    .jobs-table tbody tr {
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .jobs-table tbody tr:hover {
+        background-color: rgba(37, 99, 235, 0.015) !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    }
+
+    .jobs-table td, .jobs-table th {
+        padding-top: 1.25rem !important;
+        padding-bottom: 1.25rem !important;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: middle;
+    }
+    
+    .dropdown {
+        position: relative;
+    }
+    
+    .dropdown-menu {
+        position: absolute !important;
+        z-index: 1060 !important; /* High enough to be on top of table elements */
+        margin-top: 0.25rem;
+    }
+
+    /* Styled Applications badge */
+    .apps-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.8rem;
+        font-weight: 600;
+        font-size: 0.8rem;
+        border-radius: 30px;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        background-color: rgba(37, 99, 235, 0.08);
+        color: #2563eb !important;
+    }
+    
+    .apps-badge:hover {
+        transform: scale(1.05);
+        background-color: rgba(37, 99, 235, 0.15);
+    }
+
+    /* Styled Status badges */
+    .status-badge-open {
+        background-color: #ecfdf5;
+        color: #059669;
+        border: 1px solid #a7f3d0;
+        padding: 0.35rem 0.75rem;
+        border-radius: 30px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .status-badge-draft {
+        background-color: #fffbeb;
+        color: #d97706;
+        border: 1px solid #fde68a;
+        padding: 0.35rem 0.75rem;
+        border-radius: 30px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .status-badge-hold {
+        background-color: #f0f9ff;
+        color: #0284c7;
+        border: 1px solid #bae6fd;
+        padding: 0.35rem 0.75rem;
+        border-radius: 30px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .status-badge-closed {
+        background-color: #f8fafc;
+        color: #64748b;
+        border: 1px solid #cbd5e1;
+        padding: 0.35rem 0.75rem;
+        border-radius: 30px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .status-badge-paused {
+        background-color: #faf5ff;
+        color: #7c3aed;
+        border: 1px solid #e9d5ff;
+        padding: 0.35rem 0.75rem;
+        border-radius: 30px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    /* Modal Share buttons styling */
+    .btn-share-option {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 fade-in">
-    <h3 class="fw-bold m-0"><i class="bi bi-briefcase me-2 text-primary"></i>Job Management</h3>
+    <h3 class="fw-bold m-0" style="font-family: 'Outfit', sans-serif;"><i class="bi bi-briefcase me-2 text-primary"></i>Job Management</h3>
     <div class="d-flex gap-2">
-        <div class="btn-group">
-            <span class="btn btn-light border btn-sm">Active ({{ active_count|default:0 }})</span>
-            <span class="btn btn-light border btn-sm">Draft ({{ draft_count|default:0 }})</span>
-            <span class="btn btn-light border btn-sm">On Hold ({{ on_hold_count|default:0 }})</span>
+        <div class="btn-group shadow-sm">
+            <span class="btn btn-light border btn-sm fw-medium">Active ({{ active_count|default:0 }})</span>
+            <span class="btn btn-light border btn-sm fw-medium">Draft ({{ draft_count|default:0 }})</span>
+            <span class="btn btn-light border btn-sm fw-medium">On Hold ({{ on_hold_count|default:0 }})</span>
         </div>
-        <a href="{% url 'frontend:job_create' %}" class="btn btn-primary btn-sm px-3"><i class="bi bi-plus-lg me-1"></i> Post New Job</a>
+        <a href="{% url 'frontend:job_create' %}" class="btn btn-primary btn-sm px-3 shadow-sm fw-medium"><i class="bi bi-plus-lg me-1"></i> Post New Job</a>
     </div>
 </div>
 
 <!-- Filters & Sorting Card -->
-<div class="card shadow-sm border-0 mb-4 fade-in">
-    <div class="card-body">
+<div class="card shadow-sm border-0 mb-4 fade-in" style="border-radius: 16px;">
+    <div class="card-body p-4">
         <form method="GET" class="row g-3 align-items-end">
             <!-- Search -->
             <div class="col-md-3">
-                <label for="q" class="form-label small fw-semibold text-secondary">Search</label>
-                <input type="text" name="q" id="q" class="form-control form-control-sm" placeholder="Title or description..." value="{{ q }}">
+                <label for="q" class="form-label small fw-bold text-secondary">Search</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="q" id="q" class="form-control form-control-sm border-start-0" placeholder="Title or description..." value="{{ q }}">
+                </div>
             </div>
             
             <!-- Status Filter -->
             <div class="col-md-2">
-                <label for="status" class="form-label small fw-semibold text-secondary">Status</label>
-                <select name="status" id="status" class="form-select form-select-sm">
+                <label for="status" class="form-label small fw-bold text-secondary">Status</label>
+                <select name="status" id="status" class="form-select form-select-sm fw-medium">
                     <option value="">All Statuses</option>
                     {% for value, name in statuses %}
                         <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ name }}</option>
@@ -38,8 +185,8 @@
             
             <!-- Job Type Filter -->
             <div class="col-md-2">
-                <label for="job_type" class="form-label small fw-semibold text-secondary">Job Type</label>
-                <select name="job_type" id="job_type" class="form-select form-select-sm">
+                <label for="job_type" class="form-label small fw-bold text-secondary">Job Type</label>
+                <select name="job_type" id="job_type" class="form-select form-select-sm fw-medium">
                     <option value="">All Types</option>
                     {% for value, name in job_types %}
                         <option value="{{ value }}" {% if selected_job_type == value %}selected{% endif %}>{{ name }}</option>
@@ -49,8 +196,8 @@
             
             <!-- Sort By -->
             <div class="col-md-3">
-                <label for="sort_by" class="form-label small fw-semibold text-secondary">Sort By</label>
-                <select name="sort_by" id="sort_by" class="form-select form-select-sm">
+                <label for="sort_by" class="form-label small fw-bold text-secondary">Sort By</label>
+                <select name="sort_by" id="sort_by" class="form-select form-select-sm fw-medium">
                     <option value="-created_at" {% if selected_sort == '-created_at' %}selected{% endif %}>Newest First</option>
                     <option value="created_at" {% if selected_sort == 'created_at' %}selected{% endif %}>Oldest First</option>
                     <option value="title" {% if selected_sort == 'title' %}selected{% endif %}>Title A-Z</option>
@@ -62,83 +209,99 @@
             
             <!-- Actions -->
             <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-filter me-1"></i>Filter</button>
-                <a href="{% url 'frontend:jobs' %}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-semibold"><i class="bi bi-filter me-1"></i>Filter</button>
+                <a href="{% url 'frontend:jobs' %}" class="btn btn-outline-secondary btn-sm w-100 fw-semibold">Clear</a>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Jobs Table Card -->
-<div class="card shadow-sm border-0 fade-in">
+<div class="card jobs-table-card fade-in">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table jobs-table align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4 py-3">Job Title</th>
-                        <th class="py-3">Client / Company</th>
-                        <th class="py-3">Salary Range</th>
-                        <th class="py-3 text-center">Applications</th>
-                        <th class="py-3">Status</th>
-                        <th class="pe-4 py-3 text-end">Actions</th>
+                        <th class="ps-4 py-3 text-secondary fw-bold" style="font-size: 0.78rem;">JOB TITLE</th>
+                        <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">CLIENT / COMPANY</th>
+                        <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">SALARY RANGE</th>
+                        <th class="py-3 text-center text-secondary fw-bold" style="font-size: 0.78rem;">APPLICATIONS</th>
+                        <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">STATUS</th>
+                        <th class="pe-4 py-3 text-end text-secondary fw-bold" style="font-size: 0.78rem;">ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for job in jobs %}
                     <tr>
                         <td class="ps-4">
-                            <div class="fw-bold text-dark">{{ job.title }}</div>
-                            <div class="text-secondary x-small">{{ job.location }} | {{ job.get_job_type_display }}</div>
+                            <div class="fw-bold text-dark fs-6">{{ job.title }}</div>
+                            <div class="text-secondary small mt-0.5"><i class="bi bi-geo-alt-fill me-1 text-secondary opacity-75"></i>{{ job.location }} &bull; {{ job.get_job_type_display }}</div>
                         </td>
                         <td>
-                            <span class="small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</span>
+                            <div class="fw-semibold text-secondary small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</div>
                         </td>
                         <td>
-                            <span class="small fw-medium">{{ job.currency }} {{ job.min_salary|floatformat:0 }} - {{ job.max_salary|floatformat:0 }}</span>
+                            <span class="fw-bold text-success small">{{ job.salary_range_lpa }}</span>
                         </td>
                         <td class="text-center">
-                            <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="badge bg-primary bg-opacity-10 text-primary text-decoration-none px-2.5 py-1.5 rounded-pill">
-                                {{ job.app_count|default:0 }} Apps
+                            <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="apps-badge shadow-sm">
+                                <i class="bi bi-people-fill"></i> {{ job.app_count|default:0 }} Candidates
                             </a>
                         </td>
                         <td>
                             {% if job.status == 'ACTIVE' %}
-                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Open</span>
+                                <span class="status-badge-open"><i class="bi bi-check-circle-fill"></i> Open</span>
                             {% elif job.status == 'DRAFT' %}
-                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">Draft</span>
+                                <span class="status-badge-draft"><i class="bi bi-pencil-fill"></i> Draft</span>
                             {% elif job.status == 'ON_HOLD' %}
-                                <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1">On Hold</span>
+                                <span class="status-badge-hold"><i class="bi bi-pause-circle-fill"></i> On Hold</span>
+                            {% elif job.status == 'PAUSED' %}
+                                <span class="status-badge-paused"><i class="bi bi-slash-circle-fill"></i> Paused</span>
                             {% else %}
-                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">{{ job.get_status_display }}</span>
+                                <span class="status-badge-closed"><i class="bi bi-x-circle-fill"></i> {{ job.get_status_display }}</span>
                             {% endif %}
                         </td>
                         <td class="pe-4 text-end">
                             <div class="dropdown">
-                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots"></i>
+                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport">
+                                    <i class="bi bi-three-dots-vertical"></i>
                                 </button>
-                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
-                                    <li><a class="dropdown-item py-2" href="{% url 'frontend:job_edit' job.id %}"><i class="bi bi-pencil me-2"></i> Edit</a></li>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="border-radius: 12px; min-width: 160px;">
+                                    <li>
+                                        <a class="dropdown-item py-2 fw-medium" href="{% url 'frontend:public_job_share' job.id %}" target="_blank">
+                                            <i class="bi bi-eye text-secondary me-2"></i> View Job
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item py-2 fw-medium" href="{% url 'frontend:job_edit' job.id %}">
+                                            <i class="bi bi-pencil text-secondary me-2"></i> Edit Job
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item py-2 fw-medium" type="button" data-bs-toggle="modal" data-bs-target="#shareJobModal" data-job-title="{{ job.title }}" data-company-name="{{ job.company.name }}" data-share-url="{{ job.share_url }}">
+                                            <i class="bi bi-share text-secondary me-2"></i> Share Job
+                                        </button>
+                                    </li>
                                     <li>
                                         <form method="POST" action="{% url 'frontend:job_action' job.id 'clone' %}">
                                             {% csrf_token %}
-                                            <button type="submit" class="dropdown-item py-2 text-primary"><i class="bi bi-copy me-2"></i> Clone</button>
+                                            <button type="submit" class="dropdown-item py-2 fw-medium text-primary"><i class="bi bi-copy me-2"></i> Duplicate Job</button>
                                         </form>
                                     </li>
-                                    <li><hr class="dropdown-divider"></li>
                                     {% if job.status != 'CLOSED' %}
                                     <li>
                                         <form method="POST" action="{% url 'frontend:job_action' job.id 'close' %}">
                                             {% csrf_token %}
-                                            <button type="submit" class="dropdown-item py-2 text-warning"><i class="bi bi-slash-circle me-2"></i> Close Job</button>
+                                            <button type="submit" class="dropdown-item py-2 fw-medium text-warning"><i class="bi bi-slash-circle me-2"></i> Close Job</button>
                                         </form>
                                     </li>
                                     {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <form method="POST" action="{% url 'frontend:job_delete' job.id %}" onsubmit="return confirm('Are you sure you want to delete this job?');">
                                             {% csrf_token %}
-                                            <button type="submit" class="dropdown-item py-2 text-danger"><i class="bi bi-trash me-2"></i> Delete</button>
+                                            <button type="submit" class="dropdown-item py-2 fw-medium text-danger"><i class="bi bi-trash me-2"></i> Delete Job</button>
                                         </form>
                                     </li>
                                 </ul>
@@ -160,7 +323,7 @@
         <!-- Pagination -->
         {% if is_paginated %}
         <div class="d-flex justify-content-between align-items-center p-3 border-top">
-            <span class="small text-secondary">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} jobs</span>
+            <span class="small text-secondary fw-semibold">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} jobs</span>
             <nav>
                 <ul class="pagination pagination-sm m-0">
                     {% if page_obj.has_previous %}
@@ -188,4 +351,105 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Share Job Modal -->
+<div class="modal fade" id="shareJobModal" tabindex="-1" aria-labelledby="shareJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="shareJobModalLabel"><i class="bi bi-share me-2 text-primary"></i>Share Job</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-secondary small mb-4">Share <strong id="modalJobTitle">Job Title</strong> at <strong id="modalCompanyName">Company</strong> with prospective candidates using the links below.</p>
+                
+                <div class="d-flex flex-column gap-3">
+                    <!-- Copy Link -->
+                    <button class="btn btn-light border btn-share-option text-dark" id="modalCopyBtn" data-share-url="">
+                        <i class="bi bi-link-45deg fs-5"></i> Copy Link
+                    </button>
+                    
+                    <!-- WhatsApp -->
+                    <a href="#" target="_blank" class="btn btn-success btn-share-option text-white" id="modalWhatsappBtn">
+                        <i class="bi bi-whatsapp fs-5"></i> Share on WhatsApp
+                    </a>
+                    
+                    <!-- Email -->
+                    <a href="#" class="btn btn-primary btn-share-option text-white" style="background-color: #6366f1; border-color: #6366f1;" id="modalEmailBtn">
+                        <i class="bi bi-envelope fs-5"></i> Share via Email
+                    </a>
+
+                    <!-- Open in New Tab -->
+                    <a href="#" target="_blank" class="btn btn-primary btn-share-option text-white" id="modalOpenBtn">
+                        <i class="bi bi-box-arrow-up-right fs-5"></i> Open in New Tab
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shareJobModal = document.getElementById('shareJobModal');
+    if (shareJobModal) {
+        shareJobModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const jobTitle = button.getAttribute('data-job-title');
+            const companyName = button.getAttribute('data-company-name');
+            const shareUrl = button.getAttribute('data-share-url');
+            
+            // Set details
+            document.getElementById('modalJobTitle').textContent = jobTitle;
+            document.getElementById('modalCompanyName').textContent = companyName;
+            
+            // Set copy button link attribute
+            const copyBtn = document.getElementById('modalCopyBtn');
+            copyBtn.setAttribute('data-share-url', shareUrl);
+            copyBtn.innerHTML = '<i class="bi bi-link-45deg fs-5"></i> Copy Link';
+            
+            // Set WhatsApp link
+            const whatsappBtn = document.getElementById('modalWhatsappBtn');
+            const whatsappText = encodeURIComponent(`Check out this job opening for ${jobTitle} at ${companyName}: ${shareUrl}`);
+            whatsappBtn.setAttribute('href', `https://api.whatsapp.com/send?text=${whatsappText}`);
+            
+            // Set Email link
+            const emailBtn = document.getElementById('modalEmailBtn');
+            const emailSubject = encodeURIComponent(`Job Opportunity: ${jobTitle} at ${companyName}`);
+            const emailBody = encodeURIComponent(`Hi,\n\nI found this interesting job opening for ${jobTitle} at ${companyName}.\n\nLink: ${shareUrl}`);
+            emailBtn.setAttribute('href', `mailto:?subject=${emailSubject}&body=${emailBody}`);
+
+            // Set Open link
+            const openBtn = document.getElementById('modalOpenBtn');
+            openBtn.setAttribute('href', shareUrl);
+        });
+        
+        // Copy link handler
+        const copyBtn = document.getElementById('modalCopyBtn');
+        copyBtn.addEventListener('click', function() {
+            const url = this.getAttribute('data-share-url');
+            navigator.clipboard.writeText(url).then(() => {
+                copyBtn.innerHTML = '<i class="bi bi-check-lg fs-5"></i> Copied!';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="bi bi-link-45deg fs-5"></i> Copy Link';
+                }, 2000);
+            }).catch(() => {
+                // fallback
+                const input = document.createElement('input');
+                input.value = url;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                copyBtn.innerHTML = '<i class="bi bi-check-lg fs-5"></i> Copied!';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="bi bi-link-45deg fs-5"></i> Copy Link';
+                }, 2000);
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

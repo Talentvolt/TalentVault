@@ -1,0 +1,296 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ job.title }} at {{ job.company.name }} | TalentVault</title>
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+    <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --secondary: #06b6d4;
+            --bg-light: #f8fafc;
+            --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 2px 10px -2px rgba(0, 0, 0, 0.02);
+            --border-color: #e2e8f0;
+            --text-color: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .navbar {
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+        }
+
+        .job-card {
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            background: #ffffff;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .job-header {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            padding: 2.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .job-body {
+            padding: 2.5rem;
+        }
+
+        .badge-info {
+            background-color: rgba(37, 99, 235, 0.08);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            border-radius: 30px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: 1px solid rgba(37, 99, 235, 0.15);
+        }
+
+        .badge-skill {
+            background-color: #f1f5f9;
+            color: var(--text-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.9rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: inline-block;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-share {
+            transition: all 0.25s ease;
+            font-weight: 600;
+            border-radius: 12px;
+            padding: 0.6rem 1.2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-whatsapp {
+            background-color: #25d366;
+            color: #ffffff;
+        }
+        .btn-whatsapp:hover {
+            background-color: #20ba56;
+            color: #ffffff;
+        }
+
+        .btn-email {
+            background-color: #6366f1;
+            color: #ffffff;
+        }
+        .btn-email:hover {
+            background-color: #4f46e5;
+            color: #ffffff;
+        }
+
+        .btn-copy {
+            background-color: #f1f5f9;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+        .btn-copy:hover {
+            background-color: #e2e8f0;
+        }
+
+        .btn-new-tab {
+            background-color: var(--primary);
+            color: #ffffff;
+        }
+        .btn-new-tab:hover {
+            background-color: var(--primary-hover);
+            color: #ffffff;
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1050;
+        }
+
+        .jd-content h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-top: 1.75rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-color);
+        }
+
+        .jd-content ul {
+            padding-left: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .jd-content li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-light bg-white mb-5">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 36px; width: auto; object-fit: contain;">
+            </a>
+            <span class="text-muted small fw-semibold">Public Job Posting</span>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container mb-5">
+        <div class="row g-4">
+            <!-- Job Details Column -->
+            <div class="col-lg-8">
+                <div class="job-card">
+                    <!-- Header -->
+                    <div class="job-header">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge-info"><i class="bi bi-briefcase-fill"></i> {{ job.get_job_type_display }}</span>
+                            {% if job.is_remote %}
+                            <span class="badge-info bg-success-subtle text-success border-success-subtle"><i class="bi bi-laptop-fill"></i> Remote</span>
+                            {% endif %}
+                        </div>
+                        <h2 class="fw-bold mb-2" style="font-family: 'Outfit', sans-serif; font-size: 2.2rem; letter-spacing: -0.5px;">{{ job.title }}</h2>
+                        <h4 class="text-primary fw-semibold mb-4">{{ job.company.name }}</h4>
+                        
+                        <div class="row g-3">
+                            <div class="col-sm-4">
+                                <div class="text-secondary small text-uppercase fw-bold mb-1"><i class="bi bi-geo-alt me-1"></i> Location</div>
+                                <div class="fw-bold">{{ job.location }}</div>
+                            </div>
+                            <div class="col-sm-4">
+                                <div class="text-secondary small text-uppercase fw-bold mb-1"><i class="bi bi-award me-1"></i> Experience</div>
+                                <div class="fw-bold">{{ job.min_experience }} - {{ job.max_experience }} Years</div>
+                            </div>
+                            <div class="col-sm-4">
+                                <div class="text-secondary small text-uppercase fw-bold mb-1"><i class="bi bi-cash-stack me-1"></i> Salary</div>
+                                <div class="fw-bold text-success">{{ job.salary_range_lpa }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="job-body">
+                        <!-- Skills tags -->
+                        {% if job.skills.all %}
+                        <div class="mb-4">
+                            <h5 class="fw-bold mb-3">Required Skills</h5>
+                            <div>
+                                {% for skill in job.skills.all %}
+                                <span class="badge-skill">{{ skill.skill_name }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        {% endif %}
+
+                        <!-- Description -->
+                        <div>
+                            <h5 class="fw-bold mb-3">Job Description</h5>
+                            <div class="jd-content text-secondary" style="line-height: 1.7;">
+                                {{ job.description|safe }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Share Job Column -->
+            <div class="col-lg-4">
+                <div class="card p-4 border-0 shadow-sm rounded-4 sticky-top" style="top: 2rem;">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-share-fill me-2 text-primary"></i> Share this Job</h5>
+                    <p class="text-secondary small mb-4">Know someone who fits this role? Share the job link via the channels below.</p>
+                    
+                    <div class="d-flex flex-column gap-3">
+                        <!-- Copy Link -->
+                        <button class="btn btn-share btn-copy w-100" id="btn_copy_link" data-url="{{ share_url }}">
+                            <i class="bi bi-link-45deg fs-5"></i> Copy Link
+                        </button>
+                        
+                        <!-- WhatsApp -->
+                        <a href="https://api.whatsapp.com/send?text=Check%20out%20this%20job%20opening%20for%20{{ job.title|urlencode }}%20at%20{{ job.company.name|urlencode }}%3A%20{{ share_url|urlencode }}" target="_blank" class="btn btn-share btn-whatsapp w-100">
+                            <i class="bi bi-whatsapp fs-5"></i> Share on WhatsApp
+                        </a>
+                        
+                        <!-- Email -->
+                        <a href="mailto:?subject=Job%20Opportunity%3A%20{{ job.title|urlencode }}%20at%20{{ job.company.name|urlencode }}&body=Hi%2C%0A%0AI%20found%20this%20interesting%20job%20opening%20for%20{{ job.title|urlencode }}%20at%20{{ job.company.name|urlencode }}.%0A%0ALink%3A%20{{ share_url|urlencode }}" class="btn btn-share btn-email w-100">
+                            <i class="bi bi-envelope fs-5"></i> Share via Email
+                        </a>
+
+                        <!-- Open in new tab -->
+                        <a href="{{ share_url }}" target="_blank" class="btn btn-share btn-new-tab w-100">
+                            <i class="bi bi-box-arrow-up-right fs-5"></i> Open in New Tab
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container">
+        <div id="copyToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-check-circle-fill me-2"></i> Link copied to clipboard!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('btn_copy_link').addEventListener('click', function() {
+            const url = this.getAttribute('data-url');
+            navigator.clipboard.writeText(url).then(function() {
+                const toastEl = document.getElementById('copyToast');
+                const toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }).catch(function(err) {
+                // Fallback
+                const input = document.createElement('input');
+                input.value = url;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                
+                const toastEl = document.getElementById('copyToast');
+                const toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            });
+        });
+    </script>
+</body>
+</html>

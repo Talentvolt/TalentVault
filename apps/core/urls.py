@@ -17,6 +17,7 @@ from .views import (
     CandidateRejectView,
     AddToPipelineView,
     PublicCandidateProfileView,
+    PublicJobShareView,
     ATSPipelineView,
     UpdateApplicationStageView,
     UpdateApplicationStageDirectView,
@@ -56,6 +57,7 @@ urlpatterns = [
     path('jobs/<uuid:pk>/edit/', JobUpdateView.as_view(), name='job_edit'),
     path('jobs/<uuid:pk>/delete/', JobDeleteView.as_view(), name='job_delete'),
     path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
+    path('jobs/share/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share'),
     
     path('location-search/', LocationSearchView.as_view(), name='location_search'),
     

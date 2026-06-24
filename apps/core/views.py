@@ -297,6 +297,12 @@ class JobsView(LoginRequiredMixin, ListView):
             ('REMOTE', 'Remote'),
         ]
         context['statuses'] = Job.JobStatus.choices
+
+        # Pre-generate absolute share URLs using request.build_absolute_uri()
+        for job in context.get('jobs', []):
+            job.share_url = self.request.build_absolute_uri(
+                reverse('frontend:public_job_share', kwargs={'pk': job.pk})
+            )
         
         return context
 
@@ -898,6 +904,19 @@ class PublicCandidateProfileView(DetailView):
                 resume_missing = True
         context['resume_exists'] = resume_exists
         context['resume_missing'] = resume_missing
+        return context
+
+class PublicJobShareView(DetailView):
+    model = Job
+    template_name = 'public_job_share.html'
+    context_object_name = 'job'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        share_url = self.request.build_absolute_uri(
+            reverse('frontend:public_job_share', kwargs={'pk': self.object.pk})
+        )
+        context['share_url'] = share_url
         return context
 
 class AddToPipelineView(RecruiterRequiredMixin, View):
