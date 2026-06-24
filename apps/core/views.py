@@ -1170,7 +1170,7 @@ class ExportJobsView(RecruiterRequiredMixin, View):
         writer = csv.writer(response)
         writer.writerow(['Title', 'Company', 'Location', 'Job Type', 'Experience Level', 'Salary Min', 'Salary Max', 'Status'])
         for j in Job.objects.select_related('company').all():
-            writer.writerow([j.title, j.company.name, j.location, j.job_type, j.experience_level, j.min_salary, j.max_salary, j.status])
+            writer.writerow([j.title, j.company.name, j.location, j.job_type, f"{j.min_experience}-{j.max_experience} Years", j.min_salary, j.max_salary, j.status])
         return response
 
 class ExportInterviewsView(RecruiterRequiredMixin, View):

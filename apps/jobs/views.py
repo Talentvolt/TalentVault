@@ -18,7 +18,7 @@ class JobViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
-    filterset_fields = ['company', 'job_type', 'experience_level', 'is_remote', 'status']
+    filterset_fields = ['company', 'job_type', 'is_remote', 'status']
     search_fields = ['title', 'description', 'location', 'skills__skill_name']
     ordering_fields = ['created_at', 'min_salary']
     ordering = ['-created_at']

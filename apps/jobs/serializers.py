@@ -15,7 +15,7 @@ class JobSerializer(serializers.ModelSerializer):
         model = Job
         fields = (
             'id', 'company', 'company_details', 'title', 'description', 'location', 
-            'job_type', 'experience_level', 'min_experience', 'max_experience', 
+            'job_type', 'min_experience', 'max_experience', 
             'min_salary', 'max_salary', 'currency', 'status', 'is_remote', 
             'application_deadline', 'skills', 'created_at'
         )
