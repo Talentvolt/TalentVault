@@ -408,7 +408,6 @@ body {
 }
 
 /* Scoped Dropdown & Popover Layering (z-index: 2000) */
-.dashboard-quick-action .dropdown-menu,
 .table-actions .dropdown-menu,
 .flatpickr-calendar,
 .candidate-actions,

@@ -29,40 +29,7 @@
         <h2 class="fw-bold m-0 text-dark" style="font-size: 1.75rem; letter-spacing: -0.5px;">Good Morning, TalentVault 👋</h2>
         <p class="text-secondary small m-0 mt-1">Here's what's happening with your recruitment today.</p>
     </div>
-    
-    <div class="d-flex align-items-center gap-3">
-        <!-- Quick Action Trigger -->
-        <div class="dropdown dashboard-quick-action">
-            <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
-                <i class="bi bi-plus-lg me-1"></i> Quick Action
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                <li>
-                    <a class="dropdown-item py-2" href="{% url 'frontend:job_create' %}">
-                        <i class="bi bi-briefcase me-2 text-primary"></i>
-                        Post Job
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item py-2" href="{% url 'frontend:resume_parser' %}">
-                        <i class="bi bi-file-earmark-arrow-up me-2 text-success"></i>
-                        Parse Resume
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item py-2" href="{% url 'frontend:candidate_search' %}">
-                        <i class="bi bi-person-plus me-2 text-info"></i>
-                        Add Candidate
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item py-2" href="{% url 'frontend:interviews' %}">
-                        <i class="bi bi-calendar-event me-2 text-warning"></i>
-                        Schedule Interview
-                    </a>
-                </li>
-            </ul>
-        </div>
+    <div>
         <span class="text-secondary small fw-medium bg-white border px-3 py-1.5 rounded-pill"><i class="bi bi-calendar3 me-1 text-primary"></i> {{ timezone_now|date:"l, M d, Y" }}</span>
     </div>
 </div>
