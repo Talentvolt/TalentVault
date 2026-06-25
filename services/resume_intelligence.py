@@ -169,6 +169,22 @@ class ResumeIntelligenceService:
         if not any(char.isalpha() for char in name_clean):
             return False
             
+        # Reject resume titles
+        normalized = re.sub(r'[^a-z0-9]', '', name_clean.lower())
+        blacklisted_words = ['curriculumvitae', 'resume', 'biodata', 'curriculum', 'vitae']
+        for bw in blacklisted_words:
+            if bw in normalized:
+                return False
+                
+        # Exact cv word check
+        words = re.sub(r'[^a-zA-Z\s]', '', name_clean).lower().split()
+        if 'cv' in words:
+            return False
+            
+        # Must not be a single long run-on word without spaces (e.g. CURRICULUMVITAE)
+        if ' ' not in name_clean and len(name_clean) > 12:
+            return False
+            
         return True
 
     @staticmethod
@@ -277,12 +293,49 @@ class ResumeIntelligenceService:
         return round(years, 2)
 
     @staticmethod
+    def get_duration_display(start_str: str, end_str: str) -> str:
+        if not start_str:
+            return ""
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d").date()
+        except Exception:
+            return ""
+            
+        if not end_str or end_str.strip().lower() in ["present", "current", "today", "now", "ongoing"]:
+            end_dt = datetime.now().date()
+        else:
+            try:
+                end_dt = datetime.strptime(end_str, "%Y-%m-%d").date()
+            except Exception:
+                end_dt = datetime.now().date()
+                
+        if start_dt > end_dt:
+            return "0 months"
+            
+        diff_years = end_dt.year - start_dt.year
+        diff_months = end_dt.month - start_dt.month
+        total_months = diff_years * 12 + diff_months
+        
+        years = total_months // 12
+        months = total_months % 12
+        
+        parts = []
+        if years > 0:
+            parts.append(f"{years} Year" + ("s" if years > 1 else ""))
+        if months > 0:
+            parts.append(f"{months} Month" + ("s" if months > 1 else ""))
+        if not parts:
+            return "0 months"
+        return " ".join(parts)
+
+    @staticmethod
     def clean_camel_case_name(name: str) -> str:
         if not name or not isinstance(name, str):
             return name
         name_clean = name.strip()
-        # Insert space before any uppercase letter that is not the start of the string
-        splitted = re.sub(r'(?<!^)(?=[A-Z])', ' ', name_clean)
+        # Insert space before any uppercase letter that follows a lowercase letter (e.g. RohanKumar -> Rohan Kumar)
+        # or between consecutive uppercase letters followed by a lowercase (e.g. HTMLParser -> HTML Parser)
+        splitted = re.sub(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', ' ', name_clean)
         # Normalize multiple spaces
         return " ".join(splitted.split())
 
@@ -565,7 +618,7 @@ class ResumeIntelligenceService:
         # Extract name (heuristic: first few lines not matching email/phone/urls)
         h_name = ""
         for line in lines[:5]:
-            if "@" not in line and not any(kw in line.lower() for kw in ["phone", "tel", "email", "http", "resume", "cv", "page"]):
+            if "@" not in line and not any(kw in line.lower() for kw in ["phone", "tel", "email", "http", "resume", "cv", "page", "curriculum", "vitae", "biodata", "curriculumvitae"]):
                 # Clean name lines from dates/locations
                 if not re.search(r'\b(delhi|mumbai|bangalore|pune|hyderabad|noida|gurgaon|california|london)\b', line, re.I):
                     h_name = line
@@ -573,13 +626,41 @@ class ResumeIntelligenceService:
 
         name = ResumeIntelligenceService.extract_candidate_name(text, parsed_name=h_name)
 
-        # Location detection
+        # Location, Address, and City detection
+        address = ""
+        city = ""
         location = "Unknown"
+        
+        # Address detection
+        address_keywords = ["address", "residence", "hometown", "location"]
+        for line in lines:
+            if any(akw in line.lower() for akw in address_keywords):
+                addr_line = re.sub(r'^(address|residence|hometown|location)[:\-\s]*', '', line, flags=re.I).strip()
+                if addr_line and len(addr_line) > 3:
+                    address = addr_line
+                    break
+                    
+        if not address:
+            pincode_match = re.search(r'\b\d{6}\b', text)
+            if pincode_match:
+                for line in lines:
+                    if pincode_match.group(0) in line:
+                        address = line.strip()
+                        break
+                        
+        # City detection
         locations = ['Delhi', 'Mumbai', 'Bangalore', 'Hyderabad', 'Pune', 'Noida', 'Gurgaon', 'Patna', 'Lucknow', 'Begusarai', 'Samastipur', 'Chennai', 'Kolkata']
         for loc in locations:
             if loc.lower() in text.lower():
-                location = loc
+                city = loc
                 break
+                
+        if city:
+            location = city
+            if address and city.lower() not in address.lower():
+                address = f"{address}, {city}"
+        elif address:
+            location = address
 
         # Skills extraction
         skills_dict = [
@@ -594,7 +675,7 @@ class ResumeIntelligenceService:
             if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
                 skills.append(skill.title())
 
-        # Extract Summary (heuristic: look for "summary", "profile", "about me" headers)
+        # Extract Summary (heuristic: look for "career objective", "objective", "summary", "profile", "about me" headers)
         summary = ""
         summary_found = False
         summary_lines = []
@@ -606,7 +687,7 @@ class ResumeIntelligenceService:
                 if summary_found:
                     summary_lines.append("")
                 continue
-            if any(h in l_lower for h in ["summary", "professional summary", "career profile", "about me"]):
+            if any(h in l_lower for h in ["career objective", "objective", "summary", "professional summary", "career profile", "about me"]):
                 summary_found = True
                 continue
             if summary_found:
@@ -615,9 +696,21 @@ class ResumeIntelligenceService:
                 summary_lines.append(line)
         if summary_lines:
             summary = "\n".join(summary_lines).strip()
+            summary = re.sub(r'^\s+|\s+$', '', summary)
         else:
-            # Fallback summary
-            summary = lines[1] if len(lines) > 1 else ""
+            # Fallback summary: find first line that is not a name, email, phone, or title
+            for line in lines[1:10]:
+                l_clean = line.strip()
+                if not ResumeIntelligenceService.is_valid_name(l_clean) and "@" not in l_clean and not any(kw in l_clean.lower() for kw in ["phone", "email", "github", "linkedin", "curriculum", "vitae", "resume", "cv", "biodata"]):
+                    summary = l_clean
+                    break
+            if not summary and lines:
+                summary = lines[1] if len(lines) > 1 else lines[0]
+
+        # Clean name from summary if it somehow ended up in it
+        if name and summary:
+            summary = re.sub(rf'\b{re.escape(name)}\b', '', summary, flags=re.I).strip()
+            summary = re.sub(r'^\s*[-–—,.:;]\s*', '', summary)
 
         # Section-based extraction
         current_section = None
@@ -715,19 +808,28 @@ class ResumeIntelligenceService:
             if not line_str:
                 continue
                 
-            is_date = bool(date_range_regex.search(line_str))
+            date_match = date_range_regex.search(line_str)
+            is_date = bool(date_match)
             is_desc = is_description_line(line_str)
             is_desig = is_designation_line(line_str)
             
-            if is_date and current_block["date_line"]:
-                work_blocks.append(current_block)
-                current_block = {"header_lines": [], "date_line": "", "description_lines": []}
+            if is_date:
+                # Extract date range
+                date_str = date_match.group(0)
+                non_date_part = line_str.replace(date_str, "").strip()
+                non_date_part = re.sub(r'^[-–—,.:;\s]+|[-–—,.:;\s]+$', '', non_date_part).strip()
+                
+                if current_block["date_line"]:
+                    work_blocks.append(current_block)
+                    current_block = {"header_lines": [], "date_line": "", "description_lines": []}
+                
+                current_block["date_line"] = date_str
+                if non_date_part:
+                    current_block["header_lines"].append(non_date_part)
             elif is_desig and current_block["description_lines"]:
                 work_blocks.append(current_block)
                 current_block = {"header_lines": [], "date_line": "", "description_lines": []}
-                
-            if is_date:
-                current_block["date_line"] = line_str
+                current_block["header_lines"].append(line_str)
             elif is_desc:
                 current_block["description_lines"].append(line_str)
             else:
@@ -770,39 +872,90 @@ class ResumeIntelligenceService:
             
             designation = ""
             company = ""
+            location = ""
             
             if designation_line:
                 designation = designation_line
                 other_headers = [h for i, h in enumerate(headers) if i != designation_idx]
                 if other_headers:
                     company = other_headers[0]
+                    if len(other_headers) >= 2:
+                        location = other_headers[1]
             else:
                 if len(headers) == 1:
                     designation = headers[0]
                 elif len(headers) >= 2:
                     designation = headers[0]
                     company = headers[1]
-                    
-            for sep in [" at ", " @ ", " - ", " | ", " , "]:
-                if sep in designation:
-                    parts = designation.split(sep, 1)
-                    designation = parts[0].strip()
-                    company = parts[1].strip()
+                    if len(headers) >= 3:
+                        location = headers[2]
+            
+            # Clean and split the designation line (e.g. "Presently working as Hardware Design Engineer in Champion Semiconductor LLP")
+            designation_clean = designation.strip()
+            # Remove prefixes like "Presently working as", "Working as", etc.
+            designation_clean = re.sub(r'^(presently|currently|actively)?\s*working\s+as\s+', '', designation_clean, flags=re.I).strip()
+            designation_clean = re.sub(r'^worked\s+as\s+', '', designation_clean, flags=re.I).strip()
+            designation_clean = re.sub(r'^role\s*:\s*', '', designation_clean, flags=re.I).strip()
+            
+            # Now split by company separators: " in ", " at ", " @ ", " - ", " | ", " for ", " with "
+            company_separators = [r'\bin\b', r'\bat\b', r'\bfor\b', r'\bwith\b', r'\b@\b', r'\s*-\s*', r'\s*\|\s*']
+            parsed_desig = designation_clean
+            parsed_company = company.strip()
+            parsed_location = location.strip()
+            
+            for sep in company_separators:
+                parts = re.split(sep, designation_clean, maxsplit=1, flags=re.I)
+                if len(parts) == 2:
+                    parsed_desig = parts[0].strip()
+                    parsed_company = parts[1].strip()
                     break
             
-            if designation.lower() == "role":
-                designation = ""
-            if company.lower() == "company":
-                company = ""
-                    
+            # If company contains location info (comma or hyphen separated)
+            if parsed_company:
+                if ',' in parsed_company:
+                    c_parts = parsed_company.split(',', 1)
+                    parsed_company = c_parts[0].strip()
+                    parsed_location = c_parts[1].strip()
+                elif ' - ' in parsed_company:
+                    c_parts = parsed_company.split(' - ', 1)
+                    parsed_company = c_parts[0].strip()
+                    parsed_location = c_parts[1].strip()
+            else:
+                # If parsed_company is empty, split designation by comma
+                if ',' in parsed_desig:
+                    d_parts = parsed_desig.split(',', 1)
+                    parsed_desig = d_parts[0].strip()
+                    parsed_company = d_parts[1].strip()
+                    if ',' in parsed_company:
+                        c_parts = parsed_company.split(',', 1)
+                        parsed_company = c_parts[0].strip()
+                        parsed_location = c_parts[1].strip()
+            
+            # Fallback checks
+            if parsed_desig.lower() == "role":
+                parsed_desig = ""
+            if parsed_company.lower() == "company":
+                parsed_company = ""
+                
+            designation = re.sub(r'^[-–—,.:;\s]+|[-–—,.:;\s]+$', '', parsed_desig).strip()
+            company = re.sub(r'^[-–—,.:;\s]+|[-–—,.:;\s]+$', '', parsed_company).strip()
+            location = re.sub(r'^[-–—,.:;\s]+|[-–—,.:;\s]+$', '', parsed_location).strip()
+            
             company = re.sub(r'\s*\([^)]*\)', '', company).strip()
             designation = re.sub(r'\s*\([^)]*\)', '', designation).strip()
+            location = re.sub(r'\s*\([^)]*\)', '', location).strip()
             
             description = "\n".join(block["description_lines"]).strip()
             
+            duration = ""
+            if start_date_val:
+                duration = ResumeIntelligenceService.get_duration_display(start_date_val, end_date_val)
+                
             experiences.append({
                 "designation": designation,
                 "company": company,
+                "location": location,
+                "duration": duration,
                 "description": description,
                 "start_date": start_date_val,
                 "end_date": end_date_val
@@ -819,6 +972,8 @@ class ResumeIntelligenceService:
             desc = exp["description"].strip()
             s_date = exp["start_date"]
             e_date = exp["end_date"]
+            loc = exp.get("location", "").strip()
+            dur = exp.get("duration", "").strip()
             
             # Clean company and designation names
             comp_clean = comp.lstrip('-•*+ ').strip()
@@ -856,7 +1011,6 @@ class ResumeIntelligenceService:
                 
             # If designation or company is a single short word that is not a real name, skip it if there's no date range
             if not s_date and not e_date:
-                # heuristic: if designation length is too short or is a common OCR typo, skip
                 if (comp_clean and len(comp_clean) < 3) or (desig_clean and len(desig_clean) < 3):
                     continue
 
@@ -878,6 +1032,10 @@ class ResumeIntelligenceService:
                         ge["start_date"] = s_date
                     if e_date and (not ge["end_date"] or e_date > ge["end_date"]):
                         ge["end_date"] = e_date
+                    if not ge.get("location") and loc:
+                        ge["location"] = loc
+                    if ge.get("start_date"):
+                        ge["duration"] = ResumeIntelligenceService.get_duration_display(ge["start_date"], ge["end_date"])
                     matched = True
                     break
             
@@ -885,6 +1043,8 @@ class ResumeIntelligenceService:
                 grouped_experiences.append({
                     "company": comp_clean or "Company",
                     "designation": desig_clean or "Position",
+                    "location": loc or "Location",
+                    "duration": dur or "",
                     "description": desc_bullets,
                     "start_date": s_date,
                     "end_date": e_date
@@ -895,7 +1055,10 @@ class ResumeIntelligenceService:
 
         # 2. Parse Educations
         educations = []
-        edu_degree_keywords = ['mba', 'pgdm', 'b.com', 'bcom', 'b.tech', 'btech', 'b.e.', 'be', 'bsc', 'b.sc', 'msc', 'm.sc', 'phd', 'doctor', 'bachelor', 'master', 'diploma']
+        edu_degree_keywords = [
+            'mba', 'pgdm', 'b.com', 'bcom', 'b.tech', 'btech', 'b.e.', 'be', 'bsc', 'b.sc', 'msc', 'm.sc', 'phd', 
+            'doctor', 'bachelor', 'master', 'diploma', 'high school', 'intermediate', '10th', '12th', 'ssc', 'hsc', 'school'
+        ]
         
         edu_blocks = []
         current_edu = {"header_lines": [], "year_line": ""}
@@ -904,14 +1067,23 @@ class ResumeIntelligenceService:
             line_str = line.strip()
             if not line_str:
                 continue
-            is_year = bool(re.search(r'\b(19\d\d|20\d\d)\b', line_str))
+            year_match = re.search(r'\b(19\d\d|20\d\d)\b', line_str)
+            is_year = bool(year_match)
             
-            if is_year and current_edu["year_line"]:
-                edu_blocks.append(current_edu)
-                current_edu = {"header_lines": [], "year_line": ""}
-                
             if is_year:
-                current_edu["year_line"] = line_str
+                year_str = year_match.group(0)
+                non_year_part = line_str.replace(year_str, "").strip()
+                non_year_part = re.sub(r'^[-–—,.:;\s]+|[-–—,.:;\s]+$', '', non_year_part).strip()
+                non_year_part = re.sub(r'\s*[-–—,.:;]\s*[-–—,.:;]\s*', ' - ', non_year_part)
+                non_year_part = re.sub(r'\s+-\s+', ' - ', non_year_part)
+                
+                if current_edu["year_line"]:
+                    edu_blocks.append(current_edu)
+                    current_edu = {"header_lines": [], "year_line": ""}
+                    
+                current_edu["year_line"] = year_str
+                if non_year_part:
+                    current_edu["header_lines"].append(non_year_part)
             else:
                 current_edu["header_lines"].append(line_str)
                 
@@ -924,7 +1096,17 @@ class ResumeIntelligenceService:
             
             headers = [h.strip() for h in block["header_lines"] if h.strip()]
             if len(headers) == 1:
-                degree = headers[0]
+                h_val = headers[0]
+                split_done = False
+                for sep in [" - ", " , ", " at ", " @ ", " | ", " from "]:
+                    if sep in h_val:
+                        parts = h_val.split(sep, 1)
+                        degree = parts[0].strip()
+                        institution = parts[1].strip()
+                        split_done = True
+                        break
+                if not split_done:
+                    degree = h_val
             elif len(headers) >= 2:
                 line1 = headers[0]
                 line2 = headers[1]
@@ -1009,7 +1191,7 @@ class ResumeIntelligenceService:
             e_date = exp.get("end_date")
             if s_date:
                 total_exp += ResumeIntelligenceService.calculate_experience_years_from_dates(s_date, e_date)
-        total_exp = round(total_exp, 2)
+        total_exp = round(total_exp, 1)
 
         # Print raw extracted experience JSON and final saved experience JSON (for user logs)
         print("--- [RAW EXTRACTED EXPERIENCE JSON] ---")
@@ -1023,6 +1205,8 @@ class ResumeIntelligenceService:
                 "email": email or "candidate@example.com",
                 "phone": phone or "9876543210",
                 "location": location,
+                "address": address,
+                "city": city,
                 "linkedin_url": linkedin,
                 "portfolio_url": portfolio,
                 "current_company": experiences[0]["company"] if experiences else "",
@@ -1075,18 +1259,37 @@ class ResumeIntelligenceService:
         # 3. Normalize degrees
         for edu in improved.get("education", []):
             deg = edu.get("degree", "").lower()
-            if "btech" in deg or "b.tech" in deg or "b.e." in deg or "bachelor" in deg:
-                edu["degree"] = "Bachelor of Technology"
+            if "btech" in deg or "b.tech" in deg or "b.e." in deg or "bachelor of technology" in deg:
+                edu["degree"] = "B.Tech"
             elif "mtech" in deg or "m.tech" in deg or "master" in deg:
-                edu["degree"] = "Master of Technology"
+                edu["degree"] = "M.Tech"
             elif "phd" in deg or "doctor" in deg:
-                edu["degree"] = "Doctor of Philosophy (Ph.D.)"
+                edu["degree"] = "Ph.D."
+            elif "diploma" in deg:
+                edu["degree"] = "Diploma"
+            elif "intermediate" in deg or "12th" in deg or "hsc" in deg:
+                edu["degree"] = "Intermediate"
+            elif "high school" in deg or "10th" in deg or "ssc" in deg or "school" in deg:
+                edu["degree"] = "High School"
             edu["institution"] = edu.get("institution", "").title()
 
-        # 4. Generate professional Summary
-        skills_str = ", ".join(improved.get("skills", [])[:5])
-        info = improved["personal_info"]
-        improved["summary"] = f"Results-driven Software Professional with {info.get('total_experience', 2)} years of experience. Highly skilled in {skills_str}, with a proven track record of designing high-availability architectures and delivering scalable product features."
+        # 4. Generate professional Summary if not present or improve it
+        current_desig = info.get('current_designation') or 'Professional'
+        if current_desig.lower() == 'professional':
+            current_desig = 'Professional'
+            
+        orig_summary = data.get("summary", "")
+        cand_name = info.get("name", "")
+        
+        if orig_summary:
+            clean_summary = orig_summary
+            if cand_name:
+                clean_summary = re.sub(rf'\b{re.escape(cand_name)}\b', '', clean_summary, flags=re.I).strip()
+                clean_summary = re.sub(r'^\s*[-–—,.:;]\s*', '', clean_summary)
+            improved["summary"] = clean_summary
+        else:
+            skills_str = ", ".join(improved.get("skills", [])[:5])
+            improved["summary"] = f"Results-driven {current_desig} with {info.get('total_experience', 2)} years of experience. Highly skilled in {skills_str}, with a proven track record of delivering high-quality results."
 
         # 5. Deduplicate and suggest missing skills
         skills_set = {s.strip().title() for s in improved.get("skills", [])}
