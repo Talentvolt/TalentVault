@@ -147,3 +147,21 @@ def test_first_heading_resume():
     text = "RESUME\nRobert Johnson\nEmail: robert@example.com\nSkills: Python, Django"
     name = ResumeIntelligenceService.extract_candidate_name(text, email="robert@example.com")
     assert name == "Robert Johnson"
+
+
+# --- Company vs Person Entity Regression Tests ---
+
+def test_regression_shreya_chavda_company():
+    text = "SHREYA CHAVDA\nAnant Zaveri Pvt Ltd.\nEmail: shreya.chavda1712@gmail.com"
+    name = ResumeIntelligenceService.extract_candidate_name(text, email="shreya.chavda1712@gmail.com")
+    assert name == "SHREYA CHAVDA"
+
+def test_regression_rohan_kumar_company():
+    text = "ROHAN KUMAR\nChampion Semiconductor LLP\nEmail: rohan@example.com"
+    name = ResumeIntelligenceService.extract_candidate_name(text, email="rohan@example.com")
+    assert name == "ROHAN KUMAR"
+
+def test_regression_harneet_singh_chhabra_company():
+    text = "HARNEET SINGH CHHABRA\nHero MotoCorp\nEmail: harneet@example.com"
+    name = ResumeIntelligenceService.extract_candidate_name(text, email="harneet@example.com")
+    assert name == "HARNEET SINGH CHHABRA"

@@ -186,13 +186,16 @@ class ResumeIntelligenceService:
             return False
             
         # Check if the name contains any blacklisted word as a standalone word
-        words = re.sub(r'[^a-zA-Z\s]', '', name_clean).lower().split()
+        words = re.sub(r'[^a-zA-Z\s]', ' ', name_clean).lower().split()
         blacklisted_words = {
             'curriculum', 'vitae', 'biodata', 'resume', 'cv', 'experience', 'education', 
             'skills', 'projects', 'certifications', 'languages', 'objective', 'summary',
             'profile', 'workexperience', 'careerobjective', 'page', 'email', 'phone',
             'mobile', 'telephone', 'contact', 'address', 'present', 'current',
-            'candidate', 'unknown', 'hometown', 'residence', 'nationality', 'gender'
+            'candidate', 'unknown', 'hometown', 'residence', 'nationality', 'gender',
+            'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company',
+            'corporation', 'technologies', 'solutions', 'industries', 'group',
+            'hospital', 'university', 'college', 'institute', 'school', 'bank', 'corp'
         }
         if any(w in blacklisted_words for w in words):
             return False
@@ -441,42 +444,12 @@ class ResumeIntelligenceService:
             'page', 'email', 'phone', 'contact'
         }
         
-        # Clean helper for candidate name validation
-        def is_ignored(name_str: str) -> bool:
-            normalized = re.sub(r'[^a-z0-9]', '', name_str.lower()).strip()
-            if normalized in IGNORED_HEADINGS:
-                return True
-            words = re.sub(r'[^a-zA-Z\s]', '', name_str).lower().split()
-            if any(w in IGNORED_HEADINGS for w in words):
-                return True
-            return False
-            
-        def is_valid_human_name(name_str: str) -> bool:
-            if not ResumeIntelligenceService.is_valid_name(name_str):
-                return False
-            if is_ignored(name_str):
-                return False
-            words = name_str.split()
-            if not (1 <= len(words) <= 5):
-                return False
-            if len(name_str.strip()) < 3:
-                return False
-            return True
-
-        # Prepare email/linkedin username cross-check words
-        email_username = email.split('@')[0].lower() if email else ""
-        cross_check_words = set(re.sub(r'[^a-z]', ' ', email_username).split()) if email_username else set()
+        COMPANY_KEYWORDS = {
+            'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company',
+            'corporation', 'technologies', 'solutions', 'industries', 'group',
+            'hospital', 'university', 'college', 'institute', 'school', 'bank', 'corp'
+        }
         
-        if linkedin:
-            parts = linkedin.strip('/').split('/')
-            if parts:
-                li_user = parts[-1].lower()
-                cross_check_words.update(re.sub(r'[^a-z]', ' ', li_user).split())
-
-        # 1. Priority 1: parsed_name is valid
-        if parsed_name and is_valid_human_name(parsed_name):
-            return ResumeIntelligenceService.clean_camel_case_name(parsed_name)
-            
         # Parse lines to identify Header lines (stopping at first breaking section heading)
         lines = [l.strip() for l in text.split('\n')]
         header_lines = []
@@ -501,6 +474,62 @@ class ResumeIntelligenceService:
                     count += 1
                 if count >= 15:
                     break
+
+        # Run PERSON vs ORGANIZATION entity classification (pre-scan)
+        rejected_org_texts = set()
+        if SPACY_AVAILABLE:
+            try:
+                import spacy
+                nlp = spacy.load("en_core_web_sm")
+                header_text = "\n".join(header_lines[:12])
+                doc = nlp(header_text)
+                for ent in doc.ents:
+                    if ent.label_ in ("ORG", "GPE", "FAC", "LOC"):
+                        rejected_org_texts.add(ent.text.strip().lower())
+            except Exception as e:
+                print(f"spaCy ORG scan failed: {e}")
+
+        # Clean helper for candidate name validation
+        def is_ignored(name_str: str) -> bool:
+            normalized = re.sub(r'[^a-z0-9]', '', name_str.lower()).strip()
+            if normalized in IGNORED_HEADINGS:
+                return True
+            words = re.sub(r'[^a-zA-Z\s]', ' ', name_str).lower().split()
+            if any(w in IGNORED_HEADINGS for w in words):
+                return True
+            if any(w in COMPANY_KEYWORDS for w in words):
+                return True
+            return False
+            
+        def is_valid_human_name(name_str: str) -> bool:
+            if not ResumeIntelligenceService.is_valid_name(name_str):
+                return False
+            if is_ignored(name_str):
+                return False
+            # PERSON vs ORGANIZATION classification check
+            name_lower = name_str.lower()
+            if name_lower in rejected_org_texts or any(org in name_lower for org in rejected_org_texts):
+                return False
+            words = name_str.split()
+            if not (1 <= len(words) <= 5):
+                return False
+            if len(name_str.strip()) < 3:
+                return False
+            return True
+
+        # Prepare email/linkedin username cross-check words
+        email_username = email.split('@')[0].lower() if email else ""
+        cross_check_words = set(re.sub(r'[^a-z]', ' ', email_username).split()) if email_username else set()
+        
+        if linkedin:
+            parts = linkedin.strip('/').split('/')
+            if parts:
+                li_user = parts[-1].lower()
+                cross_check_words.update(re.sub(r'[^a-z]', ' ', li_user).split())
+
+        # 1. Priority 1: parsed_name is valid
+        if parsed_name and is_valid_human_name(parsed_name):
+            return ResumeIntelligenceService.clean_camel_case_name(parsed_name)
 
         # 2. Priority 2: Use spaCy PERSON entity detection on the header text if available
         if SPACY_AVAILABLE:
