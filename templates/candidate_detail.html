@@ -63,6 +63,7 @@
     <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Talent Vault</a>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
+        <button class="btn btn-outline-info" onclick="previewAIImprovement()"><i class="bi bi-stars me-1"></i> AI Assist</button>
         <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editResumeJSONModal" onclick="loadResumeForm()"><i class="bi bi-braces me-1"></i> Structured Editor</button>
         <a href="{% url 'frontend:candidate_edit' candidate.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit Profile</a>
         <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline">
@@ -77,7 +78,7 @@
 
 <div class="row g-4">
     <!-- Left Column: Profile -->
-    <div class="col-lg-8">
+    <div class="col-12">
         <!-- Duplicate Detection Alerts -->
         {% for dup in duplicates %}
         <div class="alert alert-warning border-0 shadow-sm d-flex justify-content-between align-items-center mb-4 p-3 rounded-3">
@@ -95,57 +96,48 @@
             </div>
         </div>
         {% endfor %}
-        <!-- Profile Header -->
+
+        <!-- Profile Header (Workable Style) -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <div class="d-flex align-items-start gap-4">
+            <div class="d-flex align-items-center gap-4">
                 {% if candidate.has_profile_photo %}
-                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover flex-shrink-0" style="width: 100px; height: 100px; border: 2px solid #dee2e6;" alt="Photo">
+                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover flex-shrink-0" style="width: 90px; height: 90px; border: 2px solid #dee2e6;" alt="Photo">
                 {% else %}
-                    <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 100px; height: 100px;">
-                        <i class="bi bi-person" style="font-size: 48px; line-height: 1;"></i>
+                    <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 90px; height: 90px;">
+                        <i class="bi bi-person" style="font-size: 40px; line-height: 1;"></i>
                     </div>
                 {% endif %}
                 <div class="flex-grow-1">
-                    <div class="d-flex align-items-center gap-3 mb-1">
-                        <h3 class="fw-bold m-0">{{ candidate.full_name|default:candidate.user.email }}</h3>
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <h2 class="fw-bold m-0" style="font-size: 1.8rem; color: #111827;">{{ candidate.full_name|default:candidate.user.email }}</h2>
                         {% if selected_job and match_details %}
-                        <span class="badge {{ match_details.badge_class }} px-3 py-2 rounded-pill fw-bold" style="font-size: 13px;">ATS Score: {{ match_details.total_score }}% ({{ match_details.match_label }})</span>
+                        <span class="badge {{ match_details.badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Score: {{ match_details.total_score }}%</span>
                         {% else %}
-                        <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-2 rounded-pill fw-bold" style="font-size: 13px;">Base Suitability: {{ candidate.ats_score }}% ATS</span>
-                        {% endif %}
-                    </div>
-                    <p class="text-primary fw-medium mb-3">
-                        {% if candidate.current_designation %}
-                        {{ candidate.current_designation }} @ {{ candidate.current_company }}
-                        {% else %}
-                        Professional
-                        {% endif %}
-                    </p>
-                    <div class="d-flex flex-wrap gap-4 text-sm text-secondary mb-4">
-                        <span><i class="bi bi-geo-alt me-1"></i> {{ candidate.location }}</span>
-                        <span><i class="bi bi-envelope me-1"></i> {{ candidate.user.email }}</span>
-                        {% if candidate.user.phone_number %}
-                        <span><i class="bi bi-telephone me-1"></i> {{ candidate.user.phone_number }}</span>
+                        <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Suitability: {{ candidate.ats_score }}%</span>
                         {% endif %}
                     </div>
                     
-                    <div class="row mb-0 bg-light p-3 rounded-3">
-                        <div class="col-md-3">
-                            <div class="text-secondary x-small text-uppercase fw-bold">Current CTC</div>
-                            <div class="fw-bold">{{ candidate.current_salary_lpa }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-secondary x-small text-uppercase fw-bold">Expected CTC</div>
-                            <div class="fw-bold">{{ candidate.expected_salary_lpa }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-secondary x-small text-uppercase fw-bold">Notice Period</div>
-                            <div class="fw-bold">{{ candidate.notice_period }} Days</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-secondary x-small text-uppercase fw-bold">Experience</div>
-                            <div class="fw-bold">{{ candidate.total_experience|floatformat:1 }} Years</div>
-                        </div>
+                    <h5 class="text-primary fw-semibold mb-3" style="font-size: 1.1rem;">
+                        {% if candidate.current_designation %}
+                        {{ candidate.current_designation }} <span class="text-secondary fw-normal">at</span> {{ candidate.current_company }}
+                        {% else %}
+                        Professional
+                        {% endif %}
+                    </h5>
+                    
+                    <div class="d-flex flex-wrap gap-4 text-sm text-secondary mb-3 align-items-center" style="font-size: 0.9rem;">
+                        <span><i class="bi bi-briefcase me-1.5"></i> {{ candidate.total_experience|floatformat:1 }} Years Exp</span>
+                        <span><i class="bi bi-geo-alt me-1.5"></i> {{ candidate.location }}</span>
+                        <span><i class="bi bi-envelope me-1.5"></i> {{ candidate.user.email }}</span>
+                        {% if candidate.user.phone_number %}
+                        <span><i class="bi bi-telephone me-1.5"></i> {{ candidate.user.phone_number }}</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex flex-wrap gap-4 text-xs text-muted border-top pt-2" style="font-size: 0.85rem;">
+                        <span><strong>Current CTC:</strong> {{ candidate.current_salary_lpa }}</span>
+                        <span><strong>Expected CTC:</strong> {{ candidate.expected_salary_lpa }}</span>
+                        <span><strong>Notice Period:</strong> {{ candidate.notice_period }} Days</span>
                     </div>
                 </div>
             </div>
@@ -153,38 +145,38 @@
 
         <!-- Summary -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3">Profile Summary</h5>
-            <p class="text-secondary mb-0">{{ candidate.summary|linebreaksbr }}</p>
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Profile Summary</h5>
+            <p class="text-secondary mb-0" style="line-height: 1.6; font-size: 0.95rem;">{{ candidate.summary|linebreaksbr }}</p>
         </div>
 
         <!-- Experience -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-4">Work Experience</h5>
-                {% for exp in candidate.experiences.all %}
-                <div class="experience-entry mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
-                    <div class="row">
-                        <!-- Left timeline for Dates -->
-                        <div class="col-md-3 mb-2 mb-md-0 text-secondary fw-semibold">
-                            <div style="font-size: 0.95rem;">
-                                {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
-                            </div>
-                            <div class="x-small text-muted fw-normal mt-1 experience-duration-text"></div>
+            <h5 class="fw-bold mb-4" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Work Experience</h5>
+            {% for exp in candidate.experiences.all %}
+            <div class="experience-entry mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
+                <div class="row">
+                    <!-- Left timeline for Dates -->
+                    <div class="col-md-3 mb-2 mb-md-0 text-secondary">
+                        <div class="fw-semibold text-dark mb-1" style="font-size: 0.95rem;">
+                            {{ exp.start_date|date:"M Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif %}
                         </div>
-                        <!-- Right side for Designation, Company, and Description -->
-                        <div class="col-md-9">
-                            <div class="fw-bold text-dark mb-1" style="font-size: 1.05rem;">
-                                {{ exp.designation }}
-                            </div>
-                            <div class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
-                                {{ exp.company_name }}
-                            </div>
-                            <div class="text-secondary small mb-0 lh-base mt-2" style="font-size: 0.88rem;">{{ exp.description|safe }}</div>
+                        <div class="x-small text-muted fw-normal experience-duration-text mt-1" style="font-size: 0.8rem;"></div>
+                    </div>
+                    <!-- Right side for Designation, Company, and Description -->
+                    <div class="col-md-9">
+                        <div class="fw-bold text-dark mb-1" style="font-size: 1.1rem; color: #111827;">
+                            {{ exp.designation }}
                         </div>
+                        <div class="fw-semibold text-secondary mb-3" style="font-size: 0.95rem;">
+                            {{ exp.company_name }}
+                        </div>
+                        <div class="text-secondary lh-base mt-2" style="font-size: 0.92rem; color: #4b5563;">{{ exp.description|safe }}</div>
                     </div>
                 </div>
-                {% empty %}
-                <p class="text-secondary small italic">No work experience listed.</p>
-                {% endfor %}
+            </div>
+            {% empty %}
+            <p class="text-secondary small italic">No work experience listed.</p>
+            {% endfor %}
         </div>
 
         <script>
@@ -223,18 +215,30 @@
 
         <!-- Education -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3">Education</h5>
+            <h5 class="fw-bold mb-4" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Education</h5>
             {% for edu in candidate.educations.all %}
-            <div class="d-flex gap-3 mb-3">
-                <div class="flex-shrink-0">
-                    <div class="bg-success bg-opacity-10 text-success rounded-circle p-2">
-                        <i class="bi bi-book"></i>
+            <div class="mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}">
+                <div class="row">
+                    <!-- Left Column: Dates -->
+                    <div class="col-md-3 mb-2 mb-md-0 text-secondary">
+                        <div class="fw-semibold text-dark" style="font-size: 0.95rem;">
+                            {{ edu.start_date|date:"Y"|default:"N/A" }} – {{ edu.end_date|date:"Y"|default:"N/A" }}
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <h6 class="fw-bold mb-0">{{ edu.institution }}</h6>
-                    <div class="text-secondary small">{{ edu.degree }} in {{ edu.field_of_study }}</div>
-                    <div class="text-muted x-small">{{ edu.start_date|date:"Y"|default:"N/A" }} - {{ edu.end_date|date:"Y"|default:"N/A" }}</div>
+                    <!-- Right Column: Degree & Institution -->
+                    <div class="col-md-9">
+                        <div class="fw-bold text-dark mb-1" style="font-size: 1.1rem; color: #111827;">
+                            {{ edu.degree }}
+                        </div>
+                        <div class="fw-semibold text-secondary mb-1" style="font-size: 0.95rem;">
+                            {{ edu.institution }}
+                        </div>
+                        {% if edu.field_of_study %}
+                        <div class="text-secondary" style="font-size: 0.9rem;">
+                            Field of Study: {{ edu.field_of_study }}
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% empty %}
@@ -242,15 +246,27 @@
             {% endfor %}
         </div>
 
+        <!-- Skills -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Skills</h5>
+            <div class="d-flex flex-wrap gap-2">
+                {% for skill in candidate.skills.all %}
+                <span class="badge bg-light text-dark border px-3 py-2 fw-medium" style="font-size: 0.88rem; border-radius: 6px;">{{ skill.skill_name }}</span>
+                {% empty %}
+                <span class="text-muted small">No skills listed.</span>
+                {% endfor %}
+            </div>
+        </div>
+
         <!-- Projects & Certifications -->
         <div class="row g-4 mb-4">
             <div class="col-md-6">
                 <div class="card p-4 border-0 shadow-sm h-100">
-                    <h5 class="fw-bold mb-3">Projects</h5>
+                    <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Projects</h5>
                     <ul class="list-unstyled mb-0">
                         {% for project in candidate.projects.all %}
                         <li class="mb-3">
-                            <h6 class="fw-bold mb-1 small">{{ project.title }}</h6>
+                            <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ project.title }}</h6>
                             <p class="text-secondary x-small mb-1">{{ project.description }}</p>
                             {% if project.link %}<a href="{{ project.link }}" target="_blank" class="x-small">View Project <i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
                         </li>
@@ -262,11 +278,11 @@
             </div>
             <div class="col-md-6">
                 <div class="card p-4 border-0 shadow-sm h-100">
-                    <h5 class="fw-bold mb-3">Certifications</h5>
+                    <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Certifications</h5>
                     <ul class="list-unstyled mb-0">
                         {% for cert in candidate.certifications.all %}
                         <li class="mb-3">
-                            <h6 class="fw-bold mb-1 small">{{ cert.name }}</h6>
+                            <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ cert.name }}</h6>
                             <div class="text-secondary x-small">{{ cert.issuing_organization }} | {{ cert.issue_date|date:"M Y"|default:"" }}</div>
                         </li>
                         {% empty %}
@@ -276,133 +292,32 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Right Column: Sidebar -->
-    <div class="col-lg-4">
-        <!-- Resume & OCR Intelligence Card -->
-        <div class="card p-4 mb-4 border-0 shadow-sm bg-dark text-white">
-            <h5 class="fw-bold mb-3"><i class="bi bi-file-earmark-pdf me-2 text-primary"></i> Resume & OCR</h5>
+        <!-- Embedded Resume PDF Viewer directly below all profile info -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3" style="border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">
+                <h5 class="fw-bold m-0" style="color: #1f2937;">Resume</h5>
+                {% if resume_exists %}
+                <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-download me-1.5"></i>Download Resume
+                </a>
+                {% endif %}
+            </div>
             {% if resume_exists %}
-            <div class="d-flex align-items-center gap-3 mb-3">
-                <div class="fs-1 text-primary"><i class="bi bi-cpu"></i></div>
-                <div>
-                    <div class="fw-bold small">{{ candidate.resume_type|default:"PDF Document" }}</div>
-                    <div class="text-secondary x-small">OCR Engine: <span class="text-white fw-bold">{{ candidate.ocr_engine|default:"System Engine" }}</span></div>
-                    <div class="text-secondary x-small">OCR Confidence: 
-                        <span class="badge {% if candidate.ocr_confidence >= 90 %}bg-success{% elif candidate.ocr_confidence >= 75 %}bg-warning{% else %}bg-danger{% endif %} text-white font-monospace">
-                            {{ candidate.ocr_confidence|default:"95.00" }}%
-                        </span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row g-2 mb-3">
-                <div class="col-6">
-                    <button type="button" id="toggle-embedded-pdf-btn" class="btn btn-primary w-100 py-2 fw-bold text-xs">
-                        <i class="bi bi-eye me-2"></i>Preview Resume
-                    </button>
-                </div>
-                <div class="col-6">
-                    <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-success w-100 py-2 fw-bold text-xs">
-                        <i class="bi bi-download me-2"></i>Download Resume
-                    </a>
-                </div>
-            </div>
-            
-            <!-- Embedded PDF Viewer -->
-            <div id="embedded-pdf-viewer-container" class="mb-3 d-none">
-                <div class="ratio ratio-4x3 border border-secondary rounded overflow-hidden bg-light">
-                    <iframe id="embedded-pdf-iframe" data-src="{% url 'frontend:candidate_resume_preview' candidate.id %}" src="about:blank" style="border: none;"></iframe>
-                </div>
-            </div>
-            
-            <!-- OCR Summary -->
-            <div class="mb-3">
-                <h6 class="text-uppercase text-secondary fw-bold x-small mb-2"><i class="bi bi-file-text me-1"></i> OCR Summary</h6>
-                <div class="bg-secondary bg-opacity-10 p-3 rounded border border-secondary text-light small" style="white-space: pre-wrap; max-height: 250px; overflow-y: auto; font-size: 0.85rem;">{{ candidate.summary|default:"No OCR summary extracted." }}</div>
-            </div>
-            
-            <!-- Skills -->
-            <div class="mb-3">
-                <h6 class="text-uppercase text-secondary fw-bold x-small mb-2"><i class="bi bi-tags me-1"></i> Skills</h6>
-                <div class="d-flex flex-wrap gap-1">
-                    {% for skill in candidate.skills.all %}
-                        <span class="badge bg-secondary text-white">{{ skill.skill_name }}</span>
-                    {% empty %}
-                        <span class="text-muted small">No skills parsed.</span>
-                    {% endfor %}
-                </div>
-            </div>
-            
-            <!-- Experience -->
-            <div>
-                <h6 class="text-uppercase text-secondary fw-bold x-small mb-2"><i class="bi bi-briefcase me-1"></i> Experience</h6>
-                <div class="timeline-small small" style="max-height: 300px; overflow-y: auto;">
-                    {% for exp in candidate.experiences.all %}
-                        <div class="border-start border-secondary ps-3 pb-3 position-relative">
-                            <div class="position-absolute bg-primary rounded-circle" style="width: 8px; height: 8px; left: -4px; top: 6px;"></div>
-                            <div class="fw-bold text-white" style="font-size: 0.85rem;">{{ exp.designation }}</div>
-                            <div class="text-secondary x-small">{{ exp.company_name }}</div>
-                            <div class="text-muted x-small">
-                                {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
-                            </div>
-                            <div class="text-secondary mt-1" style="font-size: 0.8rem;">
-                                {{ exp.description|safe }}
-                            </div>
-                        </div>
-                    {% empty %}
-                        <div class="text-muted small">No experience parsed.</div>
-                    {% endfor %}
-                </div>
-            </div>
-            
-            {% elif resume_missing %}
-            <div class="text-center py-3 text-secondary mb-3">
-                <i class="bi bi-file-earmark-exclamation fs-1 text-warning"></i>
-                <div class="mt-2 fw-bold text-warning">Resume not found. Please re-upload.</div>
-            </div>
-            <div class="row g-2">
-                <div class="col-6">
-                    <button type="button" class="btn btn-primary w-100 py-2 fw-bold text-xs" disabled>
-                        <i class="bi bi-eye me-2"></i>Preview Resume
-                    </button>
-                </div>
-                <div class="col-6">
-                    <button type="button" class="btn btn-success w-100 py-2 fw-bold text-xs" disabled>
-                        <i class="bi bi-download me-2"></i>Download Resume
-                    </button>
-                </div>
+            <div class="ratio border border-light-subtle rounded overflow-hidden bg-light mb-0" style="height: 800px; max-height: 80vh;">
+                <iframe src="{% url 'frontend:candidate_resume_preview' candidate.id %}" style="border: none; width: 100%; height: 100%;"></iframe>
             </div>
             {% else %}
-            <div class="text-center py-3 text-secondary mb-3">
-                <i class="bi bi-file-earmark-x fs-1 text-muted"></i>
-                <div class="mt-2 fw-bold text-white">No Resume Uploaded</div>
-            </div>
-            <div class="row g-2">
-                <div class="col-6">
-                    <button type="button" class="btn btn-primary w-100 py-2 fw-bold text-xs" disabled>
-                        <i class="bi bi-eye me-2"></i>Preview Resume
-                    </button>
-                </div>
-                <div class="col-6">
-                    <button type="button" class="btn btn-success w-100 py-2 fw-bold text-xs" disabled>
-                        <i class="bi bi-download me-2"></i>Download Resume
-                    </button>
-                </div>
+            <div class="text-center py-5 bg-light rounded border mb-0 text-muted">
+                <i class="bi bi-file-earmark-x fs-2 mb-2 d-block text-secondary"></i>
+                <span class="small fw-semibold text-warning">Resume not found. Please re-upload.</span>
             </div>
             {% endif %}
         </div>
 
-        <!-- AI Assist & Versions Card -->
+        <!-- Version History Card -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3"><i class="bi bi-cpu-fill me-2 text-info"></i> AI Assist & Versions</h5>
-            
-            <div class="d-grid gap-2 mb-3">
-                <button type="button" class="btn btn-info text-white fw-bold py-2 text-xs" onclick="previewAIImprovement()"><i class="bi bi-stars me-2"></i> AI Improve Profile</button>
-            </div>
-
-            <label class="form-label x-small fw-bold text-uppercase text-secondary">Version History</label>
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Version History</h5>
             <div class="version-timeline d-flex flex-column gap-2 mb-3">
                 {% for ver in versions_list %}
                 <div class="d-flex justify-content-between align-items-center border p-2 rounded bg-light {% if selected_version_id == ver.version %}border-primary bg-primary-subtle{% endif %} card-hover-shadow" style="cursor: pointer; transition: all 0.2s ease-in-out;" onclick="window.location.href='?version={{ ver.version }}'">
@@ -560,15 +475,7 @@
         </div>
         {% endif %}
 
-        <!-- Skills Card -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3">Top Skills</h5>
-            <div class="d-flex flex-wrap gap-2">
-                {% for skill in candidate.skills.all %}
-                <span class="badge bg-light text-dark border px-3 py-2">{{ skill.skill_name }}</span>
-                {% endfor %}
-            </div>
-        </div>
+
 
         <!-- Notes Card -->
         <div class="card p-4 border-0 shadow-sm">
@@ -1042,26 +949,7 @@ function addCertificationRow(name='', org='', date='') {
     container.appendChild(div);
 }
 
-document.addEventListener("DOMContentLoaded", function() {
-    const toggleBtn = document.getElementById("toggle-embedded-pdf-btn");
-    const container = document.getElementById("embedded-pdf-viewer-container");
-    const iframe = document.getElementById("embedded-pdf-iframe");
-    
-    if (toggleBtn && container && iframe) {
-        toggleBtn.addEventListener("click", function() {
-            if (container.classList.contains("d-none")) {
-                container.classList.remove("d-none");
-                if (iframe.src === "about:blank") {
-                    iframe.src = iframe.getAttribute("data-src");
-                }
-                toggleBtn.innerHTML = '<i class="bi bi-eye-slash me-2"></i>Hide Preview';
-            } else {
-                container.classList.add("d-none");
-                toggleBtn.innerHTML = '<i class="bi bi-eye me-2"></i>Preview Resume';
-            }
-        });
-    }
-});
+
 
 function saveStructuredResume() {
     // Compile JSON
