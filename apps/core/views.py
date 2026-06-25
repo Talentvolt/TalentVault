@@ -788,15 +788,12 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
         
         return context
 
+from apps.candidates.forms import CandidateProfileForm
+
 class CandidateUpdateView(LoginRequiredMixin, UpdateView):
     model = CandidateProfile
     template_name = 'candidate_form.html'
-    fields = [
-        'full_name', 'summary', 'location', 'total_experience', 
-        'current_company', 'current_designation',
-        'current_salary', 'expected_salary', 'notice_period',
-        'linkedin_url', 'portfolio_url'
-    ]
+    form_class = CandidateProfileForm
     success_url = reverse_lazy('frontend:candidate_search')
 
     def get_success_url(self):
@@ -1897,26 +1894,28 @@ class CandidateResumePreviewView(LoginRequiredMixin, View):
     """
     def get(self, request, pk, *args, **kwargs):
         import os
-        import mimetypes
         candidate = get_object_or_404(CandidateProfile, pk=pk)
         if not candidate.resume:
             return HttpResponse("No resume file found.", status=404)
             
         file_path = candidate.resume.path
-        if not os.path.exists(file_path):
-            return HttpResponse("File does not exist on disk.", status=404)
-            
-        content_type, _ = mimetypes.guess_type(file_path)
-        if not content_type:
-            content_type = 'application/octet-stream'
-            
+        if file_path.lower().endswith('.pdf') and os.path.exists(file_path):
+            try:
+                f = open(file_path, 'rb')
+                response = FileResponse(f, content_type='application/pdf')
+                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                return response
+            except Exception:
+                pass
+                
+        from services.resume_intelligence import ResumeIntelligenceService
         try:
-            f = open(file_path, 'rb')
-            response = FileResponse(f, content_type=content_type)
-            response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+            pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{candidate.full_name or "Resume"}_Resume.pdf"'
             return response
         except Exception as e:
-            return HttpResponse(f"Error loading resume file: {str(e)}", status=500)
+            return HttpResponse(f"Error generating resume preview: {str(e)}", status=500)
 
 
 class CandidateResumeDownloadView(LoginRequiredMixin, View):
@@ -1926,20 +1925,35 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
     def get(self, request, pk, *args, **kwargs):
         import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        if not candidate.resume:
+        if not candidate.resume and not candidate.original_file:
             return HttpResponse("No resume file found.", status=404)
             
-        file_path = candidate.resume.path
-        if not os.path.exists(file_path):
-            return HttpResponse("File does not exist on disk.", status=404)
-            
-        filename = os.path.basename(file_path)
+        file_field = candidate.original_file if candidate.original_file else candidate.resume
+        file_path = file_field.path
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            if filename.startswith("original_"):
+                filename = filename[len("original_"):]
+            try:
+                f = open(file_path, 'rb')
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(file_path)
+                if not content_type:
+                    content_type = 'application/octet-stream'
+                response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+                return response
+            except Exception:
+                pass
+                
+        from services.resume_intelligence import ResumeIntelligenceService
         try:
-            f = open(file_path, 'rb')
-            response = FileResponse(f, as_attachment=True, filename=filename)
+            pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
+            filename = f"{candidate.full_name or 'Resume'}_Resume.pdf"
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
         except Exception as e:
-            return HttpResponse(f"Error downloading file: {str(e)}", status=500)
+            return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
 
 
 @method_decorator(xframe_options_sameorigin, name='dispatch')
@@ -1949,26 +1963,28 @@ class PublicCandidateResumePreviewView(View):
     """
     def get(self, request, pk, *args, **kwargs):
         import os
-        import mimetypes
         candidate = get_object_or_404(CandidateProfile, pk=pk)
         if not candidate.resume:
             return HttpResponse("No resume file found.", status=404)
             
         file_path = candidate.resume.path
-        if not os.path.exists(file_path):
-            return HttpResponse("File does not exist on disk.", status=404)
-            
-        content_type, _ = mimetypes.guess_type(file_path)
-        if not content_type:
-            content_type = 'application/octet-stream'
-            
+        if file_path.lower().endswith('.pdf') and os.path.exists(file_path):
+            try:
+                f = open(file_path, 'rb')
+                response = FileResponse(f, content_type='application/pdf')
+                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                return response
+            except Exception:
+                pass
+                
+        from services.resume_intelligence import ResumeIntelligenceService
         try:
-            f = open(file_path, 'rb')
-            response = FileResponse(f, content_type=content_type)
-            response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+            pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{candidate.full_name or "Resume"}_Resume.pdf"'
             return response
         except Exception as e:
-            return HttpResponse(f"Error loading resume file: {str(e)}", status=500)
+            return HttpResponse(f"Error generating resume preview: {str(e)}", status=500)
 
 
 class PublicCandidateResumeDownloadView(View):
@@ -1978,17 +1994,32 @@ class PublicCandidateResumeDownloadView(View):
     def get(self, request, pk, *args, **kwargs):
         import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        if not candidate.resume:
+        if not candidate.resume and not candidate.original_file:
             return HttpResponse("No resume file found.", status=404)
             
-        file_path = candidate.resume.path
-        if not os.path.exists(file_path):
-            return HttpResponse("File does not exist on disk.", status=404)
-            
-        filename = os.path.basename(file_path)
+        file_field = candidate.original_file if candidate.original_file else candidate.resume
+        file_path = file_field.path
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            if filename.startswith("original_"):
+                filename = filename[len("original_"):]
+            try:
+                f = open(file_path, 'rb')
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(file_path)
+                if not content_type:
+                    content_type = 'application/octet-stream'
+                response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+                return response
+            except Exception:
+                pass
+                
+        from services.resume_intelligence import ResumeIntelligenceService
         try:
-            f = open(file_path, 'rb')
-            response = FileResponse(f, as_attachment=True, filename=filename)
+            pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
+            filename = f"{candidate.full_name or 'Resume'}_Resume.pdf"
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
         except Exception as e:
-            return HttpResponse(f"Error downloading file: {str(e)}", status=500)
+            return HttpResponse(f"Error downloading resume: {str(e)}", status=500)

@@ -542,23 +542,24 @@ class ResumeIntelligenceService:
         for line in lines:
             l = line.lower()
             
-            # Detect section transitions
+            # Detect section transitions (headings must be short standalone lines)
             is_heading = False
-            if any(h in l for h in ["work experience", "experience", "employment history", "work history", "professional experience"]):
-                current_section = 'WORK'
-                is_heading = True
-            elif any(h in l for h in ["education", "academic", "university", "college", "academic background"]):
-                current_section = 'EDU'
-                is_heading = True
-            elif any(h in l for h in ["projects", "personal projects", "academic projects"]):
-                current_section = 'PROJECT'
-                is_heading = True
-            elif any(h in l for h in ["certifications", "licenses", "certificates"]):
-                current_section = 'CERT'
-                is_heading = True
-            elif any(h in l for h in ["skills", "languages", "hobbies", "profile summary", "key skills", "interests", "summary"]):
-                current_section = 'OTHER'
-                is_heading = True
+            if len(line.strip()) < 50:
+                if any(h in l for h in ["work experience", "experience", "employment history", "work history", "professional experience"]):
+                    current_section = 'WORK'
+                    is_heading = True
+                elif any(h in l for h in ["education", "academic", "university", "college", "academic background"]):
+                    current_section = 'EDU'
+                    is_heading = True
+                elif any(h in l for h in ["projects", "personal projects", "academic projects"]):
+                    current_section = 'PROJECT'
+                    is_heading = True
+                elif any(h in l for h in ["certifications", "licenses", "certificates"]):
+                    current_section = 'CERT'
+                    is_heading = True
+                elif any(h in l for h in ["skills", "languages", "hobbies", "profile summary", "key skills", "interests", "summary"]):
+                    current_section = 'OTHER'
+                    is_heading = True
 
             if is_heading:
                 continue

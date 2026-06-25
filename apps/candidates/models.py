@@ -101,6 +101,28 @@ class CandidateProfile(BaseAppModel):
     def __str__(self):
         return self.full_name or self.user.email
 
+    def save(self, *args, **kwargs):
+        version_str = str(self.current_version)
+        if self.resume_versions and version_str in self.resume_versions:
+            version_data = self.resume_versions[version_str].get("data", {})
+            if "personal_info" not in version_data:
+                version_data["personal_info"] = {}
+            
+            version_data["personal_info"]["name"] = self.full_name
+            version_data["personal_info"]["current_company"] = self.current_company
+            version_data["personal_info"]["current_designation"] = self.current_designation
+            try:
+                version_data["personal_info"]["total_experience"] = float(self.total_experience) if self.total_experience is not None else 0.0
+            except Exception:
+                pass
+            version_data["personal_info"]["location"] = self.location
+            version_data["summary"] = self.summary
+            
+            self.resume_versions[version_str]["data"] = version_data
+            self.parsed_json = version_data
+
+        super().save(*args, **kwargs)
+
 class DuplicateResumeLog(BaseAppModel):
     email = models.EmailField(db_index=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
