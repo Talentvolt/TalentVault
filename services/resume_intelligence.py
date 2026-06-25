@@ -436,14 +436,74 @@ class ResumeIntelligenceService:
             }
 
         if resume_type == 'PDF':
-            # First try direct text extraction via PyMuPDF (fitz) for clean column ordering
+            # First try direct text extraction via PyMuPDF (fitz) with layout-aware column reconstruction
             try:
                 import fitz
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
-                for page in doc:
-                    page_text = page.get_text("text")
-                    if page_text:
-                        extracted_text += page_text + "\n"
+                
+                header_parts = []
+                col1_parts = []
+                col2_parts = []
+                footer_parts = []
+                
+                for page_idx, page in enumerate(doc):
+                    blocks = page.get_text("blocks")
+                    valid_blocks = []
+                    for b in blocks:
+                        x0, y0, x1, y1, text, block_no, block_type = b
+                        text_clean = text.strip()
+                        if text_clean:
+                            valid_blocks.append((x0, y0, x1, y1, text_clean))
+                            
+                    # Sort by y0
+                    valid_blocks_sorted = sorted(valid_blocks, key=lambda x: x[1])
+                    
+                    # Check if page has columns
+                    left_blocks = [b for b in valid_blocks_sorted if b[2] <= 205]
+                    right_blocks = [b for b in valid_blocks_sorted if b[0] >= 205]
+                    has_columns = len(left_blocks) > 0 and len(right_blocks) > 0
+                    
+                    for b in valid_blocks_sorted:
+                        x0, y0, x1, y1, text = b
+                        
+                        # Check for Header (Page 1 only, y1 < 135)
+                        if page_idx == 0 and y1 < 135:
+                            header_parts.append(text)
+                            continue
+                            
+                        # Check for Footer (Last Page only, y0 >= 700)
+                        if page_idx == len(doc) - 1 and y0 >= 700:
+                            footer_parts.append(text)
+                            continue
+                            
+                        if has_columns:
+                            # If x1 <= 205, it is Column 1 (Left column)
+                            # If x0 >= 205, it is Column 2 (Right column)
+                            # If it spans across (FULL), put it in Column 2 (since it's part of work experience sequence)
+                            if x1 <= 205:
+                                col1_parts.append(text)
+                            else:
+                                col2_parts.append(text)
+                        else:
+                            # Single column page, put all in col2_parts to keep in normal flow
+                            col2_parts.append(text)
+                            
+                # Reconstruct unified text stream
+                full_stream = []
+                if header_parts:
+                    full_stream.append("\n".join(header_parts))
+                    
+                full_stream.append("\nWORK EXPERIENCE\n")
+                full_stream.append("\n\n".join(col2_parts))
+                
+                full_stream.append("\nEDUCATION\n")
+                full_stream.append("\n\n".join(col1_parts))
+                
+                if footer_parts:
+                    full_stream.append("\nPERSONAL DETAILS\n")
+                    full_stream.append("\n\n".join(footer_parts))
+                    
+                extracted_text = "\n\n".join(full_stream) + "\n"
             except Exception as e:
                 print(f"PyMuPDF direct extraction failed: {e}")
 
@@ -1180,7 +1240,11 @@ class ResumeIntelligenceService:
                 edu["degree"] = "Intermediate"
             elif "high school" in deg or "10th" in deg or "ssc" in deg or "school" in deg:
                 edu["degree"] = "High School"
-            edu["institution"] = edu.get("institution", "").title()
+            inst = edu.get("institution", "").strip()
+            if "icai" in inst.lower():
+                edu["institution"] = "ICAI"
+            else:
+                edu["institution"] = inst.title()
 
         # 4. Generate professional Summary if not present or improve it
         current_desig = info.get('current_designation') or 'Professional'
@@ -1200,33 +1264,12 @@ class ResumeIntelligenceService:
             skills_str = ", ".join(improved.get("skills", [])[:5])
             improved["summary"] = f"Results-driven {current_desig} with {info.get('total_experience', 2)} years of experience. Highly skilled in {skills_str}, with a proven track record of delivering high-quality results."
 
-        # 5. Deduplicate and suggest missing skills
+        # 5. Deduplicate skills (Do not suggest fake/missing skills)
         skills_set = {s.strip().title() for s in improved.get("skills", [])}
-        # Suggest missing skills based on designation
-        title = info.get("current_designation", "").lower()
-        if "python" in title or "django" in title:
-            skills_set.add("Django REST Framework")
-            skills_set.add("PostgreSQL")
-            skills_set.add("Docker")
-        elif "react" in title or "javascript" in title or "frontend" in title:
-            skills_set.add("Redux Toolkit")
-            skills_set.add("TypeScript")
-            skills_set.add("CSS/Tailwind")
-        else:
-            skills_set.add("Git/GitHub")
-            skills_set.add("Agile Methodologies")
-
         improved["skills"] = sorted(list(skills_set))
 
-        # 6. Suggest certifications
-        certs = improved.get("certifications", [])
-        if not certs:
-            certs.append({
-                "name": "AWS Certified Solutions Architect",
-                "issuing_organization": "Amazon Web Services",
-                "issue_date": datetime.now().strftime("%Y-%m-%d")
-            })
-            improved["certifications"] = certs
+        # 6. Certifications (Do not suggest fake/missing certifications)
+        improved["certifications"] = improved.get("certifications", [])
 
         return improved
 

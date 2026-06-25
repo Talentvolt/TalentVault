@@ -77,3 +77,69 @@ def test_resume_parser_rohan_kumar_resume():
     assert "Diploma" in improved_degrees
     assert "Intermediate" in improved_degrees
     assert "High School" in improved_degrees
+
+
+def test_resume_parser_harneet_singh():
+    import os
+    from services.resume_intelligence import ResumeIntelligenceService
+    
+    pdf_path = os.path.join(os.path.dirname(__file__), "..", "scratch", "harneet_resume.pdf")
+    if not os.path.exists(pdf_path):
+        pytest.skip("harneet_resume.pdf not found in scratch folder")
+        
+    with open(pdf_path, 'rb') as f:
+        file_bytes = f.read()
+        
+    # Run OCR and layout parsing pipeline
+    ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, "harneet_resume.pdf")
+    parsed = ResumeIntelligenceService.parse_resume_nlp(ocr_result["text"])
+    improved = ResumeIntelligenceService.ai_improve_resume_data(parsed)
+    
+    # 6 Work Experience entries
+    experiences = parsed["experience"]
+    assert len(experiences) == 6
+    
+    # Check companies and designations
+    expected_companies = [
+        "Hero MotoCorp. Ltd",
+        "Akums Lifesciences Ltd",
+        "Adani Power Rajasthan Ltd",
+        "L&T – MHPS Boilers Pvt. Ltd",
+        "Jindal Drilling & Industries Ltd",
+        "Grant Thornton"
+    ]
+    expected_designations = [
+        "Finance Head",
+        "Manager",
+        "Deputy Manager",
+        "Assistant Manager",
+        "Deputy Manager",
+        "Senior Auditor"
+    ]
+    
+    for idx, exp in enumerate(experiences):
+        assert exp["designation"] == expected_designations[idx]
+        assert expected_companies[idx] in exp["company"]
+        
+    # 2 Education entries
+    educations = improved["education"]
+    assert len(educations) == 2
+    
+    edu_degrees = [edu["degree"] for edu in educations]
+    edu_insts = [edu["institution"] for edu in educations]
+    
+    assert "Chartered Accountant" in edu_degrees
+    assert "Bachelor of Commerce (Hons.)" in edu_degrees
+    assert "ICAI" in edu_insts
+    assert "Sambalpur University" in edu_insts
+    
+    # Technical Skills populated
+    assert len(improved["skills"]) > 0
+    # Make sure no junk like 'Practices.' is in skills
+    assert "Practices" not in improved["skills"]
+    assert "Practices." not in improved["skills"]
+    assert "Inventory For Action." not in improved["skills"]
+    
+    # Projects empty
+    assert len(improved["projects"]) == 0
+
