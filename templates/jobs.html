@@ -35,13 +35,11 @@
         vertical-align: middle;
     }
     
-    .dropdown {
+    .table-actions.dropdown {
         position: relative;
     }
     
-    .dropdown-menu {
-        position: absolute !important;
-        z-index: 1060 !important; /* High enough to be on top of table elements */
+    .table-actions .dropdown-menu {
         margin-top: 0.25rem;
     }
 
@@ -263,8 +261,8 @@
                             {% endif %}
                         </td>
                         <td class="pe-4 text-end">
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport">
+                            <div class="dropdown table-actions">
+                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown">
                                     <i class="bi bi-three-dots-vertical"></i>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="border-radius: 12px; min-width: 160px;">

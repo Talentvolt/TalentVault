@@ -407,9 +407,9 @@ body {
     z-index: 2990 !important;
 }
 
-/* Dropdown & Popover Layering (z-index: 2000) */
-.dropdown-menu,
-.dropdown-menu.show,
+/* Scoped Dropdown & Popover Layering (z-index: 2000) */
+.dashboard-quick-action .dropdown-menu,
+.table-actions .dropdown-menu,
 .flatpickr-calendar,
 .candidate-actions,
 .popover {
@@ -427,15 +427,11 @@ body {
     z-index: 1;
 }
 
-/* Prevent clipping of dropdown menus inside tables, cards and row lists */
-.card:not([style*="overflow"]):not([style*="max-height"]),
-.card-body:not([style*="overflow"]):not([style*="max-height"]),
-.table-responsive {
-    overflow: visible !important;
+/* Prevent clipping of dropdown menus inside tables, cards and row lists on desktop */
+@media (min-width: 992px) {
+    .card:not([style*="overflow"]):not([style*="max-height"]),
+    .card-body:not([style*="overflow"]):not([style*="max-height"]),
+    .table-responsive {
+        overflow: visible !important;
+    }
 }
-
-/* Ensure dropdown positioning does not cause layout shifts and stays on top */
-.dropdown-menu {
-    position: absolute;
-}
-

@@ -237,159 +237,73 @@
     <!-- TalentVault Global Dropdown & Layering Manager -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // Global dropdown orchestrator and registry
-            class TalentVaultDropdownManager {
-                constructor() {
-                    this.activeDropdownToggle = null;
-                    this.init();
-                }
-
-                init() {
-                    this.setupPopperFixedStrategy();
-                    this.setupGlobalEvents();
-                    
-                    // Listen for dynamic DOM insertions to manage dynamically loaded dropdowns
-                    const observer = new MutationObserver(() => {
-                        this.setupPopperFixedStrategy();
-                    });
-                    observer.observe(document.body, { childList: true, subtree: true });
-                }
-
-                // Standardize all dropdowns with Popper Fixed strategy to prevent card/table clipping
-                setupPopperFixedStrategy() {
-                    const dropdownToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-                    dropdownToggles.forEach(toggle => {
-                        if (!toggle.dataset.dropdownManaged) {
-                            toggle.dataset.dropdownManaged = 'true';
-                            
-                            // Set popper configuration to fixed strategy
-                            toggle.setAttribute('data-bs-popper-config', '{"strategy":"fixed"}');
-                            
-                            // Dispose old instance if it exists to apply new configuration
-                            const existingInstance = bootstrap.Dropdown.getInstance(toggle);
-                            if (existingInstance) {
-                                existingInstance.dispose();
-                            }
-                            
-                            // Re-initialize with Popper fixed positioning strategy
-                            new bootstrap.Dropdown(toggle, {
-                                popperConfig: {
-                                    strategy: 'fixed'
-                                }
-                            });
-                        }
-                    });
-                }
-
-                // Close all active dropdowns in the application
-                closeAllDropdowns(exceptToggle = null) {
-                    const activeToggles = document.querySelectorAll('[data-bs-toggle="dropdown"].show, .dropdown-toggle.show');
-                    activeToggles.forEach(toggle => {
-                        if (toggle !== exceptToggle) {
-                            const instance = bootstrap.Dropdown.getInstance(toggle);
-                            if (instance) {
-                                instance.hide();
-                            }
-                        }
-                    });
-
-                    // Handle any custom dropdown-menu elements that are manually shown
-                    document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
-                        if (!exceptToggle || !exceptToggle.nextElementSibling || !exceptToggle.nextElementSibling.contains(menu)) {
-                            menu.classList.remove('show');
-                        }
-                    });
-                }
-
-                // Setup click-outside, escape key, history navigation, and dropdown show/hide events
-                setupGlobalEvents() {
-                    // Bubbling event listener to enforce single open dropdown constraint globally
-                    document.addEventListener('show.bs.dropdown', (event) => {
-                        const showToggle = event.target;
-                        this.closeAllDropdowns(showToggle);
-                        this.activeDropdownToggle = showToggle;
-                    });
-
-                    document.addEventListener('hide.bs.dropdown', (event) => {
-                        if (this.activeDropdownToggle === event.target) {
-                            this.activeDropdownToggle = null;
-                        }
-                    });
-
-                    // Click outside closes active dropdown
-                    document.addEventListener('click', (event) => {
-                        if (this.activeDropdownToggle) {
-                            const isClickInsideToggle = this.activeDropdownToggle.contains(event.target);
-                            const isClickInsideMenu = this.activeDropdownToggle.nextElementSibling && 
-                                                    this.activeDropdownToggle.nextElementSibling.contains(event.target);
-                            
-                            if (!isClickInsideToggle && !isClickInsideMenu) {
-                                this.closeAllDropdowns();
-                            }
-                        }
-                    }, true);
-
-                    // Escape key closes dropdowns
-                    document.addEventListener('keydown', (event) => {
-                        if (event.key === 'Escape') {
-                            this.closeAllDropdowns();
-                        }
-                    });
-
-                    // Route / page change or sidebar link navigation starts
-                    document.addEventListener('click', (event) => {
-                        const link = event.target.closest('a');
-                        if (link) {
-                            const href = link.getAttribute('href');
-                            if (href && href !== '#' && !href.startsWith('javascript:') && !link.dataset.bsToggle) {
-                                this.closeAllDropdowns();
-                                this.destroyQuickActionDropdown();
-                            }
-                        }
-                    }, true);
-
-                    // Browser back & forward navigation closes dropdowns (handles BFCache)
-                    window.addEventListener('popstate', () => {
-                        this.closeAllDropdowns();
-                    });
-
-                    window.addEventListener('pageshow', (event) => {
-                        this.closeAllDropdowns();
-                        if (event.persisted) {
-                            // If restored from BFCache, reset and re-setup dropdowns
-                            document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(toggle => {
-                                toggle.removeAttribute('data-dropdown-managed');
-                            });
-                            this.setupPopperFixedStrategy();
-                        }
-                    });
-
-                    window.addEventListener('pagehide', () => {
-                        this.closeAllDropdowns();
-                        this.destroyQuickActionDropdown();
-                    });
-
-                    window.addEventListener('beforeunload', () => {
-                        this.closeAllDropdowns();
-                        this.destroyQuickActionDropdown();
-                    });
-                }
-
-                // Explicitly hide and dispose the Quick Action dropdown when leaving the dashboard
-                destroyQuickActionDropdown() {
-                    const quickActionBtn = document.getElementById('quickAddMenu');
-                    if (quickActionBtn) {
-                        const instance = bootstrap.Dropdown.getInstance(quickActionBtn);
+            // Enforce single open dropdown constraint globally across all Bootstrap dropdowns
+            document.addEventListener('show.bs.dropdown', function(event) {
+                const showToggle = event.target;
+                const activeToggles = document.querySelectorAll('[data-bs-toggle="dropdown"].show, .dropdown-toggle.show');
+                activeToggles.forEach(toggle => {
+                    if (toggle !== showToggle) {
+                        const instance = bootstrap.Dropdown.getInstance(toggle);
                         if (instance) {
                             instance.hide();
-                            instance.dispose();
                         }
+                    }
+                });
+            });
+
+            // Close all active dropdowns in the application
+            function closeAllDropdowns() {
+                const activeToggles = document.querySelectorAll('[data-bs-toggle="dropdown"].show, .dropdown-toggle.show');
+                activeToggles.forEach(toggle => {
+                    const instance = bootstrap.Dropdown.getInstance(toggle);
+                    if (instance) {
+                        instance.hide();
+                    }
+                });
+            }
+
+            // Explicitly hide and dispose the Quick Action dropdown when leaving the dashboard
+            function destroyQuickActionDropdown() {
+                const quickActionBtn = document.getElementById('quickAddMenu');
+                if (quickActionBtn) {
+                    const instance = bootstrap.Dropdown.getInstance(quickActionBtn);
+                    if (instance) {
+                        instance.hide();
+                        instance.dispose();
                     }
                 }
             }
 
-            // Instantiate Global Dropdown Manager
-            window.tvDropdownManager = new TalentVaultDropdownManager();
+            // Close dropdowns on clicking a link that triggers navigation
+            document.addEventListener('click', function(event) {
+                const link = event.target.closest('a');
+                if (link) {
+                    const href = link.getAttribute('href');
+                    if (href && href !== '#' && !href.startsWith('javascript:') && !link.dataset.bsToggle) {
+                        closeAllDropdowns();
+                        destroyQuickActionDropdown();
+                    }
+                }
+            }, true);
+
+            // Handle back/forward navigation (popstate & BFCache pageshow/pagehide)
+            window.addEventListener('popstate', function() {
+                closeAllDropdowns();
+            });
+
+            window.addEventListener('pageshow', function() {
+                closeAllDropdowns();
+            });
+
+            window.addEventListener('pagehide', function() {
+                closeAllDropdowns();
+                destroyQuickActionDropdown();
+            });
+
+            window.addEventListener('beforeunload', function() {
+                closeAllDropdowns();
+                destroyQuickActionDropdown();
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}
