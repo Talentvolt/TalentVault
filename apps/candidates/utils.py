@@ -340,11 +340,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 
             profile.experiences.all().delete()
             for exp in parsed_data.get('experience', []):
+                description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get('description', ''))
                 Experience.objects.create(
                     profile=profile,
                     company_name=exp.get('company', '')[:100],
                     designation=exp.get('designation', '')[:100],
-                    description=exp.get('description', ''),
+                    description=description_html,
                     start_date=parse_date_robust(exp.get('start_date'), None),
                     end_date=parse_date_robust(exp.get('end_date'), None)
                 )

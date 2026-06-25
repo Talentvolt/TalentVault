@@ -53,6 +53,14 @@ class CandidateProfile(BaseAppModel):
     profile_photo = models.ImageField(upload_to='candidate_photos/', null=True, blank=True)
 
     @property
+    def has_profile_photo(self):
+        import os
+        try:
+            return bool(self.profile_photo and self.profile_photo.name and os.path.exists(self.profile_photo.path))
+        except Exception:
+            return False
+
+    @property
     def current_salary_lpa(self):
         return format_salary_lpa(self.current_salary)
 
@@ -114,6 +122,11 @@ class CandidateProfile(BaseAppModel):
             version_data["personal_info"]["current_designation"] = self.current_designation
             try:
                 version_data["personal_info"]["total_experience"] = float(self.total_experience) if self.total_experience is not None else 0.0
+            except Exception:
+                pass
+            try:
+                version_data["personal_info"]["current_salary"] = float(self.current_salary) / 100000.0 if self.current_salary is not None else 0.0
+                version_data["personal_info"]["expected_salary"] = float(self.expected_salary) / 100000.0 if self.expected_salary is not None else 0.0
             except Exception:
                 pass
             version_data["personal_info"]["location"] = self.location

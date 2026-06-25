@@ -46,6 +46,87 @@ class ResumeIntelligenceService:
     """
 
     @staticmethod
+    def parse_experience_description_to_html(desc_text: str) -> str:
+        if not desc_text or not desc_text.strip():
+            return ""
+            
+        # If it already looks like HTML, return it as is
+        if "<ul" in desc_text or "<li" in desc_text or "<p" in desc_text or "<div" in desc_text or "<strong" in desc_text:
+            return desc_text
+            
+        import re
+        categories = {
+            "Responsibilities": [],
+            "Territory Coverage": [],
+            "Key Institutions": [],
+            "Achievements": [],
+        }
+        
+        current_category = "Responsibilities"
+        lines = desc_text.split('\n')
+        
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+                
+            line_clean = line_stripped.lstrip('-•*+ ').strip()
+            line_lower = line_clean.lower()
+            
+            # Check if the line is a section heading itself
+            if any(h in line_lower for h in ["responsibilities", "responsibility", "roles & responsibilities", "role & responsibilities"]):
+                current_category = "Responsibilities"
+                header_content = re.sub(r'^(responsibilities|responsibility|roles\s*&\s*responsibilities|role\s*&\s*responsibilities)[:\-\s]*', '', line_clean, flags=re.I).strip()
+                if header_content:
+                    categories[current_category].append(header_content)
+                continue
+            elif any(h in line_lower for h in ["territory coverage", "territory", "coverage area", "geographical coverage"]):
+                current_category = "Territory Coverage"
+                header_content = re.sub(r'^(territory\s*coverage|territory|coverage\s*area|geographical\s*coverage)[:\-\s]*', '', line_clean, flags=re.I).strip()
+                if header_content:
+                    categories[current_category].append(header_content)
+                continue
+            elif any(h in line_lower for h in ["key institutions", "institutions", "key accounts", "hospital focus", "medical accounts"]):
+                current_category = "Key Institutions"
+                header_content = re.sub(r'^(key\s*institutions|institutions|key\s*accounts|hospital\s*focus|medical\s*accounts)[:\-\s]*', '', line_clean, flags=re.I).strip()
+                if header_content:
+                    categories[current_category].append(header_content)
+                continue
+            elif any(h in line_lower for h in ["achievements", "achievement", "key achievements", "accomplishments"]):
+                current_category = "Achievements"
+                header_content = re.sub(r'^(achievements|achievement|key\s*achievements|accomplishments)[:\-\s]*', '', line_clean, flags=re.I).strip()
+                if header_content:
+                    categories[current_category].append(header_content)
+                continue
+                
+            # Classify the line based on keywords
+            if any(kw in line_lower for kw in ["territory", "coverage", "region", "geographic", "zone", "sales area", "pan india"]):
+                line_cat = "Territory Coverage"
+            elif any(kw in line_lower for kw in ["institution", "hospital", "medical", "clinic", "key account", "client", "customer"]):
+                line_cat = "Key Institutions"
+            elif any(kw in line_lower for kw in ["achieve", "award", "won", "growth", "increase", "revenue", "percent", "target", "%"]):
+                line_cat = "Achievements"
+            else:
+                line_cat = current_category
+                
+            categories[line_cat].append(line_clean)
+            
+        html_parts = []
+        for cat_name in ["Responsibilities", "Territory Coverage", "Key Institutions", "Achievements"]:
+            cat_lines = categories[cat_name]
+            if cat_lines:
+                html_parts.append(f"<p class='mb-1'><strong>{cat_name}</strong></p>")
+                html_parts.append("<ul class='mb-2'>")
+                for cl in cat_lines:
+                    html_parts.append(f"  <li>{cl}</li>")
+                html_parts.append("</ul>")
+                
+        if not html_parts:
+            return f"<p>{desc_text}</p>"
+            
+        return "\n".join(html_parts)
+
+    @staticmethod
     def is_valid_name(name: str) -> bool:
         if not name or not isinstance(name, str):
             return False
@@ -517,17 +598,23 @@ class ResumeIntelligenceService:
         summary = ""
         summary_found = False
         summary_lines = []
-        for i, line in enumerate(lines):
-            l = line.lower()
-            if any(h in l for h in ["summary", "professional summary", "career profile", "about me"]):
+        raw_lines = text.split('\n')
+        for i, line in enumerate(raw_lines):
+            l_strip = line.strip()
+            l_lower = l_strip.lower()
+            if not l_strip:
+                if summary_found:
+                    summary_lines.append("")
+                continue
+            if any(h in l_lower for h in ["summary", "professional summary", "career profile", "about me"]):
                 summary_found = True
                 continue
             if summary_found:
-                if any(h in l for h in ["experience", "education", "skills", "projects", "certifications", "languages"]):
+                if len(l_strip) < 50 and any(h in l_lower for h in ["experience", "education", "skills", "projects", "certifications", "languages"]):
                     break
                 summary_lines.append(line)
         if summary_lines:
-            summary = " ".join(summary_lines)
+            summary = "\n".join(summary_lines).strip()
         else:
             # Fallback summary
             summary = lines[1] if len(lines) > 1 else ""

@@ -104,3 +104,79 @@ def test_profile_photo_extraction_graceful_fallback():
     img_data, ext = extract_profile_photo(b"invalid data", "test.docx")
     assert img_data is None
     assert ext is None
+
+@pytest.mark.django_db
+def test_has_profile_photo_property():
+    user = User.objects.create_user(email="testcandidatephoto@example.com", password="password123")
+    profile = CandidateProfile.objects.create(user=user, full_name="Photo Test")
+    
+    # 1. No photo
+    assert profile.has_profile_photo is False
+    
+    # 2. Photo set but missing on disk
+    profile.profile_photo = "candidate_photos/nonexistent.png"
+    profile.save()
+    assert profile.has_profile_photo is False
+
+def test_parse_experience_description_to_html():
+    desc = (
+        "Responsibilities:\n"
+        "Managed a team of 5 sales engineers.\n"
+        "Territory Coverage:\n"
+        "North region and Delhi NCR.\n"
+        "Achievements:\n"
+        "Exceeded annual sales target by 25%."
+    )
+    html = ResumeIntelligenceService.parse_experience_description_to_html(desc)
+    assert "<strong>Responsibilities</strong>" in html
+    assert "<li>Managed a team of 5 sales engineers.</li>" in html
+    assert "<strong>Territory Coverage</strong>" in html
+    assert "<li>North region and Delhi NCR.</li>" in html
+    assert "<strong>Achievements</strong>" in html
+    assert "<li>Exceeded annual sales target by 25%.</li>" in html
+
+@pytest.mark.django_db
+def test_json_edit_view_salary_sync():
+    user = User.objects.create_user(email="jsonctctest@example.com", password="password123")
+    profile = CandidateProfile.objects.create(
+        user=user,
+        full_name="CTC Test",
+        current_salary=Decimal("500000.00"),
+        expected_salary=Decimal("800000.00")
+    )
+    
+    # Simulated JSON Edit Payload (Structured Resume Editor save)
+    data = {
+        "personal_info": {
+            "name": "CTC Test Updated",
+            "current_salary": 7.5, # 7.5 LPA
+            "expected_salary": 10.0, # 10 LPA
+            "total_experience": 3.5,
+            "location": "Bangalore"
+        },
+        "summary": "Updated summary test",
+        "skills": ["Python", "Django"],
+        "experience": []
+    }
+    
+    # Post to view
+    factory = RequestFactory()
+    from apps.core.views import CandidateJSONEditView
+    import json
+    request = factory.post(
+        reverse('frontend:candidate_edit_json', kwargs={'pk': profile.pk}),
+        data=json.dumps(data),
+        content_type='application/json'
+    )
+    request.user = user
+    
+    view = CandidateJSONEditView.as_view()
+    response = view(request, pk=profile.pk)
+    assert response.status_code == 200
+    
+    # Refresh from database
+    profile.refresh_from_db()
+    assert profile.current_salary == Decimal("750000.00")
+    assert profile.expected_salary == Decimal("1000000.00")
+    assert profile.current_salary_lpa == "7.5 LPA"
+    assert profile.expected_salary_lpa == "10 LPA"

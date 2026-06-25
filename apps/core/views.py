@@ -768,16 +768,25 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
         context['resume_filename'] = os.path.basename(self.object.resume.name) if self.object.resume else ""
         context['resume_extension'] = os.path.splitext(self.object.resume.name)[1].lower().replace('.', '') if self.object.resume else ""
         
-        resume_exists = False
-        resume_missing = False
+        has_ocr_data = bool(self.object.raw_resume_text.strip()) or bool(self.object.parsed_json) or self.object.experiences.exists()
+        file_physically_exists = False
         if self.object.resume:
             try:
                 if self.object.resume.name and os.path.exists(self.object.resume.path):
-                    resume_exists = True
-                else:
-                    resume_missing = True
+                    file_physically_exists = True
             except (ValueError, AssertionError):
+                pass
+                
+        if file_physically_exists or has_ocr_data:
+            resume_exists = True
+            resume_missing = False
+        else:
+            if self.object.resume:
                 resume_missing = True
+                resume_exists = False
+            else:
+                resume_exists = False
+                resume_missing = False
         context['resume_exists'] = resume_exists
         context['resume_missing'] = resume_missing
         
@@ -889,16 +898,25 @@ class PublicCandidateProfileView(DetailView):
         context['resume_filename'] = os.path.basename(self.object.resume.name) if self.object.resume else ""
         context['resume_extension'] = os.path.splitext(self.object.resume.name)[1].lower().replace('.', '') if self.object.resume else ""
         
-        resume_exists = False
-        resume_missing = False
+        has_ocr_data = bool(self.object.raw_resume_text.strip()) or bool(self.object.parsed_json) or self.object.experiences.exists()
+        file_physically_exists = False
         if self.object.resume:
             try:
                 if self.object.resume.name and os.path.exists(self.object.resume.path):
-                    resume_exists = True
-                else:
-                    resume_missing = True
+                    file_physically_exists = True
             except (ValueError, AssertionError):
+                pass
+                
+        if file_physically_exists or has_ocr_data:
+            resume_exists = True
+            resume_missing = False
+        else:
+            if self.object.resume:
                 resume_missing = True
+                resume_exists = False
+            else:
+                resume_exists = False
+                resume_missing = False
         context['resume_exists'] = resume_exists
         context['resume_missing'] = resume_missing
         return context
@@ -1363,6 +1381,19 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
         except Exception:
             pass
             
+        current_sal = info.get("current_salary")
+        expected_sal = info.get("expected_salary")
+        if current_sal is not None:
+            try:
+                profile.current_salary = Decimal(str(current_sal)) * 100000
+            except Exception:
+                pass
+        if expected_sal is not None:
+            try:
+                profile.expected_salary = Decimal(str(expected_sal)) * 100000
+            except Exception:
+                pass
+            
         profile.edited_by = request.user
         profile.edited_at = timezone.now()
         
@@ -1400,11 +1431,13 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
                 e_date = datetime.strptime(exp.get("end_date"), "%Y-%m-%d").date() if exp.get("end_date") else None
             except Exception:
                 s_date, e_date = None, None
+            from services.resume_intelligence import ResumeIntelligenceService
+            description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get("description", ""))
             Experience.objects.create(
                 profile=profile,
                 company_name=exp.get("company", "Company")[:100],
                 designation=exp.get("designation", "Role")[:100],
-                description=exp.get("description", ""),
+                description=description_html,
                 start_date=s_date,
                 end_date=e_date
             )
@@ -1895,16 +1928,19 @@ class CandidateResumePreviewView(LoginRequiredMixin, View):
     def get(self, request, pk, *args, **kwargs):
         import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        if not candidate.resume:
-            return HttpResponse("No resume file found.", status=404)
+        
+        has_ocr_data = bool(candidate.raw_resume_text.strip()) or bool(candidate.parsed_json) or candidate.experiences.exists()
+        if not candidate.resume and not has_ocr_data:
+            return HttpResponse("No resume file or OCR data found.", status=404)
             
-        file_path = candidate.resume.path
-        if file_path.lower().endswith('.pdf') and os.path.exists(file_path):
+        if candidate.resume:
             try:
-                f = open(file_path, 'rb')
-                response = FileResponse(f, content_type='application/pdf')
-                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
-                return response
+                file_path = candidate.resume.path
+                if file_path.lower().endswith('.pdf') and os.path.exists(file_path):
+                    f = open(file_path, 'rb')
+                    response = FileResponse(f, content_type='application/pdf')
+                    response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                    return response
             except Exception:
                 pass
                 
@@ -1925,35 +1961,41 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
     def get(self, request, pk, *args, **kwargs):
         import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        if not candidate.resume and not candidate.original_file:
-            return HttpResponse("No resume file found.", status=404)
+        
+        has_ocr_data = bool(candidate.raw_resume_text.strip()) or bool(candidate.parsed_json) or candidate.experiences.exists()
+        if not candidate.resume and not candidate.original_file and not has_ocr_data:
+            return HttpResponse("No resume file or OCR data found.", status=404)
             
         file_field = candidate.original_file if candidate.original_file else candidate.resume
-        file_path = file_field.path
-        if os.path.exists(file_path):
-            filename = os.path.basename(file_path)
-            if filename.startswith("original_"):
-                filename = filename[len("original_"):]
+        if file_field:
             try:
-                f = open(file_path, 'rb')
-                import mimetypes
-                content_type, _ = mimetypes.guess_type(file_path)
-                if not content_type:
-                    content_type = 'application/octet-stream'
-                response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
-                return response
+                file_path = file_field.path
+                if os.path.exists(file_path):
+                    filename = os.path.basename(file_path)
+                    if filename.startswith("original_"):
+                        filename = filename[len("original_"):]
+                    f = open(file_path, 'rb')
+                    import mimetypes
+                    content_type, _ = mimetypes.guess_type(file_path)
+                    if not content_type:
+                        content_type = 'application/octet-stream'
+                    response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+                    return response
             except Exception:
                 pass
                 
-        from services.resume_intelligence import ResumeIntelligenceService
-        try:
-            pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
-            filename = f"{candidate.full_name or 'Resume'}_Resume.pdf"
-            response = HttpResponse(pdf_bytes, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            return response
-        except Exception as e:
-            return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
+        if has_ocr_data:
+            from services.resume_intelligence import ResumeIntelligenceService
+            try:
+                pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
+                filename = f"{candidate.full_name or 'Resume'}_Resume.pdf"
+                response = HttpResponse(pdf_bytes, content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                return response
+            except Exception as e:
+                return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
+                
+        return HttpResponse("No resume file found.", status=404)
 
 
 @method_decorator(xframe_options_sameorigin, name='dispatch')
@@ -1964,16 +2006,19 @@ class PublicCandidateResumePreviewView(View):
     def get(self, request, pk, *args, **kwargs):
         import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        if not candidate.resume:
-            return HttpResponse("No resume file found.", status=404)
+        
+        has_ocr_data = bool(candidate.raw_resume_text.strip()) or bool(candidate.parsed_json) or candidate.experiences.exists()
+        if not candidate.resume and not has_ocr_data:
+            return HttpResponse("No resume file or OCR data found.", status=404)
             
-        file_path = candidate.resume.path
-        if file_path.lower().endswith('.pdf') and os.path.exists(file_path):
+        if candidate.resume:
             try:
-                f = open(file_path, 'rb')
-                response = FileResponse(f, content_type='application/pdf')
-                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
-                return response
+                file_path = candidate.resume.path
+                if file_path.lower().endswith('.pdf') and os.path.exists(file_path):
+                    f = open(file_path, 'rb')
+                    response = FileResponse(f, content_type='application/pdf')
+                    response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                    return response
             except Exception:
                 pass
                 
@@ -1994,32 +2039,38 @@ class PublicCandidateResumeDownloadView(View):
     def get(self, request, pk, *args, **kwargs):
         import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        if not candidate.resume and not candidate.original_file:
-            return HttpResponse("No resume file found.", status=404)
+        
+        has_ocr_data = bool(candidate.raw_resume_text.strip()) or bool(candidate.parsed_json) or candidate.experiences.exists()
+        if not candidate.resume and not candidate.original_file and not has_ocr_data:
+            return HttpResponse("No resume file or OCR data found.", status=404)
             
         file_field = candidate.original_file if candidate.original_file else candidate.resume
-        file_path = file_field.path
-        if os.path.exists(file_path):
-            filename = os.path.basename(file_path)
-            if filename.startswith("original_"):
-                filename = filename[len("original_"):]
+        if file_field:
             try:
-                f = open(file_path, 'rb')
-                import mimetypes
-                content_type, _ = mimetypes.guess_type(file_path)
-                if not content_type:
-                    content_type = 'application/octet-stream'
-                response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
-                return response
+                file_path = file_field.path
+                if os.path.exists(file_path):
+                    filename = os.path.basename(file_path)
+                    if filename.startswith("original_"):
+                        filename = filename[len("original_"):]
+                    f = open(file_path, 'rb')
+                    import mimetypes
+                    content_type, _ = mimetypes.guess_type(file_path)
+                    if not content_type:
+                        content_type = 'application/octet-stream'
+                    response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+                    return response
             except Exception:
                 pass
                 
-        from services.resume_intelligence import ResumeIntelligenceService
-        try:
-            pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
-            filename = f"{candidate.full_name or 'Resume'}_Resume.pdf"
-            response = HttpResponse(pdf_bytes, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            return response
-        except Exception as e:
-            return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
+        if has_ocr_data:
+            from services.resume_intelligence import ResumeIntelligenceService
+            try:
+                pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(candidate)
+                filename = f"{candidate.full_name or 'Resume'}_Resume.pdf"
+                response = HttpResponse(pdf_bytes, content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                return response
+            except Exception as e:
+                return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
+                
+        return HttpResponse("No resume file found.", status=404)

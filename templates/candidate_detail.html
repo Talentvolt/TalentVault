@@ -98,7 +98,7 @@
         <!-- Profile Header -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
             <div class="d-flex align-items-start gap-4">
-                {% if candidate.profile_photo %}
+                {% if candidate.has_profile_photo %}
                     <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover flex-shrink-0" style="width: 100px; height: 100px; border: 2px solid #dee2e6;" alt="Photo">
                 {% else %}
                     <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 100px; height: 100px;">
@@ -161,25 +161,26 @@
         <div class="card p-4 mb-4 border-0 shadow-sm">
             <h5 class="fw-bold mb-4">Work Experience</h5>
                 {% for exp in candidate.experiences.all %}
-                <div class="experience-entry mb-4 pb-3 border-bottom border-light-subtle" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
-                    <!-- Date Range -->
-                    <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
-                        {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
-                        <span class="x-small text-muted fw-semibold ms-2 experience-duration-text"></span>
+                <div class="experience-entry mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
+                    <div class="row">
+                        <!-- Left timeline for Dates -->
+                        <div class="col-md-3 mb-2 mb-md-0 text-secondary fw-semibold">
+                            <div style="font-size: 0.95rem;">
+                                {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
+                            </div>
+                            <div class="x-small text-muted fw-normal mt-1 experience-duration-text"></div>
+                        </div>
+                        <!-- Right side for Designation, Company, and Description -->
+                        <div class="col-md-9">
+                            <div class="fw-bold text-dark mb-1" style="font-size: 1.05rem;">
+                                {{ exp.designation }}
+                            </div>
+                            <div class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
+                                {{ exp.company_name }}
+                            </div>
+                            <div class="text-secondary small mb-0 lh-base mt-2" style="font-size: 0.88rem;">{{ exp.description|safe }}</div>
+                        </div>
                     </div>
-                    
-                    <!-- Designation -->
-                    <div class="fw-bold text-primary mb-1" style="font-size: 1.05rem;">
-                        {{ exp.designation }}
-                    </div>
-                    
-                    <!-- Company -->
-                    <div class="fw-semibold text-secondary mb-2" style="font-size: 0.92rem;">
-                        {{ exp.company_name }}
-                    </div>
-                    
-                    <!-- Bullet Points -->
-                    <div class="text-secondary small mb-0 lh-base mt-2" style="white-space: pre-wrap; font-size: 0.88rem;">{{ exp.description|default:"" }}</div>
                 </div>
                 {% empty %}
                 <p class="text-secondary small italic">No work experience listed.</p>
@@ -295,11 +296,12 @@
                     </div>
                 </div>
             </div>
-            <div class="row g-2">
+            
+            <div class="row g-2 mb-3">
                 <div class="col-6">
-                    <a href="{% url 'frontend:candidate_resume_preview' candidate.id %}" target="_blank" class="btn btn-primary w-100 py-2 fw-bold text-xs">
+                    <button type="button" id="toggle-embedded-pdf-btn" class="btn btn-primary w-100 py-2 fw-bold text-xs">
                         <i class="bi bi-eye me-2"></i>Preview Resume
-                    </a>
+                    </button>
                 </div>
                 <div class="col-6">
                     <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-success w-100 py-2 fw-bold text-xs">
@@ -307,6 +309,54 @@
                     </a>
                 </div>
             </div>
+            
+            <!-- Embedded PDF Viewer -->
+            <div id="embedded-pdf-viewer-container" class="mb-3 d-none">
+                <div class="ratio ratio-4x3 border border-secondary rounded overflow-hidden bg-light">
+                    <iframe id="embedded-pdf-iframe" data-src="{% url 'frontend:candidate_resume_preview' candidate.id %}" src="about:blank" style="border: none;"></iframe>
+                </div>
+            </div>
+            
+            <!-- OCR Summary -->
+            <div class="mb-3">
+                <h6 class="text-uppercase text-secondary fw-bold x-small mb-2"><i class="bi bi-file-text me-1"></i> OCR Summary</h6>
+                <div class="bg-secondary bg-opacity-10 p-3 rounded border border-secondary text-light small" style="white-space: pre-wrap; max-height: 250px; overflow-y: auto; font-size: 0.85rem;">{{ candidate.summary|default:"No OCR summary extracted." }}</div>
+            </div>
+            
+            <!-- Skills -->
+            <div class="mb-3">
+                <h6 class="text-uppercase text-secondary fw-bold x-small mb-2"><i class="bi bi-tags me-1"></i> Skills</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for skill in candidate.skills.all %}
+                        <span class="badge bg-secondary text-white">{{ skill.skill_name }}</span>
+                    {% empty %}
+                        <span class="text-muted small">No skills parsed.</span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Experience -->
+            <div>
+                <h6 class="text-uppercase text-secondary fw-bold x-small mb-2"><i class="bi bi-briefcase me-1"></i> Experience</h6>
+                <div class="timeline-small small" style="max-height: 300px; overflow-y: auto;">
+                    {% for exp in candidate.experiences.all %}
+                        <div class="border-start border-secondary ps-3 pb-3 position-relative">
+                            <div class="position-absolute bg-primary rounded-circle" style="width: 8px; height: 8px; left: -4px; top: 6px;"></div>
+                            <div class="fw-bold text-white" style="font-size: 0.85rem;">{{ exp.designation }}</div>
+                            <div class="text-secondary x-small">{{ exp.company_name }}</div>
+                            <div class="text-muted x-small">
+                                {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
+                            </div>
+                            <div class="text-secondary mt-1" style="font-size: 0.8rem;">
+                                {{ exp.description|safe }}
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="text-muted small">No experience parsed.</div>
+                    {% endfor %}
+                </div>
+            </div>
+            
             {% elif resume_missing %}
             <div class="text-center py-3 text-secondary mb-3">
                 <i class="bi bi-file-earmark-exclamation fs-1 text-warning"></i>
@@ -725,6 +775,14 @@
                 <label class="form-label small fw-bold">Total Experience (Years)</label>
                 <input type="number" id="edit_experience_years" class="form-control form-control-sm" step="0.1">
             </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Current CTC (LPA)</label>
+                <input type="number" id="edit_current_salary" class="form-control form-control-sm" step="0.1">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Expected CTC (LPA)</label>
+                <input type="number" id="edit_expected_salary" class="form-control form-control-sm" step="0.1">
+            </div>
         </div>
 
         <!-- Summary -->
@@ -855,6 +913,8 @@ function loadResumeForm() {
     document.getElementById('edit_company').value = info.current_company || '';
     document.getElementById('edit_designation').value = info.current_designation || '';
     document.getElementById('edit_experience_years').value = info.total_experience || 0;
+    document.getElementById('edit_current_salary').value = info.current_salary || parseFloat("{{ candidate.current_salary|default_if_none:'0' }}") / 100000.0 || '';
+    document.getElementById('edit_expected_salary').value = info.expected_salary || parseFloat("{{ candidate.expected_salary|default_if_none:'0' }}") / 100000.0 || '';
     
     document.getElementById('edit_summary').value = resumeData.summary || '';
     document.getElementById('edit_skills').value = (resumeData.skills || []).join(', ');
@@ -982,6 +1042,27 @@ function addCertificationRow(name='', org='', date='') {
     container.appendChild(div);
 }
 
+document.addEventListener("DOMContentLoaded", function() {
+    const toggleBtn = document.getElementById("toggle-embedded-pdf-btn");
+    const container = document.getElementById("embedded-pdf-viewer-container");
+    const iframe = document.getElementById("embedded-pdf-iframe");
+    
+    if (toggleBtn && container && iframe) {
+        toggleBtn.addEventListener("click", function() {
+            if (container.classList.contains("d-none")) {
+                container.classList.remove("d-none");
+                if (iframe.src === "about:blank") {
+                    iframe.src = iframe.getAttribute("data-src");
+                }
+                toggleBtn.innerHTML = '<i class="bi bi-eye-slash me-2"></i>Hide Preview';
+            } else {
+                container.classList.add("d-none");
+                toggleBtn.innerHTML = '<i class="bi bi-eye me-2"></i>Preview Resume';
+            }
+        });
+    }
+});
+
 function saveStructuredResume() {
     // Compile JSON
     const data = {
@@ -992,7 +1073,9 @@ function saveStructuredResume() {
             location: document.getElementById('edit_location').value,
             current_company: document.getElementById('edit_company').value,
             current_designation: document.getElementById('edit_designation').value,
-            total_experience: parseFloat(document.getElementById('edit_experience_years').value) || 0
+            total_experience: parseFloat(document.getElementById('edit_experience_years').value) || 0,
+            current_salary: parseFloat(document.getElementById('edit_current_salary').value) || 0,
+            expected_salary: parseFloat(document.getElementById('edit_expected_salary').value) || 0
         },
         summary: document.getElementById('edit_summary').value,
         skills: document.getElementById('edit_skills').value.split(',').map(s => s.trim()).filter(s => s),
@@ -1054,7 +1137,7 @@ function saveStructuredResume() {
     .then(r => r.json())
     .then(res => {
         if(res.status === 'success') {
-            location.reload();
+            window.location.href = window.location.pathname + '?nocache=' + Date.now();
         } else {
             alert('Error updating candidate details: ' + res.message);
         }

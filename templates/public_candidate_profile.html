@@ -52,10 +52,10 @@
             <!-- Profile Header -->
             <div class="card p-4 mb-4 border-0 shadow-sm">
                 <div class="d-flex align-items-start gap-4">
-                    {% if candidate.profile_photo %}
+                    {% if candidate.has_profile_photo %}
                         <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover flex-shrink-0" style="width: 100px; height: 100px; border: 2px solid #dee2e6;" alt="Photo">
                     {% else %}
-                        <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center">
+                        <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 100px; height: 100px;">
                             <i class="bi bi-person" style="font-size: 48px; line-height: 1;"></i>
                         </div>
                     {% endif %}
@@ -109,24 +109,25 @@
                 <h5 class="fw-bold mb-4">Work Experience</h5>
                 <div class="experience-list">
                     {% for exp in candidate.experiences.all %}
-                    <div class="experience-entry mb-4 pb-3 border-bottom border-light-subtle">
-                        <!-- Date Range -->
-                        <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
-                            {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
+                    <div class="experience-entry mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}">
+                        <div class="row">
+                            <!-- Left timeline for Dates -->
+                            <div class="col-md-3 mb-2 mb-md-0 text-secondary fw-semibold">
+                                <div style="font-size: 0.95rem;">
+                                    {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
+                                </div>
+                            </div>
+                            <!-- Right side for Designation, Company, and Description -->
+                            <div class="col-md-9">
+                                <div class="fw-bold text-dark mb-1" style="font-size: 1.05rem;">
+                                    {{ exp.designation }}
+                                </div>
+                                <div class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
+                                    {{ exp.company_name }}
+                                </div>
+                                <div class="text-secondary small mb-0 lh-base mt-2" style="font-size: 0.88rem;">{{ exp.description|safe }}</div>
+                            </div>
                         </div>
-                        
-                        <!-- Designation -->
-                        <div class="fw-bold text-primary mb-1" style="font-size: 1.05rem;">
-                            {{ exp.designation }}
-                        </div>
-                        
-                        <!-- Company -->
-                        <div class="fw-semibold text-secondary mb-2" style="font-size: 0.92rem;">
-                            {{ exp.company_name }}
-                        </div>
-                        
-                        <!-- Bullet Points -->
-                        <p class="text-secondary small mb-0 lh-base mt-2" style="white-space: pre-wrap; font-size: 0.88rem;">{{ exp.description|default:"" }}</p>
                     </div>
                     {% empty %}
                     <p class="text-secondary small italic">No work experience listed.</p>
