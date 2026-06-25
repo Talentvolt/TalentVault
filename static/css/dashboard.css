@@ -396,3 +396,46 @@ body {
         margin-left: 0;
     }
 }
+
+/* --- Global Dropdown & z-index Layering System --- */
+
+/* Modal Stack Layering (z-index: 3000) */
+.modal {
+    z-index: 3000 !important;
+}
+.modal-backdrop {
+    z-index: 2990 !important;
+}
+
+/* Dropdown & Popover Layering (z-index: 2000) */
+.dropdown-menu,
+.dropdown-menu.show,
+.flatpickr-calendar,
+.candidate-actions,
+.popover {
+    z-index: 2000 !important;
+}
+
+/* Sticky Navbar & Sidebar Layering (z-index: 1000) */
+.top-navbar,
+.sidebar {
+    z-index: 1000 !important;
+}
+
+/* Content Card default layering (z-index: 1) */
+.card {
+    z-index: 1;
+}
+
+/* Prevent clipping of dropdown menus inside tables, cards and row lists */
+.card:not([style*="overflow"]):not([style*="max-height"]),
+.card-body:not([style*="overflow"]):not([style*="max-height"]),
+.table-responsive {
+    overflow: visible !important;
+}
+
+/* Ensure dropdown positioning does not cause layout shifts and stays on top */
+.dropdown-menu {
+    position: absolute;
+}
+
