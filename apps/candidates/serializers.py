@@ -28,7 +28,7 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'user', 'summary', 'resume', 'location', 'total_experience',
             'current_salary', 'expected_salary', 'notice_period', 'is_immediate_joiner',
-            'linkedin_url', 'portfolio_url', 'skills', 'experiences', 'educations', 'created_at'
+            'linkedin_url', 'portfolio_url', 'skills', 'experiences', 'educations', 'profile_photo', 'created_at'
         )
         read_only_fields = ('id', 'created_at')
 
