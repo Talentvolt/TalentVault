@@ -93,3 +93,14 @@ def test_ocr_heading_detection_length():
     res_long = ResumeIntelligenceService.parse_resume_nlp(long_summary_sentence)
     # Because of length filter, it shouldn't switch current_section to WORK, and should be parsed as summary fallback instead
     assert "Certified Project Manager" in res_long["summary"]
+
+def test_profile_photo_extraction_graceful_fallback():
+    from apps.candidates.utils import extract_profile_photo
+    # Test that invalid files do not raise an exception and return (None, None)
+    img_data, ext = extract_profile_photo(b"invalid data", "test.pdf")
+    assert img_data is None
+    assert ext is None
+
+    img_data, ext = extract_profile_photo(b"invalid data", "test.docx")
+    assert img_data is None
+    assert ext is None

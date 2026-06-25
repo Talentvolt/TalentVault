@@ -318,6 +318,13 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 profile.original_file.save("original_" + filename, ContentFile(file_bytes), save=False)
                 logger.info(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
                 print(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
+                
+                # Detect and save profile photo
+                photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
+                if photo_bytes:
+                    profile.profile_photo.save(f"photo_{profile.id}.{photo_ext}", ContentFile(photo_bytes), save=False)
+                    logger.info(f"[PARSER PHOTO SAVE SUCCESS] Extracted and saved profile photo for {profile.full_name}")
+                    print(f"[PARSER PHOTO SAVE SUCCESS] Extracted and saved profile photo for {profile.full_name}")
             except Exception as e:
                 logger.error(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}", exc_info=True)
                 print(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}")
@@ -428,3 +435,50 @@ def handle_resume_upload(uploaded_file, overwrite=False):
             results['error_reasons'].append(err_reason)
             
     return results
+
+def extract_profile_photo(file_bytes, filename):
+    ext = filename.split('.')[-1].lower()
+    if ext == 'pdf':
+        try:
+            import fitz
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            for page_num in range(min(3, len(doc))):
+                page = doc[page_num]
+                image_list = page.get_images(full=True)
+                for img_info in image_list:
+                    xref = img_info[0]
+                    base_image = doc.extract_image(xref)
+                    if not base_image:
+                        continue
+                    width = base_image.get("width", 0)
+                    height = base_image.get("height", 0)
+                    if width >= 80 and height >= 80:
+                        aspect_ratio = width / height
+                        if 0.5 <= aspect_ratio <= 2.0:
+                            return base_image["image"], base_image.get("ext", "png")
+        except Exception as e:
+            logger.error(f"Error extracting photo from PDF: {e}")
+    elif ext in ['docx', 'doc']:
+        try:
+            import zipfile
+            import io
+            from PIL import Image
+            
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+                media_files = [f for f in z.namelist() if f.startswith('word/media/')]
+                media_files.sort()
+                for f_name in media_files:
+                    img_data = z.read(f_name)
+                    try:
+                        img = Image.open(io.BytesIO(img_data))
+                        width, height = img.size
+                        if width >= 80 and height >= 80:
+                            aspect_ratio = width / height
+                            if 0.5 <= aspect_ratio <= 2.0:
+                                ext = f_name.split('.')[-1].lower()
+                                return img_data, ext
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.error(f"Error extracting photo from DOCX: {e}")
+    return None, None
