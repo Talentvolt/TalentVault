@@ -391,7 +391,15 @@ def process_resume_file(file_obj, filename, overwrite=False):
         return None, "SAVE_FAILED"
 
 def handle_resume_upload(uploaded_file, overwrite=False):
-    results = {'created': [], 'duplicates': 0, 'errors': 0}
+    results = {'created': [], 'duplicates': 0, 'errors': 0, 'error_reasons': []}
+    
+    reason_map = {
+        "INVALID_FORMAT": "Invalid file format. Supported: PDF, DOC, DOCX, PNG, JPG, JPEG, TIFF, BMP.",
+        "READ_ERROR": "Error reading file bytes.",
+        "OCR_FAILED": "OCR engine extraction failed.",
+        "NLP_FAILED": "NLP parsing/extraction failed.",
+        "SAVE_FAILED": "Database save failed."
+    }
     
     if uploaded_file.name.lower().endswith('.zip'):
         with zipfile.ZipFile(uploaded_file, 'r') as z:
@@ -406,6 +414,8 @@ def handle_resume_upload(uploaded_file, overwrite=False):
                             results['duplicates'] += 1
                         else:
                             results['errors'] += 1
+                            err_reason = reason_map.get(status, f"Unknown parsing error ({status})")
+                            results['error_reasons'].append(f"{filename}: {err_reason}")
     else:
         profile, status = process_resume_file(uploaded_file, uploaded_file.name, overwrite)
         if status == "SUCCESS":
@@ -414,5 +424,7 @@ def handle_resume_upload(uploaded_file, overwrite=False):
             results['duplicates'] += 1
         else:
             results['errors'] += 1
+            err_reason = reason_map.get(status, f"Unknown parsing error ({status})")
+            results['error_reasons'].append(err_reason)
             
     return results

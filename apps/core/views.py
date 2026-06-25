@@ -1235,33 +1235,54 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         overwrite = request.POST.get('overwrite') == 'on'
-        total_created = 0
-        total_duplicates = 0
         
-        if 'resume' in request.FILES:
-            results = handle_resume_upload(request.FILES['resume'], overwrite=overwrite)
-            total_created += len(results['created'])
-            total_duplicates += results['duplicates']
+        file_uploaded = 'resume' in request.FILES or 'resumes_zip' in request.FILES
+        if not file_uploaded:
+            messages.error(request, '❌ Parsing failed\n\nReason: No file was uploaded.')
+            return redirect('frontend:candidate_search')
             
-        if 'resumes_zip' in request.FILES:
-            results = handle_resume_upload(request.FILES['resumes_zip'], overwrite=overwrite)
-            total_created += len(results['created'])
-            total_duplicates += results['duplicates']
+        uploaded_file = request.FILES.get('resume') or request.FILES.get('resumes_zip')
+        results = handle_resume_upload(uploaded_file, overwrite=overwrite)
+        
+        created_profiles = results['created']
+        duplicates = results['duplicates']
+        error_reasons = results.get('error_reasons', [])
+        
+        if len(created_profiles) > 0:
+            profile = created_profiles[0]
+            skills_str = ", ".join([s.skill_name for s in profile.skills.all()])
+            phone_num = profile.user.phone_number or 'N/A'
             
-        if total_created > 0 or total_duplicates > 0:
-            msg = f'Import complete. {total_created} profiles created.'
-            if total_duplicates > 0:
-                msg += f' {total_duplicates} duplicates found ({"updated" if overwrite else "skipped"}).'
+            msg = (
+                "✅ Resume Parsed Successfully\n\n"
+                "Candidate Created:\n"
+                f"Name: {profile.full_name or 'N/A'}\n"
+                f"Email: {profile.user.email or 'N/A'}\n"
+                f"Phone: {phone_num}\n"
+                f"Experience: {profile.total_experience or 0.0} Years\n"
+                f"Skills: {skills_str or 'N/A'}"
+            )
             messages.success(request, msg)
-            # Create recruiter notification
+            
+            if len(created_profiles) > 1:
+                bulk_msg = f"Successfully parsed {len(created_profiles)} candidates from ZIP file."
+                messages.info(request, bulk_msg)
+                
             Notification.objects.create(
                 recipient=request.user,
-                title="Resume Parsing Complete",
-                message=msg,
+                title="Resume Parsing Success",
+                message=f"Candidate {profile.full_name or profile.user.email} parsed successfully.",
                 notification_type='SYSTEM'
             )
+        elif duplicates > 0:
+            messages.warning(request, "⚠ Candidate already exists")
         else:
-            messages.error(request, 'No valid resumes were parsed.')
+            reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
+            msg = (
+                "❌ Parsing failed\n\n"
+                f"Reason: {reason}"
+            )
+            messages.error(request, msg)
             
         return redirect('frontend:candidate_search')
 

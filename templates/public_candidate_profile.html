@@ -106,21 +106,27 @@
 
             <!-- Experience -->
             <div class="card p-4 mb-4 border-0 shadow-sm">
-                <h5 class="fw-bold mb-3">Work Experience</h5>
-                <div class="timeline">
+                <h5 class="fw-bold mb-4">Work Experience</h5>
+                <div class="experience-list">
                     {% for exp in candidate.experiences.all %}
-                    <div class="d-flex gap-3 mb-4 position-relative">
-                        <div class="flex-shrink-0" style="margin-left: -1.75rem; background: #fff;">
-                            <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-2 border border-white border-4">
-                                <i class="bi bi-briefcase"></i>
-                            </div>
+                    <div class="experience-entry mb-4 pb-3 border-bottom border-light-subtle">
+                        <!-- Date Range -->
+                        <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
+                            {{ exp.start_date|date:"Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
                         </div>
-                        <div>
-                            <h6 class="fw-bold mb-0">{{ exp.company_name }}</h6>
-                            <div class="text-primary small mb-1">{{ exp.designation }}</div>
-                            <div class="text-secondary small mb-2">{{ exp.start_date|date:"M Y"|default:"N/A" }} - {{ exp.end_date|date:"M Y"|default:"Present" }}</div>
-                            <p class="text-secondary small mb-0">{{ exp.description }}</p>
+                        
+                        <!-- Designation -->
+                        <div class="fw-bold text-primary mb-1" style="font-size: 1.05rem;">
+                            {{ exp.designation }}
                         </div>
+                        
+                        <!-- Company -->
+                        <div class="fw-semibold text-secondary mb-2" style="font-size: 0.92rem;">
+                            {{ exp.company_name }}
+                        </div>
+                        
+                        <!-- Bullet Points -->
+                        <p class="text-secondary small mb-0 lh-base mt-2" style="white-space: pre-wrap; font-size: 0.88rem;">{{ exp.description|default:"" }}</p>
                     </div>
                     {% empty %}
                     <p class="text-secondary small italic">No work experience listed.</p>

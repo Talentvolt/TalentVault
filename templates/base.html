@@ -179,6 +179,16 @@
 
         <!-- Content Area -->
         <main class="content-area">
+            {% if messages %}
+            <div class="messages-container mb-4">
+                {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% elif message.tags == 'info' %}info{% else %}success{% endif %} alert-dismissible fade show shadow-sm" role="alert">
+                    <div style="white-space: pre-line; font-weight: 500;">{{ message }}</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% block content %}{% endblock %}
         </main>
     </div>

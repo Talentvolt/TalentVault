@@ -720,6 +720,91 @@ class ResumeIntelligenceService:
                 "end_date": end_date_val
             })
 
+        # Post-process experiences to:
+        # 1. Reject fake experiences (empty or generic OCR artifacts)
+        # 2. Format description as clean bullet points
+        # 3. Group by company and designation, keeping the chronological order
+        grouped_experiences = []
+        for exp in experiences:
+            comp = exp["company"].strip()
+            desig = exp["designation"].strip()
+            desc = exp["description"].strip()
+            s_date = exp["start_date"]
+            e_date = exp["end_date"]
+            
+            # Clean company and designation names
+            comp_clean = comp.lstrip('-•*+ ').strip()
+            desig_clean = desig.lstrip('-•*+ ').strip()
+            
+            # Remove parentheses content and clean extra spaces
+            comp_clean = re.sub(r'\s*\([^)]*\)', '', comp_clean).strip()
+            desig_clean = re.sub(r'\s*\([^)]*\)', '', desig_clean).strip()
+
+            # Filter out common personal detail or license OCR lines
+            invalid_keywords = [
+                "valid upto", "valid up to", "expiry date", "date of birth", "gender:", "nationality:", 
+                "languages known", "marital status", "passport no", "driving license",
+                "hobbies", "permanent address", "current address", "valid check", "validity"
+            ]
+            if any(ikw in comp_clean.lower() for ikw in invalid_keywords):
+                comp_clean = ""
+            if any(ikw in desig_clean.lower() for ikw in invalid_keywords):
+                desig_clean = ""
+            
+            # Skip/Merge if both are empty or if it's just random OCR text without company/designation
+            if not comp_clean and not desig_clean:
+                if grouped_experiences and desc:
+                    # Append description lines to the last experience
+                    existing_desc = grouped_experiences[-1]["description"]
+                    new_lines = []
+                    for line in desc.split('\n'):
+                        l_clean = line.strip().lstrip('-•*+ ').strip()
+                        if l_clean:
+                            new_lines.append(f"• {l_clean}")
+                    if new_lines:
+                        new_desc = "\n".join(new_lines)
+                        grouped_experiences[-1]["description"] = (existing_desc + "\n" + new_desc).strip()
+                continue
+                
+            # If designation or company is a single short word that is not a real name, skip it if there's no date range
+            if not s_date and not e_date:
+                # heuristic: if designation length is too short or is a common OCR typo, skip
+                if (comp_clean and len(comp_clean) < 3) or (desig_clean and len(desig_clean) < 3):
+                    continue
+
+            # Format description into clean bullet points
+            cleaned_desc_lines = []
+            for line in desc.split('\n'):
+                l_clean = line.strip().lstrip('-•*+ ').strip()
+                if l_clean:
+                    cleaned_desc_lines.append(f"• {l_clean}")
+            desc_bullets = "\n".join(cleaned_desc_lines)
+            
+            # Search if we can merge with an existing experience (case-insensitive)
+            matched = False
+            for ge in grouped_experiences:
+                if ge["company"].lower() == comp_clean.lower() and ge["designation"].lower() == desig_clean.lower():
+                    if desc_bullets:
+                        ge["description"] = (ge["description"] + "\n" + desc_bullets).strip()
+                    if s_date and (not ge["start_date"] or s_date < ge["start_date"]):
+                        ge["start_date"] = s_date
+                    if e_date and (not ge["end_date"] or e_date > ge["end_date"]):
+                        ge["end_date"] = e_date
+                    matched = True
+                    break
+            
+            if not matched:
+                grouped_experiences.append({
+                    "company": comp_clean or "Company",
+                    "designation": desig_clean or "Position",
+                    "description": desc_bullets,
+                    "start_date": s_date,
+                    "end_date": e_date
+                })
+        
+        experiences = grouped_experiences
+
+
         # 2. Parse Educations
         educations = []
         edu_degree_keywords = ['mba', 'pgdm', 'b.com', 'bcom', 'b.tech', 'btech', 'b.e.', 'be', 'bsc', 'b.sc', 'msc', 'm.sc', 'phd', 'doctor', 'bachelor', 'master', 'diploma']
@@ -889,10 +974,15 @@ class ResumeIntelligenceService:
             comp = re.sub(r'\b(inc|corp|corporation|ltd|limited|llc|pvt)\b\.?', '', comp, flags=re.I).strip()
             exp["company"] = comp.title()
             
-            # Rewrite descriptions to ATS-friendly STAR format
+            # Preserve original experience description bullet points
             desc = exp.get("description", "")
-            if len(desc) < 30 or "Designed" not in desc:
-                exp["description"] = f"Designed and deployed robust software architectures utilizing {', '.join(improved.get('skills', [])[:3])}, optimizing application latency by 20% and improving overall team execution workflow."
+            cleaned_desc_lines = []
+            for line in desc.split('\n'):
+                l_clean = line.strip().lstrip('-•*+ ').strip()
+                if l_clean:
+                    cleaned_desc_lines.append(f"• {l_clean}")
+            exp["description"] = "\n".join(cleaned_desc_lines)
+
 
         # 3. Normalize degrees
         for edu in improved.get("education", []):
