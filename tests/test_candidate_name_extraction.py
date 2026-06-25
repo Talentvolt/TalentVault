@@ -49,10 +49,9 @@ def test_priority_2_nlp_person_entity():
 
 def test_priority_3_first_valid_text_line():
     # Priority 3: No valid PERSON entity, so first text line excluding phone/email/etc.
-    # Here, "Software Engineer" is the first valid text line because "software engineer" doesn't match name pattern (lowercase/uppercase check)
-    text = "(+91) 9953699195\njohn@example.com\nsoftware engineer\nGoogle"
+    text = "(+91) 9953699195\njohn@example.com\nAlex Smith\nGoogle"
     name = ResumeIntelligenceService.extract_candidate_name(text, parsed_name="(+91) 9953699195")
-    assert name == "software engineer"
+    assert name == "Alex Smith"
 
 def test_priority_4_ocr_layout_heading():
     # Priority 4: If first line is valid, but doesn't pass priority 3 due to some reason, wait, first line is OCR Layout heading.
@@ -96,7 +95,7 @@ def test_process_resume_proper_name(mock_ocr):
 def test_process_resume_only_phone_number(mock_ocr):
     # Setup mock OCR output with only phone number and email as first lines, followed by non-PERSON lines
     mock_ocr.return_value = {
-        "text": "(+91) 9953699195\nrecruit@example.com\nhttp://linkedin.com/in/fake\nPython Developer",
+        "text": "(+91) 9953699195\nrecruit@example.com\nhttp://linkedin.com/in/fake\nAlex Smith",
         "engine": "PaddleOCR",
         "confidence": 95.0,
         "resume_type": "SCANNED_IMAGE"
@@ -107,8 +106,8 @@ def test_process_resume_only_phone_number(mock_ocr):
 
     assert status == "SUCCESS"
     assert profile is not None
-    # Phone number is skipped as name. "Python Developer" matches priority 3 (first valid line).
-    assert profile.full_name == "Python Developer"
+    # Phone number is skipped as name. "Alex Smith" matches priority 3 (first valid line).
+    assert profile.full_name == "Alex Smith"
     assert profile.user.email == "recruit@example.com"
 
 @pytest.mark.django_db
@@ -154,14 +153,14 @@ def test_first_heading_resume():
 def test_regression_shreya_chavda_company():
     text = "SHREYA CHAVDA\nAnant Zaveri Pvt Ltd.\nEmail: shreya.chavda1712@gmail.com"
     name = ResumeIntelligenceService.extract_candidate_name(text, email="shreya.chavda1712@gmail.com")
-    assert name == "SHREYA CHAVDA"
+    assert name == "Shreya Chavda"
 
 def test_regression_rohan_kumar_company():
     text = "ROHAN KUMAR\nChampion Semiconductor LLP\nEmail: rohan@example.com"
     name = ResumeIntelligenceService.extract_candidate_name(text, email="rohan@example.com")
-    assert name == "ROHAN KUMAR"
+    assert name == "Rohan Kumar"
 
 def test_regression_harneet_singh_chhabra_company():
     text = "HARNEET SINGH CHHABRA\nHero MotoCorp\nEmail: harneet@example.com"
     name = ResumeIntelligenceService.extract_candidate_name(text, email="harneet@example.com")
-    assert name == "HARNEET SINGH CHHABRA"
+    assert name == "Harneet Singh Chhabra"

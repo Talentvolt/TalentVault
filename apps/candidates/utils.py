@@ -200,6 +200,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
     try:
         logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
         parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
+        parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
         info = parsed_data['personal_info']
         logger.info(f"[PARSER NLP SUCCESS] Parsed info for candidate: {info.get('name')}")
     except Exception as e:
@@ -448,6 +449,7 @@ def extract_profile_photo(file_bytes, filename):
         try:
             import fitz
             doc = fitz.open(stream=file_bytes, filetype="pdf")
+            candidates = []
             for page_num in range(min(3, len(doc))):
                 page = doc[page_num]
                 image_list = page.get_images(full=True)
@@ -458,10 +460,14 @@ def extract_profile_photo(file_bytes, filename):
                         continue
                     width = base_image.get("width", 0)
                     height = base_image.get("height", 0)
-                    if width >= 80 and height >= 80:
+                    img_data = base_image.get("image")
+                    if img_data and width >= 80 and height >= 80:
                         aspect_ratio = width / height
                         if 0.5 <= aspect_ratio <= 2.0:
-                            return base_image["image"], base_image.get("ext", "png")
+                            candidates.append((len(img_data), img_data, base_image.get("ext", "png")))
+            if candidates:
+                candidates.sort(key=lambda x: x[0], reverse=True)
+                return candidates[0][1], candidates[0][2]
         except Exception as e:
             logger.error(f"Error extracting photo from PDF: {e}")
     elif ext in ['docx', 'doc']:
@@ -473,6 +479,7 @@ def extract_profile_photo(file_bytes, filename):
             with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
                 media_files = [f for f in z.namelist() if f.startswith('word/media/')]
                 media_files.sort()
+                candidates = []
                 for f_name in media_files:
                     img_data = z.read(f_name)
                     try:
@@ -482,9 +489,12 @@ def extract_profile_photo(file_bytes, filename):
                             aspect_ratio = width / height
                             if 0.5 <= aspect_ratio <= 2.0:
                                 ext = f_name.split('.')[-1].lower()
-                                return img_data, ext
+                                candidates.append((len(img_data), img_data, ext))
                     except Exception:
                         continue
+                if candidates:
+                    candidates.sort(key=lambda x: x[0], reverse=True)
+                    return candidates[0][1], candidates[0][2]
         except Exception as e:
             logger.error(f"Error extracting photo from DOCX: {e}")
     return None, None

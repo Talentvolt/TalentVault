@@ -34,7 +34,7 @@ def test_resume_parser_rohan_kumar_resume():
     parsed = ResumeIntelligenceService.parse_resume_nlp(resume_text)
     
     # 1. Candidate Name
-    assert parsed["personal_info"]["name"] == "ROHAN KUMAR"
+    assert parsed["personal_info"]["name"] == "Rohan Kumar"
     
     # 2. Contact
     assert parsed["personal_info"]["email"] == "rohan.kumar@example.com"

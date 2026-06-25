@@ -188,20 +188,28 @@ class ResumeIntelligenceService:
         # Check if the name contains any blacklisted word as a standalone word
         words = re.sub(r'[^a-zA-Z\s]', ' ', name_clean).lower().split()
         blacklisted_words = {
-            'curriculum', 'vitae', 'biodata', 'resume', 'cv', 'experience', 'education', 
-            'skills', 'projects', 'certifications', 'languages', 'objective', 'summary',
-            'profile', 'workexperience', 'careerobjective', 'page', 'email', 'phone',
-            'mobile', 'telephone', 'contact', 'address', 'present', 'current',
-            'candidate', 'unknown', 'hometown', 'residence', 'nationality', 'gender',
-            'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company',
-            'corporation', 'technologies', 'solutions', 'industries', 'group',
-            'hospital', 'university', 'college', 'institute', 'school', 'bank', 'corp'
+            'manager', 'developer', 'executive', 'engineer', 'lead', 'associate', 'specialist', 'director', 
+            'analyst', 'consultant', 'officer', 'administrator', 'coordinator', 'technician', 'representative', 
+            'intern', 'programmer', 'architect', 'head', 'founder', 'co-founder', 'ceo', 'cto', 'supervisor',
+            'leader', 'operator', 'agent', 'strategist', 'advisor', 'expert', 'auditor', 'salesperson',
+            'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company', 'curriculum', 'vitae',
+            'corporation', 'technologies', 'solutions', 'industries', 'group', 'corp',
+            'hospital', 'university', 'college', 'institute', 'school', 'bank', 'resume', 'cv', 'biodata',
+            'profile', 'summary', 'education', 'skills', 'projects', 'certifications', 'languages',
+            'objective', 'experience', 'work', 'history', 'academic', 'qualification', 'qualifications',
+            'page', 'email', 'phone', 'contact', 'mobile', 'telephone', 'address', 'present', 'current',
+            'candidate', 'unknown', 'hometown', 'residence', 'nationality', 'gender', 'about',
+            'hr', 'recruiter', 'team'
         }
         if any(w in blacklisted_words for w in words):
             return False
             
         # Must not be a single long run-on word without spaces (e.g. CURRICULUMVITAE)
         if ' ' not in name_clean and len(name_clean) > 12:
+            return False
+            
+        # Must have between 1 and 5 words
+        if not (1 <= len(name_clean.split()) <= 5):
             return False
             
         return True
@@ -262,7 +270,7 @@ class ResumeIntelligenceService:
             return "LANGUAGES"
         if l in ["personal details", "personal profile", "personal summary"]:
             return "PERSONAL"
-        if l in ["profile summary", "summary", "career objective", "objective", "professional summary", "about me"]:
+        if l in ["profile summary", "summary", "career objective", "objective", "professional summary", "about me", "profile"]:
             return "SUMMARY"
         if l in ["notable accomplishments across the career"]:
             return "OTHER"
@@ -423,7 +431,6 @@ class ResumeIntelligenceService:
 
     @staticmethod
     def extract_candidate_name(text: str, parsed_name: str = None, email: str = "", linkedin: str = "") -> str:
-        # Define breaking section headings that end the resume header
         BREAKING_SECTION_HEADINGS = {
             'workexperience', 'experience', 'employmenthistory', 'workhistory', 'professionalexperience',
             'education', 'academic', 'academicbackground', 'qualification', 'qualifications', 'educationhistory',
@@ -433,24 +440,6 @@ class ResumeIntelligenceService:
             'summary', 'careerobjective', 'objective', 'professionalsummary', 'aboutme', 'profilesummary'
         }
         
-        # Ignored resume titles/labels/headings
-        IGNORED_HEADINGS = {
-            'workexperience', 'experience', 'curriculumvitae', 'resume', 'cv',
-            'biodata', 'profile', 'careerobjective', 'objective', 'summary',
-            'education', 'skills', 'projects', 'certifications', 'languages',
-            'personaldetails', 'languagesknown', 'corecompetencies', 'technicalskills',
-            'employmenthistory', 'workhistory', 'professionalexperience', 'aboutme',
-            'academicbackground', 'qualification', 'qualifications', 'educationhistory',
-            'page', 'email', 'phone', 'contact'
-        }
-        
-        COMPANY_KEYWORDS = {
-            'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company',
-            'corporation', 'technologies', 'solutions', 'industries', 'group',
-            'hospital', 'university', 'college', 'institute', 'school', 'bank', 'corp'
-        }
-        
-        # Parse lines to identify Header lines (stopping at first breaking section heading)
         lines = [l.strip() for l in text.split('\n')]
         header_lines = []
         for line in lines:
@@ -461,7 +450,6 @@ class ResumeIntelligenceService:
                 break
             header_lines.append(line)
             
-        # Fallback if header_lines is too empty
         if len(header_lines) < 2:
             header_lines = []
             count = 0
@@ -475,122 +463,86 @@ class ResumeIntelligenceService:
                 if count >= 15:
                     break
 
-        # Run PERSON vs ORGANIZATION entity classification (pre-scan)
-        rejected_org_texts = set()
+        candidates = {}
+        
+        def add_candidate(cand_name, score_add):
+            if not cand_name:
+                return
+            cand_clean = ResumeIntelligenceService.clean_camel_case_name(cand_name)
+            if ResumeIntelligenceService.is_valid_name(cand_clean):
+                cand_key = cand_clean.title()
+                candidates[cand_key] = candidates.get(cand_key, 0) + score_add
+                
+        if parsed_name:
+            add_candidate(parsed_name, 100)
+            
+        spacy_persons = []
+        rejected_orgs = set()
         if SPACY_AVAILABLE:
             try:
                 import spacy
                 nlp = spacy.load("en_core_web_sm")
-                header_text = "\n".join(header_lines[:12])
+                header_text = "\n".join(header_lines[:15])
                 doc = nlp(header_text)
                 for ent in doc.ents:
-                    if ent.label_ in ("ORG", "GPE", "FAC", "LOC"):
-                        rejected_org_texts.add(ent.text.strip().lower())
+                    ent_text = ent.text.strip()
+                    if ent.label_ == "PERSON":
+                        spacy_persons.append(ent_text)
+                        add_candidate(ent_text, 50)
+                    elif ent.label_ in ("ORG", "GPE", "FAC", "LOC"):
+                        rejected_orgs.add(ent_text.lower())
             except Exception as e:
-                print(f"spaCy ORG scan failed: {e}")
-
-        # Clean helper for candidate name validation
-        def is_ignored(name_str: str) -> bool:
-            normalized = re.sub(r'[^a-z0-9]', '', name_str.lower()).strip()
-            if normalized in IGNORED_HEADINGS:
-                return True
-            words = re.sub(r'[^a-zA-Z\s]', ' ', name_str).lower().split()
-            if any(w in IGNORED_HEADINGS for w in words):
-                return True
-            if any(w in COMPANY_KEYWORDS for w in words):
-                return True
-            return False
+                print(f"spaCy extraction failed: {e}")
+                
+        for idx, line in enumerate(header_lines[:10]):
+            line_clean = line.strip()
+            position_score = 30 - (idx * 3)
+            add_candidate(line_clean, position_score)
             
-        def is_valid_human_name(name_str: str) -> bool:
-            if not ResumeIntelligenceService.is_valid_name(name_str):
-                return False
-            if is_ignored(name_str):
-                return False
-            # PERSON vs ORGANIZATION classification check
-            name_lower = name_str.lower()
-            if name_lower in rejected_org_texts or any(org in name_lower for org in rejected_org_texts):
-                return False
-            words = name_str.split()
-            if not (1 <= len(words) <= 5):
-                return False
-            if len(name_str.strip()) < 3:
-                return False
-            return True
-
-        # Prepare email/linkedin username cross-check words
+        if not candidates:
+            return "Unknown Candidate"
+            
         email_username = email.split('@')[0].lower() if email else ""
         cross_check_words = set(re.sub(r'[^a-z]', ' ', email_username).split()) if email_username else set()
-        
         if linkedin:
             parts = linkedin.strip('/').split('/')
             if parts:
                 li_user = parts[-1].lower()
                 cross_check_words.update(re.sub(r'[^a-z]', ' ', li_user).split())
-
-        # 1. Priority 1: parsed_name is valid
-        if parsed_name and is_valid_human_name(parsed_name):
-            return ResumeIntelligenceService.clean_camel_case_name(parsed_name)
-
-        # 2. Priority 2: Use spaCy PERSON entity detection on the header text if available
-        if SPACY_AVAILABLE:
-            try:
-                nlp = spacy.load("en_core_web_sm")
-                header_text = "\n".join(header_lines[:12])
-                doc = nlp(header_text)
-                nlp_candidates = []
-                for ent in doc.ents:
-                    if ent.label_ == "PERSON":
-                        val = ent.text.strip()
-                        if is_valid_human_name(val):
-                            nlp_candidates.append(val)
-                            
-                if nlp_candidates:
-                    if cross_check_words:
-                        for cand in nlp_candidates:
-                            cand_words = set(re.sub(r'[^a-z]', ' ', cand.lower()).split())
-                            if cand_words.intersection(cross_check_words):
-                                return ResumeIntelligenceService.clean_camel_case_name(cand)
-                    return ResumeIntelligenceService.clean_camel_case_name(nlp_candidates[0])
-            except Exception as e:
-                print(f"spaCy PERSON extraction in header failed: {e}")
-
-        # 3. Priority 3: Rule-based PERSON entity in first 15 lines (2-3 capitalized words)
-        rule_candidates = []
-        for line in header_lines[:15]:
-            line_clean = line.strip()
-            if not is_valid_human_name(line_clean):
-                continue
-            words = line_clean.split()
-            if 2 <= len(words) <= 3:
-                # Must be all capitalized words
-                if all(w[0].isupper() and re.sub(r'[.,]', '', w).isalpha() for w in words):
-                    rule_candidates.append(line_clean)
-                    
-        if rule_candidates:
-            if cross_check_words:
-                for cand in rule_candidates:
-                    cand_words = set(re.sub(r'[^a-z]', ' ', cand.lower()).split())
-                    if cand_words.intersection(cross_check_words):
-                        return ResumeIntelligenceService.clean_camel_case_name(cand)
-            return ResumeIntelligenceService.clean_camel_case_name(rule_candidates[0])
-
-        # 4. Priority 4: First text line in header matching email/linkedin cross check
-        if cross_check_words:
-            for line in header_lines:
-                line_clean = line.strip()
-                if is_valid_human_name(line_clean):
-                    line_words = set(re.sub(r'[^a-z]', ' ', line_clean.lower()).split())
-                    if line_words.intersection(cross_check_words):
-                        return ResumeIntelligenceService.clean_camel_case_name(line_clean)
-
-        # 5. Priority 5: First text line excluding phone/email/etc.
-        for line in header_lines:
-            line_clean = line.strip()
-            if is_valid_human_name(line_clean):
-                return ResumeIntelligenceService.clean_camel_case_name(line_clean)
                 
-        # 6. Final Fallback
-        return "Unknown Candidate"
+        scored_list = []
+        for cand, base_score in candidates.items():
+            score = base_score
+            cand_lower = cand.lower()
+            
+            if any(org in cand_lower for org in rejected_orgs):
+                continue
+                
+            if cross_check_words:
+                cand_words = set(re.sub(r'[^a-z]', ' ', cand_lower).split())
+                matches = cand_words.intersection(cross_check_words)
+                if matches:
+                    score += len(matches) * 40
+                    
+            words_count = len(cand.split())
+            if 2 <= words_count <= 3:
+                score += 20
+                
+            if all(w[0].isupper() for w in cand.split() if w.isalpha()):
+                score += 15
+                
+            scored_list.append((cand, score))
+            
+        if not scored_list:
+            return "Unknown Candidate"
+            
+        scored_list.sort(key=lambda x: x[1], reverse=True)
+        
+        final_name = scored_list[0][0]
+        if not ResumeIntelligenceService.is_valid_name(final_name):
+            return "Unknown Candidate"
+            
+        return final_name
 
     @staticmethod
     def detect_resume_type(filename: str) -> str:
@@ -667,14 +619,15 @@ class ResumeIntelligenceService:
                     for b in blocks_dict.get("blocks", []):
                         if b.get("type") == 0: # text block
                             for line in b.get("lines", []):
-                                for span in line.get("spans", []):
-                                    span_text = span.get("text", "").strip()
-                                    if span_text:
-                                        size = span.get("size", 0.0)
-                                        font = span.get("font", "").lower()
-                                        flags = span.get("flags", 0)
-                                        is_bold = "bold" in font or (flags & 16)
-                                        spans_info.append((span_text, size, is_bold))
+                                line_spans = line.get("spans", [])
+                                if not line_spans:
+                                    continue
+                                line_text = "".join([s.get("text", "") for s in line_spans]).strip()
+                                line_text = " ".join(line_text.split())
+                                if line_text:
+                                    max_size = max(s.get("size", 0.0) for s in line_spans)
+                                    is_bold = any("bold" in s.get("font", "").lower() or "black" in s.get("font", "").lower() or (s.get("flags", 0) & 16) for s in line_spans)
+                                    spans_info.append((line_text, max_size, is_bold))
                     
                     # Filter and rank
                     valid_spans = []
@@ -692,7 +645,7 @@ class ResumeIntelligenceService:
                             }:
                                 valid_spans.append((cleaned, size, is_bold))
                     if valid_spans:
-                        valid_spans.sort(key=lambda x: (x[2], x[1]), reverse=True)
+                        valid_spans.sort(key=lambda x: x[1] + (5.0 if x[2] else 0.0), reverse=True)
                         largest_bold_name = valid_spans[0][0]
             except Exception as e:
                 print(f"PDF largest bold name extraction failed: {e}")
@@ -702,10 +655,28 @@ class ResumeIntelligenceService:
                 import fitz
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
                 
-                header_parts = []
-                col1_parts = []
-                col2_parts = []
-                footer_parts = []
+                largest_font_size = 0
+                name_block_x_center = 0
+                
+                if len(doc) > 0:
+                    page = doc[0]
+                    blocks_dict = page.get_text("dict")
+                    for b in blocks_dict.get("blocks", []):
+                        if b.get("type") == 0:  # text
+                            for line in b.get("lines", []):
+                                for span in line.get("spans", []):
+                                    size = span.get("size", 0)
+                                    text = span.get("text", "").strip()
+                                    if len(text) > 3 and any(c.isalpha() for c in text):
+                                        if text.lower() not in ["education", "experience", "work experience", "skills", "projects", "certifications", "profile", "summary"]:
+                                            if size > largest_font_size:
+                                                largest_font_size = size
+                                                bbox = span.get("bbox", (0,0,0,0))
+                                                name_block_x_center = (bbox[0] + bbox[2]) / 2
+
+                main_stream_parts = []
+                sidebar_stream_parts = []
+                right_column_first = False
                 
                 for page_idx, page in enumerate(doc):
                     blocks = page.get_text("blocks")
@@ -716,55 +687,93 @@ class ResumeIntelligenceService:
                         if text_clean:
                             valid_blocks.append((x0, y0, x1, y1, text_clean))
                             
-                    # Sort by y0
-                    valid_blocks_sorted = sorted(valid_blocks, key=lambda x: x[1])
-                    
-                    # Check if page has columns
-                    left_blocks = [b for b in valid_blocks_sorted if b[2] <= 205]
-                    right_blocks = [b for b in valid_blocks_sorted if b[0] >= 205]
-                    has_columns = len(left_blocks) > 0 and len(right_blocks) > 0
-                    
-                    for b in valid_blocks_sorted:
-                        x0, y0, x1, y1, text = b
+                    if not valid_blocks:
+                        continue
                         
-                        # Check for Header (Page 1 only, y1 < 135)
-                        if page_idx == 0 and y1 < 135:
-                            header_parts.append(text)
-                            continue
-                            
-                        # Check for Footer (Last Page only, y0 >= 700)
-                        if page_idx == len(doc) - 1 and y0 >= 700:
-                            footer_parts.append(text)
-                            continue
-                            
-                        if has_columns:
-                            # If x1 <= 205, it is Column 1 (Left column)
-                            # If x0 >= 205, it is Column 2 (Right column)
-                            # If it spans across (FULL), put it in Column 2 (since it's part of work experience sequence)
-                            if x1 <= 205:
-                                col1_parts.append(text)
+                    best_x = None
+                    min_cross = 9999
+                    for x in range(120, 400, 10):
+                        left_count = 0
+                        right_count = 0
+                        cross_count = 0
+                        for x0, y0, x1, y1, text in valid_blocks:
+                            if x1 <= x:
+                                left_count += 1
+                            elif x0 >= x:
+                                right_count += 1
                             else:
-                                col2_parts.append(text)
-                        else:
-                            # Single column page, put all in col2_parts to keep in normal flow
-                            col2_parts.append(text)
+                                cross_count += 1
+                        
+                        if left_count > 0 and right_count > 0:
+                            if cross_count < min_cross:
+                                min_cross = cross_count
+                                best_x = x
+                            elif cross_count == min_cross:
+                                if best_x is None or abs(x - 297.5) < abs(best_x - 297.5):
+                                    best_x = x
+                                    
+                    has_columns = best_x is not None and min_cross <= max(2, len(valid_blocks) * 0.25)
+                    
+                    if page_idx == 0 and has_columns:
+                        if name_block_x_center > best_x:
+                            right_column_first = True
                             
-                # Reconstruct unified text stream
-                full_stream = []
-                if header_parts:
-                    full_stream.append("\n".join(header_parts))
-                    
-                full_stream.append("\nWORK EXPERIENCE\n")
-                full_stream.append("\n\n".join(col2_parts))
-                
-                full_stream.append("\nEDUCATION\n")
-                full_stream.append("\n\n".join(col1_parts))
-                
-                if footer_parts:
-                    full_stream.append("\nPERSONAL DETAILS\n")
-                    full_stream.append("\n\n".join(footer_parts))
-                    
-                extracted_text = "\n\n".join(full_stream) + "\n"
+                    if has_columns:
+                        header_blocks = []
+                        footer_blocks = []
+                        left_blocks = []
+                        right_blocks = []
+                        
+                        for b in valid_blocks:
+                            x0, y0, x1, y1, text = b
+                            if x0 < best_x < x1:
+                                if y1 < 150:
+                                    header_blocks.append(b)
+                                elif y0 > 700:
+                                    footer_blocks.append(b)
+                                else:
+                                    center_x = (x0 + x1) / 2
+                                    if center_x <= best_x:
+                                        left_blocks.append(b)
+                                    else:
+                                        right_blocks.append(b)
+                            elif x1 <= best_x:
+                                left_blocks.append(b)
+                            else:
+                                right_blocks.append(b)
+                                
+                        header_blocks.sort(key=lambda x: x[1])
+                        footer_blocks.sort(key=lambda x: x[1])
+                        left_blocks.sort(key=lambda x: x[1])
+                        right_blocks.sort(key=lambda x: x[1])
+                        
+                        main_parts = []
+                        if header_blocks:
+                            main_parts.append("\n".join([b[4] for b in header_blocks]))
+                            
+                        left_text = "\n".join([b[4] for b in left_blocks])
+                        right_text = "\n".join([b[4] for b in right_blocks])
+                        
+                        if right_column_first:
+                            if right_text: main_parts.append(right_text)
+                            if left_text: sidebar_stream_parts.append(left_text)
+                        else:
+                            if left_text: main_parts.append(left_text)
+                            if right_text: sidebar_stream_parts.append(right_text)
+                            
+                        if footer_blocks:
+                            main_parts.append("\n".join([b[4] for b in footer_blocks]))
+                            
+                        if main_parts:
+                            main_stream_parts.append("\n\n".join(main_parts))
+                    else:
+                        valid_blocks.sort(key=lambda x: x[1])
+                        main_stream_parts.append("\n\n".join([b[4] for b in valid_blocks]))
+                        
+                extracted_text = "\n\n".join(main_stream_parts)
+                if sidebar_stream_parts:
+                    extracted_text += "\n\n=== COLUMN RESET ===\n\n" + "\n\n".join(sidebar_stream_parts)
+                extracted_text += "\n"
             except Exception as e:
                 print(f"PyMuPDF direct extraction failed: {e}")
 
@@ -1021,7 +1030,7 @@ class ResumeIntelligenceService:
                 if summary_found:
                     summary_lines.append("")
                 continue
-            if any(h in l_lower for h in ["career objective", "objective", "summary", "professional summary", "career profile", "about me"]):
+            if any(h in l_lower for h in ["career objective", "objective", "summary", "professional summary", "career profile", "about me", "profile"]):
                 summary_found = True
                 continue
             if summary_found:
@@ -1090,8 +1099,12 @@ class ResumeIntelligenceService:
             
             heading_type = detect_heading_type(line_str)
             if heading_type:
-                current_section = heading_type
-                continue
+                # Do not transition back to SUMMARY if we are already in WORK or EDU sections
+                if heading_type == "SUMMARY" and current_section in ["WORK", "EDU", "PROJECT", "SKILLS", "CERT"]:
+                    pass
+                else:
+                    current_section = heading_type
+                    continue
                 
             # Check for implicit transition to WORK:
             date_match = date_range_regex.search(line_str)
@@ -1112,137 +1125,247 @@ class ResumeIntelligenceService:
             if current_section is None:
                 header_info_lines.append(line_str)
             else:
-                if current_section in ["SKILLS", "OTHER"]:
-                    is_bullet = line_str.startswith(('-', '•', '*', '+'))
-                    is_long = len(line_str) > 50
-                    first_word = re.sub(r'[^a-zA-Z]', '', line_str.split()[0].lower()) if line_str.split() else ""
-                    is_action = first_word in action_verbs
-                    
-                    if is_bullet or is_long or is_action:
-                        sections["WORK"].append(line_str)
-                        continue
-                        
                 sections[current_section].append(line_str)
 
         # 1. Parse Work Experiences
-        work_blocks = []
-        current_block = {
-            "title_line": "",
-            "description_lines": []
+        job_blocks = []
+        current_block = []
+        
+        designation_keywords = {
+            'manager', 'developer', 'executive', 'engineer', 'lead', 'associate', 'specialist', 'director', 
+            'analyst', 'consultant', 'officer', 'administrator', 'coordinator', 'technician', 'representative', 
+            'intern', 'programmer', 'architect', 'head', 'founder', 'co-founder', 'ceo', 'cto', 'supervisor',
+            'leader', 'operator', 'agent', 'strategist', 'advisor', 'expert', 'auditor', 'salesperson'
+        }
+        
+        company_keywords = {
+            'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company',
+            'corporation', 'technologies', 'solutions', 'industries', 'group', 'corp', 'jewellers'
+        }
+        
+        responsibility_keywords = {
+            'managing', 'handling', 'ensuring', 'reporting', 'coordinating', 'developing', 
+            'providing', 'assisting', 'performing', 'working', 'responsible', 'led', 
+            'managed', 'coordinated', 'assisted', 'prepared', 'monitored', 'maintained',
+            'drove', 'ensured', 'strengthened', 'oversaw', 'directed', 'optimized', 'tracked', 
+            'governed', 'crafted', 'built', 'delivered', 'reviewed', 'partnered', 'spearheaded',
+            'achieved', 'contributed', 'liaised', 'supporting', 'giving', 'execute', 'implementation',
+            'involved', 'handling', 'floor', 'inventory', 'to', 'maintain', 'fostering', 'monitor',
+            'lead', 'manage', 'coordinate', 'prepare', 'monitor', 'maintain', 'perform', 'ensure', 'assist', 'provide',
+            'developed', 'designed', 'implemented', 'created', 'conducted', 'analyzed', 'served', 'orchestrated',
+            'tracked', 'governed', 'crafted', 'built', 'delivered', 'reviewed', 'partnered'
         }
 
+        in_description = False
+        
         for line in sections["WORK"]:
             line_str = line.strip()
             if not line_str:
                 continue
                 
-            date_match = date_range_regex.search(line_str)
-            is_new_job_line = False
+            is_bullet = line_str.startswith(('-', '•', '*', '+'))
+            has_date = bool(date_range_regex.search(line_str))
             
-            if date_match:
-                non_date_text = line_str.replace(date_match.group(0), "").strip()
-                non_date_text = re.sub(r'^[|/\-\s\.,:]+|[|/\-\s\.,:]+$', '', non_date_text).strip()
-                if len(non_date_text) > 3 and any(char.isalpha() for char in non_date_text):
-                    is_new_job_line = True
-            else:
-                is_bullet = line_str.startswith(('-', '•', '*', '+'))
-                if not is_bullet and len(line_str) < 120:
-                    l_lower = line_str.lower()
-                    first_word = re.sub(r'[^a-zA-Z]', '', line_str.split()[0].lower()) if line_str.split() else ""
-                    if l_lower.startswith("key result areas"):
-                        is_new_job_line = False
-                    elif first_word in action_verbs:
-                        is_new_job_line = False
-                    elif any(re.search(r'\b' + re.escape(kw) + r'\b', l_lower) for kw in designation_keywords):
-                        if "leadership" not in l_lower and "summary" not in l_lower:
-                            is_new_job_line = True
+            words = re.sub(r'[^a-zA-Z\s]', ' ', line_str).lower().split()
+            first_word = words[0] if words else ""
+            l_lower = line_str.lower()
+            is_resp = (
+                is_bullet or 
+                (first_word in responsibility_keywords) or 
+                any(h in l_lower for h in ["key result areas", "responsibilities", "key responsibilities", "duties"])
+            )
+            
+            is_new = False
+            if current_block:
+                if has_date:
+                    block_has_date = any(date_range_regex.search(b) for b in current_block)
+                    if block_has_date or in_description:
+                        is_new = True
+                elif in_description and not is_resp and len(line_str) < 80:
+                    starts_upper = line_str[0].isupper() if line_str else False
+                    ends_dot = line_str.endswith('.') and not any(line_str.lower().endswith(suffix) for suffix in ['ltd.', 'pvt.', 'co.', 'inc.'])
+                    if starts_upper and not ends_dot:
+                        has_desig = any(w in designation_keywords for w in words)
+                        has_comp = any(w in company_keywords for w in words)
+                        if has_desig or has_comp:
+                            is_new = True
                         
-            if is_new_job_line:
-                if current_block["title_line"].strip():
-                    work_blocks.append(current_block)
-                current_block = {
-                    "title_line": line_str,
-                    "description_lines": []
-                }
+            if is_new:
+                pulled_line = None
+                if current_block and len(current_block) > 1:
+                    last_line = current_block[-1].strip()
+                    last_words = re.sub(r'[^a-zA-Z\s]', ' ', last_line).lower().split()
+                    last_first_word = last_words[0] if last_words else ""
+                    
+                    is_last_bullet = last_line.startswith(('-', '•', '*', '+'))
+                    is_last_resp = is_last_bullet or (last_first_word in responsibility_keywords)
+                    
+                    if not is_last_bullet and not is_last_resp and len(last_line) < 60 and last_line[0].isupper():
+                        pulled_line = current_block.pop()
+                        
+                job_blocks.append(current_block)
+                if pulled_line:
+                    current_block = [pulled_line, line_str]
+                else:
+                    current_block = [line_str]
+                in_description = False
             else:
-                current_block["description_lines"].append(line_str)
-
-        if current_block["title_line"].strip():
-            work_blocks.append(current_block)
-
+                current_block.append(line_str)
+                
+            if is_resp:
+                in_description = True
+                
+        if current_block:
+            job_blocks.append(current_block)
+            
         experiences = []
-        for block in work_blocks:
-            title_line = block["title_line"]
-            date_match = date_range_regex.search(title_line)
+        for block in job_blocks:
+            header_lines = []
+            desc_lines = []
+            
+            block_in_desc = False
+            for line in block:
+                line_str = line.strip()
+                is_bullet = line_str.startswith(('-', '•', '*', '+'))
+                words = re.sub(r'[^a-zA-Z\s]', ' ', line_str).lower().split()
+                first_word = words[0] if words else ""
+                l_lower = line_str.lower()
+                is_resp = (
+                    is_bullet or 
+                    (first_word in responsibility_keywords) or 
+                    any(h in l_lower for h in ["key result areas", "responsibilities", "key responsibilities", "duties"])
+                )
+                
+                if is_resp:
+                    block_in_desc = True
+                    
+                if block_in_desc:
+                    desc_lines.append(line_str)
+                else:
+                    header_lines.append(line_str)
+                    
+            if not header_lines and block:
+                header_lines = [block[0]]
+                desc_lines = block[1:]
+                
             date_str = ""
             start_date_val = ""
             end_date_val = ""
-            if date_match:
-                date_str = date_match.group(0)
-                raw_start = date_match.group(1).strip() if date_match.group(1) else ""
-                raw_end = date_match.group(2).strip() if date_match.group(2) else ""
-                start_date_val = ResumeIntelligenceService.normalize_date_to_string(raw_start, is_end=False) or ""
-                end_date_val = ResumeIntelligenceService.normalize_date_to_string(raw_end, is_end=True) or ""
-                
-            title_clean = title_line.replace(date_str, "").strip()
-            title_clean = re.sub(r'^[|/\-\s\.,:]+|[|/\-\s\.,:]+$', '', title_clean).strip()
             
-            parts = [p.strip() for p in re.split(r'[|]+', title_clean) if p.strip()]
-            if len(parts) == 1:
-                parts = [p.strip() for p in re.split(r'[,–\-]+', title_clean) if p.strip()]
-                
+            remaining_headers = []
+            for h in header_lines:
+                dm = date_range_regex.search(h)
+                if dm:
+                    date_str = dm.group(0)
+                    raw_start = dm.group(1).strip() if dm.group(1) else ""
+                    raw_end = dm.group(2).strip() if dm.group(2) else ""
+                    start_date_val = ResumeIntelligenceService.normalize_date_to_string(raw_start, is_end=False) or ""
+                    end_date_val = ResumeIntelligenceService.normalize_date_to_string(raw_end, is_end=True) or ""
+                    
+                    h_clean = h.replace(date_str, "").strip()
+                    h_clean = re.sub(r'^[|/\-\s\.,:]+|[|/\-\s\.,:]+$', '', h_clean).strip()
+                    if h_clean:
+                        remaining_headers.append(h_clean)
+                else:
+                    remaining_headers.append(h)
+                    
             designation = ""
             company = ""
             location = ""
             
-            if len(parts) >= 1:
-                designation = parts[0]
-            if len(parts) >= 2:
-                company = parts[1]
-            if len(parts) >= 3:
-                location = parts[2]
+            desig_line_idx = -1
+            for idx, h in enumerate(remaining_headers):
+                words = re.sub(r'[^a-zA-Z\s]', ' ', h).lower().split()
+                if any(w in designation_keywords for w in words):
+                    desig_line_idx = idx
+                    designation = h
+                    break
+                    
+            if desig_line_idx == -1 and remaining_headers:
+                desig_line_idx = 0
+                designation = remaining_headers[0]
                 
-            designation = re.sub(r'^(presently|currently|actively)?\s*working\s+as\s+', '', designation, flags=re.I).strip()
-            designation = re.sub(r'^worked\s+as\s+', '', designation, flags=re.I).strip()
-            designation = re.sub(r'^role\s*:\s*', '', designation, flags=re.I).strip()
+            other_headers = [h for idx, h in enumerate(remaining_headers) if idx != desig_line_idx]
             
-            # Split designation by company separators if company is empty
+            if other_headers:
+                comp_line_idx = -1
+                for idx, h in enumerate(other_headers):
+                    words = re.sub(r'[^a-zA-Z\s]', ' ', h).lower().split()
+                    if any(w in company_keywords for w in words):
+                        comp_line_idx = idx
+                        company = h
+                        break
+                if comp_line_idx != -1:
+                    company = other_headers[comp_line_idx]
+                    loc_headers = [h for idx, h in enumerate(other_headers) if idx != comp_line_idx]
+                    if loc_headers:
+                        location = loc_headers[0]
+                else:
+                    company = other_headers[0]
+                    if len(other_headers) > 1:
+                        location = other_headers[1]
+            
             if designation and not company:
-                company_separators = [r'\bin\b', r'\bat\b', r'\bfor\b', r'\bwith\b', r'\b@\b', r'\s*-\s*', r'\s*\|\s*']
-                for sep in company_separators:
+                for sep in [r'\bin\b', r'\bat\b', r'\bfor\b', r'\bwith\b', r'\b@\b', r'\s*-\s*', r'\s*\|\s*']:
                     c_parts = re.split(sep, designation, maxsplit=1, flags=re.I)
                     if len(c_parts) == 2:
                         designation = c_parts[0].strip()
                         company = c_parts[1].strip()
                         break
-            
-            desc_lines = []
-            for line in block["description_lines"]:
-                line_str = line.strip()
-                if not line_str:
-                    continue
-                if line_str.lower().startswith("key result areas"):
-                    desc_lines.append(line_str)
-                else:
-                    line_clean = line_str.lstrip('-•*+ ').strip()
-                    if line_clean:
-                        desc_lines.append(f"• {line_clean}")
                         
-            description = "\n".join(desc_lines)
+            designation = re.sub(r'^(presently|currently|actively)?\s*working\s+as\s+', '', designation, flags=re.I).strip()
+            designation = re.sub(r'^worked\s+as\s+', '', designation, flags=re.I).strip()
+            designation = re.sub(r'^role\s*:\s*', '', designation, flags=re.I).strip()
+            
+            designation = re.sub(r'^[•\-\*\+\s\.,]+|[•\-\*\+\s\.,]+$', '', designation).strip()
+            company = re.sub(r'^[•\-\*\+\s\.,]+|[•\-\*\+\s\.,]+$', '', company).strip()
+            location = re.sub(r'^[•\-\*\+\s\.,]+|[•\-\*\+\s\.,]+$', '', location).strip()
+            
+            cleaned_desc = []
+            for d in desc_lines:
+                d_clean = d.strip().lstrip('-•*+ ').strip()
+                if d_clean:
+                    cleaned_desc.append(f"• {d_clean}")
+            description = "\n".join(cleaned_desc)
             
             duration = ""
             if start_date_val:
                 duration = ResumeIntelligenceService.get_duration_display(start_date_val, end_date_val)
                 
             experiences.append({
-                "designation": designation or "Position",
-                "company": company or "Company",
-                "location": location or "Location",
+                "designation": designation or "",
+                "company": company or "",
+                "location": location or "",
                 "duration": duration,
                 "description": description,
                 "start_date": start_date_val,
                 "end_date": end_date_val
             })
+
+        # Filter experiences to discard invalid blocks
+        valid_experiences = []
+        for exp in experiences:
+            # Check if designation or company looks like a job header
+            if not exp["designation"] and not exp["company"]:
+                continue
+            
+            desig_words = re.sub(r'[^a-zA-Z\s]', ' ', exp["designation"]).lower().split()
+            comp_words = re.sub(r'[^a-zA-Z\s]', ' ', exp["company"]).lower().split()
+            
+            has_desig_kw = any(w in designation_keywords for w in desig_words)
+            has_comp_kw = any(w in company_keywords for w in comp_words)
+            has_date = bool(exp["start_date"])
+            
+            # If it has a date, or if it has designation/company keywords, it's valid
+            if has_date or has_desig_kw or has_comp_kw:
+                valid_experiences.append(exp)
+            else:
+                first_word = desig_words[0] if desig_words else ""
+                if first_word in responsibility_keywords or len(exp["designation"]) > 60:
+                    # Discard this block as it is likely a responsibility or accomplishment line
+                    continue
+                valid_experiences.append(exp)
+        experiences = valid_experiences
 
         # 2. Parse Educations
         educations = []
@@ -1392,6 +1515,24 @@ class ResumeIntelligenceService:
                 total_exp += ResumeIntelligenceService.calculate_experience_years_from_dates(s_date, e_date)
         total_exp = round(total_exp, 1)
 
+        # Fallback/refinement using text-based experience extraction
+        text_exp = 0.0
+        m = re.search(r'\b(\d+)\s*years?\s*(?:\d+\s*months?)?\b', text, re.I)
+        if m:
+            val = float(m.group(1))
+            if 0.5 <= val <= 40.0:
+                text_exp = val
+        else:
+            m = re.search(r'\b(\d+)\s*years?\s+(?:of\s+)?(?:hands-on\s+)?experience\b', text, re.I)
+            if m:
+                val = float(m.group(1))
+                if 0.5 <= val <= 40.0:
+                    text_exp = val
+
+        if text_exp > 0.0:
+            if total_exp == 0.0 or abs(total_exp - text_exp) <= 2.0:
+                total_exp = text_exp
+
         # Print raw extracted experience JSON and final saved experience JSON (for user logs)
         print("--- [RAW EXTRACTED EXPERIENCE JSON] ---")
         print(json.dumps(experiences, indent=2))
@@ -1442,7 +1583,6 @@ class ResumeIntelligenceService:
         # 2. Normalize company names
         for exp in improved.get("experience", []):
             comp = exp.get("company", "")
-            comp = re.sub(r'\b(inc|corp|corporation|ltd|limited|llc|pvt)\b\.?', '', comp, flags=re.I).strip()
             exp["company"] = comp.title()
             
             # Preserve original experience description bullet points
@@ -1454,6 +1594,29 @@ class ResumeIntelligenceService:
                     cleaned_desc_lines.append(f"• {l_clean}")
             exp["description"] = "\n".join(cleaned_desc_lines)
 
+        # Update current designation and company in info dictionary if experiences exist
+        if improved.get("experience"):
+            first_exp = improved["experience"][0]
+            info["current_company"] = first_exp.get("company", "")
+            info["current_designation"] = first_exp.get("designation", "")
+
+        # Improve current designation using summary context if available
+        current_desig = info.get('current_designation') or ''
+        summary_clean = data.get("summary", "")
+        if summary_clean and current_desig:
+            summary_clean = " ".join(summary_clean.split())
+            # Look for patterns like "experience as a Marketing Executive and in Floor Management"
+            match = re.search(r'experience as a?\s*([^,.]+?)\s+and\s+(?:in\s+)?([^,.]+)', summary_clean, re.I)
+            if match:
+                role1 = match.group(1).strip()
+                role2 = match.group(2).strip()
+                if len(role1) < 50 and len(role2) < 50:
+                    if role1.lower() in current_desig.lower() or current_desig.lower() in role1.lower():
+                        combined = f"{role1} / {role2}"
+                        combined = " / ".join([r.strip().title() for r in combined.split('/')])
+                        info["current_designation"] = combined
+                        if improved.get("experience"):
+                            improved["experience"][0]["designation"] = combined
 
         # 3. Normalize degrees
         for edu in improved.get("education", []):
