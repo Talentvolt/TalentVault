@@ -129,3 +129,21 @@ def test_process_resume_scanned_ocr_fallback(mock_ocr):
     assert profile is not None
     # Fallback name "Unknown Candidate" is used because all lines are invalid
     assert profile.full_name == "Unknown Candidate"
+
+
+# --- Regression Tests for Major Headings ---
+
+def test_first_heading_work_experience():
+    text = "WORK EXPERIENCE\nJohn Doe\nEmail: john@example.com\nExperience: 5 years"
+    name = ResumeIntelligenceService.extract_candidate_name(text, email="john@example.com")
+    assert name == "John Doe"
+
+def test_first_heading_curriculum_vitae():
+    text = "CURRICULUM VITAE\nJane Smith\nEmail: jane.smith@example.com\nEducation: B.Tech"
+    name = ResumeIntelligenceService.extract_candidate_name(text, email="jane.smith@example.com")
+    assert name == "Jane Smith"
+
+def test_first_heading_resume():
+    text = "RESUME\nRobert Johnson\nEmail: robert@example.com\nSkills: Python, Django"
+    name = ResumeIntelligenceService.extract_candidate_name(text, email="robert@example.com")
+    assert name == "Robert Johnson"

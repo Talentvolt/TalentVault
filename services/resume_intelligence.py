@@ -169,16 +169,32 @@ class ResumeIntelligenceService:
         if not any(char.isalpha() for char in name_clean):
             return False
             
-        # Reject resume titles
-        normalized = re.sub(r'[^a-z0-9]', '', name_clean.lower())
-        blacklisted_words = ['curriculumvitae', 'resume', 'biodata', 'curriculum', 'vitae']
-        for bw in blacklisted_words:
-            if bw in normalized:
-                return False
-                
-        # Exact cv word check
+        # Normalize and reject common resume headings
+        normalized = re.sub(r'[^a-z0-9]', '', name_clean.lower()).strip()
+        
+        blacklisted_exact = {
+            'curriculumvitae', 'resume', 'biodata', 'curriculum', 'vitae', 'cv',
+            'workexperience', 'experience', 'profile', 'careerobjective', 'objective',
+            'summary', 'education', 'skills', 'projects', 'certifications', 'languages',
+            'personaldetails', 'languagesknown', 'corecompetencies', 'technicalskills',
+            'employmenthistory', 'workhistory', 'professionalexperience', 'aboutme',
+            'academicbackground', 'qualification', 'qualifications', 'educationhistory',
+            'page', 'email', 'phone', 'contact'
+        }
+        
+        if normalized in blacklisted_exact:
+            return False
+            
+        # Check if the name contains any blacklisted word as a standalone word
         words = re.sub(r'[^a-zA-Z\s]', '', name_clean).lower().split()
-        if 'cv' in words:
+        blacklisted_words = {
+            'curriculum', 'vitae', 'biodata', 'resume', 'cv', 'experience', 'education', 
+            'skills', 'projects', 'certifications', 'languages', 'objective', 'summary',
+            'profile', 'workexperience', 'careerobjective', 'page', 'email', 'phone',
+            'mobile', 'telephone', 'contact', 'address', 'present', 'current',
+            'candidate', 'unknown', 'hometown', 'residence', 'nationality', 'gender'
+        }
+        if any(w in blacklisted_words for w in words):
             return False
             
         # Must not be a single long run-on word without spaces (e.g. CURRICULUMVITAE)
@@ -186,6 +202,69 @@ class ResumeIntelligenceService:
             return False
             
         return True
+
+    @staticmethod
+    def calculate_name_email_similarity(name: str, email: str, linkedin: str = "") -> float:
+        # Extract username from email
+        username = email.split('@')[0].lower() if email else ""
+        # Extract username from LinkedIn URL
+        li_user = ""
+        if linkedin:
+            parts = linkedin.strip('/').split('/')
+            if parts:
+                li_user = parts[-1].lower()
+                
+        name_words = re.sub(r'[^a-zA-Z\s]', '', name).lower().split()
+        if not name_words:
+            return 0.0
+            
+        score = 0.0
+        # Check email match
+        if username:
+            clean_username = re.sub(r'[^a-z]', ' ', username)
+            user_words = clean_username.split()
+            for w in name_words:
+                if w in user_words or any(w in uw or uw in w for uw in user_words):
+                    score += 0.5
+                    
+        # Check LinkedIn match
+        if li_user:
+            clean_li = re.sub(r'[^a-z]', ' ', li_user)
+            li_words = clean_li.split()
+            for w in name_words:
+                if w in li_words or any(w in lw or lw in w for lw in li_words):
+                    score += 0.5
+                    
+        return score
+
+    @staticmethod
+    def detect_heading_type(line_str: str) -> str:
+        l = line_str.strip().lower()
+        l = re.sub(r'[:\-\s]+$', '', l).strip()
+        if len(l) > 60 or len(l) < 3:
+            return None
+        
+        # Exact or close matching
+        if l in ["work experience", "experience", "employment history", "work history", "professional experience"]:
+            return "WORK"
+        if l in ["education", "academic", "academic background", "qualification", "qualifications", "education history"]:
+            return "EDU"
+        if l in ["projects", "personal projects", "academic projects", "key projects"]:
+            return "PROJECT"
+        if l in ["technical skills", "core competencies", "skills", "key skills", "expertise", "competencies"]:
+            return "SKILLS"
+        if l in ["certifications", "certification", "courses", "credentials", "licenses & certifications"]:
+            return "CERT"
+        if l in ["languages", "languages known"]:
+            return "LANGUAGES"
+        if l in ["personal details", "personal profile", "personal summary"]:
+            return "PERSONAL"
+        if l in ["profile summary", "summary", "career objective", "objective", "professional summary", "about me"]:
+            return "SUMMARY"
+        if l in ["notable accomplishments across the career"]:
+            return "OTHER"
+            
+        return None
 
     @staticmethod
     def normalize_date_to_string(date_str: str, default_year: int = None, is_end: bool = False) -> str:
@@ -340,62 +419,148 @@ class ResumeIntelligenceService:
         return " ".join(splitted.split())
 
     @staticmethod
-    def extract_candidate_name(text: str, parsed_name: str = None) -> str:
-        lines = [l.strip() for l in text.split('\n') if l.strip()]
+    def extract_candidate_name(text: str, parsed_name: str = None, email: str = "", linkedin: str = "") -> str:
+        # Define breaking section headings that end the resume header
+        BREAKING_SECTION_HEADINGS = {
+            'workexperience', 'experience', 'employmenthistory', 'workhistory', 'professionalexperience',
+            'education', 'academic', 'academicbackground', 'qualification', 'qualifications', 'educationhistory',
+            'skills', 'technicalskills', 'corecompetencies', 'keyskills', 'expertise', 'competencies',
+            'projects', 'personalprojects', 'academicprojects', 'keyprojects',
+            'certifications', 'certification', 'courses', 'credentials', 'licensescertifications',
+            'summary', 'careerobjective', 'objective', 'professionalsummary', 'aboutme', 'profilesummary'
+        }
         
-        # 1. parsed_json.personal_info.name
-        if parsed_name and ResumeIntelligenceService.is_valid_name(parsed_name):
+        # Ignored resume titles/labels/headings
+        IGNORED_HEADINGS = {
+            'workexperience', 'experience', 'curriculumvitae', 'resume', 'cv',
+            'biodata', 'profile', 'careerobjective', 'objective', 'summary',
+            'education', 'skills', 'projects', 'certifications', 'languages',
+            'personaldetails', 'languagesknown', 'corecompetencies', 'technicalskills',
+            'employmenthistory', 'workhistory', 'professionalexperience', 'aboutme',
+            'academicbackground', 'qualification', 'qualifications', 'educationhistory',
+            'page', 'email', 'phone', 'contact'
+        }
+        
+        # Clean helper for candidate name validation
+        def is_ignored(name_str: str) -> bool:
+            normalized = re.sub(r'[^a-z0-9]', '', name_str.lower()).strip()
+            if normalized in IGNORED_HEADINGS:
+                return True
+            words = re.sub(r'[^a-zA-Z\s]', '', name_str).lower().split()
+            if any(w in IGNORED_HEADINGS for w in words):
+                return True
+            return False
+            
+        def is_valid_human_name(name_str: str) -> bool:
+            if not ResumeIntelligenceService.is_valid_name(name_str):
+                return False
+            if is_ignored(name_str):
+                return False
+            words = name_str.split()
+            if not (1 <= len(words) <= 5):
+                return False
+            if len(name_str.strip()) < 3:
+                return False
+            return True
+
+        # Prepare email/linkedin username cross-check words
+        email_username = email.split('@')[0].lower() if email else ""
+        cross_check_words = set(re.sub(r'[^a-z]', ' ', email_username).split()) if email_username else set()
+        
+        if linkedin:
+            parts = linkedin.strip('/').split('/')
+            if parts:
+                li_user = parts[-1].lower()
+                cross_check_words.update(re.sub(r'[^a-z]', ' ', li_user).split())
+
+        # 1. Priority 1: parsed_name is valid
+        if parsed_name and is_valid_human_name(parsed_name):
             return ResumeIntelligenceService.clean_camel_case_name(parsed_name)
             
-        # 2. NLP entities (PERSON)
-        nlp_name = ""
+        # Parse lines to identify Header lines (stopping at first breaking section heading)
+        lines = [l.strip() for l in text.split('\n')]
+        header_lines = []
+        for line in lines:
+            if not line:
+                continue
+            normalized = re.sub(r'[^a-z0-9]', '', line.lower()).strip()
+            if normalized in BREAKING_SECTION_HEADINGS:
+                break
+            header_lines.append(line)
+            
+        # Fallback if header_lines is too empty
+        if len(header_lines) < 2:
+            header_lines = []
+            count = 0
+            for line in lines:
+                if not line:
+                    continue
+                normalized = re.sub(r'[^a-z0-9]', '', line.lower()).strip()
+                if normalized not in BREAKING_SECTION_HEADINGS:
+                    header_lines.append(line)
+                    count += 1
+                if count >= 15:
+                    break
+
+        # 2. Priority 2: Use spaCy PERSON entity detection on the header text if available
         if SPACY_AVAILABLE:
             try:
                 nlp = spacy.load("en_core_web_sm")
-                doc = nlp(text)
+                header_text = "\n".join(header_lines[:12])
+                doc = nlp(header_text)
+                nlp_candidates = []
                 for ent in doc.ents:
                     if ent.label_ == "PERSON":
                         val = ent.text.strip()
-                        if ResumeIntelligenceService.is_valid_name(val):
-                            nlp_name = val
-                            break
-            except Exception as e:
-                print(f"spaCy PERSON extraction failed: {e}")
-                
-        # Fallback heuristic for PERSON entity detection (NLP entities helper)
-        if not nlp_name:
-            for line in lines[:15]:
-                l_clean = line.strip()
-                if not ResumeIntelligenceService.is_valid_name(l_clean):
-                    continue
-                words = l_clean.split()
-                if 2 <= len(words) <= 3:
-                    if all(w[0].isupper() and re.sub(r'[.,]', '', w).isalpha() for w in words):
-                        if not any(h in l_clean.lower() for h in ["experience", "education", "skills", "projects", "certifications", "summary"]):
-                            nlp_name = l_clean
-                            break
+                        if is_valid_human_name(val):
+                            nlp_candidates.append(val)
                             
-        if nlp_name and ResumeIntelligenceService.is_valid_name(nlp_name):
-            return ResumeIntelligenceService.clean_camel_case_name(nlp_name)
-            
-        # 3. First text line excluding phone, email, URL, linkedin, github
-        p3_name = ""
-        for line in lines:
-            l_clean = line.strip()
-            if ResumeIntelligenceService.is_valid_name(l_clean):
-                p3_name = l_clean
-                break
+                if nlp_candidates:
+                    if cross_check_words:
+                        for cand in nlp_candidates:
+                            cand_words = set(re.sub(r'[^a-z]', ' ', cand.lower()).split())
+                            if cand_words.intersection(cross_check_words):
+                                return ResumeIntelligenceService.clean_camel_case_name(cand)
+                    return ResumeIntelligenceService.clean_camel_case_name(nlp_candidates[0])
+            except Exception as e:
+                print(f"spaCy PERSON extraction in header failed: {e}")
+
+        # 3. Priority 3: Rule-based PERSON entity in first 15 lines (2-3 capitalized words)
+        rule_candidates = []
+        for line in header_lines[:15]:
+            line_clean = line.strip()
+            if not is_valid_human_name(line_clean):
+                continue
+            words = line_clean.split()
+            if 2 <= len(words) <= 3:
+                # Must be all capitalized words
+                if all(w[0].isupper() and re.sub(r'[.,]', '', w).isalpha() for w in words):
+                    rule_candidates.append(line_clean)
+                    
+        if rule_candidates:
+            if cross_check_words:
+                for cand in rule_candidates:
+                    cand_words = set(re.sub(r'[^a-z]', ' ', cand.lower()).split())
+                    if cand_words.intersection(cross_check_words):
+                        return ResumeIntelligenceService.clean_camel_case_name(cand)
+            return ResumeIntelligenceService.clean_camel_case_name(rule_candidates[0])
+
+        # 4. Priority 4: First text line in header matching email/linkedin cross check
+        if cross_check_words:
+            for line in header_lines:
+                line_clean = line.strip()
+                if is_valid_human_name(line_clean):
+                    line_words = set(re.sub(r'[^a-z]', ' ', line_clean.lower()).split())
+                    if line_words.intersection(cross_check_words):
+                        return ResumeIntelligenceService.clean_camel_case_name(line_clean)
+
+        # 5. Priority 5: First text line excluding phone/email/etc.
+        for line in header_lines:
+            line_clean = line.strip()
+            if is_valid_human_name(line_clean):
+                return ResumeIntelligenceService.clean_camel_case_name(line_clean)
                 
-        if p3_name:
-            return ResumeIntelligenceService.clean_camel_case_name(p3_name)
-            
-        # 4. OCR Layout heading
-        if lines:
-            p4_name = lines[0].strip()
-            if ResumeIntelligenceService.is_valid_name(p4_name):
-                return ResumeIntelligenceService.clean_camel_case_name(p4_name)
-                
-        # 5. Fallback
+        # 6. Final Fallback
         return "Unknown Candidate"
 
     @staticmethod
@@ -423,19 +588,86 @@ class ResumeIntelligenceService:
         if resume_type == 'DOCX':
             # Direct python-docx parsing
             import docx
+            largest_bold_name = None
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
                 extracted_text = "\n".join([p.text for p in doc.paragraphs])
+                
+                # Check top paragraphs for bold or heading style
+                for p in doc.paragraphs[:15]:
+                    cleaned_p = p.text.strip()
+                    if not cleaned_p:
+                        continue
+                    # Check if paragraph has bold runs
+                    is_bold = any(run.bold for run in p.runs)
+                    is_heading = p.style.name.startswith("Heading") or p.style.name == "Title"
+                    if (is_bold or is_heading) and ResumeIntelligenceService.is_valid_name(cleaned_p):
+                        # Ensure it's not an ignored heading
+                        normalized = re.sub(r'[^a-z0-9]', '', cleaned_p.lower()).strip()
+                        if normalized not in {
+                            'workexperience', 'experience', 'curriculumvitae', 'resume', 'cv',
+                            'biodata', 'profile', 'careerobjective', 'objective', 'summary',
+                            'education', 'skills', 'projects', 'certifications', 'languages',
+                            'personaldetails', 'languagesknown', 'corecompetencies', 'technicalskills',
+                            'employmenthistory', 'workhistory', 'professionalexperience', 'aboutme',
+                            'academicbackground', 'qualification', 'qualifications', 'educationhistory'
+                        }:
+                            largest_bold_name = cleaned_p
+                            break
             except Exception as e:
                 extracted_text = f"DOCX Parse Error: {str(e)}"
+                largest_bold_name = None
             return {
                 "text": extracted_text,
                 "engine": "python-docx",
                 "confidence": 100.0,
-                "resume_type": "EDITABLE_DOCX"
+                "resume_type": "EDITABLE_DOCX",
+                "largest_bold_name": largest_bold_name
             }
 
         if resume_type == 'PDF':
+            # Extract largest bold valid name span on page 1
+            largest_bold_name = None
+            try:
+                import fitz
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                if len(doc) > 0:
+                    page = doc[0]
+                    spans_info = []
+                    blocks_dict = page.get_text("dict")
+                    for b in blocks_dict.get("blocks", []):
+                        if b.get("type") == 0: # text block
+                            for line in b.get("lines", []):
+                                for span in line.get("spans", []):
+                                    span_text = span.get("text", "").strip()
+                                    if span_text:
+                                        size = span.get("size", 0.0)
+                                        font = span.get("font", "").lower()
+                                        flags = span.get("flags", 0)
+                                        is_bold = "bold" in font or (flags & 16)
+                                        spans_info.append((span_text, size, is_bold))
+                    
+                    # Filter and rank
+                    valid_spans = []
+                    for text_val, size, is_bold in spans_info:
+                        cleaned = " ".join(text_val.split())
+                        if ResumeIntelligenceService.is_valid_name(cleaned):
+                            normalized = re.sub(r'[^a-z0-9]', '', cleaned.lower()).strip()
+                            if normalized not in {
+                                'workexperience', 'experience', 'curriculumvitae', 'resume', 'cv',
+                                'biodata', 'profile', 'careerobjective', 'objective', 'summary',
+                                'education', 'skills', 'projects', 'certifications', 'languages',
+                                'personaldetails', 'languagesknown', 'corecompetencies', 'technicalskills',
+                                'employmenthistory', 'workhistory', 'professionalexperience', 'aboutme',
+                                'academicbackground', 'qualification', 'qualifications', 'educationhistory'
+                            }:
+                                valid_spans.append((cleaned, size, is_bold))
+                    if valid_spans:
+                        valid_spans.sort(key=lambda x: (x[2], x[1]), reverse=True)
+                        largest_bold_name = valid_spans[0][0]
+            except Exception as e:
+                print(f"PDF largest bold name extraction failed: {e}")
+
             # First try direct text extraction via PyMuPDF (fitz) with layout-aware column reconstruction
             try:
                 import fitz
@@ -512,7 +744,8 @@ class ResumeIntelligenceService:
                     "text": extracted_text,
                     "engine": "pymupdf",
                     "confidence": 99.0,
-                    "resume_type": "EDITABLE_PDF"
+                    "resume_type": "EDITABLE_PDF",
+                    "largest_bold_name": largest_bold_name
                 }
 
             # Fallback to pdfplumber
@@ -532,7 +765,8 @@ class ResumeIntelligenceService:
                     "text": extracted_text,
                     "engine": "pdfplumber",
                     "confidence": 98.0,
-                    "resume_type": "EDITABLE_PDF"
+                    "resume_type": "EDITABLE_PDF",
+                    "largest_bold_name": largest_bold_name
                 }
             else:
                 # Scanned or non-editable PDF, must render pages to images and run OCR
@@ -676,7 +910,7 @@ class ResumeIntelligenceService:
         return result_dict
 
     @staticmethod
-    def parse_resume_nlp(text: str) -> dict:
+    def parse_resume_nlp(text: str, parsed_name: str = None) -> dict:
         """
         Layout-aware NLP Parsing Engine extracting Name, Contact details, Education,
         Experiences, Skills, Certifications, and Summary using heuristics & NLP keywords.
@@ -695,16 +929,7 @@ class ResumeIntelligenceService:
         portfolio_match = re.search(r'((github\.com|portfolio|behance\.net)/[\w-]+)', text, re.I)
         portfolio = portfolio_match.group(0) if portfolio_match else ""
 
-        # Extract name (heuristic: first few lines not matching email/phone/urls)
-        h_name = ""
-        for line in lines[:5]:
-            if "@" not in line and not any(kw in line.lower() for kw in ["phone", "tel", "email", "http", "resume", "cv", "page", "curriculum", "vitae", "biodata", "curriculumvitae"]):
-                # Clean name lines from dates/locations
-                if not re.search(r'\b(delhi|mumbai|bangalore|pune|hyderabad|noida|gurgaon|california|london)\b', line, re.I):
-                    h_name = line
-                    break
-
-        name = ResumeIntelligenceService.extract_candidate_name(text, parsed_name=h_name)
+        name = ResumeIntelligenceService.extract_candidate_name(text, parsed_name=parsed_name, email=email, linkedin=linkedin)
 
         # Location, Address, and City detection
         address = ""
@@ -793,31 +1018,7 @@ class ResumeIntelligenceService:
             summary = re.sub(r'^\s*[-–—,.:;]\s*', '', summary)
 
         # Section-based extraction
-        def detect_heading_type(line_str):
-            l = line_str.strip().lower()
-            l = re.sub(r'[:\-\s]+$', '', l).strip()
-            if len(l) > 60 or len(l) < 3:
-                return None
-            
-            # Exact or close matching
-            if l in ["work experience", "experience", "employment history", "work history", "professional experience"]:
-                return "WORK"
-            if l in ["education", "academic", "academic background", "qualification", "qualifications", "education history"]:
-                return "EDU"
-            if l in ["projects", "personal projects", "academic projects", "key projects"]:
-                return "PROJECT"
-            if l in ["technical skills", "core competencies", "skills", "key skills", "expertise", "competencies"]:
-                return "SKILLS"
-            if l in ["languages", "languages known"]:
-                return "LANGUAGES"
-            if l in ["personal details", "personal profile", "personal summary"]:
-                return "PERSONAL"
-            if l in ["profile summary", "summary", "career objective", "objective", "professional summary", "about me"]:
-                return "SUMMARY"
-            if l in ["notable accomplishments across the career"]:
-                return "OTHER"
-                
-            return None
+        detect_heading_type = ResumeIntelligenceService.detect_heading_type
 
         current_section = None
         header_info_lines = []

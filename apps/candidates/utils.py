@@ -199,7 +199,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
     # 2. NLP Extraction
     try:
         logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
-        parsed_data = ResumeIntelligenceService.parse_resume_nlp(text)
+        parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
         info = parsed_data['personal_info']
         logger.info(f"[PARSER NLP SUCCESS] Parsed info for candidate: {info.get('name')}")
     except Exception as e:
@@ -271,7 +271,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
             
             candidate_name = info.get('name', '')
             if not ResumeIntelligenceService.is_valid_name(candidate_name):
-                candidate_name = ResumeIntelligenceService.extract_candidate_name(text)
+                candidate_name = ResumeIntelligenceService.extract_candidate_name(
+                    text,
+                    parsed_name=ocr_result.get("largest_bold_name"),
+                    email=email,
+                    linkedin=info.get('linkedin_url', '')
+                )
                 
             profile.full_name = candidate_name
             profile.summary = parsed_data.get('summary', '')
