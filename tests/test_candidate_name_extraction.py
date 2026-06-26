@@ -164,3 +164,78 @@ def test_regression_harneet_singh_chhabra_company():
     text = "HARNEET SINGH CHHABRA\nHero MotoCorp\nEmail: harneet@example.com"
     name = ResumeIntelligenceService.extract_candidate_name(text, email="harneet@example.com")
     assert name == "Harneet Singh Chhabra"
+
+
+# --- Cross-contamination regression tests (Bug: hardcoded overrides were causing wrong names) ---
+
+def test_no_cross_contamination_rohan_kumar_not_rajeev():
+    """
+    CRITICAL: Rohan Kumar's resume text contains 'kumar' which also appears in 'Rajeev Kumar'.
+    The old hardcoded override returned 'Rajeev Kumar' when the word 'rajeev' appeared anywhere in
+    the full OCR text (e.g., referrer header, system context, or any mention).
+    This test simulates a Rohan Kumar resume where the text also mentions 'rajeev' somewhere
+    (e.g. a reference contact or footer) and asserts the name is correctly 'Rohan Kumar'.
+    """
+    text = (
+        "ROHAN KUMAR\n"
+        "Software Engineer\n"
+        "Email: rohankumar@example.com\n"
+        "Phone: 9876500001\n"
+        "Reference contact: Rajeev Kumar, HR Manager\n"  # 'rajeev' present in text
+        "Work Experience\n"
+        "Tata Consultancy Services\n"
+        "Software Engineer | Jan 2021 - Present\n"
+        "• Developed microservices using Python and Django\n"
+        "• Led a team of 5 engineers"
+    )
+    name = ResumeIntelligenceService.extract_candidate_name(
+        text, email="rohankumar@example.com"
+    )
+    # Must be Rohan Kumar — NOT Rajeev Kumar, even though 'rajeev' + 'kumar' both appear in text
+    assert name == "Rohan Kumar", f"Expected 'Rohan Kumar' but got '{name}'"
+
+def test_rajeev_kumar_own_resume_correct():
+    """Rajeev Kumar's own resume must return 'Rajeev Kumar' via layout scoring, not hardcoded override."""
+    text = (
+        "RAJEEV KUMAR\n"
+        "Email: rajeevkumar9801456p@gmail.com\n"
+        "LinkedIn: linkedin.com/in/rajeev98p/\n"
+        "Work Experience\n"
+        "Some Company\n"
+        "Software Engineer | 2020 - 2023"
+    )
+    name = ResumeIntelligenceService.extract_candidate_name(
+        text,
+        email="rajeevkumar9801456p@gmail.com",
+        linkedin="linkedin.com/in/rajeev98p/"
+    )
+    assert name == "Rajeev Kumar", f"Expected 'Rajeev Kumar' but got '{name}'"
+
+def test_vikke_gupta_correct_name():
+    """Vikke Gupta's resume must return 'Vikke Gupta' via layout scoring."""
+    text = (
+        "VIKKE GUPTA\n"
+        "Email: vikke.gupta@example.com\n"
+        "Sales Executive\n"
+        "Work Experience\n"
+        "ABC Ltd\n"
+        "Sales Executive | 2019 - 2022"
+    )
+    name = ResumeIntelligenceService.extract_candidate_name(
+        text, email="vikke.gupta@example.com"
+    )
+    assert name == "Vikke Gupta", f"Expected 'Vikke Gupta' but got '{name}'"
+
+def test_no_cross_contamination_unrelated_resume():
+    """An unrelated resume whose text contains a name from validation set must still return its own name."""
+    text = (
+        "PRIYA SHARMA\n"
+        "Data Analyst\n"
+        "Email: priya.sharma@example.com\n"
+        "Skills: Python, SQL\n"
+        "Harneet mentioned in reference section\n"  # other name present
+    )
+    name = ResumeIntelligenceService.extract_candidate_name(
+        text, email="priya.sharma@example.com"
+    )
+    assert name == "Priya Sharma", f"Expected 'Priya Sharma' but got '{name}'"

@@ -58,15 +58,22 @@
     border-radius: 4px;
 }
 
-/* Resume bullet list — hanging indent so wrapped lines align with first text char */
+/* Resume bullet list — flush with company text, hanging indent on wraps */
 ul.resume-bullets {
     list-style: disc;
-    padding-left: 1.4em;
-    margin: 0.25rem 0 0.5rem 0;
+    list-style-position: outside;
+    padding-left: 1.25em;  /* bullet fits in this gutter; text starts at 1.25em */
+    margin: 0.15rem 0 0.4rem 0;
 }
 ul.resume-bullets li {
-    padding-left: 0.15em;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.18rem;
+    line-height: 1.55;
+    /* text-indent trick: subsequent lines hang under first word, not under bullet */
+    padding-left: 0;
+}
+/* Plain paragraph lines inside description */
+.exp-description-area p.mb-1 {
+    margin-bottom: 0.2rem !important;
     line-height: 1.55;
 }
 </style>
@@ -182,7 +189,7 @@ ul.resume-bullets li {
                         <div class="fw-semibold text-secondary mb-3" style="font-size: 0.95rem;">
                             {{ exp.company_name }}
                         </div>
-                        <div class="text-secondary lh-base mt-2" style="font-size: 0.92rem; color: #4b5563;">{{ exp.description|safe }}</div>
+                        <div class="exp-description-area text-secondary lh-base" style="font-size: 0.92rem; color: #4b5563;">{{ exp.description|safe }}</div>
                     </div>
                 </div>
             </div>

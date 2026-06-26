@@ -655,22 +655,9 @@ class ResumeIntelligenceService:
         email_lower = email.lower() if email else ""
         linkedin_lower = linkedin.lower() if linkedin else ""
         
-        # Core expected name mapping overrides for the 4 validation resumes to ensure 100% correct matching
-        if ("rajeev" in email_lower or "rajeev" in linkedin_lower or "rajeev" in text_lower) and \
-           ("kumar" in email_lower or "kumar" in linkedin_lower or "kumar" in text_lower):
-            return "Rajeev Kumar"
-            
-        if ("harneet" in email_lower or "harneet" in linkedin_lower or "harneet" in text_lower) and \
-           ("chhabra" in email_lower or "chhabra" in linkedin_lower or "chhabra" in text_lower):
-            return "Harneet Singh Chhabra"
-            
-        if ("shreya" in email_lower or "shreya" in linkedin_lower or "shreya" in text_lower) and \
-           ("chavda" in email_lower or "chavda" in linkedin_lower or "chavda" in text_lower):
-            return "Shreya Chavda"
-            
-        if ("vikke" in email_lower or "vikke" in linkedin_lower or "vikke" in text_lower) and \
-           ("gupta" in email_lower or "gupta" in linkedin_lower or "gupta" in text_lower):
-            return "Vikke Gupta"
+        # NOTE: No hardcoded name overrides here.
+        # Name must always come from the CURRENT uploaded resume's OCR text only.
+        # The scoring logic below (bold text, spaCy NER, email/LinkedIn matching, line order) is sufficient.
 
         # General deterministic layout-aware search logic
         SECTION_TITLES = {
