@@ -47,84 +47,54 @@ class ResumeIntelligenceService:
 
     @staticmethod
     def parse_experience_description_to_html(desc_text: str) -> str:
+        """
+        Converts plain-text experience description to HTML, preserving the original
+        structure exactly: bullet lines become <li> items in order, plain paragraph
+        lines become <p> blocks. Never reorders lines or keyword-categorises them.
+        """
         if not desc_text or not desc_text.strip():
             return ""
-            
-        # If it already looks like HTML, return it as is
-        if "<ul" in desc_text or "<li" in desc_text or "<p" in desc_text or "<div" in desc_text or "<strong" in desc_text:
+
+        # Already HTML — return unchanged
+        if any(tag in desc_text for tag in ("<ul", "<li", "<p>", "<p ", "<div", "<strong")):
             return desc_text
-            
-        import re
-        categories = {
-            "Responsibilities": [],
-            "Territory Coverage": [],
-            "Key Institutions": [],
-            "Achievements": [],
-        }
-        
-        current_category = "Responsibilities"
+
+        BULLET_CHARS = ('-', '•', '*', '+', '●', '■', '▪', '–', '→')
+
         lines = desc_text.split('\n')
-        
-        for line in lines:
-            line_stripped = line.strip()
-            if not line_stripped:
-                continue
-                
-            line_clean = line_stripped.lstrip('-•*+ ').strip()
-            line_lower = line_clean.lower()
-            
-            # Check if the line is a section heading itself
-            if any(h in line_lower for h in ["responsibilities", "responsibility", "roles & responsibilities", "role & responsibilities"]):
-                current_category = "Responsibilities"
-                header_content = re.sub(r'^(responsibilities|responsibility|roles\s*&\s*responsibilities|role\s*&\s*responsibilities)[:\-\s]*', '', line_clean, flags=re.I).strip()
-                if header_content:
-                    categories[current_category].append(header_content)
-                continue
-            elif any(h in line_lower for h in ["territory coverage", "territory", "coverage area", "geographical coverage"]):
-                current_category = "Territory Coverage"
-                header_content = re.sub(r'^(territory\s*coverage|territory|coverage\s*area|geographical\s*coverage)[:\-\s]*', '', line_clean, flags=re.I).strip()
-                if header_content:
-                    categories[current_category].append(header_content)
-                continue
-            elif any(h in line_lower for h in ["key institutions", "institutions", "key accounts", "hospital focus", "medical accounts"]):
-                current_category = "Key Institutions"
-                header_content = re.sub(r'^(key\s*institutions|institutions|key\s*accounts|hospital\s*focus|medical\s*accounts)[:\-\s]*', '', line_clean, flags=re.I).strip()
-                if header_content:
-                    categories[current_category].append(header_content)
-                continue
-            elif any(h in line_lower for h in ["achievements", "achievement", "key achievements", "accomplishments"]):
-                current_category = "Achievements"
-                header_content = re.sub(r'^(achievements|achievement|key\s*achievements|accomplishments)[:\-\s]*', '', line_clean, flags=re.I).strip()
-                if header_content:
-                    categories[current_category].append(header_content)
-                continue
-                
-            # Classify the line based on keywords
-            if any(kw in line_lower for kw in ["territory", "coverage", "region", "geographic", "zone", "sales area", "pan india"]):
-                line_cat = "Territory Coverage"
-            elif any(kw in line_lower for kw in ["institution", "hospital", "medical", "clinic", "key account", "client", "customer"]):
-                line_cat = "Key Institutions"
-            elif any(kw in line_lower for kw in ["achieve", "award", "won", "growth", "increase", "revenue", "percent", "target", "%"]):
-                line_cat = "Achievements"
-            else:
-                line_cat = current_category
-                
-            categories[line_cat].append(line_clean)
-            
         html_parts = []
-        for cat_name in ["Responsibilities", "Territory Coverage", "Key Institutions", "Achievements"]:
-            cat_lines = categories[cat_name]
-            if cat_lines:
-                html_parts.append(f"<p class='mb-1'><strong>{cat_name}</strong></p>")
-                html_parts.append("<ul class='mb-2'>")
-                for cl in cat_lines:
-                    html_parts.append(f"  <li>{cl}</li>")
-                html_parts.append("</ul>")
-                
-        if not html_parts:
-            return f"<p>{desc_text}</p>"
-            
-        return "\n".join(html_parts)
+        in_list = False
+
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line:
+                # Close any open list on blank line
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+                continue
+
+            is_bullet = line[0] in BULLET_CHARS
+
+            if is_bullet:
+                # Strip the leading bullet character(s), preserve the rest verbatim
+                content = re.sub(r'^[\-•*+●■▪–→]+\s*', '', line, count=1).strip()
+                if not in_list:
+                    html_parts.append("<ul class='resume-bullets'>")
+                    in_list = True
+                html_parts.append(f'  <li>{content}</li>')
+            else:
+                # Plain paragraph line
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+                html_parts.append(f'<p class="mb-1">{line}</p>')
+
+        # Close any trailing open list
+        if in_list:
+            html_parts.append('</ul>')
+
+        return '\n'.join(html_parts)
 
     @staticmethod
     def is_valid_name(name: str) -> bool:
@@ -1763,15 +1733,22 @@ class ResumeIntelligenceService:
                         location_val = header
                         break
 
-            # Parse bullets only under this job
+            # Preserve description formatting exactly as parsed from the resume.
+            # Bullet lines keep their original bullet character.
+            # Paragraph lines stay as paragraphs. Never re-prefix every line with •.
+            BULLET_CHARS = ('-', '\u2022', '*', '+', '\u25cf', '\u25a0', '\u25aa', '\u2013', '\u2192')
             desc_items = []
             for desc_line in desc_lines:
-                # Ignore nested sections or achievements headers
-                if any(h in desc_line.lower() for h in ["achievements", "certifications", "competencies", "key skills"]):
+                line_s = desc_line.strip()
+                if not line_s:
                     continue
-                cleaned = ResumeIntelligenceService._strip_bullet(desc_line)
-                if cleaned:
-                    desc_items.append(f"• {cleaned}")
+                # Skip nested section headings inside experience block
+                if any(h in line_s.lower() for h in ["achievements", "certifications", "competencies", "key skills"]):
+                    continue
+                # Preserve original bullet/paragraph; only normalise corrupt multi-byte bullet artifacts
+                # These arise from Windows-1252/Latin-1 decoded as UTF-8 (â€¢ = •, etc.)
+                line_s = re.sub(r'â[^\s]{0,3}(?:\s|$)', '\u2022 ', line_s).strip()
+                desc_items.append(line_s)
 
             # Verify validity of job
             desig_words = set(re.sub(r'[^a-zA-Z\s]', ' ', designation).lower().split())
@@ -2083,13 +2060,11 @@ class ResumeIntelligenceService:
             comp = exp.get("company", "")
             exp["company"] = comp.title()
             
-            # Preserve original experience description bullet points
+            # Preserve the exact description formatting produced by parse_resume_nlp.
+            # Do NOT strip bullets and re-prefix them — that destroys paragraph formatting.
             desc = exp.get("description", "")
-            cleaned_desc_lines = []
-            for line in desc.split('\n'):
-                l_clean = line.strip().lstrip('-•*+ ').strip()
-                if l_clean:
-                    cleaned_desc_lines.append(f"• {l_clean}")
+            # Only strip genuinely empty lines; keep every non-empty line intact
+            cleaned_desc_lines = [l for l in desc.split('\n') if l.strip()]
             exp["description"] = "\n".join(cleaned_desc_lines)
 
         # Update current designation and company in info dictionary if experiences exist

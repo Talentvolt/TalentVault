@@ -196,16 +196,66 @@ def process_resume_file(file_obj, filename, overwrite=False):
         logger.error(f"[PARSER OCR FAILURE] Failed during OCR pipeline on {filename}: {str(e)}", exc_info=True)
         return None, "OCR_FAILED"
     
-    # 2. NLP Extraction
+    # 2. NLP Extraction with graceful fallback — a single bad section must never stop parsing
+    parsed_data = None
     try:
         logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
         parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
-        parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
-        info = parsed_data['personal_info']
-        logger.info(f"[PARSER NLP SUCCESS] Parsed info for candidate: {info.get('name')}")
+        logger.info("[PARSER NLP SUCCESS] parse_resume_nlp completed")
     except Exception as e:
-        logger.error(f"[PARSER NLP FAILURE] Failed running NLP parser: {str(e)}", exc_info=True)
-        return None, "NLP_FAILED"
+        logger.error(f"[PARSER NLP FAILURE] parse_resume_nlp raised an exception: {str(e)}", exc_info=True)
+
+    # ai_improve step (only if NLP succeeded; still guarded individually)
+    if parsed_data is not None:
+        try:
+            parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
+            info = parsed_data['personal_info']
+            logger.info(f"[PARSER NLP SUCCESS] Final candidate: {info.get('name')}")
+        except Exception as e:
+            logger.error(f"[PARSER AI_IMPROVE FAILURE] ai_improve_resume_data raised: {str(e)}", exc_info=True)
+            # ai_improve failed — keep the raw parsed_data without AI improvements
+            info = parsed_data.get('personal_info', {})
+
+    # Fallback: build a minimal parsed_data from raw OCR text so upload still succeeds
+    if parsed_data is None:
+        logger.warning("[PARSER FALLBACK] Building minimal parsed_data from raw OCR text")
+        import re as _re
+        _email_m = _re.search(r'[\w\.\-]+@[\w\.\-]+\.\w+', text)
+        _phone_m = _re.search(r'(?:\+?\d{1,3}[- ]?)?(?:\d[- ]?){9}\d', text)
+        _email_fb = _email_m.group(0) if _email_m else ""
+        _phone_fb = _re.sub(r'[\s-]', '', _phone_m.group(0))[-10:] if _phone_m else ""
+        # Best-effort name: first non-empty line that has no @ or digits
+        _name_fb = ocr_result.get("largest_bold_name") or ""
+        if not _name_fb:
+            for _ln in text.split('\n'):
+                _ln = _ln.strip()
+                if _ln and '@' not in _ln and not _re.search(r'\d{5,}', _ln) and len(_ln.split()) <= 5:
+                    _name_fb = _ln.title()
+                    break
+        parsed_data = {
+            "personal_info": {
+                "name": _name_fb,
+                "email": _email_fb,
+                "phone": _phone_fb,
+                "location": "",
+                "linkedin_url": "",
+                "portfolio_url": "",
+                "current_company": "",
+                "current_designation": "",
+                "total_experience": 0,
+            },
+            "summary": "",
+            "experience": [],
+            "education": [],
+            "skills": [],
+            "projects": [],
+            "certifications": [],
+            "achievements": [],
+            "languages": [],
+            "metadata": {"parsed_at": "", "word_count": len(text.split()), "fallback": True},
+        }
+        info = parsed_data['personal_info']
+        logger.warning(f"[PARSER FALLBACK] Minimal data built for name={_name_fb!r} email={_email_fb!r}")
     
     email = info.get('email', '')
     phone = info.get('phone', '')

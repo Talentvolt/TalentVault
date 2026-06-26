@@ -119,7 +119,8 @@ def test_has_profile_photo_property():
     assert profile.has_profile_photo is False
 
 def test_parse_experience_description_to_html():
-    desc = (
+    # --- Test 1: Plain paragraph lines are preserved in order as <p> tags ---
+    desc_plain = (
         "Responsibilities:\n"
         "Managed a team of 5 sales engineers.\n"
         "Territory Coverage:\n"
@@ -127,13 +128,39 @@ def test_parse_experience_description_to_html():
         "Achievements:\n"
         "Exceeded annual sales target by 25%."
     )
-    html = ResumeIntelligenceService.parse_experience_description_to_html(desc)
-    assert "<strong>Responsibilities</strong>" in html
-    assert "<li>Managed a team of 5 sales engineers.</li>" in html
-    assert "<strong>Territory Coverage</strong>" in html
-    assert "<li>North region and Delhi NCR.</li>" in html
-    assert "<strong>Achievements</strong>" in html
-    assert "<li>Exceeded annual sales target by 25%.</li>" in html
+    html_plain = ResumeIntelligenceService.parse_experience_description_to_html(desc_plain)
+    # All lines are plain text (no bullet chars) so they all become <p> elements
+    assert '<p class="mb-1">Responsibilities:</p>' in html_plain
+    assert '<p class="mb-1">Managed a team of 5 sales engineers.</p>' in html_plain
+    assert '<p class="mb-1">Territory Coverage:</p>' in html_plain
+    assert '<p class="mb-1">North region and Delhi NCR.</p>' in html_plain
+    assert '<p class="mb-1">Achievements:</p>' in html_plain
+    assert '<p class="mb-1">Exceeded annual sales target by 25%.</p>' in html_plain
+
+    # --- Test 2: Bullet lines become <li> items inside <ul> ---
+    desc_bullets = (
+        "• Managed a team of 5 sales engineers.\n"
+        "• Covered North region and Delhi NCR.\n"
+        "• Exceeded annual sales target by 25%."
+    )
+    html_bullets = ResumeIntelligenceService.parse_experience_description_to_html(desc_bullets)
+    assert "<ul class='resume-bullets'>" in html_bullets
+    assert "<li>Managed a team of 5 sales engineers.</li>" in html_bullets
+    assert "<li>Covered North region and Delhi NCR.</li>" in html_bullets
+    assert "<li>Exceeded annual sales target by 25%.</li>" in html_bullets
+
+    # --- Test 3: Mixed bullets and paragraphs maintain order and group correctly ---
+    desc_mixed = (
+        "Key Responsibilities:\n"
+        "• Line one\n"
+        "• Line two\n"
+        "Summary note here."
+    )
+    html_mixed = ResumeIntelligenceService.parse_experience_description_to_html(desc_mixed)
+    assert '<p class="mb-1">Key Responsibilities:</p>' in html_mixed
+    assert "<li>Line one</li>" in html_mixed
+    assert "<li>Line two</li>" in html_mixed
+    assert '<p class="mb-1">Summary note here.</p>' in html_mixed
 
 @pytest.mark.django_db
 def test_json_edit_view_salary_sync():
