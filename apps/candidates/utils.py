@@ -363,6 +363,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     institution=edu.get('institution', '')[:100],
                     degree=edu.get('degree', '')[:100],
                     field_of_study=edu.get('field_of_study', '')[:100],
+                    percentage_or_cgpa=edu.get('score', '')[:20],
                     start_date=parse_date_robust(edu.get('start_date'), None),
                     end_date=parse_date_robust(edu.get('end_date'), None)
                 )

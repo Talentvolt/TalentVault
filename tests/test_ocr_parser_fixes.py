@@ -143,3 +143,50 @@ def test_resume_parser_harneet_singh():
     # Projects empty
     assert len(improved["projects"]) == 0
 
+
+def test_work_experience_only_parses_work_section():
+    resume_text = (
+        "Asha Mehta\n"
+        "asha.mehta@example.com\n\n"
+        "Profile Summary\n"
+        "Product leader from Jan 2020 to Dec 2021 with Python and AWS exposure.\n\n"
+        "Projects\n"
+        "Inventory Migration - Feb 2022 to Apr 2022\n"
+        "Built migration tooling.\n\n"
+        "Work Experience\n"
+        "Senior Product Manager at Bright Systems Pvt Ltd - May 2022 to Present\n"
+        "- Led roadmap planning across three product squads.\n"
+        "Product Manager at Clear Labs Pvt Ltd - Jan 2020 to Apr 2022\n"
+        "- Managed analytics releases for enterprise customers.\n"
+    )
+
+    parsed = ResumeIntelligenceService.parse_resume_nlp(resume_text)
+
+    assert len(parsed["experience"]) == 2
+    assert parsed["experience"][0]["company"] == "Bright Systems Pvt Ltd"
+    assert parsed["experience"][1]["company"] == "Clear Labs Pvt Ltd"
+    assert "Inventory Migration" not in [exp["designation"] for exp in parsed["experience"]]
+
+
+def test_skills_are_limited_to_skills_section_and_grouped():
+    resume_text = (
+        "Neha Rao\n"
+        "neha.rao@example.com\n\n"
+        "Professional Summary\n"
+        "Engineer with Python, AWS and stakeholder communication experience.\n\n"
+        "Work Experience\n"
+        "Software Engineer at BuildGrid Technologies Pvt Ltd - Jan 2021 to Present\n"
+        "- Built APIs using Django and PostgreSQL.\n\n"
+        "Skills\n"
+        "Python, Django, PostgreSQL, AWS, Git, Leadership\n"
+    )
+
+    parsed = ResumeIntelligenceService.parse_resume_nlp(resume_text)
+
+    assert parsed["skills"] == ["Python", "Django", "PostgreSQL", "AWS", "Git", "Leadership"]
+    assert parsed["skill_groups"]["Programming Languages"] == ["Python"]
+    assert parsed["skill_groups"]["Frameworks"] == ["Django"]
+    assert parsed["skill_groups"]["Databases"] == ["PostgreSQL"]
+    assert parsed["skill_groups"]["Cloud"] == ["AWS"]
+    assert parsed["skill_groups"]["Tools"] == ["Git"]
+    assert parsed["skill_groups"]["Soft Skills"] == ["Leadership"]
