@@ -393,6 +393,16 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 logger.error(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}", exc_info=True)
                 print(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}")
             
+            # Generate and save the OCR/AI resume separately
+            try:
+                from services.resume_intelligence import ResumeIntelligenceService
+                pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(profile)
+                profile.generated_resume.save("generated_resume.pdf", ContentFile(pdf_bytes), save=True)
+                logger.info(f"[PARSER] Saved separate generated_resume.pdf for profile ID {profile.id}")
+            except Exception as e:
+                logger.error(f"[PARSER GENERATED RESUME ERROR] Failed generating or saving generated_resume.pdf: {str(e)}", exc_info=True)
+                print(f"[PARSER GENERATED RESUME ERROR] Failed generating or saving generated_resume.pdf: {str(e)}")
+
             logger.info(f"[PARSER COMPLETED] Candidate Profile created/updated successfully: {profile.id}")
             print(f"[PARSER COMPLETED] Candidate Profile created successfully: ID={profile.id}, Name={profile.full_name}")
             return profile, "SUCCESS"

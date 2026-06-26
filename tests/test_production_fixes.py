@@ -180,3 +180,55 @@ def test_json_edit_view_salary_sync():
     assert profile.expected_salary == Decimal("1000000.00")
     assert profile.current_salary_lpa == "7.5 LPA"
     assert profile.expected_salary_lpa == "10 LPA"
+
+
+@pytest.mark.django_db
+def test_original_resume_retention_and_preview():
+    import io
+    from django.core.files.base import ContentFile
+    
+    # 1. Create candidate
+    user = User.objects.create_user(email="harneet_test@example.com", password="password123")
+    profile = CandidateProfile.objects.create(
+        user=user,
+        full_name="Harneet Singh Chhabra",
+        location="Delhi"
+    )
+    
+    fake_pdf_content = b"%PDF-1.4 ... fake pdf content ... %EOF"
+    profile.resume.save("harneet_resume.pdf", ContentFile(fake_pdf_content), save=True)
+    
+    # Generate and save the generated resume separately
+    generated_pdf_content = b"%PDF-1.4 ... generated ats content ... %EOF"
+    profile.generated_resume.save("generated_resume.pdf", ContentFile(generated_pdf_content), save=True)
+    
+    # Verify both exist separately
+    profile.refresh_from_db()
+    assert "harneet_resume" in profile.resume.name
+    assert "generated_resume" in profile.generated_resume.name
+    assert profile.resume.name.endswith(".pdf")
+    assert profile.generated_resume.name.endswith(".pdf")
+    
+    # 2. Test Preview View
+    factory = RequestFactory()
+    request = factory.get(reverse('frontend:candidate_resume_preview', kwargs={'pk': profile.pk}))
+    request.user = user
+    
+    view = CandidateResumePreviewView.as_view()
+    response = view(request, pk=profile.pk)
+    
+    assert response.status_code == 200
+    # Should serve the original fake_pdf_content, NOT the generated_pdf_content
+    response_content = b"".join(response.streaming_content)
+    assert response_content == fake_pdf_content
+    
+    # 3. Test Download View
+    request_dl = factory.get(reverse('frontend:candidate_resume_download', kwargs={'pk': profile.pk}))
+    request_dl.user = user
+    
+    view_dl = CandidateResumeDownloadView.as_view()
+    response_dl = view_dl(request_dl, pk=profile.pk)
+    
+    assert response_dl.status_code == 200
+    response_dl_content = b"".join(response_dl.streaming_content)
+    assert response_dl_content == fake_pdf_content

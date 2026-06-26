@@ -70,6 +70,7 @@ class CandidateProfile(BaseAppModel):
     
     # Resume Intelligence Engine fields
     original_file = models.FileField(upload_to='resumes/original/', null=True, blank=True)
+    generated_resume = models.FileField(upload_to='resumes/generated/', null=True, blank=True)
     parsed_json = models.JSONField(default=dict, blank=True)
     current_version = models.IntegerField(default=1)
     ocr_engine = models.CharField(max_length=50, blank=True, null=True)
