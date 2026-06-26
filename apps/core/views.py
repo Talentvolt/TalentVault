@@ -2,13 +2,14 @@ import random
 import json
 from decimal import Decimal
 from datetime import datetime
-from django.http import JsonResponse, HttpResponse, FileResponse
+from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 from django.views.generic import TemplateView, ListView, DetailView, View, CreateView, UpdateView, DeleteView
 from django.utils.decorators import method_decorator
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.db import transaction
 from django.db.models import Count, Q, Avg
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -812,12 +813,20 @@ class CandidateUpdateView(LoginRequiredMixin, UpdateView):
 
 class CandidateDeleteView(LoginRequiredMixin, View):
     def post(self, request, id, *args, **kwargs):
-        candidate = get_object_or_404(CandidateProfile, id=id)
-        user = candidate.user
-        candidate.delete()
-        if user and user.role == 'CANDIDATE':
-            user.delete()
-        messages.success(request, "Candidate deleted successfully.")
+        try:
+            with transaction.atomic():
+                queryset = CandidateProfile.objects.select_for_update()
+                candidate = get_object_or_404(queryset, id=id)
+                user = candidate.user
+                if user and user.role == 'CANDIDATE':
+                    user.delete()
+                else:
+                    candidate.delete()
+            messages.success(request, "Candidate deleted successfully.")
+        except (Http404, CandidateProfile.DoesNotExist):
+            messages.info(request, "Candidate already deleted.")
+        except Exception as e:
+            messages.error(request, "An unexpected error occurred while deleting the candidate.")
         return redirect('frontend:candidate_search')
 
 class CandidateRejectView(LoginRequiredMixin, View):

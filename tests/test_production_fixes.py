@@ -232,3 +232,53 @@ def test_original_resume_retention_and_preview():
     assert response_dl.status_code == 200
     response_dl_content = b"".join(response_dl.streaming_content)
     assert response_dl_content == fake_pdf_content
+
+
+@pytest.mark.django_db
+def test_candidate_delete_flow():
+    from django.contrib.messages import get_messages
+    from django.test import Client
+    
+    # 1. Create a candidate user and candidate profile
+    candidate_user = User.objects.create_user(email="candidate_del@example.com", password="password123", role="CANDIDATE")
+    profile = CandidateProfile.objects.create(
+        user=candidate_user,
+        full_name="To Be Deleted",
+        location="Bangalore"
+    )
+    candidate_id = profile.id
+    
+    # Create recruiter user to perform the action (as CandidateDeleteView has LoginRequiredMixin)
+    recruiter_user = User.objects.create_user(email="recruiter_del@example.com", password="password123", role="RECRUITER")
+    
+    client = Client()
+    client.force_login(recruiter_user)
+    
+    # 2. Test deleting existing candidate
+    delete_url = reverse('frontend:candidate_delete', kwargs={'id': candidate_id})
+    response = client.post(delete_url)
+    
+    # Verify it returns HTTP 302 redirect
+    assert response.status_code == 302
+    assert response.url == reverse('frontend:candidate_search')
+    
+    # Verify the candidate and the user are deleted
+    assert not CandidateProfile.objects.filter(id=candidate_id).exists()
+    assert not User.objects.filter(id=candidate_user.id).exists()
+    
+    # Verify the Django success message
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) > 0
+    assert any("Candidate deleted successfully." in str(msg) for msg in messages)
+    
+    # 3. Test already deleted candidate / duplicate POST / double-click / browser refresh
+    response2 = client.post(delete_url)
+    
+    # Verify it returns HTTP 302 redirect instead of 404
+    assert response2.status_code == 302
+    assert response2.url == reverse('frontend:candidate_search')
+    
+    # Verify Django success/info message: "Candidate already deleted."
+    messages2 = list(get_messages(response2.wsgi_request))
+    assert len(messages2) > 0
+    assert any("Candidate already deleted." in str(msg) for msg in messages2)
