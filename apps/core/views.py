@@ -1318,11 +1318,15 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
             
             result_container = {}
             def run_parser_thread():
+                from django.db import connection
                 try:
+                    connection.close() # Ensure fresh database connection for thread
                     result_container['results'] = handle_resume_upload(in_memory_file, overwrite=overwrite)
                 except Exception as e:
                     import traceback
                     result_container['error'] = f"{str(e)}\n{traceback.format_exc()}"
+                finally:
+                    connection.close()
                     
             t = threading.Thread(target=run_parser_thread)
             t.start()
@@ -1332,44 +1336,54 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                 yield " "
                 time.sleep(1)
                 
-            if 'error' in result_container:
-                messages.error(request, f"❌ Parsing failed\n\nReason: {result_container['error']}")
-            else:
-                results = result_container['results']
-                created_profiles = results['created']
-                duplicates = results['duplicates']
-                error_reasons = results.get('error_reasons', [])
-                
-                if len(created_profiles) > 0:
-                    profile = created_profiles[0]
-                    skills_str = ", ".join([s.skill_name for s in profile.skills.all()])
-                    phone_num = profile.user.phone_number or 'N/A'
-                    
-                    msg = (
-                        "✅ Resume Parsed Successfully\n\n"
-                        "Candidate Created:\n"
-                        f"Name: {profile.full_name or 'N/A'}\n"
-                        f"Email: {profile.user.email or 'N/A'}\n"
-                        f"Phone: {phone_num}\n"
-                        f"Experience: {profile.total_experience or 0.0} Years\n"
-                        f"Skills: {skills_str or 'N/A'}"
-                    )
-                    messages.success(request, msg)
-                    
-                    if len(created_profiles) > 1:
-                        messages.info(request, f"Successfully parsed {len(created_profiles)} candidates from ZIP file.")
-                        
-                    Notification.objects.create(
-                        recipient=request.user,
-                        title="Resume Parsing Success",
-                        message=f"Candidate {profile.full_name or profile.user.email} parsed successfully.",
-                        notification_type='SYSTEM'
-                    )
-                elif duplicates > 0:
-                    messages.warning(request, "⚠ Candidate already exists")
+            try:
+                if 'error' in result_container:
+                    messages.error(request, f"❌ Parsing failed\n\nReason: {result_container['error']}")
                 else:
-                    reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
-                    messages.error(request, f"❌ Parsing failed\n\nReason: {reason}")
+                    results = result_container['results']
+                    created_profiles = results['created']
+                    duplicates = results['duplicates']
+                    error_reasons = results.get('error_reasons', [])
+                    
+                    if len(created_profiles) > 0:
+                        profile = created_profiles[0]
+                        try:
+                            skills_str = ", ".join([s.skill_name for s in profile.skills.all()])
+                        except Exception:
+                            skills_str = "N/A"
+                        phone_num = getattr(getattr(profile, 'user', None), 'phone_number', 'N/A') or 'N/A'
+                        
+                        msg = (
+                            "✅ Resume Parsed Successfully\n\n"
+                            "Candidate Created:\n"
+                            f"Name: {profile.full_name or 'N/A'}\n"
+                            f"Email: {profile.user.email or 'N/A'}\n"
+                            f"Phone: {phone_num}\n"
+                            f"Experience: {profile.total_experience or 0.0} Years\n"
+                            f"Skills: {skills_str or 'N/A'}"
+                        )
+                        messages.success(request, msg)
+                        
+                        if len(created_profiles) > 1:
+                            messages.info(request, f"Successfully parsed {len(created_profiles)} candidates from ZIP file.")
+                            
+                        try:
+                            Notification.objects.create(
+                                recipient=request.user,
+                                title="Resume Parsing Success",
+                                message=f"Candidate {profile.full_name or profile.user.email} parsed successfully.",
+                                notification_type='SYSTEM'
+                            )
+                        except Exception:
+                            pass
+                    elif duplicates > 0:
+                        messages.warning(request, "⚠ Candidate already exists")
+                    else:
+                        reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
+                        messages.error(request, f"❌ Parsing failed\n\nReason: {reason}")
+            except Exception as pe:
+                import traceback
+                messages.error(request, f"❌ Post-processing failed: {pe}\n{traceback.format_exc()}")
                     
             redirect_url = reverse('frontend:candidate_search')
             yield f"<script>window.location.href = '{redirect_url}';</script></body></html>"
