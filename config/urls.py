@@ -36,6 +36,31 @@ class DebugDiagnosticsView(View):
         if request.GET.get('secret') != 'audit_2026':
             return JsonResponse({'error': 'Unauthorized'}, status=403)
             
+        if request.GET.get('action') == 'verify_openai':
+            try:
+                import time
+                from openai import OpenAI
+                from django.conf import settings
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                t0 = time.time()
+                completion = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": "Hello"}],
+                    max_tokens=10
+                )
+                dur = time.time() - t0
+                return JsonResponse({
+                    'status': 'success',
+                    'duration': dur,
+                    'response': completion.choices[0].message.content
+                })
+            except Exception as e:
+                import traceback
+                return JsonResponse({
+                    'error': str(e),
+                    'traceback': traceback.format_exc()
+                }, status=500)
+
         if request.GET.get('action') == 'parse_test':
             try:
                 import os
