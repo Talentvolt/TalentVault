@@ -57,11 +57,30 @@ class DebugDiagnosticsView(View):
             except Exception as e:
                 pkg_versions[p] = f"Error: {e}"
                 
+        latest_cand = None
+        try:
+            from apps.candidates.models import CandidateProfile
+            latest = CandidateProfile.objects.latest('created_at')
+            latest_cand = {
+                'id': str(latest.id),
+                'full_name': latest.full_name,
+                'email': latest.user.email,
+                'parsed_json': latest.parsed_json,
+                'ocr_engine': latest.ocr_engine,
+                'ocr_confidence': str(latest.ocr_confidence) if latest.ocr_confidence is not None else None,
+                'audit_logs': latest.audit_logs,
+                'raw_text_len': len(latest.raw_resume_text) if latest.raw_resume_text else 0,
+                'resume_type': latest.resume_type,
+            }
+        except Exception as e:
+            latest_cand = {'error': str(e)}
+
         return JsonResponse({
             'python_version': sys.version,
             'env_vars': env_vars,
             'pip_freeze': pip_freeze,
             'pkg_versions': pkg_versions,
+            'latest_candidate': latest_cand,
         })
 
 urlpatterns = [
