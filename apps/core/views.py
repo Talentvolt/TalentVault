@@ -1254,8 +1254,8 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         
         file_uploaded = 'resume' in request.FILES or 'resumes_zip' in request.FILES
         if not file_uploaded:
-            messages.error(request, '❌ Parsing failed\n\nReason: No file was uploaded.')
-            return redirect('frontend:candidate_search')
+            from django.http import JsonResponse
+            return JsonResponse({"stage": "error", "message": "No file was uploaded."}, status=400)
             
         uploaded_file = request.FILES.get('resume') or request.FILES.get('resumes_zip')
         
@@ -1266,129 +1266,76 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         
         from django.core.files.uploadedfile import SimpleUploadedFile
         from django.http import StreamingHttpResponse
-        from django.urls import reverse
-        from apps.notifications.models import Notification
         import threading
+        import queue
+        import json
         import time
         
         in_memory_file = SimpleUploadedFile(file_name, file_bytes, content_type=content_type)
+        q = queue.Queue()
         
-        def stream_generator():
-            yield """<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Parsing Resume...</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
-        .loader {
-            border: 4px solid #334155;
-            border-top: 4px solid #38bdf8;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        h2 { margin: 0 0 10px 0; font-weight: 600; }
-        p { margin: 0; color: #94a3b8; font-size: 14px; text-align: center; max-width: 340px; line-height: 1.5; }
-    </style>
-</head>
-<body>
-    <div class="loader"></div>
-    <h2>Parsing Resume...</h2>
-    <p>Extracting contact details, skills, experiences, and education using AI. Please do not reload or close this page.</p>
-"""
-            # Yield space buffer to push initial HTML
-            yield " " * 1024
-            
-            result_container = {}
-            def run_parser_thread():
-                from django.db import connection
+        def progress_cb(stage, profile=None):
+            data = {"stage": stage}
+            if stage == "completed" and profile:
                 try:
-                    connection.close() # Ensure fresh database connection for thread
-                    result_container['results'] = handle_resume_upload(in_memory_file, overwrite=overwrite)
-                except Exception as e:
-                    import traceback
-                    result_container['error'] = f"{str(e)}\n{traceback.format_exc()}"
-                finally:
-                    connection.close()
-                    
-            t = threading.Thread(target=run_parser_thread)
-            t.start()
+                    skills_count = profile.skills.count()
+                except Exception:
+                    skills_count = 0
+                try:
+                    edu_count = profile.educations.count()
+                except Exception:
+                    edu_count = 0
+                data.update({
+                    "candidate_id": str(profile.id),
+                    "name": profile.full_name,
+                    "experience": float(profile.total_experience or 0.0),
+                    "skills_count": skills_count,
+                    "education_count": edu_count
+                })
+            q.put(data)
             
-            # Periodically yield spaces to keep connection alive
-            while t.is_alive():
-                yield " "
-                time.sleep(1)
-                
+        def run_parser_thread():
+            from django.db import connection
             try:
-                if 'error' in result_container:
-                    messages.error(request, f"❌ Parsing failed\n\nReason: {result_container['error']}")
-                else:
-                    results = result_container['results']
-                    created_profiles = results['created']
-                    duplicates = results['duplicates']
-                    error_reasons = results.get('error_reasons', [])
-                    
-                    if len(created_profiles) > 0:
-                        profile = created_profiles[0]
-                        try:
-                            skills_str = ", ".join([s.skill_name for s in profile.skills.all()])
-                        except Exception:
-                            skills_str = "N/A"
-                        phone_num = getattr(getattr(profile, 'user', None), 'phone_number', 'N/A') or 'N/A'
-                        
-                        msg = (
-                            "✅ Resume Parsed Successfully\n\n"
-                            "Candidate Created:\n"
-                            f"Name: {profile.full_name or 'N/A'}\n"
-                            f"Email: {profile.user.email or 'N/A'}\n"
-                            f"Phone: {phone_num}\n"
-                            f"Experience: {profile.total_experience or 0.0} Years\n"
-                            f"Skills: {skills_str or 'N/A'}"
-                        )
-                        messages.success(request, msg)
-                        
-                        if len(created_profiles) > 1:
-                            messages.info(request, f"Successfully parsed {len(created_profiles)} candidates from ZIP file.")
-                            
-                        try:
-                            Notification.objects.create(
-                                recipient=request.user,
-                                title="Resume Parsing Success",
-                                message=f"Candidate {profile.full_name or profile.user.email} parsed successfully.",
-                                notification_type='SYSTEM'
-                            )
-                        except Exception:
-                            pass
-                    elif duplicates > 0:
-                        messages.warning(request, "⚠ Candidate already exists")
+                connection.close() # Ensure fresh database connection for thread
+                results = handle_resume_upload(in_memory_file, overwrite=overwrite, progress_callback=progress_cb)
+                created_profiles = results['created']
+                duplicates = results['duplicates']
+                error_reasons = results.get('error_reasons', [])
+                
+                if not created_profiles:
+                    if duplicates > 0:
+                        q.put({"stage": "duplicate", "message": "Candidate profile with this email or phone number already exists."})
                     else:
                         reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
-                        messages.error(request, f"❌ Parsing failed\n\nReason: {reason}")
-            except Exception as pe:
+                        q.put({"stage": "error", "message": f"Parsing failed: {reason}"})
+            except Exception as e:
                 import traceback
-                messages.error(request, f"❌ Post-processing failed: {pe}\n{traceback.format_exc()}")
-                    
-            redirect_url = reverse('frontend:candidate_search')
-            yield f"<script>window.location.href = '{redirect_url}';</script></body></html>"
+                q.put({"stage": "error", "message": f"Unexpected error: {str(e)}"})
+            finally:
+                connection.close()
+                q.put(None)
+                
+        t = threading.Thread(target=run_parser_thread)
+        t.start()
+        
+        def stream_generator():
+            yield json.dumps({"stage": "upload_complete"}) + " " * 1024 + "\n"
             
-        response = StreamingHttpResponse(stream_generator(), content_type="text/html")
+            while True:
+                try:
+                    item = q.get(timeout=1.0)
+                except queue.Empty:
+                    # Heartbeat space to keep connection open
+                    yield " "
+                    continue
+                    
+                if item is None:
+                    break
+                    
+                yield json.dumps(item) + " " * 1024 + "\n"
+                
+        response = StreamingHttpResponse(stream_generator(), content_type="application/x-ndjson")
         response['X-Accel-Buffering'] = 'no'
         response['Cache-Control'] = 'no-cache'
         return response

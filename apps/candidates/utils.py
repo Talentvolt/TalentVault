@@ -381,13 +381,88 @@ def convert_llm_data_to_standard_format(llm_data):
         }
     }
 
+from typing import List, Optional
+from pydantic import BaseModel, Field
+
+class FastExperienceItem(BaseModel):
+    company: Optional[str] = Field(None, description="Company name")
+    designation: Optional[str] = Field(None, description="Job designation / title")
+    location: Optional[str] = Field(None, description="Work location")
+    employment_type: Optional[str] = Field(None, description="Full-time, part-time, etc.")
+    start_date: Optional[str] = Field(None, description="Start date of employment")
+    end_date: Optional[str] = Field(None, description="End date or Present")
+    description: Optional[str] = Field(None, description="Key duties and accomplishments")
+
+class FastExperience(BaseModel):
+    value: List[FastExperienceItem] = Field(default_factory=list)
+
+class FastEducationItem(BaseModel):
+    degree: Optional[str] = Field(None, description="Name of degree")
+    branch: Optional[str] = Field(None, description="Branch of study")
+    college: Optional[str] = Field(None, description="College name")
+    board: Optional[str] = Field(None, description="Board name")
+    university: Optional[str] = Field(None, description="University name")
+    start_year: Optional[str] = Field(None, description="Start year")
+    end_year: Optional[str] = Field(None, description="End year")
+    cgpa: Optional[str] = Field(None, description="CGPA")
+    percentage: Optional[str] = Field(None, description="Percentage")
+    grade: Optional[str] = Field(None, description="Grade")
+
+class FastEducation(BaseModel):
+    value: List[FastEducationItem] = Field(default_factory=list)
+
+class FastProjectItem(BaseModel):
+    title: Optional[str] = Field(None, description="Project title")
+    description: Optional[str] = Field(None, description="Project description")
+    technologies: Optional[str] = Field(None, description="Technologies used")
+    duration: Optional[str] = Field(None, description="Duration")
+
+class FastProject(BaseModel):
+    value: List[FastProjectItem] = Field(default_factory=list)
+
+class FastCertificationItem(BaseModel):
+    name: Optional[str] = Field(None, description="Certification name")
+    issuing_organization: Optional[str] = Field(None, description="Issuing organization")
+    issue_date: Optional[str] = Field(None, description="Issue date")
+
+class FastCertification(BaseModel):
+    value: List[FastCertificationItem] = Field(default_factory=list)
+
+class FastResumeSchema(BaseModel):
+    candidate_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    portfolio: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    current_designation: Optional[str] = None
+    current_company: Optional[str] = None
+    professional_summary: Optional[str] = None
+    work_experience: FastExperience = Field(default_factory=FastExperience)
+    education: FastEducation = Field(default_factory=FastEducation)
+    projects: FastProject = Field(default_factory=FastProject)
+    technical_skills: List[str] = Field(default_factory=list)
+    soft_skills: List[str] = Field(default_factory=list)
+    languages: List[str] = Field(default_factory=list)
+    certifications: FastCertification = Field(default_factory=FastCertification)
+    awards: List[str] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+    training: List[str] = Field(default_factory=list)
+    interests: List[str] = Field(default_factory=list)
+    strengths: List[str] = Field(default_factory=list)
+    references: List[str] = Field(default_factory=list)
+
 class OpenAIResumeParser:
     @staticmethod
     def parse(text: str) -> dict:
         import os
+        import time
         from openai import OpenAI
         from django.conf import settings
-        from services.parser.llm_extractor import ResumeSchema
         
         api_key = getattr(settings, "OPENAI_API_KEY", None) or os.environ.get("OPENAI_API_KEY")
         if not api_key:
@@ -406,6 +481,7 @@ class OpenAIResumeParser:
             "- Never combine multiple distinct bullet points or achievements into a single sentence or line."
         )
         
+        t0 = time.time()
         completion = client.beta.chat.completions.parse(
             model=model_name,
             messages=[
@@ -415,13 +491,22 @@ class OpenAIResumeParser:
                 },
                 {"role": "user", "content": text}
             ],
-            response_format=ResumeSchema
+            response_format=FastResumeSchema
         )
+        logger.info(f"[TIMING] OpenAI API call took: {time.time() - t0:.4f}s")
+        print(f"[TIMING] OpenAI API call took: {time.time() - t0:.4f}s")
         
+        t_val = time.time()
         llm_raw_data = completion.choices[0].message.parsed.model_dump()
-        return convert_llm_data_to_standard_format(llm_raw_data)
+        result = convert_llm_data_to_standard_format(llm_raw_data)
+        logger.info(f"[TIMING] JSON validation & conversion took: {time.time() - t_val:.4f}s")
+        print(f"[TIMING] JSON validation & conversion took: {time.time() - t_val:.4f}s")
+        return result
 
-def process_resume_file(file_obj, filename, overwrite=False):
+def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None):
+    import time
+    t_process_start = time.time()
+    
     # Support images, screenshots, scanned PDFs, etc.
     ext = filename.split('.')[-1].lower()
     if ext not in ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'tiff', 'bmp']:
@@ -439,27 +524,58 @@ def process_resume_file(file_obj, filename, overwrite=False):
 
     from services.resume_intelligence import ResumeIntelligenceService
     
-    # 1. OCR Engine Execution
+    # 1. OCR Engine Execution / Text Extraction
+    t_ocr_start = time.time()
     try:
         logger.info(f"[PARSER OCR RUNNING] Running OCR pipeline for: {filename}")
+        if progress_callback:
+            progress_callback("reading_pdf")
+            progress_callback("extracting_text")
         ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
         text = ocr_result["text"]
         logger.info(f"[PARSER OCR SUCCESS] Engine: {ocr_result['engine']}, Confidence: {ocr_result['confidence']}%")
     except Exception as e:
         logger.error(f"[PARSER OCR FAILURE] Failed during OCR pipeline on {filename}: {str(e)}", exc_info=True)
         return None, "OCR_FAILED"
+    t_ocr = time.time() - t_ocr_start
+    logger.info(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
+    print(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
     
-    # 2. Try OpenAIResumeParser first, falling back to NLP rule-based parser on failure
+    # 2. Run OpenAI parser and profile photo extraction in parallel!
+    t_parallel_start = time.time()
+    import concurrent.futures
+    
     parsed_data = None
-    try:
-        print("[OPENAI PARSER] Started")
-        logger.info(f"[PARSER LLM RUNNING] Attempting OpenAI parsing for: {filename}")
-        parsed_data = OpenAIResumeParser.parse(text)
-        print("[OPENAI PARSER] Success")
-        logger.info("[PARSER LLM SUCCESS] OpenAI parsing succeeded")
-    except Exception as e:
-        print("[OPENAI PARSER] Failed, using fallback")
-        logger.error(f"[PARSER LLM FAILURE] OpenAI parsing failed, falling back to NLP parser: {str(e)}", exc_info=True)
+    photo_bytes = None
+    photo_ext = None
+    
+    def run_openai_parser():
+        try:
+            logger.info(f"[PARSER LLM RUNNING] Attempting OpenAI parsing for: {filename}")
+            if progress_callback:
+                progress_callback("ai_parsing")
+            return OpenAIResumeParser.parse(text)
+        except Exception as e:
+            logger.error(f"[PARSER LLM FAILURE] OpenAI parsing failed, falling back to NLP parser: {str(e)}", exc_info=True)
+            return None
+
+    def run_photo_extraction():
+        try:
+            return extract_profile_photo(file_bytes, filename)
+        except Exception as e:
+            logger.error(f"[PARSER PHOTO FAILURE] Photo extraction failed: {str(e)}", exc_info=True)
+            return None, None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_openai = executor.submit(run_openai_parser)
+        future_photo = executor.submit(run_photo_extraction)
+        
+        parsed_data = future_openai.result()
+        photo_bytes, photo_ext = future_photo.result()
+        
+    t_parallel = time.time() - t_parallel_start
+    logger.info(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
+    print(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
 
     if parsed_data is None:
         try:
@@ -472,12 +588,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
     # ai_improve step (only if NLP succeeded; still guarded individually)
     if parsed_data is not None:
         try:
+            t_improve_start = time.time()
             parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
             info = parsed_data['personal_info']
-            logger.info(f"[PARSER NLP SUCCESS] Final candidate: {info.get('name')}")
+            logger.info(f"[TIMING] AI improve took: {time.time() - t_improve_start:.4f}s")
         except Exception as e:
             logger.error(f"[PARSER AI_IMPROVE FAILURE] ai_improve_resume_data raised: {str(e)}", exc_info=True)
-            # ai_improve failed — keep the raw parsed_data without AI improvements
             info = parsed_data.get('personal_info', {})
 
     # Fallback: build a minimal parsed_data from raw OCR text so upload still succeeds
@@ -488,7 +604,6 @@ def process_resume_file(file_obj, filename, overwrite=False):
         _phone_m = _re.search(r'(?:\+?\d{1,3}[- ]?)?(?:\d[- ]?){9}\d', text)
         _email_fb = _email_m.group(0) if _email_m else ""
         _phone_fb = _re.sub(r'[\s-]', '', _phone_m.group(0))[-10:] if _phone_m else ""
-        # Best-effort name: first non-empty line that has no @ or digits
         _name_fb = ocr_result.get("largest_bold_name") or ""
         if not _name_fb:
             for _ln in text.split('\n'):
@@ -531,7 +646,6 @@ def process_resume_file(file_obj, filename, overwrite=False):
         phone = ""
         
     if not email:
-        # Avoid using absolute hash without dynamic text to generate a unique but reproducible identifier
         email = f"unknown_{abs(hash(text or filename))}@example.com"
 
     logger.info(f"[PARSER CONTACTS] Extracted Email: {email}, Extracted Phone: {phone}")
@@ -539,9 +653,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
         
     try:
         from django.db import transaction
+        t_db_start = time.time()
         with transaction.atomic():
+            if progress_callback:
+                progress_callback("saving_candidate")
             # Check for duplicates:
-            # Match on email (which is unique) OR match on phone number ONLY if we have a valid, non-empty phone number
+            t_user_start = time.time()
             if phone:
                 existing_user = User.objects.filter(Q(email=email) | Q(phone_number=phone)).first()
             else:
@@ -581,16 +698,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     user.save()
                 logger.info(f"[PARSER DB USER] User record {'created' if created_user else 'retrieved'}: {user.email}")
                 print(f"[PARSER DB USER] User record {'created' if created_user else 'retrieved'}: {user.email}")
+            t_user = time.time() - t_user_start
+            logger.info(f"[TIMING] User DB lookup/create took: {t_user:.4f}s")
                 
+            t_profile_start = time.time()
             profile, created_profile = CandidateProfile.objects.get_or_create(user=user)
             
-            # Resolve name based on the specified priority:
-            # 1. Use OpenAI full_name if available.
-            # 2. Otherwise extract the largest heading from the first page of the resume.
-            # 3. If unavailable, extract the first probable PERSON NAME using spaCy PERSON entity recognition.
-            # 4. If still unavailable, derive a readable name from the email username.
-            # 5. Only use "Unknown Candidate" if absolutely every extraction method fails.
-
             def get_priority_name():
                 def is_acceptable_name(name_str):
                     if not name_str or not isinstance(name_str, str):
@@ -601,7 +714,6 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     if name_str.lower() in ("unknown candidate", "unknown", "placeholder", "candidate", "null", "none"):
                         return False
                     
-                    # Relaxed validation allowing 1 to 5 words
                     import re
                     name_clean = " ".join(name_str.strip().split())
                     if not name_clean:
@@ -746,10 +858,8 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     username = email.split('@')[0]
                     if username:
                         import re
-                        # Remove digits
                         username_no_digits = re.sub(r'\d+', '', username)
                         
-                        # Strip prefixes (mr, ms, dr, hr)
                         lowered = username_no_digits.lower()
                         prefix_removed = username_no_digits
                         for pfx in ['mr', 'ms', 'dr', 'hr']:
@@ -769,10 +879,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
                         if lowered_prefix_removed in ("unknown", "candidate", "admin", "recruit", "hr", "jobs", "careers", "info", "support", "contact", "office", "staff", "hello", "team", "sales", "marketing", "work", "example") or lowered_prefix_removed.startswith("unknown_"):
                             email_name = None
                         else:
-                            # Split by common separators: dot, underscore, hyphen
                             parts = re.split(r'[\._\-]', prefix_removed)
-                            
-                            # Apply segment splitting on each part
                             segmented_parts = []
                             segments = {
                                 "raj", "kumar", "azeez", "basha", "sunny", "singh", "sharma", "verma", "gupta", "bose", "das", "roy", "sen", "amit", "rahul", "priya", "neha", "pooja"
@@ -803,7 +910,6 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     print(f"[NAME] Final Name: {email_name}")
                     return email_name
 
-                # 5. Fallback "Unknown Candidate"
                 logger.info(f"[NAME] Final Name: Unknown Candidate")
                 print(f"[NAME] Final Name: Unknown Candidate")
                 return "Unknown Candidate"
@@ -822,19 +928,16 @@ def process_resume_file(file_obj, filename, overwrite=False):
             profile.current_company = info.get('current_company')
             profile.current_designation = info.get('current_designation') or "Professional"
 
-            # Save fields for Resume Intelligence
             profile.parsed_json = parsed_data
             profile.ocr_engine = ocr_result.get("engine", "None")
             profile.ocr_confidence = Decimal(str(ocr_result.get("confidence", 0.0)))
             profile.resume_type = ocr_result.get("resume_type", "UNKNOWN")
             
-            # Store original fields
             profile.raw_resume_text = text
             profile.original_experience_json = parsed_data.get('experience', [])
             profile.original_skills = parsed_data.get('skills', [])
             profile.original_summary = parsed_data.get('summary', '')
             
-            # Store initial Version 1
             v1_data = {
                 "version": 1,
                 "label": "Original Resume",
@@ -850,15 +953,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 "user": "System"
             }]
             
-            # Save the original file content
             try:
                 profile.resume.save(filename, ContentFile(file_bytes), save=False)
                 profile.original_file.save("original_" + filename, ContentFile(file_bytes), save=False)
                 logger.info(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
                 print(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
                 
-                # Detect and save profile photo
-                photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
                 if photo_bytes is None:
                     logger.info("[PHOTO] No valid candidate portrait found.")
                     print("[PHOTO] No valid candidate portrait found.")
@@ -872,14 +972,21 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 print(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}")
             
             profile.save()
-            logger.info(f"[PARSER DB PROFILE] CandidateProfile saved successfully for: {profile.full_name} (ID: {profile.id})")
-            print(f"[PARSER DB PROFILE] CandidateProfile saved successfully for: {profile.full_name} (ID: {profile.id})")
+            t_profile = time.time() - t_profile_start
+            logger.info(f"[TIMING] Profile DB save took: {t_profile:.4f}s")
+            print(f"[TIMING] Profile DB save took: {t_profile:.4f}s")
             
-            # Clear and update related data
+            # Skills save
+            t_skills_start = time.time()
             profile.skills.all().delete()
             for skill in parsed_data.get('skills', []):
                 CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.title())
+            t_skills = time.time() - t_skills_start
+            logger.info(f"[TIMING] Skills DB save took: {t_skills:.4f}s")
+            print(f"[TIMING] Skills DB save took: {t_skills:.4f}s")
                 
+            # Experience save
+            t_exp_start = time.time()
             profile.experiences.all().delete()
             for exp in parsed_data.get('experience', []):
                 description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get('description', ''))
@@ -891,7 +998,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     start_date=parse_date_robust(exp.get('start_date'), None),
                     end_date=parse_date_robust(exp.get('end_date'), None)
                 )
+            t_exp = time.time() - t_exp_start
+            logger.info(f"[TIMING] Experience DB save took: {t_exp:.4f}s")
+            print(f"[TIMING] Experience DB save took: {t_exp:.4f}s")
                 
+            # Education save
+            t_edu_start = time.time()
             profile.educations.all().delete()
             for edu in parsed_data.get('education', []):
                 Education.objects.create(
@@ -903,7 +1015,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     start_date=parse_date_robust(edu.get('start_date'), None),
                     end_date=parse_date_robust(edu.get('end_date'), None)
                 )
+            t_edu = time.time() - t_edu_start
+            logger.info(f"[TIMING] Education DB save took: {t_edu:.4f}s")
+            print(f"[TIMING] Education DB save took: {t_edu:.4f}s")
                 
+            # Projects save
+            t_proj_start = time.time()
             profile.projects.all().delete()
             for proj in parsed_data.get('projects', []):
                 Project.objects.create(
@@ -912,7 +1029,12 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     description=ResumeIntelligenceService.parse_experience_description_to_html(proj.get('description', '')),
                     link=proj.get('link', '')
                 )
+            t_proj = time.time() - t_proj_start
+            logger.info(f"[TIMING] Projects DB save took: {t_proj:.4f}s")
+            print(f"[TIMING] Projects DB save took: {t_proj:.4f}s")
                 
+            # Certifications save
+            t_cert_start = time.time()
             profile.certifications.all().delete()
             for cert in parsed_data.get('certifications', []):
                 Certification.objects.create(
@@ -921,27 +1043,42 @@ def process_resume_file(file_obj, filename, overwrite=False):
                     issuing_organization=cert.get('issuing_organization', '')[:255],
                     issue_date=parse_date_robust(cert.get('issue_date'), None)
                 )
+            t_cert = time.time() - t_cert_start
+            logger.info(f"[TIMING] Certifications DB save took: {t_cert:.4f}s")
+            print(f"[TIMING] Certifications DB save took: {t_cert:.4f}s")
                 
             # Calculate and save ATS suitability score
+            t_ats_start = time.time()
             try:
                 from services.candidate_matching_service import CandidateMatchingService
                 CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
+                if progress_callback:
+                    progress_callback("ats_score_generated")
             except Exception as e:
                 logger.error(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}", exc_info=True)
                 print(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}")
+            t_ats = time.time() - t_ats_start
+            logger.info(f"[TIMING] ATS suitability scoring took: {t_ats:.4f}s")
+            print(f"[TIMING] ATS suitability scoring took: {t_ats:.4f}s")
             
-            # Generate and save the OCR/AI resume separately
-            try:
-                from services.resume_intelligence import ResumeIntelligenceService
-                pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(profile)
-                profile.generated_resume.save("generated_resume.pdf", ContentFile(pdf_bytes), save=True)
-                logger.info(f"[PARSER] Saved separate generated_resume.pdf for profile ID {profile.id}")
-            except Exception as e:
-                logger.error(f"[PARSER GENERATED RESUME ERROR] Failed generating or saving generated_resume.pdf: {str(e)}", exc_info=True)
-                print(f"[PARSER GENERATED RESUME ERROR] Failed generating or saving generated_resume.pdf: {str(e)}")
+            # Dynamic PDF generation: Skipped entirely during upload parsing!
+            logger.info("[TIMING] ReportLab PDF generation skipped during parsing upload.")
+            print("[TIMING] ReportLab PDF generation skipped during parsing upload.")
+
+            t_db = time.time() - t_db_start
+            logger.info(f"[TIMING] Total Database Transaction took: {t_db:.4f}s")
+            print(f"[TIMING] Total Database Transaction took: {t_db:.4f}s")
 
             logger.info(f"[PARSER COMPLETED] Candidate Profile created/updated successfully: {profile.id}")
             print(f"[PARSER COMPLETED] Candidate Profile created successfully: ID={profile.id}, Name={profile.full_name}")
+            
+            t_total = time.time() - t_process_start
+            logger.info(f"[TIMING] process_resume_file TOTAL duration: {t_total:.4f}s")
+            print(f"[TIMING] process_resume_file TOTAL duration: {t_total:.4f}s")
+            
+            if progress_callback:
+                progress_callback("completed", profile)
+                
             return profile, "SUCCESS"
             
     except Exception as e:
@@ -951,7 +1088,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
         print(f"[PARSER DATABASE SAVE FAILURE] Exception Traceback in process_resume_file:\n{tb}")
         return None, "SAVE_FAILED"
 
-def handle_resume_upload(uploaded_file, overwrite=False):
+def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None):
     results = {'created': [], 'duplicates': 0, 'errors': 0, 'error_reasons': []}
     
     reason_map = {
@@ -968,7 +1105,7 @@ def handle_resume_upload(uploaded_file, overwrite=False):
                 if filename.lower().endswith(('.pdf', '.docx', '.png', '.jpg', '.jpeg')):
                     with z.open(filename) as f:
                         file_obj = io.BytesIO(f.read()) 
-                        profile, status = process_resume_file(file_obj, filename, overwrite)
+                        profile, status = process_resume_file(file_obj, filename, overwrite, progress_callback)
                         if status == "SUCCESS":
                             results['created'].append(profile)
                         elif status == "DUPLICATE":
@@ -978,7 +1115,7 @@ def handle_resume_upload(uploaded_file, overwrite=False):
                             err_reason = reason_map.get(status, f"Unknown parsing error ({status})")
                             results['error_reasons'].append(f"{filename}: {err_reason}")
     else:
-        profile, status = process_resume_file(uploaded_file, uploaded_file.name, overwrite)
+        profile, status = process_resume_file(uploaded_file, uploaded_file.name, overwrite, progress_callback)
         if status == "SUCCESS":
             results['created'].append(profile)
         elif status == "DUPLICATE":

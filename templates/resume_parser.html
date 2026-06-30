@@ -11,24 +11,24 @@
 <div class="row g-4">
     <!-- Single/Bulk Upload -->
     <div class="col-lg-6">
-        <div class="card shadow-sm border-0 h-100">
+        <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white border-bottom fw-bold py-3">
                 <i class="bi bi-file-earmark-arrow-up me-2 text-primary"></i>Upload Resumes
             </div>
             <div class="card-body p-4">
-                <form method="POST" enctype="multipart/form-data">
+                <form id="uploadForm" method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     
-                    <div class="mb-4 text-center p-5 border-2 border-dashed rounded-3 bg-light">
+                    <div class="mb-4 text-center p-5 border-2 border-dashed rounded-3 bg-light position-relative">
                         <i class="bi bi-cloud-upload fs-1 text-secondary mb-2"></i>
                         <h6>Select PDF, DOCX or ZIP</h6>
-                        <input type="file" name="resume" class="form-control mt-3" accept=".pdf,.docx">
+                        <input type="file" id="fileInput" name="resume" class="form-control mt-3" accept=".pdf,.docx">
                         <div class="form-text mt-2">Maximum file size: 10MB</div>
                     </div>
 
                     <div class="mb-4 text-center p-4 border rounded bg-primary bg-opacity-10">
                         <h6>Bulk Upload (ZIP)</h6>
-                        <input type="file" name="resumes_zip" class="form-control mt-2" accept=".zip">
+                        <input type="file" id="zipInput" name="resumes_zip" class="form-control mt-2" accept=".zip">
                         <div class="form-text mt-2 text-primary">Upload up to 100+ resumes in a single ZIP.</div>
                     </div>
 
@@ -38,10 +38,80 @@
                         <div class="form-text">If checked, existing candidates with same Email/Mobile will be updated. Otherwise, they will be skipped and logged.</div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary w-100 py-3 fw-bold">
+                    <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold">
                         <i class="bi bi-lightning-charge me-2"></i> Start Parsing
                     </button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Progress/Status Card -->
+        <div id="parserStatusContainer" class="card shadow-sm border-0 mb-4" style="display: none;">
+            <div class="card-header bg-white border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock me-2 text-primary"></i>Parsing Status</span>
+                <span id="elapsedTime" class="badge bg-secondary">Elapsed: 0s</span>
+            </div>
+            <div class="card-body p-4">
+                <ul class="list-group list-group-flush mb-4">
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-upload_complete">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>Upload Complete</span>
+                    </li>
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-reading_pdf">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>Reading PDF</span>
+                    </li>
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-extracting_text">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>Extracting Text</span>
+                    </li>
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-ai_parsing">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>AI Parsing</span>
+                    </li>
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-saving_candidate">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>Saving Candidate</span>
+                    </li>
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-ats_score_generated">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>ATS Score Generated</span>
+                    </li>
+                    <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-completed">
+                        <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
+                        <span>Completed</span>
+                    </li>
+                </ul>
+                
+                <!-- Success Card -->
+                <div id="successCard" class="alert alert-success border-success d-none" role="alert">
+                    <h5 class="alert-heading fw-bold mb-3 text-success"><i class="bi bi-check-circle-fill me-2"></i>Resume Parsed Successfully!</h5>
+                    <div class="row mb-3 text-dark">
+                        <div class="col-sm-6 mb-2">
+                            <strong>Candidate Name:</strong> <span id="res-name">-</span>
+                        </div>
+                        <div class="col-sm-6 mb-2">
+                            <strong>Experience:</strong> <span id="res-experience">-</span> Years
+                        </div>
+                        <div class="col-sm-6 mb-2">
+                            <strong>Skills Count:</strong> <span id="res-skills">-</span>
+                        </div>
+                        <div class="col-sm-6 mb-2">
+                            <strong>Education Count:</strong> <span id="res-education">-</span>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="#" id="viewCandidateBtn" class="btn btn-success fw-bold px-4">View Candidate</a>
+                        <button type="button" id="resetParserBtn" class="btn btn-outline-success fw-bold px-4">Upload Another Resume</button>
+                    </div>
+                </div>
+                
+                <!-- Error Card -->
+                <div id="errorCard" class="alert alert-danger border-danger d-none" role="alert">
+                    <h5 class="alert-heading fw-bold mb-2 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Parsing Failed</h5>
+                    <p class="mb-0 text-dark" id="errorMessage">-</p>
+                    <button type="button" id="resetParserErrorBtn" class="btn btn-outline-danger fw-bold mt-3 px-4">Try Again</button>
+                </div>
             </div>
         </div>
     </div>
@@ -77,4 +147,216 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById("uploadForm");
+    const fileInput = document.getElementById("fileInput");
+    const zipInput = document.getElementById("zipInput");
+    const submitBtn = document.getElementById("submitBtn");
+    
+    const parserStatusContainer = document.getElementById("parserStatusContainer");
+    const elapsedTimeLabel = document.getElementById("elapsedTime");
+    const successCard = document.getElementById("successCard");
+    const errorCard = document.getElementById("errorCard");
+    const errorMessage = document.getElementById("errorMessage");
+    
+    const resName = document.getElementById("res-name");
+    const resExperience = document.getElementById("res-experience");
+    const resSkills = document.getElementById("res-skills");
+    const resEducation = document.getElementById("res-education");
+    const viewCandidateBtn = document.getElementById("viewCandidateBtn");
+    const resetParserBtn = document.getElementById("resetParserBtn");
+    const resetParserErrorBtn = document.getElementById("resetParserErrorBtn");
+    
+    const stages = ["upload_complete", "reading_pdf", "extracting_text", "ai_parsing", "saving_candidate", "ats_score_generated", "completed"];
+    
+    let timerInterval = null;
+    let startTime = 0;
+    
+    function resetFormState() {
+        form.reset();
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-lightning-charge me-2"></i> Start Parsing';
+        parserStatusContainer.style.display = "none";
+        successCard.classList.add("d-none");
+        errorCard.classList.add("d-none");
+        
+        stages.forEach(s => updateStage(s, "pending"));
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        elapsedTimeLabel.textContent = "Elapsed: 0s";
+    }
+    
+    resetParserBtn.addEventListener("click", resetFormState);
+    resetParserErrorBtn.addEventListener("click", resetFormState);
+    
+    function updateStage(stageName, status) {
+        const el = document.getElementById(`stage-${stageName}`);
+        if (!el) return;
+        
+        const iconSpan = el.querySelector(".stage-icon");
+        
+        if (status === "active") {
+            el.className = "list-group-item d-flex align-items-center py-3 fw-bold text-primary bg-light";
+            iconSpan.innerHTML = '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>';
+        } else if (status === "done") {
+            el.className = "list-group-item d-flex align-items-center py-3 text-success";
+            iconSpan.innerHTML = '<i class="bi bi-check-circle-fill text-success fs-5"></i>';
+        } else if (status === "failed") {
+            el.className = "list-group-item d-flex align-items-center py-3 text-danger";
+            iconSpan.innerHTML = '<i class="bi bi-x-circle-fill text-danger fs-5"></i>';
+        } else {
+            el.className = "list-group-item d-flex align-items-center py-3 text-muted";
+            iconSpan.innerHTML = '<i class="bi bi-circle text-muted"></i>';
+        }
+    }
+    
+    function handleProgressUpdate(data) {
+        const stage = data.stage;
+        
+        if (stage === "error" || stage === "duplicate") {
+            clearInterval(timerInterval);
+            stages.forEach(s => {
+                const el = document.getElementById(`stage-${s}`);
+                if (el && (el.classList.contains("text-primary") || el.classList.contains("text-muted"))) {
+                    updateStage(s, "failed");
+                }
+            });
+            showError(data.message || "An error occurred during parsing.");
+            return;
+        }
+        
+        const currentIdx = stages.indexOf(stage);
+        if (currentIdx !== -1) {
+            stages.forEach((s, idx) => {
+                if (idx < currentIdx) {
+                    updateStage(s, "done");
+                } else if (idx === currentIdx) {
+                    updateStage(s, "active");
+                } else {
+                    updateStage(s, "pending");
+                }
+            });
+        }
+        
+        if (stage === "completed") {
+            clearInterval(timerInterval);
+            stages.forEach(s => updateStage(s, "done"));
+            showSuccess(data);
+        }
+    }
+    
+    function showSuccess(data) {
+        successCard.classList.remove("d-none");
+        errorCard.classList.add("d-none");
+        
+        resName.textContent = data.name || "N/A";
+        resExperience.textContent = data.experience !== undefined ? data.experience : "0.0";
+        resSkills.textContent = data.skills_count !== undefined ? data.skills_count : "0";
+        resEducation.textContent = data.education_count !== undefined ? data.education_count : "0";
+        
+        if (data.candidate_id) {
+            viewCandidateBtn.href = `/candidates/${data.candidate_id}/`;
+            viewCandidateBtn.classList.remove("d-none");
+        } else {
+            viewCandidateBtn.classList.add("d-none");
+        }
+        
+        submitBtn.innerHTML = '<i class="bi bi-check-lg me-2"></i> Completed';
+    }
+    
+    function showError(msg) {
+        successCard.classList.add("d-none");
+        errorCard.classList.remove("d-none");
+        errorMessage.textContent = msg;
+        
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i> Try Again';
+    }
+    
+    form.addEventListener("submit", async function(e) {
+        e.preventDefault();
+        
+        if (!fileInput.files.length && !zipInput.files.length) {
+            alert("Please select a file to parse.");
+            return;
+        }
+        
+        // Reset state for new upload
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Parsing...';
+        
+        parserStatusContainer.style.display = "block";
+        successCard.classList.add("d-none");
+        errorCard.classList.add("d-none");
+        stages.forEach(s => updateStage(s, "pending"));
+        
+        // Start Timer
+        startTime = Date.now();
+        elapsedTimeLabel.textContent = "Elapsed: 0s";
+        timerInterval = setInterval(() => {
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+            elapsedTimeLabel.textContent = `Elapsed: ${elapsed}s`;
+        }, 1000);
+        
+        const formData = new FormData(form);
+        
+        try {
+            const response = await fetch("", {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            });
+            
+            if (!response.ok) {
+                const errText = await response.text();
+                let errMsg = "Upload failed.";
+                try {
+                    const parsedErr = JSON.parse(errText);
+                    errMsg = parsedErr.message || errMsg;
+                } catch(e) {}
+                clearInterval(timerInterval);
+                stages.forEach(s => updateStage(s, "failed"));
+                showError(errMsg);
+                return;
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+                
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    try {
+                        const data = JSON.parse(trimmed);
+                        handleProgressUpdate(data);
+                    } catch (e) {
+                        // Skip empty keep-alive spacing packets
+                    }
+                }
+            }
+            
+        } catch (err) {
+            console.error(err);
+            clearInterval(timerInterval);
+            stages.forEach(s => updateStage(s, "failed"));
+            showError("Network or server connection error.");
+        }
+    });
+});
+</script>
 {% endblock %}
