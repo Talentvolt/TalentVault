@@ -62,3 +62,6 @@ xlsxwriter==3.2.9
 gunicorn>=21.2.0,<22.0
 whitenoise>=6.6.0,<7.0
 pymupdf==1.27.2.3
+openai==2.44.0
+pytesseract==0.3.13
+opencv-python-headless==4.10.0.84
