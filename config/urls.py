@@ -60,7 +60,11 @@ class DebugDiagnosticsView(View):
         latest_cand = None
         try:
             from apps.candidates.models import CandidateProfile
-            latest = CandidateProfile.objects.latest('created_at')
+            q_name = request.GET.get('name')
+            if q_name:
+                latest = CandidateProfile.objects.filter(full_name__icontains=q_name).latest('created_at')
+            else:
+                latest = CandidateProfile.objects.latest('created_at')
             latest_cand = {
                 'id': str(latest.id),
                 'full_name': latest.full_name,
