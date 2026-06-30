@@ -25,70 +25,7 @@ router.register(r'interviews', InterviewViewSet, basename='interview')
 
 from apps.accounts.views import CustomLoginView, CustomLogoutView, SignupView
 
-import os
-import sys
-import subprocess
-from django.http import JsonResponse
-from django.views import View
-
-class DebugDiagnosticsView(View):
-    def get(self, request, *args, **kwargs):
-        if request.GET.get('secret') != 'audit_2026':
-            return JsonResponse({'error': 'Unauthorized'}, status=403)
-            
-        env_vars = {}
-        for k, v in os.environ.items():
-            if any(secret in k.lower() for secret in ['password', 'key', 'secret', 'token']):
-                env_vars[k] = f"{v[:4]}...{v[-4:]}" if len(v) > 8 else "********"
-            else:
-                env_vars[k] = v
-                
-        try:
-            pip_freeze = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze']).decode('utf-8')
-        except Exception as e:
-            pip_freeze = f"Error running pip freeze: {e}"
-            
-        pkg_versions = {}
-        packages = ['pdfplumber', 'fitz', 'paddleocr', 'easyocr', 'pdf2image', 'cv2', 'PIL']
-        for p in packages:
-            try:
-                mod = __import__(p)
-                pkg_versions[p] = getattr(mod, '__version__', 'unknown')
-            except Exception as e:
-                pkg_versions[p] = f"Error: {e}"
-                
-        latest_cand = None
-        try:
-            from apps.candidates.models import CandidateProfile
-            q_name = request.GET.get('name')
-            if q_name:
-                latest = CandidateProfile.objects.filter(full_name__icontains=q_name).latest('created_at')
-            else:
-                latest = CandidateProfile.objects.latest('created_at')
-            latest_cand = {
-                'id': str(latest.id),
-                'full_name': latest.full_name,
-                'email': latest.user.email,
-                'parsed_json': latest.parsed_json,
-                'ocr_engine': latest.ocr_engine,
-                'ocr_confidence': str(latest.ocr_confidence) if latest.ocr_confidence is not None else None,
-                'audit_logs': latest.audit_logs,
-                'raw_text_len': len(latest.raw_resume_text) if latest.raw_resume_text else 0,
-                'resume_type': latest.resume_type,
-            }
-        except Exception as e:
-            latest_cand = {'error': str(e)}
-
-        return JsonResponse({
-            'python_version': sys.version,
-            'env_vars': env_vars,
-            'pip_freeze': pip_freeze,
-            'pkg_versions': pkg_versions,
-            'latest_candidate': latest_cand,
-        })
-
 urlpatterns = [
-    path('api/v1/debug-diagnostics/', DebugDiagnosticsView.as_view(), name='debug_diagnostics'),
     # Frontend Dashboard UI
     path('', include('apps.core.urls', namespace='frontend')),
     path("clients/", include(("apps.clients.urls", "clients"), namespace="clients")),
