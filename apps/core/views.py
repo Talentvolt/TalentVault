@@ -1466,7 +1466,7 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
             Project.objects.create(
                 profile=profile,
                 title=proj.get("title", "Project")[:255],
-                description=proj.get("description", ""),
+                description=ResumeIntelligenceService.parse_experience_description_to_html(proj.get("description", "")),
                 link=proj.get("link", "")
             )
             
@@ -1479,7 +1479,7 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
                 i_date = None
             Certification.objects.create(
                 profile=profile,
-                name=cert.get("name", "Certification")[:255],
+                name=ResumeIntelligenceService.parse_experience_description_to_html(cert.get("name", "Certification")[:255]),
                 issuing_organization=cert.get("issuing_organization", "")[:255],
                 issue_date=i_date
             )

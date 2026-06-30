@@ -7,6 +7,7 @@ from apps.candidates.models import CandidateProfile
 from apps.candidates.forms import CandidateProfileForm
 from apps.core.views import CandidateResumePreviewView, CandidateResumeDownloadView
 from services.resume_intelligence import ResumeIntelligenceService
+from unittest.mock import patch
 
 User = get_user_model()
 
@@ -309,3 +310,176 @@ def test_candidate_delete_flow():
     messages2 = list(get_messages(response2.wsgi_request))
     assert len(messages2) > 0
     assert any("Candidate already deleted." in str(msg) for msg in messages2)
+
+
+@pytest.mark.django_db
+def test_ats_friendly_pdf_generation_with_malformed_html():
+    from apps.candidates.models import CandidateProfile, Experience, Project, CandidateSkill
+    from services.resume_intelligence import ResumeIntelligenceService
+    import datetime
+
+    user = User.objects.create_user(email="ats_test@example.com", password="password123")
+    profile = CandidateProfile.objects.create(
+        user=user,
+        full_name="Rajeev Kumar & Partners <br>",
+        location="Delhi & NCR",
+        linkedin_url="https://linkedin.com/in/rajeev?param1=val1&param2=val2",
+        summary="Professional summary with unclosed <b>bold and <i>italic tags and raw & signs."
+    )
+    
+    # 1. Experience with malformed HTML
+    # Note: parse_experience_description_to_html produces HTML with style block and ul/li. Let's pass that directly as description.
+    malformed_description = (
+        "<style>\n.resume-bullets { list-style-type: disc !important; }\n</style>\n"
+        "<ul class='resume-bullets'>\n"
+        "  <li>Managed R&D team with <b>unclosed tag\n"
+        "  <li>Worked on AT&T systems & Python\n"
+        "</ul>"
+    )
+    Experience.objects.create(
+        profile=profile,
+        company_name="AT&T & Co.",
+        designation="Senior R&D Lead <b>",
+        start_date=datetime.date(2020, 1, 1),
+        description=malformed_description
+    )
+    
+    # 2. Project with raw & and unclosed tag in link and description
+    Project.objects.create(
+        profile=profile,
+        title="Project A&B <font color='red'>",
+        link="https://github.com/project?a=1&b=2",
+        description="Developed custom widgets <p>with unclosed <p> tags"
+    )
+    
+    # 3. Skills with raw & and <
+    CandidateSkill.objects.create(profile=profile, skill_name="C++ & Java")
+    CandidateSkill.objects.create(profile=profile, skill_name="HTML/CSS <tags>")
+    
+    # Generate ATS PDF
+    pdf_bytes = ResumeIntelligenceService.generate_ats_friendly_pdf(profile)
+    
+    # Assertions
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_profile_photo_extraction_face_detection_and_heuristics():
+    import numpy as np
+    import cv2
+    from unittest.mock import patch
+    from apps.candidates.utils import select_best_profile_photo
+
+    logo_img = np.ones((150, 150, 3), dtype=np.uint8) * 255
+    cv2.putText(logo_img, "COMPANY LOGO", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+    _, logo_bytes = cv2.imencode(".png", logo_img)
+    logo_bytes = logo_bytes.tobytes()
+
+    banner_img = np.ones((100, 500, 3), dtype=np.uint8) * 255
+    cv2.putText(banner_img, "BANNER AD", (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 3)
+    _, banner_bytes = cv2.imencode(".png", banner_img)
+    banner_bytes = banner_bytes.tobytes()
+
+    # Logo and banner have no faces, so select_best_profile_photo should reject them and return None, None
+    best_data, best_ext = select_best_profile_photo([
+        (banner_bytes, "png"),
+        (logo_bytes, "png")
+    ])
+    assert best_data is None
+    assert best_ext is None
+
+    # Test empty list
+    best_data_empty, best_ext_empty = select_best_profile_photo([])
+    assert best_data_empty is None
+    assert best_ext_empty is None
+
+
+@pytest.mark.django_db
+@patch('cv2.CascadeClassifier.detectMultiScale')
+def test_profile_photo_extraction_with_mocked_face(mock_detect):
+    import numpy as np
+    import cv2
+    from apps.candidates.utils import select_best_profile_photo
+
+    # Mock frontal face detection to return exactly one face, and profile face to return empty
+    mock_detect.side_effect = [
+        np.array([[20, 20, 80, 80]]), # frontal faces
+        []                            # profile faces
+    ]
+
+    # Create a 120x150 portrait image
+    portrait_img = np.ones((150, 120, 3), dtype=np.uint8) * 200
+    # Add texture/gradients so it's not mostly white
+    portrait_img[10:140, 10:110] = 120
+    _, portrait_bytes = cv2.imencode(".png", portrait_img)
+    portrait_bytes = portrait_bytes.tobytes()
+
+    best_data, best_ext = select_best_profile_photo([
+        (portrait_bytes, "png")
+    ])
+
+    assert best_data == portrait_bytes
+    assert best_ext == "png"
+
+
+def test_education_date_parsing():
+    from apps.candidates.utils import parse_education_date_to_date_obj
+    import datetime
+
+    # Test required cases
+    d1 = parse_education_date_to_date_obj("May-2008")
+    assert d1 == datetime.date(2008, 5, 1)
+
+    d2 = parse_education_date_to_date_obj("May-2012")
+    assert d2 == datetime.date(2012, 5, 1)
+
+    d3 = parse_education_date_to_date_obj("May-2015")
+    assert d3 == datetime.date(2015, 5, 1)
+
+    # Test other common formats
+    assert parse_education_date_to_date_obj("Apr-2010") == datetime.date(2010, 4, 1)
+    assert parse_education_date_to_date_obj("June 2015") == datetime.date(2015, 6, 1)
+    assert parse_education_date_to_date_obj("2015") == datetime.date(2015, 1, 1)
+    assert parse_education_date_to_date_obj("05/2015") == datetime.date(2015, 5, 1)
+    assert parse_education_date_to_date_obj("2015-05") == datetime.date(2015, 5, 1)
+    assert parse_education_date_to_date_obj("Mar 2022") == datetime.date(2022, 3, 1)
+    assert parse_education_date_to_date_obj("March-2022") == datetime.date(2022, 3, 1)
+
+
+@pytest.mark.django_db
+def test_save_llm_parsed_data_education_one_year():
+    from apps.candidates.models import CandidateProfile
+    from apps.accounts.models import User
+    from services.parser.llm_extractor import save_llm_parsed_data_to_db
+    import datetime
+
+    user = User.objects.create_user(email="edu_test_one_year@example.com", password="password123")
+    profile = CandidateProfile.objects.create(user=user)
+
+    mock_validated_data = {
+        "candidate_name": {"value": "Ramanjeet Maurya"},
+        "education": {
+            "value": [
+                {
+                    "degree": {"value": "B.Tech"},
+                    "college": {"value": "IIT Delhi"},
+                    "start_year": {"value": "May-2015"}, # Only start_year exists
+                    "end_year": {"value": None}
+                }
+            ]
+        }
+    }
+
+    save_llm_parsed_data_to_db(profile, mock_validated_data)
+    profile.refresh_from_db()
+    
+    # Assert start_date and end_date
+    assert profile.educations.count() == 1
+    edu = profile.educations.first()
+    assert edu.start_date is None
+    # Requirement: "If only one completion year exists: store it as end_date."
+    assert edu.end_date == datetime.date(2015, 5, 1)
+
+
+
+

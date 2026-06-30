@@ -190,3 +190,40 @@ def test_skills_are_limited_to_skills_section_and_grouped():
     assert parsed["skill_groups"]["Cloud"] == ["AWS"]
     assert parsed["skill_groups"]["Tools"] == ["Git"]
     assert parsed["skill_groups"]["Soft Skills"] == ["Leadership"]
+
+
+def test_parse_experience_description_preserves_blank_lines():
+    desc_with_blanks = (
+        "• Bullet point 1\n"
+        "\n"
+        "• Bullet point 2\n"
+        "\n"
+        "Paragraph after spacing."
+    )
+    html = ResumeIntelligenceService.parse_experience_description_to_html(desc_with_blanks)
+    assert "<li>Bullet point 1</li>" in html
+    assert "<li>Bullet point 2</li>" in html
+    assert '<p class="mb-1">&nbsp;</p>' in html
+    assert '<p class="mb-1">Paragraph after spacing.</p>' in html
+
+
+def test_parse_experience_description_with_ordered_lists():
+    desc = (
+        "Responsibilities:\n"
+        "1. Managed client interactions.\n"
+        "2) Conducted QA checks.\n"
+        "• Bullet point item\n"
+        "Ending text."
+    )
+    html = ResumeIntelligenceService.parse_experience_description_to_html(desc)
+    assert '<p class="mb-1">Responsibilities:</p>' in html
+    assert "<ol class='resume-ordered'>" in html
+    assert "<li>Managed client interactions.</li>" in html
+    assert "<li>Conducted QA checks.</li>" in html
+    assert "</ol>" in html
+    assert "<ul class='resume-bullets'>" in html
+    assert "<li>Bullet point item</li>" in html
+    assert "</ul>" in html
+    assert '<p class="mb-1">Ending text.</p>' in html
+
+

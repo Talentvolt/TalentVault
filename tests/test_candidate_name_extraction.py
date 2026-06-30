@@ -239,3 +239,156 @@ def test_no_cross_contamination_unrelated_resume():
         text, email="priya.sharma@example.com"
     )
     assert name == "Priya Sharma", f"Expected 'Priya Sharma' but got '{name}'"
+
+
+@pytest.mark.django_db
+@patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
+@patch('apps.candidates.utils.OpenAIResumeParser.parse')
+def test_process_resume_name_priority_list(mock_parser, mock_ocr):
+    # Setup mock OCR output
+    mock_ocr.return_value = {
+        "text": "Laxmi Sudharshan\nlaxmi@example.com\n+91 98765 43211\nExperience: Python Developer",
+        "engine": "pdfplumber",
+        "confidence": 98.0,
+        "resume_type": "EDITABLE_PDF",
+        "largest_bold_name": "OCR Bold Heading Name"
+    }
+
+    # Case 1: parsed_data has full_name
+    mock_parser.return_value = {
+        "personal_info": {
+            "full_name": "Priority One Name",
+            "name": "Priority Two Name",
+            "candidate_name": "Priority Three Name",
+            "email": "laxmi@example.com",
+            "phone": "9876543211"
+        }
+    }
+    file_obj = io.BytesIO(b"dummy pdf content")
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Priority One Name"
+
+    # Case 2: parsed_data has no full_name, but has name
+    mock_parser.return_value = {
+        "personal_info": {
+            "name": "Priority Two Name",
+            "candidate_name": "Priority Three Name",
+            "email": "laxmi@example.com",
+            "phone": "9876543211"
+        }
+    }
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Priority Two Name"
+
+    # Case 3: parsed_data has no full_name or name, but has candidate_name
+    mock_parser.return_value = {
+        "personal_info": {
+            "name": "",
+            "candidate_name": "Priority Three Name",
+            "email": "laxmi@example.com",
+            "phone": "9876543211"
+        }
+    }
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Priority Three Name"
+
+    # Case 4: parsed_data has only "Unknown Candidate", should fall back to NLP name
+    mock_parser.return_value = {
+        "personal_info": {
+            "name": "Unknown Candidate",
+            "email": "john.doe@example.com",
+            "phone": "9876543211"
+        }
+    }
+    mock_ocr.return_value["text"] = "John Doe\njohn.doe@example.com"
+    mock_ocr.return_value["largest_bold_name"] = ""
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "John Doe"
+
+    # Case 5: NLP name is invalid or empty, falls back to Largest heading
+    mock_ocr.return_value = {
+        "text": "+91 98765 43211\njohn.doe@example.com",
+        "engine": "pdfplumber",
+        "confidence": 98.0,
+        "resume_type": "EDITABLE_PDF",
+        "largest_bold_name": "OCR Bold Heading Name"
+    }
+    mock_parser.return_value = {
+        "personal_info": {
+            "name": "",
+            "email": "john.doe@example.com",
+            "phone": "9876543211"
+        }
+    }
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Ocr Bold Heading Name"
+
+    # Case 6: Largest heading is invalid/empty, falls back to Email username
+    mock_ocr.return_value = {
+        "text": "+91 98765 43211\njohn.doe@example.com",
+        "engine": "pdfplumber",
+        "confidence": 98.0,
+        "resume_type": "EDITABLE_PDF",
+        "largest_bold_name": ""
+    }
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "John Doe"
+
+    # Case 7: Email username is generic (e.g. recruit@example.com), falls back to "Unknown Candidate"
+    mock_ocr.return_value = {
+        "text": "+91 98765 43211\nrecruit@example.com",
+        "engine": "pdfplumber",
+        "confidence": 98.0,
+        "resume_type": "EDITABLE_PDF",
+        "largest_bold_name": ""
+    }
+    mock_parser.return_value = {
+        "personal_info": {
+            "name": "",
+            "email": "recruit@example.com",
+            "phone": "9876543211"
+        }
+    }
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Unknown Candidate"
+
+
+@pytest.mark.django_db
+@patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
+@patch('apps.candidates.utils.OpenAIResumeParser.parse')
+def test_new_name_extraction_pipeline(mock_parser, mock_ocr):
+    # Setup base mocks
+    mock_ocr.return_value = {
+        "text": "Laxmi Sudharshan\nlaxmi@example.com",
+        "engine": "pdfplumber",
+        "confidence": 98.0,
+        "resume_type": "EDITABLE_PDF",
+        "largest_bold_name": ""
+    }
+    mock_parser.return_value = {
+        "personal_info": {
+            "full_name": "",
+            "name": "",
+            "candidate_name": "",
+            "email": "hrsunny32@gmail.com",
+            "phone": "9876543211"
+        }
+    }
+    
+    file_obj = io.BytesIO(b"dummy pdf content")
+    
+    # 1. Test Email username fallback: hrsunny32@gmail.com -> Sunny
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Sunny"
+
+    # 2. Test Email username fallback: azeezbasha78654@gmail.com -> Azeez Basha
+    mock_parser.return_value["personal_info"]["email"] = "azeezbasha78654@gmail.com"
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Azeez Basha"
+
+    # 3. Test Email username fallback: rajkumar9801@gmail.com -> Raj Kumar
+    mock_parser.return_value["personal_info"]["email"] = "rajkumar9801@gmail.com"
+    profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
+    assert profile.full_name == "Raj Kumar"
+
+

@@ -37,6 +37,45 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
 }
 
+/* Premium ATS Work Experience Formatting */
+.ats-experience-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* 10-12px vertical spacing between bullet items */
+    margin-top: 8px;
+}
+.ats-experience-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px; /* Spacing between bullet and text */
+}
+.ats-bullet {
+    flex-shrink: 0;
+    color: inherit;
+    font-size: 0.75rem; /* Circular bullet ● size */
+    line-height: 1.5; /* Matches text line-height */
+}
+.ats-text {
+    line-height: 1.5; /* Comfortable line-height (1.5-1.6) */
+    font-size: inherit;
+    color: inherit;
+}
+
+/* Profile Summary Grid Formatting */
+.profile-summary-text {
+    line-height: 1.75; /* Comfortable line-height (1.6-1.8) */
+}
+.profile-summary-grid {
+    display: block; /* default fallback for mobile/tablet */
+}
+@media (min-width: 992px) {
+    .profile-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 32px;
+    }
+}
+
 /* Skeleton Loading Screens */
 .skeleton {
     animation: skeleton-shimmer 1.4s ease-in-out infinite alternate;
@@ -58,17 +97,21 @@
     border-radius: 4px;
 }
 
-/* Resume bullet list — flush with company text, hanging indent on wraps */
-ul.resume-bullets {
-    list-style: disc;
+/* Resume bullet/ordered lists — flush with company text, hanging indent on wraps */
+ul.resume-bullets, ol.resume-ordered {
     list-style-position: outside;
-    padding-left: 1.25em;  /* bullet fits in this gutter; text starts at 1.25em */
+    padding-left: 1.25em;  /* list marker fits in this gutter */
     margin: 0.15rem 0 0.4rem 0;
 }
-ul.resume-bullets li {
+ul.resume-bullets {
+    list-style: disc;
+}
+ol.resume-ordered {
+    list-style: decimal;
+}
+ul.resume-bullets li, ol.resume-ordered li {
     margin-bottom: 0.18rem;
     line-height: 1.55;
-    /* text-indent trick: subsequent lines hang under first word, not under bullet */
     padding-left: 0;
 }
 /* Plain paragraph lines inside description */
@@ -165,7 +208,7 @@ ul.resume-bullets li {
         <!-- Summary -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
             <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Profile Summary</h5>
-            <p class="text-secondary mb-0" style="line-height: 1.6; font-size: 0.95rem;">{{ candidate.summary|linebreaksbr }}</p>
+            <p class="profile-summary-text text-secondary mb-0" style="line-height: 1.75; font-size: 0.95rem;">{{ candidate.summary|linebreaksbr }}</p>
         </div>
 
         <!-- Experience -->
@@ -224,13 +267,166 @@ ul.resume-bullets li {
                     durationText += months + " month" + (months > 1 ? "s" : "");
                 }
                 
-                var durationSpan = el.querySelector('.experience-duration-text');
-                if (durationSpan && durationText.trim() !== "") {
-                    durationSpan.textContent = "(" + durationText.trim() + ")";
-                }
-            });
-        });
-        </script>
+                 var durationSpan = el.querySelector('.experience-duration-text');
+                 if (durationSpan && durationText.trim() !== "") {
+                     durationSpan.textContent = "(" + durationText.trim() + ")";
+                 }
+             });
+             
+             // Format experience descriptions on load
+             function formatExperienceDescriptions() {
+                 document.querySelectorAll('.exp-description-area').forEach(function(element) {
+                     var rawHtml = element.innerHTML.trim();
+                     if (!rawHtml) return;
+                     
+                     var tempDiv = document.createElement('div');
+                     tempDiv.innerHTML = rawHtml;
+                     
+                     // Remove style tags
+                     tempDiv.querySelectorAll('style').forEach(function(st) {
+                         st.remove();
+                     });
+                     
+                     var rawLines = [];
+                     var lis = tempDiv.querySelectorAll('li');
+                     
+                     if (lis.length > 0) {
+                         lis.forEach(function(li) {
+                             var txt = li.innerText.trim();
+                             if (txt) {
+                                 rawLines.push(txt);
+                             }
+                         });
+                     } else {
+                         // Replace common paragraph, div, and break tags with newlines
+                         var htmlContent = tempDiv.innerHTML;
+                         htmlContent = htmlContent.replace(/<br\s*\/?>/gi, '\n');
+                         htmlContent = htmlContent.replace(/<\/p>/gi, '\n');
+                         htmlContent = htmlContent.replace(/<\/div>/gi, '\n');
+                         htmlContent = htmlContent.replace(/<p[^>]*>/gi, '');
+                         htmlContent = htmlContent.replace(/<div[^>]*>/gi, '');
+                         
+                         // Strip all other HTML tags
+                         var cleanText = htmlContent.replace(/<[^>]+>/g, '');
+                         
+                         cleanText.split('\n').forEach(function(line) {
+                             var txt = line.trim();
+                             if (txt) {
+                                 rawLines.push(txt);
+                             }
+                         });
+                     }
+                     
+                     var processedLines = [];
+                     rawLines.forEach(function(line) {
+                         // Split by inline bullet characters if they exist in the middle of a line
+                         var lineWithDelimiters = line.replace(/[•●▪◦○\u2022]/g, '\n');
+                         // Also split by " - " or " * " (surrounded by whitespace)
+                         lineWithDelimiters = lineWithDelimiters.replace(/\s+[\-\*]\s+/g, '\n');
+                         
+                         lineWithDelimiters.split('\n').forEach(function(part) {
+                             var cleaned = part.trim();
+                             if (cleaned) {
+                                 // Strip leading symbols: •, ●, -, *, +, etc.
+                                 cleaned = cleaned.replace(/^[•●▪◦○\-\*\+\u2022\s]+/, '').trim();
+                                 // Strip leading numbered prefixes like "1. " or "1) "
+                                 cleaned = cleaned.replace(/^\d+[\.\)]\s*/, '').trim();
+                                 
+                                 if (cleaned) {
+                                     processedLines.push(cleaned);
+                                 }
+                             }
+                         });
+                     });
+                     
+                     if (processedLines.length === 0) return;
+                     
+                     // Build the formatted container
+                     var listContainer = document.createElement('div');
+                     listContainer.className = 'ats-experience-list';
+                     
+                     processedLines.forEach(function(lineText) {
+                         var itemDiv = document.createElement('div');
+                         itemDiv.className = 'ats-experience-item';
+                         
+                         var bulletSpan = document.createElement('span');
+                         bulletSpan.className = 'ats-bullet';
+                         bulletSpan.innerHTML = '●';
+                         
+                         var textSpan = document.createElement('span');
+                         textSpan.className = 'ats-text';
+                         textSpan.innerText = lineText;
+                         
+                         itemDiv.appendChild(bulletSpan);
+                         itemDiv.appendChild(textSpan);
+                         listContainer.appendChild(itemDiv);
+                     });
+                     
+                     element.innerHTML = '';
+                     element.appendChild(listContainer);
+                 });
+             }
+             formatExperienceDescriptions();
+             
+             // Format profile summary to 2 columns on desktop if long
+             function formatProfileSummary() {
+                 var summaryEl = document.querySelector('.profile-summary-text');
+                 if (!summaryEl) return;
+                 
+                 var text = summaryEl.innerHTML.trim();
+                 if (text.length > 400) {
+                     var mid = Math.floor(text.length / 2);
+                     var splitIndex = -1;
+                     
+                     for (var offset = 0; offset < mid; offset++) {
+                         var checkIndices = [mid + offset, mid - offset];
+                         for (var i = 0; i < checkIndices.length; i++) {
+                             var idx = checkIndices[i];
+                             if (idx > 0 && idx < text.length - 10) {
+                                 if (text.substring(idx, idx + 4).toLowerCase() === '<br>') {
+                                     splitIndex = idx + 4;
+                                     break;
+                                 }
+                                 if (text.charAt(idx) === '.' && text.charAt(idx + 1) === ' ') {
+                                     splitIndex = idx + 2;
+                                     break;
+                                 }
+                             }
+                         }
+                         if (splitIndex !== -1) break;
+                     }
+                     
+                     if (splitIndex === -1) {
+                         splitIndex = text.indexOf(' ', mid);
+                         if (splitIndex === -1) {
+                             splitIndex = mid;
+                         }
+                     }
+                     
+                     var part1 = text.substring(0, splitIndex).trim();
+                     var part2 = text.substring(splitIndex).trim();
+                     
+                     if (part1 && part2) {
+                         var gridDiv = document.createElement('div');
+                         gridDiv.className = 'profile-summary-grid';
+                         
+                         var col1 = document.createElement('div');
+                         col1.innerHTML = part1;
+                         
+                         var col2 = document.createElement('div');
+                         col2.innerHTML = part2;
+                         
+                         gridDiv.appendChild(col1);
+                         gridDiv.appendChild(col2);
+                         
+                         summaryEl.innerHTML = '';
+                         summaryEl.appendChild(gridDiv);
+                     }
+                 }
+             }
+             formatProfileSummary();
+         });
+         </script>
 
         <!-- Education -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
@@ -286,7 +482,7 @@ ul.resume-bullets li {
                         {% for project in candidate.projects.all %}
                         <li class="mb-3">
                             <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ project.title }}</h6>
-                            <p class="text-secondary x-small mb-1">{{ project.description }}</p>
+                            <div class="text-secondary x-small mb-1">{{ project.description|safe }}</div>
                             {% if project.link %}<a href="{{ project.link }}" target="_blank" class="x-small">View Project <i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
                         </li>
                         {% empty %}
@@ -301,7 +497,7 @@ ul.resume-bullets li {
                     <ul class="list-unstyled mb-0">
                         {% for cert in candidate.certifications.all %}
                         <li class="mb-3">
-                            <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ cert.name }}</h6>
+                            <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ cert.name|safe }}</h6>
                             <div class="text-secondary x-small">{{ cert.issuing_organization }} | {{ cert.issue_date|date:"M Y"|default:"" }}</div>
                         </li>
                         {% empty %}

@@ -277,5 +277,5 @@ class CandidateMatchingService:
                 highest_score = max(cand_apps.values_list('match_score', flat=True))
                 candidate.ats_score = highest_score
             else:
-                candidate.ats_score = 0
+                candidate.ats_score = CandidateMatchingService.calculate_ats_score(candidate, None)
             candidate.save()

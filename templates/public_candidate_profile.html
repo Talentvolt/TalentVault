@@ -32,9 +32,35 @@
             padding: 1rem;
         }
         .pdf-page { margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        /* Resume bullet list — hanging indent so wrapped lines align with first text char */
-        ul.resume-bullets { list-style: disc; padding-left: 1.4em; margin: 0.2rem 0 0.4rem 0; }
-        ul.resume-bullets li { padding-left: 0.15em; margin-bottom: 0.2rem; line-height: 1.55; }
+        /* Resume bullet/ordered lists — hanging indent so wrapped lines align with first text char */
+        ul.resume-bullets, ol.resume-ordered { list-style-position: outside; padding-left: 1.4em; margin: 0.2rem 0 0.4rem 0; }
+        ul.resume-bullets { list-style: disc; }
+        ol.resume-ordered { list-style: decimal; }
+        ul.resume-bullets li, ol.resume-ordered li { padding-left: 0.15em; margin-bottom: 0.2rem; line-height: 1.55; }
+
+        /* Premium ATS Work Experience Formatting */
+        .ats-experience-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* 10-12px vertical spacing between bullet items */
+            margin-top: 8px;
+        }
+        .ats-experience-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px; /* Spacing between bullet and text */
+        }
+        .ats-bullet {
+            flex-shrink: 0;
+            color: inherit;
+            font-size: 0.75rem; /* Circular bullet ● size */
+            line-height: 1.5; /* Matches text line-height */
+        }
+        .ats-text {
+            line-height: 1.5; /* Comfortable line-height (1.5-1.6) */
+            font-size: inherit;
+            color: inherit;
+        }
     </style>
 </head>
 <body>
@@ -128,7 +154,7 @@
                                 <div class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
                                     {{ exp.company_name }}
                                 </div>
-                                <div class="text-secondary small mb-0 lh-base mt-2" style="font-size: 0.88rem;">{{ exp.description|safe }}</div>
+                                 <div class="exp-description-area text-secondary small mb-0 lh-base mt-2" style="font-size: 0.88rem;">{{ exp.description|safe }}</div>
                             </div>
                         </div>
                     </div>
@@ -230,7 +256,103 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    function formatExperienceDescriptions() {
+        document.querySelectorAll('.exp-description-area').forEach(function(element) {
+            var rawHtml = element.innerHTML.trim();
+            if (!rawHtml) return;
+            
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = rawHtml;
+            
+            // Remove style tags
+            tempDiv.querySelectorAll('style').forEach(function(st) {
+                st.remove();
+            });
+            
+            var rawLines = [];
+            var lis = tempDiv.querySelectorAll('li');
+            
+            if (lis.length > 0) {
+                lis.forEach(function(li) {
+                    var txt = li.innerText.trim();
+                    if (txt) {
+                        rawLines.push(txt);
+                    }
+                });
+            } else {
+                // Replace common paragraph, div, and break tags with newlines
+                var htmlContent = tempDiv.innerHTML;
+                htmlContent = htmlContent.replace(/<br\s*\/?>/gi, '\n');
+                htmlContent = htmlContent.replace(/<\/p>/gi, '\n');
+                htmlContent = htmlContent.replace(/<\/div>/gi, '\n');
+                htmlContent = htmlContent.replace(/<p[^>]*>/gi, '');
+                htmlContent = htmlContent.replace(/<div[^>]*>/gi, '');
+                
+                // Strip all other HTML tags
+                var cleanText = htmlContent.replace(/<[^>]+>/g, '');
+                
+                cleanText.split('\n').forEach(function(line) {
+                    var txt = line.trim();
+                    if (txt) {
+                        rawLines.push(txt);
+                    }
+                });
+            }
+            
+            var processedLines = [];
+            rawLines.forEach(function(line) {
+                // Split by inline bullet characters if they exist in the middle of a line
+                var lineWithDelimiters = line.replace(/[•●▪◦○\u2022]/g, '\n');
+                // Also split by " - " or " * " (surrounded by whitespace)
+                lineWithDelimiters = lineWithDelimiters.replace(/\s+[\-\*]\s+/g, '\n');
+                
+                lineWithDelimiters.split('\n').forEach(function(part) {
+                    var cleaned = part.trim();
+                    if (cleaned) {
+                        // Strip leading symbols: •, ●, -, *, +, etc.
+                        cleaned = cleaned.replace(/^[•●▪◦○\-\*\+\u2022\s]+/, '').trim();
+                        // Strip leading numbered prefixes like "1. " or "1) "
+                        cleaned = cleaned.replace(/^\d+[\.\)]\s*/, '').trim();
+                        
+                        if (cleaned) {
+                            processedLines.push(cleaned);
+                        }
+                    }
+                });
+            });
+            
+            if (processedLines.length === 0) return;
+            
+            // Build the formatted container
+            var listContainer = document.createElement('div');
+            listContainer.className = 'ats-experience-list';
+            
+            processedLines.forEach(function(lineText) {
+                var itemDiv = document.createElement('div');
+                itemDiv.className = 'ats-experience-item';
+                
+                var bulletSpan = document.createElement('span');
+                bulletSpan.className = 'ats-bullet';
+                bulletSpan.innerHTML = '●';
+                
+                var textSpan = document.createElement('span');
+                textSpan.className = 'ats-text';
+                textSpan.innerText = lineText;
+                
+                itemDiv.appendChild(bulletSpan);
+                itemDiv.appendChild(textSpan);
+                listContainer.appendChild(itemDiv);
+            });
+            
+            element.innerHTML = '';
+            element.appendChild(listContainer);
+        });
+    }
+    formatExperienceDescriptions();
+});
+</script>
 
 </body>
 </html>

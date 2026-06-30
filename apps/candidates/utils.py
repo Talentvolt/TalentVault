@@ -168,6 +168,259 @@ def parse_resume_text(text):
     data['summary'] = text[:500]
     return data
 
+def _flatten_field(field_data):
+    if isinstance(field_data, dict) and "value" in field_data:
+        return field_data["value"]
+    return field_data
+
+
+def parse_education_date_to_date_obj(date_val):
+    if not date_val:
+        return None
+    date_str = str(date_val).strip()
+    if not date_str:
+        return None
+        
+    import re
+    from datetime import datetime
+    
+    # 1. Try common full/partial date formats via datetime.strptime
+    formats = [
+        "%Y-%m-%d", "%Y-%m", "%m/%Y", "%m-%Y", 
+        "%b %Y", "%B %Y", "%b-%Y", "%B-%Y", "%Y"
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+
+    # 2. Extract year (4 digits) and search for month name/number
+    year_match = re.search(r'\b(19\d\d|20\d\d)\b', date_str)
+    if not year_match:
+        return None
+    year = int(year_match.group(1))
+    
+    months = {
+        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+        'january': 1, 'february': 2, 'march': 3, 'april': 4, 'june': 6,
+        'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+    }
+    
+    date_str_lower = date_str.lower()
+    found_month = None
+    for m_name, m_num in months.items():
+        if m_name in date_str_lower:
+            if not found_month or len(m_name) > len(found_month[0]):
+                found_month = (m_name, m_num)
+                
+    if found_month:
+        try:
+            return datetime(year, found_month[1], 1).date()
+        except Exception:
+            pass
+            
+    m1 = re.search(r'\b(0[1-9]|1[0-2]|[1-9])\s*[\-/]\s*(19\d\d|20\d\d)\b', date_str)
+    if m1:
+        try:
+            return datetime(int(m1.group(2)), int(m1.group(1)), 1).date()
+        except Exception:
+            pass
+            
+    m2 = re.search(r'\b(19\d\d|20\d\d)\s*[\-/]\s*(0[1-9]|1[0-2]|[1-9])\b', date_str)
+    if m2:
+        try:
+            return datetime(int(m2.group(1)), int(m2.group(2)), 1).date()
+        except Exception:
+            pass
+
+    try:
+        return datetime(year, 1, 1).date()
+    except Exception:
+        return None
+
+
+def parse_education_date_to_string(date_val) -> str:
+    date_obj = parse_education_date_to_date_obj(date_val)
+    if date_obj:
+        return date_obj.strftime("%Y-%m-%d")
+    return ""
+
+
+def convert_llm_data_to_standard_format(llm_data):
+    f = _flatten_field
+    
+    # 1. Experiences
+    experiences = []
+    work_exp = llm_data.get("work_experience", {})
+    if work_exp and isinstance(work_exp.get("value"), list):
+        for item in work_exp["value"]:
+            s_date = f(item.get("start_date"))
+            e_date = f(item.get("end_date"))
+            experiences.append({
+                "designation": (f(item.get("designation")) or "")[:100],
+                "company": (f(item.get("company")) or "")[:100],
+                "location": (f(item.get("location")) or "")[:100],
+                "duration": "",
+                "description": f(item.get("description")) or "",
+                "start_date": s_date or "",
+                "end_date": e_date or ""
+            })
+            
+    # Calculate duration and years of experience
+    from services.resume_intelligence import ResumeIntelligenceService
+    total_exp = 0.0
+    for exp in experiences:
+        s_date_str = ResumeIntelligenceService.normalize_date_to_string(exp["start_date"], is_end=False)
+        e_date_str = ResumeIntelligenceService.normalize_date_to_string(exp["end_date"], is_end=True)
+        if s_date_str:
+            exp["start_date"] = s_date_str
+            exp["end_date"] = e_date_str or "Present"
+            exp["duration"] = ResumeIntelligenceService.get_duration_display(s_date_str, e_date_str)
+            total_exp += ResumeIntelligenceService.calculate_experience_years_from_dates(s_date_str, e_date_str)
+    total_exp = round(total_exp, 1)
+
+    # 2. Educations
+    educations = []
+    education = llm_data.get("education", {})
+    if education and isinstance(education.get("value"), list):
+        for item in education["value"]:
+            s_year = f(item.get("start_year"))
+            e_year = f(item.get("end_year"))
+            
+            # If only one completion year exists, store it as end_date
+            if s_year and not e_year:
+                e_year = s_year
+                s_year = ""
+                
+            educations.append({
+                "degree": (f(item.get("degree")) or "")[:100],
+                "institution": (f(item.get("college")) or f(item.get("university")) or "")[:100],
+                "field_of_study": (f(item.get("branch")) or "General")[:100],
+                "score": (f(item.get("cgpa")) or f(item.get("percentage")) or "N/A")[:20],
+                "start_date": parse_education_date_to_string(s_year),
+                "end_date": parse_education_date_to_string(e_year)
+            })
+
+    # 3. Skills
+    tech_skills = f(llm_data.get("technical_skills")) or []
+    soft_skills = f(llm_data.get("soft_skills")) or []
+    skills = [s.strip() for s in (tech_skills + soft_skills) if s and s.strip()]
+
+    # 4. Projects
+    projects = []
+    projects_data = llm_data.get("projects", {})
+    if projects_data and isinstance(projects_data.get("value"), list):
+        for item in projects_data["value"]:
+            projects.append({
+                "title": (f(item.get("title")) or "")[:255],
+                "description": f(item.get("description")) or "",
+                "link": (f(item.get("link")) or "")[:255]
+            })
+
+    # 5. Certifications
+    certifications = []
+    cert_data = llm_data.get("certifications", {})
+    if cert_data and isinstance(cert_data.get("value"), list):
+        for item in cert_data["value"]:
+            certifications.append({
+                "name": (f(item.get("name")) or "")[:255],
+                "issuing_organization": (f(item.get("issuing_organization")) or "")[:255],
+                "issue_date": f(item.get("issue_date")) or ""
+            })
+
+    # 6. Personal Info
+    raw_phone = f(llm_data.get("phone")) or ""
+    phone_digits = re.sub(r'\D', '', raw_phone)
+    phone_clean = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+    if not phone_clean:
+        phone_match = re.search(r'(?:\+?\d{1,3}[- ]?)?(?:\d[- ]?){9}\d', raw_phone)
+        if phone_match:
+            phone_clean = re.sub(r'\D', '', phone_match.group(0))[-10:]
+
+    raw_email = f(llm_data.get("email")) or ""
+    email_clean = raw_email.strip()[:254]
+
+    raw_name = f(llm_data.get("full_name")) or f(llm_data.get("name")) or f(llm_data.get("candidate_name")) or "Unknown Candidate"
+    name_clean = raw_name.strip()[:255]
+
+    raw_linkedin = f(llm_data.get("linkedin")) or ""
+    linkedin_clean = raw_linkedin.strip()[:200]
+
+    raw_portfolio = f(llm_data.get("portfolio")) or ""
+    portfolio_clean = raw_portfolio.strip()[:200]
+
+    personal_info = {
+        "name": name_clean,
+        "email": email_clean,
+        "phone": phone_clean,
+        "location": (f(llm_data.get("address")) or f(llm_data.get("city")) or "Unknown")[:255],
+        "address": (f(llm_data.get("address")) or "")[:255],
+        "city": (f(llm_data.get("city")) or "")[:255],
+        "linkedin_url": linkedin_clean,
+        "portfolio_url": portfolio_clean,
+        "current_company": (experiences[0]["company"] if experiences else "")[:255],
+        "current_designation": (experiences[0]["designation"] if experiences else "Professional")[:255],
+        "total_experience": total_exp
+    }
+
+    return {
+        "personal_info": personal_info,
+        "summary": f(llm_data.get("professional_summary")) or "",
+        "skills": skills,
+        "education": educations,
+        "experience": experiences,
+        "projects": projects,
+        "certifications": certifications,
+        "achievements": f(llm_data.get("achievements")) or [],
+        "languages": f(llm_data.get("languages")) or [],
+        "metadata": {
+            "parsed_by": "OpenAIResumeParser",
+            "parsed_at": datetime.now().isoformat()
+        }
+    }
+
+class OpenAIResumeParser:
+    @staticmethod
+    def parse(text: str) -> dict:
+        import os
+        from openai import OpenAI
+        from django.conf import settings
+        from services.parser.llm_extractor import ResumeSchema
+        
+        api_key = getattr(settings, "OPENAI_API_KEY", None) or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OpenAI API Key is not configured.")
+        
+        model_name = getattr(settings, "OPENAI_MODEL_NAME", "gpt-4.1-mini")
+        client = OpenAI(api_key=api_key)
+        
+        system_content = (
+            "You are a professional resume parsing assistant.\n"
+            "Your critical objective is to extract 100% of the resume content without any summarization, omission, or simplification.\n"
+            "- Extract EVERY work experience, education item, project, skill, and certification listed, preserving their original order exactly.\n"
+            "- For work experience and projects descriptions (responsibilities): Do NOT merge separate bullet points, sentences, or responsibilities into one long paragraph.\n"
+            "- Do NOT summarize or condense responsibilities. Convert each responsibility or action item into its own separate line starting with a bullet point character '• '.\n"
+            "- If the resume already has bullets, keep them as separate lines. Each bullet item must be preserved with its exact wording.\n"
+            "- Never combine multiple distinct bullet points or achievements into a single sentence or line."
+        )
+        
+        completion = client.beta.chat.completions.parse(
+            model=model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content
+                },
+                {"role": "user", "content": text}
+            ],
+            response_format=ResumeSchema
+        )
+        
+        llm_raw_data = completion.choices[0].message.parsed.model_dump()
+        return convert_llm_data_to_standard_format(llm_raw_data)
+
 def process_resume_file(file_obj, filename, overwrite=False):
     # Support images, screenshots, scanned PDFs, etc.
     ext = filename.split('.')[-1].lower()
@@ -196,14 +449,25 @@ def process_resume_file(file_obj, filename, overwrite=False):
         logger.error(f"[PARSER OCR FAILURE] Failed during OCR pipeline on {filename}: {str(e)}", exc_info=True)
         return None, "OCR_FAILED"
     
-    # 2. NLP Extraction with graceful fallback — a single bad section must never stop parsing
+    # 2. Try OpenAIResumeParser first, falling back to NLP rule-based parser on failure
     parsed_data = None
     try:
-        logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
-        parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
-        logger.info("[PARSER NLP SUCCESS] parse_resume_nlp completed")
+        print("[OPENAI PARSER] Started")
+        logger.info(f"[PARSER LLM RUNNING] Attempting OpenAI parsing for: {filename}")
+        parsed_data = OpenAIResumeParser.parse(text)
+        print("[OPENAI PARSER] Success")
+        logger.info("[PARSER LLM SUCCESS] OpenAI parsing succeeded")
     except Exception as e:
-        logger.error(f"[PARSER NLP FAILURE] parse_resume_nlp raised an exception: {str(e)}", exc_info=True)
+        print("[OPENAI PARSER] Failed, using fallback")
+        logger.error(f"[PARSER LLM FAILURE] OpenAI parsing failed, falling back to NLP parser: {str(e)}", exc_info=True)
+
+    if parsed_data is None:
+        try:
+            logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
+            parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
+            logger.info("[PARSER NLP SUCCESS] parse_resume_nlp completed")
+        except Exception as e:
+            logger.error(f"[PARSER NLP FAILURE] parse_resume_nlp raised an exception: {str(e)}", exc_info=True)
 
     # ai_improve step (only if NLP succeeded; still guarded individually)
     if parsed_data is not None:
@@ -320,16 +584,234 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 
             profile, created_profile = CandidateProfile.objects.get_or_create(user=user)
             
-            candidate_name = info.get('name', '')
-            if not ResumeIntelligenceService.is_valid_name(candidate_name):
-                candidate_name = ResumeIntelligenceService.extract_candidate_name(
-                    text,
-                    parsed_name=ocr_result.get("largest_bold_name"),
-                    email=email,
-                    linkedin=info.get('linkedin_url', '')
-                )
+            # Resolve name based on the specified priority:
+            # 1. Use OpenAI full_name if available.
+            # 2. Otherwise extract the largest heading from the first page of the resume.
+            # 3. If unavailable, extract the first probable PERSON NAME using spaCy PERSON entity recognition.
+            # 4. If still unavailable, derive a readable name from the email username.
+            # 5. Only use "Unknown Candidate" if absolutely every extraction method fails.
+
+            def get_priority_name():
+                def is_acceptable_name(name_str):
+                    if not name_str or not isinstance(name_str, str):
+                        return False
+                    name_str = name_str.strip()
+                    if not name_str:
+                        return False
+                    if name_str.lower() in ("unknown candidate", "unknown", "placeholder", "candidate", "null", "none"):
+                        return False
+                    
+                    # Relaxed validation allowing 1 to 5 words
+                    import re
+                    name_clean = " ".join(name_str.strip().split())
+                    if not name_clean:
+                        return False
+                    if name_clean.isdigit():
+                        return False
+                    if re.match(r'^\+?\d[\d\s-]{8,}$', name_clean):
+                        return False
+                    if '@' in name_clean:
+                        return False
+                    if name_clean.lower().startswith('http'):
+                        return False
+                    if 'linkedin' in name_clean.lower() or 'github' in name_clean.lower():
+                        return False
+                        
+                    digits_only = re.sub(r'[^\d+]', '', name_clean)
+                    if len(digits_only) >= 8 and digits_only.replace('+', '').isdigit():
+                        return False
+                        
+                    if re.search(r'[\w\.-]+@[\w\.-]+\.\w+', name_clean):
+                        return False
+                    if re.search(r'(https?://\S+|www\.\S+)', name_clean, re.I):
+                        return False
+                        
+                    if not any(char.isalpha() for char in name_clean):
+                        return False
+                        
+                    norm = re.sub(r'[^a-z\s]', '', name_clean.lower()).strip()
+                    norm = " ".join(norm.split())
+                    
+                    SECTION_TITLES = {
+                        "objective", "summary", "professional summary", "profile", "education",
+                        "experience", "work experience", "projects", "technical skills", "skills",
+                        "certifications", "achievements", "awards", "languages", "personal details",
+                        "interests", "hobbies", "extracurricular activities", "volunteer work",
+                        "declaration", "references", "career objective", "academic qualification"
+                    }
+                    if norm in SECTION_TITLES:
+                        return False
+                        
+                    common_headings = {
+                        'curriculum vitae', 'curriculum', 'vitae', 'resume', 'cv', 'biodata', 'page', 'email', 'phone', 'contact', 'mobile'
+                    }
+                    if norm in common_headings:
+                        return False
+                        
+                    words = name_clean.lower().split()
+                    blacklisted_words = {
+                        'manager', 'developer', 'executive', 'engineer', 'lead', 'associate', 'specialist', 'director', 
+                        'analyst', 'consultant', 'officer', 'administrator', 'coordinator', 'technician', 'representative', 
+                        'intern', 'programmer', 'architect', 'head', 'founder', 'co-founder', 'ceo', 'cto', 'supervisor',
+                        'leader', 'operator', 'agent', 'strategist', 'advisor', 'expert', 'auditor', 'salesperson',
+                        'ltd', 'limited', 'pvt', 'private', 'llp', 'llc', 'inc', 'company', 'corporation', 'technologies',
+                        'solutions', 'industries', 'group', 'corp', 'hospital', 'university', 'college', 'institute',
+                        'school', 'bank', 'unknown', 'hometown', 'residence', 'nationality', 'gender', 'about', 'hr',
+                        'recruiter', 'team', 'page', 'phone', 'email', 'address', 'contact', 'mobile', 'cv', 'resume',
+                        'biodata', 'curriculum', 'vitae'
+                    }
+                    if any(w in blacklisted_words for w in words):
+                        return False
+                        
+                    if ' ' not in name_clean and len(name_clean) > 12:
+                        return False
+                        
+                    if not (1 <= len(words) <= 5):
+                        return False
+                        
+                    return True
+
+                # 1. OpenAI Name
+                openai_name = None
+                for k in ["full_name", "name", "candidate_name"]:
+                    val = parsed_data.get(k)
+                    if isinstance(val, dict) and "value" in val:
+                        val = val["value"]
+                    if is_acceptable_name(val):
+                        openai_name = val.strip()
+                        break
                 
+                if not openai_name:
+                    personal = parsed_data.get("personal_info", {})
+                    if isinstance(personal, dict):
+                        for k in ["full_name", "name", "candidate_name"]:
+                            val = personal.get(k)
+                            if isinstance(val, dict) and "value" in val:
+                                val = val["value"]
+                            if is_acceptable_name(val):
+                                openai_name = val.strip()
+                                break
+                
+                logger.info(f"[NAME] OpenAI Name: {openai_name or 'None'}")
+                print(f"[NAME] OpenAI Name: {openai_name or 'None'}")
+
+                if openai_name:
+                    logger.info(f"[NAME] Final Name: {openai_name}")
+                    print(f"[NAME] Final Name: {openai_name}")
+                    return openai_name
+
+                # 2. Resume Heading Name
+                heading_name = None
+                largest_heading = ocr_result.get("largest_bold_name")
+                if is_acceptable_name(largest_heading):
+                    heading_name = largest_heading.strip().title()
+                
+                logger.info(f"[NAME] Resume Heading: {heading_name or 'None'}")
+                print(f"[NAME] Resume Heading: {heading_name or 'None'}")
+
+                if heading_name:
+                    logger.info(f"[NAME] Final Name: {heading_name}")
+                    print(f"[NAME] Final Name: {heading_name}")
+                    return heading_name
+
+                # 3. spaCy Name
+                spacy_name = None
+                try:
+                    import spacy
+                    nlp = spacy.load("en_core_web_sm")
+                    page_1 = text.split('\x0c')[0] if '\x0c' in text else text
+                    lines = [line.strip() for line in page_1.split('\n') if line.strip()]
+                    search_text = "\n".join(lines[:15])
+                    doc = nlp(search_text)
+                    for ent in doc.ents:
+                        if ent.label_ == "PERSON":
+                            ent_text = " ".join(ent.text.strip().split())
+                            if is_acceptable_name(ent_text):
+                                spacy_name = ent_text.title()
+                                break
+                except Exception as e:
+                    logger.warning(f"spaCy PERSON extraction failed: {e}")
+                
+                logger.info(f"[NAME] spaCy Name: {spacy_name or 'None'}")
+                print(f"[NAME] spaCy Name: {spacy_name or 'None'}")
+
+                if spacy_name:
+                    logger.info(f"[NAME] Final Name: {spacy_name}")
+                    print(f"[NAME] Final Name: {spacy_name}")
+                    return spacy_name
+
+                # 4. Email Fallback
+                email_name = None
+                if email and '@' in email:
+                    username = email.split('@')[0]
+                    if username:
+                        import re
+                        # Remove digits
+                        username_no_digits = re.sub(r'\d+', '', username)
+                        
+                        # Strip prefixes (mr, ms, dr, hr)
+                        lowered = username_no_digits.lower()
+                        prefix_removed = username_no_digits
+                        for pfx in ['mr', 'ms', 'dr', 'hr']:
+                            if lowered.startswith(pfx):
+                                rem = username_no_digits[len(pfx):]
+                                if rem and rem[0] in '._-':
+                                    prefix_removed = rem[1:]
+                                    break
+                                elif pfx == 'hr' and len(rem) >= 3:
+                                    prefix_removed = rem
+                                    break
+                                elif pfx in ('mr', 'ms', 'dr') and len(rem) >= 4:
+                                    prefix_removed = rem
+                                    break
+                                    
+                        lowered_prefix_removed = prefix_removed.lower()
+                        if lowered_prefix_removed in ("unknown", "candidate", "admin", "recruit", "hr", "jobs", "careers", "info", "support", "contact", "office", "staff", "hello", "team", "sales", "marketing", "work", "example") or lowered_prefix_removed.startswith("unknown_"):
+                            email_name = None
+                        else:
+                            # Split by common separators: dot, underscore, hyphen
+                            parts = re.split(r'[\._\-]', prefix_removed)
+                            
+                            # Apply segment splitting on each part
+                            segmented_parts = []
+                            segments = {
+                                "raj", "kumar", "azeez", "basha", "sunny", "singh", "sharma", "verma", "gupta", "bose", "das", "roy", "sen", "amit", "rahul", "priya", "neha", "pooja"
+                            }
+                            for p in parts:
+                                p_lower = p.lower()
+                                split_done = False
+                                for i in range(3, len(p_lower) - 2):
+                                    part1 = p_lower[:i]
+                                    part2 = p_lower[i:]
+                                    if part1 in segments or part2 in segments:
+                                        segmented_parts.append(part1)
+                                        segmented_parts.append(part2)
+                                        split_done = True
+                                        break
+                                if not split_done:
+                                    segmented_parts.append(p)
+                                    
+                            email_name_raw = " ".join(segmented_parts).strip().title()
+                            if is_acceptable_name(email_name_raw):
+                                email_name = email_name_raw
+
+                logger.info(f"[NAME] Email Fallback: {email_name or 'None'}")
+                print(f"[NAME] Email Fallback: {email_name or 'None'}")
+
+                if email_name:
+                    logger.info(f"[NAME] Final Name: {email_name}")
+                    print(f"[NAME] Final Name: {email_name}")
+                    return email_name
+
+                # 5. Fallback "Unknown Candidate"
+                logger.info(f"[NAME] Final Name: Unknown Candidate")
+                print(f"[NAME] Final Name: Unknown Candidate")
+                return "Unknown Candidate"
+
+            candidate_name = get_priority_name()
             profile.full_name = candidate_name
+            if isinstance(info, dict):
+                info['name'] = candidate_name
             profile.summary = parsed_data.get('summary', '')
             profile.location = info.get('location') or "Unknown"
             profile.current_salary = parsed_data.get('current_ctc')
@@ -377,7 +859,11 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 
                 # Detect and save profile photo
                 photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
-                if photo_bytes:
+                if photo_bytes is None:
+                    logger.info("[PHOTO] No valid candidate portrait found.")
+                    print("[PHOTO] No valid candidate portrait found.")
+                    profile.profile_photo = None
+                else:
                     profile.profile_photo.save(f"photo_{profile.id}.{photo_ext}", ContentFile(photo_bytes), save=False)
                     logger.info(f"[PARSER PHOTO SAVE SUCCESS] Extracted and saved profile photo for {profile.full_name}")
                     print(f"[PARSER PHOTO SAVE SUCCESS] Extracted and saved profile photo for {profile.full_name}")
@@ -423,7 +909,7 @@ def process_resume_file(file_obj, filename, overwrite=False):
                 Project.objects.create(
                     profile=profile,
                     title=proj.get('title', '')[:255],
-                    description=proj.get('description', ''),
+                    description=ResumeIntelligenceService.parse_experience_description_to_html(proj.get('description', '')),
                     link=proj.get('link', '')
                 )
                 
@@ -504,14 +990,210 @@ def handle_resume_upload(uploaded_file, overwrite=False):
             
     return results
 
+def select_best_profile_photo(images_list):
+    """
+    Refactored profile photo selector.
+    Returns: (photo_bytes, ext) if a valid candidate portrait is found, else (None, None).
+    """
+    if not images_list:
+        logger.info("[PHOTO] No valid candidate portrait found.")
+        return None, None
+
+    import cv2
+    import numpy as np
+    import os
+    import re
+
+    # Load Haar cascades
+    face_cascade_path = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
+    profile_cascade_path = os.path.join(cv2.data.haarcascades, 'haarcascade_profileface.xml')
+    face_cascade = cv2.CascadeClassifier(face_cascade_path)
+    profile_cascade = cv2.CascadeClassifier(profile_cascade_path)
+    use_face_detection = not (face_cascade.empty() or profile_cascade.empty())
+
+    valid_candidates = []
+
+    for idx, (img_bytes, ext) in enumerate(images_list, 1):
+        try:
+            logger.info(f"[PHOTO] Image #{idx}")
+            
+            # Decode image
+            np_arr = np.frombuffer(img_bytes, np.uint8)
+            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            if img is None:
+                logger.info("Width: 0\nHeight: 0\nFaces: 0\nOCR Text Ratio: 0.0\nDecision: Rejected (could not decode)")
+                continue
+
+            height, width = img.shape[:2]
+            logger.info(f"Width: {width}")
+            logger.info(f"Height: {height}")
+            
+            # Rule 1: Reject immediately if width < 120 or height < 120
+            if width < 120 or height < 120:
+                logger.info("Faces: 0\nOCR Text Ratio: 0.0\nDecision: rejected (too small)")
+                continue
+
+            # Aspect Ratio
+            aspect_ratio = width / height
+            
+            # Rule 2: Reject landscape screenshots/wide banners/very tall narrow slices
+            if aspect_ratio < 0.5 or aspect_ratio > 1.25:
+                logger.info("Faces: 0\nOCR Text Ratio: 0.0\nDecision: rejected (invalid aspect ratio)")
+                continue
+
+            # Convert to gray
+            if len(img.shape) == 2:
+                gray = img
+            else:
+                if img.shape[2] == 4:
+                    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+                    gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
+                else:
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Rule 3: Mostly white document check
+            white_pixels = np.sum(gray > 240)
+            white_ratio = white_pixels / gray.size
+            if white_ratio > 0.85:
+                logger.info("Faces: 0\nOCR Text Ratio: 0.0\nDecision: rejected (mostly white document)")
+                continue
+
+            # Detect faces
+            num_faces = 0
+            faces = []
+            if use_face_detection:
+                frontal_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+                profile_faces = profile_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+                
+                faces = list(frontal_faces)
+                for pf in profile_faces:
+                    px, py, pw, ph = pf
+                    overlap = False
+                    for ff in frontal_faces:
+                        fx, fy, fw, fh = ff
+                        if abs((px + pw/2) - (fx + fw/2)) < fw/2 and abs((py + ph/2) - (fy + fh/2)) < fh/2:
+                            overlap = True
+                            break
+                    if not overlap:
+                        faces.append(pf)
+                num_faces = len(faces)
+
+            logger.info(f"Faces: {num_faces}")
+
+            # Rule 4: Reject if no face detected
+            if num_faces == 0:
+                logger.info("OCR Text Ratio: 0.0\nDecision: rejected (no face)")
+                continue
+
+            # Rule 5: Reject if more than one face detected
+            if num_faces > 1:
+                logger.info("OCR Text Ratio: 0.0\nDecision: rejected (multiple faces)")
+                continue
+
+            # Get the single face details
+            fx, fy, fw, fh = faces[0]
+            face_area = fw * fh
+            img_area = width * height
+            face_area_pct = (face_area / img_area) * 100
+
+            # Rule 6: Face area occupies less than 22% or more than 80% of image
+            if face_area_pct < 22 or face_area_pct > 80:
+                logger.info(f"OCR Text Ratio: 0.0\nDecision: rejected (face occupies {face_area_pct:.1f}% of image, outside 22-80%)")
+                continue
+
+            # Rule 7: Face centered check
+            face_x_center = fx + fw/2
+            face_y_center = fy + fh/2
+            img_x_center = width / 2
+            img_y_center = height / 2
+            x_offset = abs(face_x_center - img_x_center) / width
+            y_offset = abs(face_y_center - img_y_center) / height
+            if x_offset > 0.25 or y_offset > 0.35:
+                logger.info("OCR Text Ratio: 0.0\nDecision: rejected (face not centered)")
+                continue
+
+            # Rule 8: Detect text regions to compute OCR text density / text area
+            # Sobel horizontal gradients
+            grad = cv2.Sobel(gray, cv2.CV_8U, 1, 0, ksize=3)
+            _, thresh = cv2.threshold(grad, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
+            dilated = cv2.dilate(thresh, kernel, iterations=1)
+            contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            text_area = 0
+            for ctr in contours:
+                cx, cy, cw, ch = cv2.boundingRect(ctr)
+                if cw > 10 and 5 < ch < 50:
+                    text_area += cw * ch
+
+            ocr_text_ratio = text_area / img_area
+            logger.info(f"OCR Text Ratio: {ocr_text_ratio:.2f}")
+
+            # Rule 9: Reject if text area > face area
+            if text_area > face_area:
+                logger.info("Decision: rejected (text area > face area)")
+                continue
+
+            # Rule 10: Reject if OCR text density occupies significant portion (> 30% of total image)
+            if ocr_text_ratio > 0.3:
+                logger.info("Decision: rejected (mostly text)")
+                continue
+
+            # Rule 11: Table detection
+            horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1))
+            detect_horizontal = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+            cnts_h = cv2.findContours(detect_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+            vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25))
+            detect_vertical = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+            cnts_v = cv2.findContours(detect_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+            if len(cnts_h) > 5 and len(cnts_v) > 5:
+                logger.info("Decision: rejected (table detected)")
+                continue
+
+            # Rule 12: OCR text content check for Resume/CV headings
+            text_content = ""
+            try:
+                import pytesseract
+                from PIL import Image
+                pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                text_content = pytesseract.image_to_string(pil_img).lower()
+            except Exception:
+                pass
+
+            if any(term in text_content for term in ("curriculum", "vitae", "resume", "cv", "education", "experience")):
+                logger.info("Decision: rejected (curriculum vitae header)")
+                continue
+
+            # If all checks pass, it is a valid candidate portrait!
+            logger.info("Decision: accepted (candidate portrait)")
+            valid_candidates.append({
+                'img_bytes': img_bytes,
+                'ext': ext,
+                'resolution': img_area,
+                'face_area': face_area
+            })
+
+        except Exception as e:
+            logger.error(f"Decision: rejected (exception occurred: {e})")
+            continue
+
+    if valid_candidates:
+        # Prefer the one with the largest face area, then resolution
+        valid_candidates.sort(key=lambda x: (x['face_area'], x['resolution']), reverse=True)
+        best = valid_candidates[0]
+        return best['img_bytes'], best['ext']
+
+    logger.info("[PHOTO] No valid candidate portrait found.")
+    return None, None
+
+
 def extract_profile_photo(file_bytes, filename):
     ext = filename.split('.')[-1].lower()
+    images_list = []
     if ext == 'pdf':
         try:
             import fitz
             doc = fitz.open(stream=file_bytes, filetype="pdf")
-            candidates = []
-            for page_num in range(min(3, len(doc))):
+            for page_num in range(len(doc)):
                 page = doc[page_num]
                 image_list = page.get_images(full=True)
                 for img_info in image_list:
@@ -519,43 +1201,23 @@ def extract_profile_photo(file_bytes, filename):
                     base_image = doc.extract_image(xref)
                     if not base_image:
                         continue
-                    width = base_image.get("width", 0)
-                    height = base_image.get("height", 0)
                     img_data = base_image.get("image")
-                    if img_data and width >= 80 and height >= 80:
-                        aspect_ratio = width / height
-                        if 0.5 <= aspect_ratio <= 2.0:
-                            candidates.append((len(img_data), img_data, base_image.get("ext", "png")))
-            if candidates:
-                candidates.sort(key=lambda x: x[0], reverse=True)
-                return candidates[0][1], candidates[0][2]
+                    if img_data:
+                        images_list.append((img_data, base_image.get("ext", "png")))
         except Exception as e:
             logger.error(f"Error extracting photo from PDF: {e}")
     elif ext in ['docx', 'doc']:
         try:
             import zipfile
             import io
-            from PIL import Image
-            
             with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
                 media_files = [f for f in z.namelist() if f.startswith('word/media/')]
                 media_files.sort()
-                candidates = []
                 for f_name in media_files:
                     img_data = z.read(f_name)
-                    try:
-                        img = Image.open(io.BytesIO(img_data))
-                        width, height = img.size
-                        if width >= 80 and height >= 80:
-                            aspect_ratio = width / height
-                            if 0.5 <= aspect_ratio <= 2.0:
-                                ext = f_name.split('.')[-1].lower()
-                                candidates.append((len(img_data), img_data, ext))
-                    except Exception:
-                        continue
-                if candidates:
-                    candidates.sort(key=lambda x: x[0], reverse=True)
-                    return candidates[0][1], candidates[0][2]
+                    ext = f_name.split('.')[-1].lower()
+                    images_list.append((img_data, ext))
         except Exception as e:
             logger.error(f"Error extracting photo from DOCX: {e}")
-    return None, None
+
+    return select_best_profile_photo(images_list)

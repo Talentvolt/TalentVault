@@ -1,26 +1,43 @@
-import random
+from pathlib import Path
+import fitz
+
+
+def extract_pdf_text(file_path):
+    """
+    Extract all text from PDF.
+    """
+
+    text = []
+
+    pdf = fitz.open(file_path)
+
+    for page in pdf:
+        page_text = page.get_text()
+
+        if page_text:
+            text.append(page_text)
+
+    pdf.close()
+
+    return "\n".join(text)
+
 
 def parse_resume(file_path):
     """
-    Parses a resume (PDF/DOCX) and extracts key information.
-    Mock implementation for now.
+    Read PDF and return raw text.
     """
-    return {
-        'name': f"Extracted Candidate {random.randint(1000, 9999)}",
-        'email': f"candidate.{random.randint(100, 999)}@example.com",
-        'phone': '+1234567890',
-        'skills': 'Python, Django, React, SQL, AWS, Docker',
-        'experience': 'Software Engineer - 5 years',
-        'education': 'B.Tech in Computer Science',
-        'certifications': 'AWS Certified Solutions Architect'
-    }
 
-def process_bulk_resumes(zip_file_path):
-    """
-    Processes a ZIP containing multiple resumes.
-    Mock implementation for now.
-    """
-    candidates = []
-    for i in range(5):
-        candidates.append(parse_resume(f"resume_{i}.pdf"))
-    return candidates
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(file_path)
+
+    if file_path.suffix.lower() != ".pdf":
+        raise ValueError("Only PDF supported.")
+
+    raw_text = extract_pdf_text(file_path)
+
+    return {
+        "file_name": file_path.name,
+        "raw_text": raw_text,
+    }
