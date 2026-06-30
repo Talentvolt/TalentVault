@@ -36,6 +36,31 @@ class DebugDiagnosticsView(View):
         if request.GET.get('secret') != 'audit_2026':
             return JsonResponse({'error': 'Unauthorized'}, status=403)
             
+        if request.GET.get('action') == 'parse_test':
+            try:
+                import os
+                from django.conf import settings
+                from apps.candidates.utils import process_resume_file
+                pdf_path = os.path.join(settings.BASE_DIR, 'scratch', 'harneet_resume.pdf')
+                with open(pdf_path, 'rb') as f:
+                    profile, status = process_resume_file(f, 'harneet_resume.pdf', overwrite=True)
+                
+                return JsonResponse({
+                    'status': status,
+                    'candidate_id': str(profile.id) if profile else None,
+                    'full_name': profile.full_name if profile else None,
+                    'experiences_count': profile.experiences.count() if profile else 0,
+                    'educations_count': profile.educations.count() if profile else 0,
+                    'skills_count': profile.skills.count() if profile else 0,
+                    'skills': [s.skill_name for s in profile.skills.all()] if profile else []
+                })
+            except Exception as e:
+                import traceback
+                return JsonResponse({
+                    'error': str(e),
+                    'traceback': traceback.format_exc()
+                }, status=500)
+            
         env_vars = {}
         for k, v in os.environ.items():
             if any(secret in k.lower() for secret in ['password', 'key', 'secret', 'token']):
