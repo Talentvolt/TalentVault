@@ -66,20 +66,42 @@ class DebugDiagnosticsView(View):
                 import threading
                 from django.conf import settings
                 
+                # Clear previous logs if they exist
+                for filename in ['parsing_debug.json', 'parsing_stdout.txt']:
+                    p = os.path.join(settings.MEDIA_ROOT, filename)
+                    if os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                
                 def run_background_parse():
+                    import sys
+                    import io
+                    import traceback
+                    
+                    stdout_buffer = io.StringIO()
+                    sys.stdout = stdout_buffer
+                    sys.stderr = stdout_buffer
+                    
                     debug_log = {
                         "status": "started",
                         "error": "",
                         "traceback": ""
                     }
                     try:
+                        print("Thread started. Importing process_resume_file...")
                         from apps.candidates.utils import process_resume_file
                         from django.db import connection
+                        print("Closing connection...")
                         connection.close() # Ensure fresh database connection
                         
                         pdf_path = os.path.join(settings.BASE_DIR, 'scratch', 'harneet_resume.pdf')
+                        print(f"Reading PDF from {pdf_path}...")
                         with open(pdf_path, 'rb') as f:
+                            print("Calling process_resume_file...")
                             profile, status = process_resume_file(f, 'harneet_resume.pdf', overwrite=True)
+                            print(f"process_resume_file completed with status={status}")
                             
                         debug_log["status"] = "completed"
                         debug_log["parser_status"] = status
@@ -90,10 +112,24 @@ class DebugDiagnosticsView(View):
                         debug_log["skills_count"] = profile.skills.count() if profile else 0
                         debug_log["skills"] = [s.skill_name for s in profile.skills.all()] if profile else []
                     except Exception as ex:
-                        import traceback
+                        print(f"Exception raised: {ex}")
+                        print(traceback.format_exc())
                         debug_log["status"] = "failed"
                         debug_log["error"] = str(ex)
                         debug_log["traceback"] = traceback.format_exc()
+                    finally:
+                        # Restore standard streams
+                        sys.stdout = sys.__stdout__
+                        sys.stderr = sys.__stderr__
+                        
+                        # Write stdout logs to media/parsing_stdout.txt
+                        try:
+                            stdout_file = os.path.join(settings.MEDIA_ROOT, 'parsing_stdout.txt')
+                            os.makedirs(os.path.dirname(stdout_file), exist_ok=True)
+                            with open(stdout_file, 'w', encoding='utf-8') as sf:
+                                sf.write(stdout_buffer.getvalue())
+                        except Exception as sf_ex:
+                            sys.__stderr__.write(f"Failed to write stdout file: {sf_ex}\n")
                         
                     # Write results to media/parsing_debug.json
                     try:
@@ -103,7 +139,7 @@ class DebugDiagnosticsView(View):
                         with open(debug_file, 'w', encoding='utf-8') as df:
                             json.dump(debug_log, df, indent=2)
                     except Exception as write_ex:
-                        print(f"Failed to write parsing debug log: {write_ex}")
+                        sys.__stderr__.write(f"Failed to write parsing debug log: {write_ex}\n")
                 
                 t = threading.Thread(target=run_background_parse)
                 t.start()
@@ -117,11 +153,22 @@ class DebugDiagnosticsView(View):
                 from django.conf import settings
                 import json
                 debug_file = os.path.join(settings.MEDIA_ROOT, 'parsing_debug.json')
-                if not os.path.exists(debug_file):
-                    return JsonResponse({"status": "not_found", "message": "Log file not created yet."})
-                with open(debug_file, 'r', encoding='utf-8') as df:
-                    log_data = json.load(df)
-                return JsonResponse(log_data)
+                stdout_file = os.path.join(settings.MEDIA_ROOT, 'parsing_stdout.txt')
+                
+                stdout_content = ""
+                if os.path.exists(stdout_file):
+                    with open(stdout_file, 'r', encoding='utf-8') as sf:
+                        stdout_content = sf.read()
+                        
+                log_data = {"status": "not_found", "message": "Log file not created yet."}
+                if os.path.exists(debug_file):
+                    with open(debug_file, 'r', encoding='utf-8') as df:
+                        log_data = json.load(df)
+                        
+                return JsonResponse({
+                    "log": log_data,
+                    "stdout": stdout_content
+                })
             except Exception as e:
                 import traceback
                 return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
