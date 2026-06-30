@@ -61,29 +61,70 @@ class DebugDiagnosticsView(View):
                     'traceback': traceback.format_exc()
                 }, status=500)
 
-        if request.GET.get('action') == 'parse_test':
+        if request.GET.get('action') == 'parse_test_start':
             try:
+                import threading
                 from django.conf import settings
-                from apps.candidates.utils import process_resume_file
-                pdf_path = os.path.join(settings.BASE_DIR, 'scratch', 'harneet_resume.pdf')
-                with open(pdf_path, 'rb') as f:
-                    profile, status = process_resume_file(f, 'harneet_resume.pdf', overwrite=True)
                 
-                return JsonResponse({
-                    'status': status,
-                    'candidate_id': str(profile.id) if profile else None,
-                    'full_name': profile.full_name if profile else None,
-                    'experiences_count': profile.experiences.count() if profile else 0,
-                    'educations_count': profile.educations.count() if profile else 0,
-                    'skills_count': profile.skills.count() if profile else 0,
-                    'skills': [s.skill_name for s in profile.skills.all()] if profile else []
-                })
+                def run_background_parse():
+                    debug_log = {
+                        "status": "started",
+                        "error": "",
+                        "traceback": ""
+                    }
+                    try:
+                        from apps.candidates.utils import process_resume_file
+                        from django.db import connection
+                        connection.close() # Ensure fresh database connection
+                        
+                        pdf_path = os.path.join(settings.BASE_DIR, 'scratch', 'harneet_resume.pdf')
+                        with open(pdf_path, 'rb') as f:
+                            profile, status = process_resume_file(f, 'harneet_resume.pdf', overwrite=True)
+                            
+                        debug_log["status"] = "completed"
+                        debug_log["parser_status"] = status
+                        debug_log["candidate_id"] = str(profile.id) if profile else None
+                        debug_log["full_name"] = profile.full_name if profile else None
+                        debug_log["experiences_count"] = profile.experiences.count() if profile else 0
+                        debug_log["educations_count"] = profile.educations.count() if profile else 0
+                        debug_log["skills_count"] = profile.skills.count() if profile else 0
+                        debug_log["skills"] = [s.skill_name for s in profile.skills.all()] if profile else []
+                    except Exception as ex:
+                        import traceback
+                        debug_log["status"] = "failed"
+                        debug_log["error"] = str(ex)
+                        debug_log["traceback"] = traceback.format_exc()
+                        
+                    # Write results to media/parsing_debug.json
+                    try:
+                        debug_file = os.path.join(settings.MEDIA_ROOT, 'parsing_debug.json')
+                        os.makedirs(os.path.dirname(debug_file), exist_ok=True)
+                        import json
+                        with open(debug_file, 'w', encoding='utf-8') as df:
+                            json.dump(debug_log, df, indent=2)
+                    except Exception as write_ex:
+                        print(f"Failed to write parsing debug log: {write_ex}")
+                
+                t = threading.Thread(target=run_background_parse)
+                t.start()
+                return JsonResponse({"status": "started", "thread_ident": t.ident})
             except Exception as e:
                 import traceback
-                return JsonResponse({
-                    'error': str(e),
-                    'traceback': traceback.format_exc()
-                }, status=500)
+                return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
+
+        if request.GET.get('action') == 'parse_test_results':
+            try:
+                from django.conf import settings
+                import json
+                debug_file = os.path.join(settings.MEDIA_ROOT, 'parsing_debug.json')
+                if not os.path.exists(debug_file):
+                    return JsonResponse({"status": "not_found", "message": "Log file not created yet."})
+                with open(debug_file, 'r', encoding='utf-8') as df:
+                    log_data = json.load(df)
+                return JsonResponse(log_data)
+            except Exception as e:
+                import traceback
+                return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
             
         env_vars = {}
         for k, v in os.environ.items():
