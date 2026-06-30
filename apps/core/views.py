@@ -1258,49 +1258,126 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
             return redirect('frontend:candidate_search')
             
         uploaded_file = request.FILES.get('resume') or request.FILES.get('resumes_zip')
-        results = handle_resume_upload(uploaded_file, overwrite=overwrite)
         
-        created_profiles = results['created']
-        duplicates = results['duplicates']
-        error_reasons = results.get('error_reasons', [])
+        # Read the file content into memory to ensure thread-safety
+        file_bytes = uploaded_file.read()
+        file_name = uploaded_file.name
+        content_type = getattr(uploaded_file, 'content_type', '')
         
-        if len(created_profiles) > 0:
-            profile = created_profiles[0]
-            skills_str = ", ".join([s.skill_name for s in profile.skills.all()])
-            phone_num = profile.user.phone_number or 'N/A'
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.http import StreamingHttpResponse
+        from django.urls import reverse
+        from apps.notifications.models import Notification
+        import threading
+        import time
+        
+        in_memory_file = SimpleUploadedFile(file_name, file_bytes, content_type=content_type)
+        
+        def stream_generator():
+            yield """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Parsing Resume...</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .loader {
+            border: 4px solid #334155;
+            border-top: 4px solid #38bdf8;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        h2 { margin: 0 0 10px 0; font-weight: 600; }
+        p { margin: 0; color: #94a3b8; font-size: 14px; text-align: center; max-width: 340px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <h2>Parsing Resume...</h2>
+    <p>Extracting contact details, skills, experiences, and education using AI. Please do not reload or close this page.</p>
+"""
+            # Yield space buffer to push initial HTML
+            yield " " * 1024
             
-            msg = (
-                "✅ Resume Parsed Successfully\n\n"
-                "Candidate Created:\n"
-                f"Name: {profile.full_name or 'N/A'}\n"
-                f"Email: {profile.user.email or 'N/A'}\n"
-                f"Phone: {phone_num}\n"
-                f"Experience: {profile.total_experience or 0.0} Years\n"
-                f"Skills: {skills_str or 'N/A'}"
-            )
-            messages.success(request, msg)
+            result_container = {}
+            def run_parser_thread():
+                try:
+                    result_container['results'] = handle_resume_upload(in_memory_file, overwrite=overwrite)
+                except Exception as e:
+                    import traceback
+                    result_container['error'] = f"{str(e)}\n{traceback.format_exc()}"
+                    
+            t = threading.Thread(target=run_parser_thread)
+            t.start()
             
-            if len(created_profiles) > 1:
-                bulk_msg = f"Successfully parsed {len(created_profiles)} candidates from ZIP file."
-                messages.info(request, bulk_msg)
+            # Periodically yield spaces to keep connection alive
+            while t.is_alive():
+                yield " "
+                time.sleep(1)
                 
-            Notification.objects.create(
-                recipient=request.user,
-                title="Resume Parsing Success",
-                message=f"Candidate {profile.full_name or profile.user.email} parsed successfully.",
-                notification_type='SYSTEM'
-            )
-        elif duplicates > 0:
-            messages.warning(request, "⚠ Candidate already exists")
-        else:
-            reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
-            msg = (
-                "❌ Parsing failed\n\n"
-                f"Reason: {reason}"
-            )
-            messages.error(request, msg)
+            if 'error' in result_container:
+                messages.error(request, f"❌ Parsing failed\n\nReason: {result_container['error']}")
+            else:
+                results = result_container['results']
+                created_profiles = results['created']
+                duplicates = results['duplicates']
+                error_reasons = results.get('error_reasons', [])
+                
+                if len(created_profiles) > 0:
+                    profile = created_profiles[0]
+                    skills_str = ", ".join([s.skill_name for s in profile.skills.all()])
+                    phone_num = profile.user.phone_number or 'N/A'
+                    
+                    msg = (
+                        "✅ Resume Parsed Successfully\n\n"
+                        "Candidate Created:\n"
+                        f"Name: {profile.full_name or 'N/A'}\n"
+                        f"Email: {profile.user.email or 'N/A'}\n"
+                        f"Phone: {phone_num}\n"
+                        f"Experience: {profile.total_experience or 0.0} Years\n"
+                        f"Skills: {skills_str or 'N/A'}"
+                    )
+                    messages.success(request, msg)
+                    
+                    if len(created_profiles) > 1:
+                        messages.info(request, f"Successfully parsed {len(created_profiles)} candidates from ZIP file.")
+                        
+                    Notification.objects.create(
+                        recipient=request.user,
+                        title="Resume Parsing Success",
+                        message=f"Candidate {profile.full_name or profile.user.email} parsed successfully.",
+                        notification_type='SYSTEM'
+                    )
+                elif duplicates > 0:
+                    messages.warning(request, "⚠ Candidate already exists")
+                else:
+                    reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
+                    messages.error(request, f"❌ Parsing failed\n\nReason: {reason}")
+                    
+            redirect_url = reverse('frontend:candidate_search')
+            yield f"<script>window.location.href = '{redirect_url}';</script></body></html>"
             
-        return redirect('frontend:candidate_search')
+        response = StreamingHttpResponse(stream_generator(), content_type="text/html")
+        response['X-Accel-Buffering'] = 'no'
+        response['Cache-Control'] = 'no-cache'
+        return response
 
 from django.core.mail import send_mail
 from django.conf import settings
