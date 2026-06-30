@@ -33,12 +33,12 @@ from django.views import View
 
 class DebugDiagnosticsView(View):
     def get(self, request, *args, **kwargs):
+        import time
         if request.GET.get('secret') != 'audit_2026':
             return JsonResponse({'error': 'Unauthorized'}, status=403)
             
         if request.GET.get('action') == 'verify_openai':
             try:
-                import time
                 from openai import OpenAI
                 from django.conf import settings
                 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -63,7 +63,6 @@ class DebugDiagnosticsView(View):
 
         if request.GET.get('action') == 'parse_test':
             try:
-                import os
                 from django.conf import settings
                 from apps.candidates.utils import process_resume_file
                 pdf_path = os.path.join(settings.BASE_DIR, 'scratch', 'harneet_resume.pdf')
