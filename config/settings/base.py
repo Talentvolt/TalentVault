@@ -15,11 +15,12 @@ SECRET_KEY = os.environ.get(
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    "testserver",
     "localhost",
     "127.0.0.1",
-    "orderonchat.com",
-    "www.orderonchat.com",
+    "testserver",
+
+    "talent-vault.in",
+    "www.talent-vault.in",
 ]
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
@@ -30,8 +31,8 @@ if RENDER_EXTERNAL_HOSTNAME:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     CSRF_TRUSTED_ORIGINS = [
-    "https://orderonchat.com",
-    "https://www.orderonchat.com",
+    "https://talent-vault.in",
+    "https://www.talent-vault.in",
 ]
 
 if RENDER_EXTERNAL_HOSTNAME:

@@ -41,32 +41,32 @@
 .ats-experience-list {
     display: flex;
     flex-direction: column;
-    gap: 10px; /* 10-12px vertical spacing between bullet items */
+    gap: 10px;
     margin-top: 8px;
 }
 .ats-experience-item {
     display: flex;
     align-items: flex-start;
-    gap: 8px; /* Spacing between bullet and text */
+    gap: 8px;
 }
 .ats-bullet {
     flex-shrink: 0;
     color: inherit;
-    font-size: 0.75rem; /* Circular bullet ● size */
-    line-height: 1.5; /* Matches text line-height */
+    font-size: 0.75rem;
+    line-height: 1.5;
 }
 .ats-text {
-    line-height: 1.5; /* Comfortable line-height (1.5-1.6) */
+    line-height: 1.5;
     font-size: inherit;
     color: inherit;
 }
 
 /* Profile Summary Grid Formatting */
 .profile-summary-text {
-    line-height: 1.75; /* Comfortable line-height (1.6-1.8) */
+    line-height: 1.75;
 }
 .profile-summary-grid {
-    display: block; /* default fallback for mobile/tablet */
+    display: block;
 }
 @media (min-width: 992px) {
     .profile-summary-grid {
@@ -97,10 +97,10 @@
     border-radius: 4px;
 }
 
-/* Resume bullet/ordered lists — flush with company text, hanging indent on wraps */
+/* Resume bullet/ordered lists */
 ul.resume-bullets, ol.resume-ordered {
     list-style-position: outside;
-    padding-left: 1.25em;  /* list marker fits in this gutter */
+    padding-left: 1.25em;
     margin: 0.15rem 0 0.4rem 0;
 }
 ul.resume-bullets {
@@ -114,72 +114,207 @@ ul.resume-bullets li, ol.resume-ordered li {
     line-height: 1.55;
     padding-left: 0;
 }
-/* Plain paragraph lines inside description */
 .exp-description-area p.mb-1 {
     margin-bottom: 0.2rem !important;
     line-height: 1.55;
 }
 </style>
 
-<div class="mb-4 d-flex justify-content-between align-items-center sticky-action-bar">
-    <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Talent Vault</a>
-    <div class="d-flex gap-2">
-        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
-        <button class="btn btn-outline-info" onclick="previewAIImprovement()"><i class="bi bi-stars me-1"></i> AI Assist</button>
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editResumeJSONModal" onclick="loadResumeForm()"><i class="bi bi-braces me-1"></i> Structured Editor</button>
-        <a href="{% url 'frontend:candidate_edit' candidate.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit Profile</a>
-        <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i> Reject</button>
-        </form>
-        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCandidateModal"><i class="bi bi-trash me-1"></i> Delete Candidate</button>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addToPipelineModal"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
-        <button class="btn btn-primary"><i class="bi bi-calendar-event me-1"></i> Schedule Interview</button>
+<!-- Sticky Action Bar -->
+<div class="mb-4 d-flex justify-content-between align-items-center sticky-action-bar fade-in">
+    {% if selected_job %}
+        <a href="{% url 'frontend:job_candidates' selected_job.id %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Job Candidates</a>
+    {% else %}
+        <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Talent Vault</a>
+    {% endif %}
+    
+    <div class="d-flex gap-2 align-items-center">
+        <!-- Share profile -->
+        <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
+        
+        <!-- AI Assist & Structured Editor -->
+        <button class="btn btn-outline-info btn-sm" onclick="previewAIImprovement()"><i class="bi bi-stars me-1"></i> AI Assist</button>
+        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editResumeJSONModal" onclick="loadResumeForm()"><i class="bi bi-braces me-1"></i> Structured Editor</button>
+        
+        <!-- Edit Profile -->
+        <a href="{% url 'frontend:candidate_edit' candidate.id %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i> Edit Profile</a>
+        
+        <!-- Reject Button (Specific to job application or general) -->
+        {% if selected_job %}
+            <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to reject this candidate for this job?');">
+                {% csrf_token %}
+                <input type="hidden" name="job_id" value="{{ selected_job.id }}">
+                <input type="hidden" name="next" value="{% url 'frontend:job_candidates' selected_job.id %}">
+                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1"></i> Reject</button>
+            </form>
+        {% else %}
+            <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to reject this candidate?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1"></i> Reject</button>
+            </form>
+        {% endif %}
+        
+        <!-- Delete Candidate -->
+        <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteCandidateModal"><i class="bi bi-trash me-1"></i> Delete</button>
+        
+        <!-- Add to Pipeline (Specific to job application or modal selector) -->
+        {% if selected_job %}
+            {% if is_in_pipeline %}
+                <button class="btn btn-success btn-sm text-white" disabled><i class="bi bi-check-circle-fill me-1"></i> In Pipeline</button>
+            {% else %}
+                <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="job_id" value="{{ selected_job.id }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
+                </form>
+            {% endif %}
+        {% else %}
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addToPipelineModal"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
+        {% endif %}
+        
+        <!-- Schedule Interview -->
+        <a href="{% url 'frontend:interviews' %}{% if selected_job %}?job_id={{ selected_job.id }}&candidate_id={{ candidate.id }}{% endif %}" class="btn btn-primary btn-sm"><i class="bi bi-calendar-event me-1"></i> Schedule Interview</a>
     </div>
 </div>
 
-<div class="row g-4">
-    <!-- Left Column: Profile -->
-    <div class="col-12">
-        <!-- Duplicate Detection Alerts -->
-        {% for dup in duplicates %}
-        <div class="alert alert-warning border-0 shadow-sm d-flex justify-content-between align-items-center mb-4 p-3 rounded-3">
-            <div>
-                <h6 class="fw-bold text-dark mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i> Duplicate Candidate Found</h6>
-                <p class="text-secondary small mb-0">Similar candidate <strong>{{ dup.duplicate_candidate_name }}</strong> detected. Similarity Score: <strong>{{ dup.similarity_score }}%</strong>. ({{ dup.reasons|join:", " }})</p>
+<!-- Duplicate Detection Alerts -->
+{% for dup in duplicates %}
+<div class="alert alert-warning border-0 shadow-sm d-flex justify-content-between align-items-center mb-4 p-3 rounded-3 fade-in">
+    <div>
+        <h6 class="fw-bold text-dark mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i> Duplicate Candidate Found</h6>
+        <p class="text-secondary small mb-0">Similar candidate <strong>{{ dup.duplicate_candidate_name }}</strong> detected. Similarity Score: <strong>{{ dup.similarity_score }}%</strong>. ({{ dup.reasons|join:", " }})</p>
+    </div>
+    <div class="d-flex gap-2">
+        <form method="POST" action="{% url 'frontend:candidate_duplicates' candidate.id %}" class="m-0">
+            {% csrf_token %}
+            <input type="hidden" name="target_id" value="{{ dup.duplicate_candidate_id }}">
+            <button type="submit" name="action" value="merge" class="btn btn-sm btn-warning fw-bold px-3">Merge</button>
+            <button type="submit" name="action" value="ignore" class="btn btn-sm btn-outline-secondary px-3">Ignore</button>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Side-by-Side Premium ATS Split Layout -->
+<div class="row g-4 fade-in">
+    
+    <!-- LEFT COLUMN: Sticky Resume Preview & History & Logs -->
+    <div class="col-lg-6 col-12">
+        <div class="sticky-top" style="top: 80px; z-index: 10;">
+            <!-- Embedded Resume PDF Viewer -->
+            <div class="card p-4 mb-4 border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3" style="border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">
+                    <h5 class="fw-bold m-0" style="color: #1f2937;"><i class="bi bi-file-earmark-pdf me-2 text-primary"></i>Resume Preview</h5>
+                    {% if resume_exists %}
+                    <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-xs btn-outline-success">
+                        <i class="bi bi-download me-1.5"></i>Download Original
+                    </a>
+                    {% endif %}
+                </div>
+                {% if resume_exists %}
+                <div class="ratio border border-light-subtle rounded overflow-hidden bg-light" style="height: 640px; max-height: 70vh;">
+                    <iframe src="{% url 'frontend:candidate_resume_preview' candidate.id %}" style="border: none; width: 100%; height: 100%;"></iframe>
+                </div>
+                {% else %}
+                <div class="text-center py-5 bg-light rounded border text-muted">
+                    <i class="bi bi-file-earmark-x fs-2 mb-2 d-block text-secondary"></i>
+                    <span class="small fw-semibold text-warning">Resume not found. Please re-upload.</span>
+                </div>
+                {% endif %}
             </div>
-            <div class="d-flex gap-2">
-                <form method="POST" action="{% url 'frontend:candidate_duplicates' candidate.id %}" class="m-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="target_id" value="{{ dup.duplicate_candidate_id }}">
-                    <button type="submit" name="action" value="merge" class="btn btn-sm btn-warning fw-bold px-3">Merge</button>
-                    <button type="submit" name="action" value="ignore" class="btn btn-sm btn-outline-secondary px-3">Ignore</button>
-                </form>
+
+            <!-- Version History Card -->
+            <div class="card p-4 mb-4 border-0 shadow-sm">
+                <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-history me-2 text-info"></i>Version History</h5>
+                <div class="version-timeline d-flex flex-column gap-2 mb-3" style="max-height: 180px; overflow-y: auto;">
+                    {% for ver in versions_list %}
+                    <div class="d-flex justify-content-between align-items-center border p-2 rounded bg-light {% if selected_version_id == ver.version %}border-primary bg-primary-subtle{% endif %} card-hover-shadow" style="cursor: pointer; transition: all 0.2s ease-in-out;" onclick="window.location.href='?version={{ ver.version }}{% if selected_job %}&job_id={{ selected_job.id }}{% endif %}'">
+                        <div>
+                            <div class="fw-bold x-small text-dark">{{ ver.label }}</div>
+                            <div class="text-secondary" style="font-size: 10px;">{{ ver.created_by }} | {{ ver.created_at|slice:":10" }}</div>
+                        </div>
+                        <div>
+                            {% if candidate.current_version == ver.version %}
+                                <span class="badge bg-success text-white x-small">Active</span>
+                            {% else %}
+                                <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="m-0 d-inline-block" onclick="event.stopPropagation();">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="version_id" value="{{ ver.version }}">
+                                    <button type="submit" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold text-xs" style="font-size: 10px;">Rollback</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="d-flex gap-2">
+                    {% if has_undo %}
+                    <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="flex-grow-1 m-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="version_id" value="{{ prev_version }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-arrow-left"></i> Undo</button>
+                    </form>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-secondary w-100 flex-grow-1" disabled><i class="bi bi-arrow-left"></i> Undo</button>
+                    {% endif %}
+
+                    {% if has_redo %}
+                    <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="flex-grow-1 m-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="version_id" value="{{ next_version }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Redo <i class="bi bi-arrow-right"></i></button>
+                    </form>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-secondary w-100 flex-grow-1" disabled>Redo <i class="bi bi-arrow-right"></i></button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Activity Timeline / Audit Logs Card -->
+            <div class="card p-4 border-0 shadow-sm" style="max-height: 200px; overflow-y: auto;">
+                <h5 class="fw-bold mb-3"><i class="bi bi-journal-text me-2 text-warning"></i> Activity Timeline</h5>
+                <div class="d-flex flex-column gap-2 small">
+                    {% for log in candidate.audit_logs %}
+                    <div class="border-bottom pb-2">
+                        <div class="text-dark fw-bold mb-1" style="font-size: 11px;">{{ log.action }}</div>
+                        <div class="text-secondary d-flex justify-content-between" style="font-size: 9px;">
+                            <span>By: {{ log.user }}</span>
+                            <span>{{ log.timestamp|slice:":16" }}</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-3 small">No logs recorded yet.</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
-        {% endfor %}
+    </div>
 
-        <!-- Profile Header (Workable Style) -->
+    <!-- RIGHT COLUMN: Profile details, AI Score, Notes, Experience, Education -->
+    <div class="col-lg-6 col-12">
+        <!-- Profile Header -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
             <div class="d-flex align-items-center gap-4">
                 {% if candidate.has_profile_photo %}
-                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover flex-shrink-0" style="width: 90px; height: 90px; border: 2px solid #dee2e6;" alt="Photo">
+                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover flex-shrink-0" style="width: 80px; height: 80px; border: 2px solid #dee2e6;" alt="Photo">
                 {% else %}
-                    <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 90px; height: 90px;">
-                        <i class="bi bi-person" style="font-size: 40px; line-height: 1;"></i>
+                    <div class="avatar-xl bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                        <i class="bi bi-person" style="font-size: 36px; line-height: 1;"></i>
                     </div>
                 {% endif %}
                 <div class="flex-grow-1">
-                    <div class="d-flex align-items-center gap-3 mb-2">
-                        <h2 class="fw-bold m-0" style="font-size: 1.8rem; color: #111827;">{{ candidate.full_name|default:candidate.user.email }}</h2>
+                    <div class="d-flex align-items-center gap-3 mb-1">
+                        <h3 class="fw-bold m-0" style="font-size: 1.6rem; color: #111827;">{{ candidate.full_name|default:candidate.user.email }}</h3>
                         {% if selected_job and match_details %}
-                        <span class="badge {{ match_details.badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Score: {{ match_details.total_score }}%</span>
+                        <span class="badge {{ match_details.badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 11px;">ATS Score: {{ match_details.total_score }}%</span>
                         {% else %}
-                        <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Suitability: {{ candidate.ats_score }}%</span>
+                        <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 11px;">ATS Suitability: {{ candidate.ats_score }}%</span>
                         {% endif %}
                     </div>
                     
-                    <h5 class="text-primary fw-semibold mb-3" style="font-size: 1.1rem;">
+                    <h5 class="text-primary fw-semibold mb-2" style="font-size: 1rem;">
                         {% if candidate.current_designation %}
                         {{ candidate.current_designation }} <span class="text-secondary fw-normal">at</span> {{ candidate.current_company }}
                         {% else %}
@@ -187,16 +322,13 @@ ul.resume-bullets li, ol.resume-ordered li {
                         {% endif %}
                     </h5>
                     
-                    <div class="d-flex flex-wrap gap-4 text-sm text-secondary mb-3 align-items-center" style="font-size: 0.9rem;">
-                        <span><i class="bi bi-briefcase me-1.5"></i> {{ candidate.total_experience|floatformat:1 }} Years Exp</span>
-                        <span><i class="bi bi-geo-alt me-1.5"></i> {{ candidate.location }}</span>
-                        <span><i class="bi bi-envelope me-1.5"></i> {{ candidate.user.email }}</span>
-                        {% if candidate.user.phone_number %}
-                        <span><i class="bi bi-telephone me-1.5"></i> {{ candidate.user.phone_number }}</span>
-                        {% endif %}
+                    <div class="d-flex flex-wrap gap-3 text-sm text-secondary mb-2 align-items-center" style="font-size: 0.85rem;">
+                        <span><i class="bi bi-briefcase me-1"></i> {{ candidate.total_experience|floatformat:1 }} Years Exp</span>
+                        <span><i class="bi bi-geo-alt me-1"></i> {{ candidate.location }}</span>
+                        <span><i class="bi bi-envelope me-1"></i> {{ candidate.user.email }}</span>
                     </div>
                     
-                    <div class="d-flex flex-wrap gap-4 text-xs text-muted border-top pt-2" style="font-size: 0.85rem;">
+                    <div class="d-flex flex-wrap gap-3 text-xs text-muted border-top pt-2" style="font-size: 0.8rem;">
                         <span><strong>Current CTC:</strong> {{ candidate.current_salary_lpa }}</span>
                         <span><strong>Expected CTC:</strong> {{ candidate.expected_salary_lpa }}</span>
                         <span><strong>Notice Period:</strong> {{ candidate.notice_period }} Days</span>
@@ -205,414 +337,25 @@ ul.resume-bullets li, ol.resume-ordered li {
             </div>
         </div>
 
-        <!-- Summary -->
+        <!-- AI ATS Score Breakdown -->
         <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Profile Summary</h5>
-            <p class="profile-summary-text text-secondary mb-0" style="line-height: 1.75; font-size: 0.95rem;">{{ candidate.summary|linebreaksbr }}</p>
-        </div>
-
-        <!-- Experience -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-4" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Work Experience</h5>
-            {% for exp in candidate.experiences.all %}
-            <div class="experience-entry mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
-                <div class="row">
-                    <!-- Left timeline for Dates -->
-                    <div class="col-md-3 mb-2 mb-md-0 text-secondary">
-                        <div class="fw-semibold text-dark mb-1" style="font-size: 0.95rem;">
-                            {{ exp.start_date|date:"M Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif %}
-                        </div>
-                        <div class="x-small text-muted fw-normal experience-duration-text mt-1" style="font-size: 0.8rem;"></div>
-                    </div>
-                    <!-- Right side for Designation, Company, and Description -->
-                    <div class="col-md-9">
-                        <div class="fw-bold text-dark mb-1" style="font-size: 1.1rem; color: #111827;">
-                            {{ exp.designation }}
-                        </div>
-                        <div class="fw-semibold text-secondary mb-3" style="font-size: 0.95rem;">
-                            {{ exp.company_name }}
-                        </div>
-                        <div class="exp-description-area text-secondary lh-base" style="font-size: 0.92rem; color: #4b5563;">{{ exp.description|safe }}</div>
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <p class="text-secondary small italic">No work experience listed.</p>
-            {% endfor %}
-        </div>
-
-        <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            document.querySelectorAll('.experience-entry').forEach(function(el) {
-                var startStr = el.getAttribute('data-start-date');
-                var endStr = el.getAttribute('data-end-date');
-                if (!startStr || startStr === 'None') return;
-                
-                var start = new Date(startStr);
-                var end = (endStr === 'present' || !endStr || endStr === 'None') ? new Date() : new Date(endStr);
-                
-                var totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-                if (totalMonths <= 0) {
-                    totalMonths = 1;
-                }
-                
-                var years = Math.floor(totalMonths / 12);
-                var months = totalMonths % 12;
-                
-                var durationText = "";
-                if (years > 0) {
-                    durationText += years + " year" + (years > 1 ? "s" : "") + " ";
-                }
-                if (months > 0) {
-                    durationText += months + " month" + (months > 1 ? "s" : "");
-                }
-                
-                 var durationSpan = el.querySelector('.experience-duration-text');
-                 if (durationSpan && durationText.trim() !== "") {
-                     durationSpan.textContent = "(" + durationText.trim() + ")";
-                 }
-             });
-             
-             // Format experience descriptions on load
-             function formatExperienceDescriptions() {
-                 document.querySelectorAll('.exp-description-area').forEach(function(element) {
-                     var rawHtml = element.innerHTML.trim();
-                     if (!rawHtml) return;
-                     
-                     var tempDiv = document.createElement('div');
-                     tempDiv.innerHTML = rawHtml;
-                     
-                     // Remove style tags
-                     tempDiv.querySelectorAll('style').forEach(function(st) {
-                         st.remove();
-                     });
-                     
-                     var rawLines = [];
-                     var lis = tempDiv.querySelectorAll('li');
-                     
-                     if (lis.length > 0) {
-                         lis.forEach(function(li) {
-                             var txt = li.innerText.trim();
-                             if (txt) {
-                                 rawLines.push(txt);
-                             }
-                         });
-                     } else {
-                         // Replace common paragraph, div, and break tags with newlines
-                         var htmlContent = tempDiv.innerHTML;
-                         htmlContent = htmlContent.replace(/<br\s*\/?>/gi, '\n');
-                         htmlContent = htmlContent.replace(/<\/p>/gi, '\n');
-                         htmlContent = htmlContent.replace(/<\/div>/gi, '\n');
-                         htmlContent = htmlContent.replace(/<p[^>]*>/gi, '');
-                         htmlContent = htmlContent.replace(/<div[^>]*>/gi, '');
-                         
-                         // Strip all other HTML tags
-                         var cleanText = htmlContent.replace(/<[^>]+>/g, '');
-                         
-                         cleanText.split('\n').forEach(function(line) {
-                             var txt = line.trim();
-                             if (txt) {
-                                 rawLines.push(txt);
-                             }
-                         });
-                     }
-                     
-                     var processedLines = [];
-                     rawLines.forEach(function(line) {
-                         // Split by inline bullet characters if they exist in the middle of a line
-                         var lineWithDelimiters = line.replace(/[•●▪◦○\u2022]/g, '\n');
-                         // Also split by " - " or " * " (surrounded by whitespace)
-                         lineWithDelimiters = lineWithDelimiters.replace(/\s+[\-\*]\s+/g, '\n');
-                         
-                         lineWithDelimiters.split('\n').forEach(function(part) {
-                             var cleaned = part.trim();
-                             if (cleaned) {
-                                 // Strip leading symbols: •, ●, -, *, +, etc.
-                                 cleaned = cleaned.replace(/^[•●▪◦○\-\*\+\u2022\s]+/, '').trim();
-                                 // Strip leading numbered prefixes like "1. " or "1) "
-                                 cleaned = cleaned.replace(/^\d+[\.\)]\s*/, '').trim();
-                                 
-                                 if (cleaned) {
-                                     processedLines.push(cleaned);
-                                 }
-                             }
-                         });
-                     });
-                     
-                     if (processedLines.length === 0) return;
-                     
-                     // Build the formatted container
-                     var listContainer = document.createElement('div');
-                     listContainer.className = 'ats-experience-list';
-                     
-                     processedLines.forEach(function(lineText) {
-                         var itemDiv = document.createElement('div');
-                         itemDiv.className = 'ats-experience-item';
-                         
-                         var bulletSpan = document.createElement('span');
-                         bulletSpan.className = 'ats-bullet';
-                         bulletSpan.innerHTML = '●';
-                         
-                         var textSpan = document.createElement('span');
-                         textSpan.className = 'ats-text';
-                         textSpan.innerText = lineText;
-                         
-                         itemDiv.appendChild(bulletSpan);
-                         itemDiv.appendChild(textSpan);
-                         listContainer.appendChild(itemDiv);
-                     });
-                     
-                     element.innerHTML = '';
-                     element.appendChild(listContainer);
-                 });
-             }
-             formatExperienceDescriptions();
-             
-             // Format profile summary to 2 columns on desktop if long
-             function formatProfileSummary() {
-                 var summaryEl = document.querySelector('.profile-summary-text');
-                 if (!summaryEl) return;
-                 
-                 var text = summaryEl.innerHTML.trim();
-                 if (text.length > 400) {
-                     var mid = Math.floor(text.length / 2);
-                     var splitIndex = -1;
-                     
-                     for (var offset = 0; offset < mid; offset++) {
-                         var checkIndices = [mid + offset, mid - offset];
-                         for (var i = 0; i < checkIndices.length; i++) {
-                             var idx = checkIndices[i];
-                             if (idx > 0 && idx < text.length - 10) {
-                                 if (text.substring(idx, idx + 4).toLowerCase() === '<br>') {
-                                     splitIndex = idx + 4;
-                                     break;
-                                 }
-                                 if (text.charAt(idx) === '.' && text.charAt(idx + 1) === ' ') {
-                                     splitIndex = idx + 2;
-                                     break;
-                                 }
-                             }
-                         }
-                         if (splitIndex !== -1) break;
-                     }
-                     
-                     if (splitIndex === -1) {
-                         splitIndex = text.indexOf(' ', mid);
-                         if (splitIndex === -1) {
-                             splitIndex = mid;
-                         }
-                     }
-                     
-                     var part1 = text.substring(0, splitIndex).trim();
-                     var part2 = text.substring(splitIndex).trim();
-                     
-                     if (part1 && part2) {
-                         var gridDiv = document.createElement('div');
-                         gridDiv.className = 'profile-summary-grid';
-                         
-                         var col1 = document.createElement('div');
-                         col1.innerHTML = part1;
-                         
-                         var col2 = document.createElement('div');
-                         col2.innerHTML = part2;
-                         
-                         gridDiv.appendChild(col1);
-                         gridDiv.appendChild(col2);
-                         
-                         summaryEl.innerHTML = '';
-                         summaryEl.appendChild(gridDiv);
-                     }
-                 }
-             }
-             formatProfileSummary();
-         });
-         </script>
-
-        <!-- Education -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-4" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Education</h5>
-            {% for edu in candidate.educations.all %}
-            <div class="mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}">
-                <div class="row">
-                    <!-- Left Column: Dates -->
-                    <div class="col-md-3 mb-2 mb-md-0 text-secondary">
-                        <div class="fw-semibold text-dark" style="font-size: 0.95rem;">
-                            {{ edu.start_date|date:"Y"|default:"N/A" }} – {{ edu.end_date|date:"Y"|default:"N/A" }}
-                        </div>
-                    </div>
-                    <!-- Right Column: Degree & Institution -->
-                    <div class="col-md-9">
-                        <div class="fw-bold text-dark mb-1" style="font-size: 1.1rem; color: #111827;">
-                            {{ edu.degree }}
-                        </div>
-                        <div class="fw-semibold text-secondary mb-1" style="font-size: 0.95rem;">
-                            {{ edu.institution }}
-                        </div>
-                        {% if edu.field_of_study %}
-                        <div class="text-secondary" style="font-size: 0.9rem;">
-                            Field of Study: {{ edu.field_of_study }}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <p class="text-secondary small italic">No education history listed.</p>
-            {% endfor %}
-        </div>
-
-        <!-- Skills -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Skills</h5>
-            <div class="d-flex flex-wrap gap-2">
-                {% for skill in candidate.skills.all %}
-                <span class="badge bg-light text-dark border px-3 py-2 fw-medium" style="font-size: 0.88rem; border-radius: 6px;">{{ skill.skill_name }}</span>
-                {% empty %}
-                <span class="text-muted small">No skills listed.</span>
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Projects & Certifications -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-6">
-                <div class="card p-4 border-0 shadow-sm h-100">
-                    <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Projects</h5>
-                    <ul class="list-unstyled mb-0">
-                        {% for project in candidate.projects.all %}
-                        <li class="mb-3">
-                            <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ project.title }}</h6>
-                            <div class="text-secondary x-small mb-1">{{ project.description|safe }}</div>
-                            {% if project.link %}<a href="{{ project.link }}" target="_blank" class="x-small">View Project <i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
-                        </li>
-                        {% empty %}
-                        <li class="text-secondary small italic">No projects listed.</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card p-4 border-0 shadow-sm h-100">
-                    <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Certifications</h5>
-                    <ul class="list-unstyled mb-0">
-                        {% for cert in candidate.certifications.all %}
-                        <li class="mb-3">
-                            <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ cert.name|safe }}</h6>
-                            <div class="text-secondary x-small">{{ cert.issuing_organization }} | {{ cert.issue_date|date:"M Y"|default:"" }}</div>
-                        </li>
-                        {% empty %}
-                        <li class="text-secondary small italic">No certifications listed.</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Embedded Resume PDF Viewer directly below all profile info -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center mb-3" style="border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">
-                <h5 class="fw-bold m-0" style="color: #1f2937;">Resume</h5>
-                {% if resume_exists %}
-                <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-download me-1.5"></i>Download Resume
-                </a>
-                {% endif %}
-            </div>
-            {% if resume_exists %}
-            <div class="ratio border border-light-subtle rounded overflow-hidden bg-light mb-0" style="height: 800px; max-height: 80vh;">
-                <iframe src="{% url 'frontend:candidate_resume_preview' candidate.id %}" style="border: none; width: 100%; height: 100%;"></iframe>
-            </div>
-            {% else %}
-            <div class="text-center py-5 bg-light rounded border mb-0 text-muted">
-                <i class="bi bi-file-earmark-x fs-2 mb-2 d-block text-secondary"></i>
-                <span class="small fw-semibold text-warning">Resume not found. Please re-upload.</span>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Version History Card -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Version History</h5>
-            <div class="version-timeline d-flex flex-column gap-2 mb-3">
-                {% for ver in versions_list %}
-                <div class="d-flex justify-content-between align-items-center border p-2 rounded bg-light {% if selected_version_id == ver.version %}border-primary bg-primary-subtle{% endif %} card-hover-shadow" style="cursor: pointer; transition: all 0.2s ease-in-out;" onclick="window.location.href='?version={{ ver.version }}'">
-                    <div>
-                        <div class="fw-bold x-small text-dark">{{ ver.label }}</div>
-                        <div class="text-secondary" style="font-size: 10px;">{{ ver.created_by }} | {{ ver.created_at|slice:":10" }}</div>
-                    </div>
-                    <div>
-                        {% if candidate.current_version == ver.version %}
-                            <span class="badge bg-success text-white x-small">Active</span>
-                        {% else %}
-                            <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="m-0 d-inline-block" onclick="event.stopPropagation();">
-                                {% csrf_token %}
-                                <input type="hidden" name="version_id" value="{{ ver.version }}">
-                                <button type="submit" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold text-xs" style="font-size: 10px;">Rollback</button>
-                            </form>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            
-            <div class="d-flex gap-2">
-                {% if has_undo %}
-                <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="flex-grow-1 m-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="version_id" value="{{ prev_version }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-arrow-left"></i> Undo</button>
-                </form>
-                {% else %}
-                <button class="btn btn-sm btn-outline-secondary w-100 flex-grow-1" disabled><i class="bi bi-arrow-left"></i> Undo</button>
-                {% endif %}
-
-                {% if has_redo %}
-                <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="flex-grow-1 m-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="version_id" value="{{ next_version }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Redo <i class="bi bi-arrow-right"></i></button>
-                </form>
-                {% else %}
-                <button class="btn btn-sm btn-outline-secondary w-100 flex-grow-1" disabled>Redo <i class="bi bi-arrow-right"></i></button>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Audit Logs Card -->
-        <div class="card p-4 mb-4 border-0 shadow-sm" style="max-height: 250px; overflow-y: auto;">
-            <h5 class="fw-bold mb-3"><i class="bi bi-journal-text me-2 text-warning"></i> Audit Log</h5>
-            <div class="d-flex flex-column gap-2 small">
-                {% for log in candidate.audit_logs %}
-                <div class="border-bottom pb-2">
-                    <div class="text-dark fw-bold mb-1" style="font-size: 11px;">{{ log.action }}</div>
-                    <div class="text-secondary d-flex justify-content-between" style="font-size: 9px;">
-                        <span>By: {{ log.user }}</span>
-                        <span>{{ log.timestamp|slice:":16" }}</span>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="text-center text-muted py-3 small">No audit logs recorded yet.</div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- ATS Score Breakdown Card -->
-        <div class="card p-4 mb-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-steps me-2 text-primary"></i> Score Breakdown</h5>
+            <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-steps me-2 text-primary"></i> AI ATS Suitability Score</h5>
             
             <form method="GET" class="mb-3">
-                <label class="form-label small fw-bold">Select Job Opening to Calculate Match</label>
-                <select name="job_id" class="form-select form-select-sm" onchange="this.form.submit()">
-                    <option value="">-- Choose Job --</option>
-                    {% for job in active_jobs %}
-                        <option value="{{ job.id }}" {% if selected_job.id == job.id %}selected{% endif %}>{{ job.title }} ({{ job.location }})</option>
-                    {% endfor %}
-                </select>
+                <label class="form-label small fw-bold">Evaluate Against Active Job Opening</label>
+                <div class="input-group input-group-sm">
+                    <select name="job_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">-- Choose Job --</option>
+                        {% for job in active_jobs %}
+                            <option value="{{ job.id }}" {% if selected_job.id == job.id %}selected{% endif %}>{{ job.title }} ({{ job.location }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </form>
 
             {% if selected_job and match_details %}
                 <div class="mb-3 bg-light p-3 rounded-3 text-center">
-                    <div class="x-small text-uppercase fw-bold text-secondary mb-1">ATS Suitability Match</div>
+                    <div class="x-small text-uppercase fw-bold text-secondary mb-1">Job Match Analysis</div>
                     <h2 class="fw-bold mb-1 {% if match_details.total_score >= 90 %}text-success{% elif match_details.total_score >= 75 %}text-primary{% elif match_details.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
                         {{ match_details.total_score }}%
                     </h2>
@@ -656,10 +399,130 @@ ul.resume-bullets li, ol.resume-ordered li {
             {% else %}
                 <div class="text-center py-4 bg-light rounded-3 border">
                     <i class="bi bi-info-circle text-secondary fs-3 mb-2 d-block"></i>
-                    <h6 class="text-secondary fw-bold">No Job Match Calculated</h6>
-                    <p class="text-muted x-small mb-0">Select a job opening above to calculate candidate's ATS suitability score and view breakdown.</p>
+                    <h6 class="text-secondary fw-bold">Select job opening above to calculate candidate's ATS suitability score and view breakdown.</h6>
                 </div>
             {% endif %}
+        </div>
+
+        <!-- Recruiter Notes Card (FUNCTIONAL) -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3"><i class="bi bi-journal-text me-2 text-primary"></i> Recruiter Notes</h5>
+            <form method="POST" action="{% url 'frontend:save_candidate_notes' candidate.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="mb-3">
+                    <textarea name="notes" class="form-control text-sm mb-3" rows="3" placeholder="Add your evaluation or interview notes here...">{{ candidate.recruiter_notes }}</textarea>
+                    <button type="submit" class="btn btn-primary w-100 text-sm"><i class="bi bi-floppy me-1"></i> Save Note</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Summary -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-card-text me-2 text-primary"></i> Profile Summary</h5>
+            <p class="profile-summary-text text-secondary mb-0" style="line-height: 1.75; font-size: 0.92rem;">{{ candidate.summary|linebreaksbr }}</p>
+        </div>
+
+        <!-- Skills -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-puzzle me-2 text-primary"></i> Skills</h5>
+            <div class="d-flex flex-wrap gap-2">
+                {% for skill in candidate.skills.all %}
+                <span class="badge bg-light text-dark border px-3 py-2 fw-medium" style="font-size: 0.82rem; border-radius: 6px;">{{ skill.skill_name }}</span>
+                {% empty %}
+                <span class="text-muted small">No skills listed.</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Experience -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-4" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-briefcase me-2 text-primary"></i> Work Experience</h5>
+            {% for exp in candidate.experiences.all %}
+            <div class="experience-entry mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
+                <div class="row">
+                    <div class="col-md-4 mb-2 mb-md-0 text-secondary">
+                        <div class="fw-semibold text-dark mb-1" style="font-size: 0.88rem;">
+                            {{ exp.start_date|date:"M Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif %}
+                        </div>
+                        <div class="x-small text-muted fw-normal experience-duration-text mt-1" style="font-size: 0.78rem;"></div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem; color: #111827;">
+                            {{ exp.designation }}
+                        </div>
+                        <div class="fw-semibold text-secondary mb-2" style="font-size: 0.88rem;">
+                            {{ exp.company_name }}
+                        </div>
+                        <div class="exp-description-area text-secondary lh-base" style="font-size: 0.85rem; color: #4b5563;">{{ exp.description|safe }}</div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-secondary small italic">No work experience listed.</p>
+            {% endfor %}
+        </div>
+
+        <!-- Education -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-4" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-mortarboard me-2 text-primary"></i> Education</h5>
+            {% for edu in candidate.educations.all %}
+            <div class="mb-4 pb-3 {% if not forloop.last %}border-bottom border-light-subtle{% endif %}">
+                <div class="row">
+                    <div class="col-md-4 mb-2 mb-md-0 text-secondary">
+                        <div class="fw-semibold text-dark" style="font-size: 0.88rem;">
+                            {{ edu.start_date|date:"Y"|default:"N/A" }} – {{ edu.end_date|date:"Y"|default:"N/A" }}
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem; color: #111827;">
+                            {{ edu.degree }}
+                        </div>
+                        <div class="fw-semibold text-secondary mb-1" style="font-size: 0.88rem;">
+                            {{ edu.institution }}
+                        </div>
+                        {% if edu.field_of_study %}
+                        <div class="text-secondary" style="font-size: 0.82rem;">
+                            Field of Study: {{ edu.field_of_study }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-secondary small italic">No education history listed.</p>
+            {% endfor %}
+        </div>
+
+        <!-- Projects -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-code-slash me-2 text-primary"></i> Projects</h5>
+            <ul class="list-unstyled mb-0">
+                {% for project in candidate.projects.all %}
+                <li class="mb-3">
+                    <h6 class="fw-bold mb-1" style="font-size: 0.92rem;">{{ project.title }}</h6>
+                    <div class="text-secondary x-small mb-1">{{ project.description|safe }}</div>
+                    {% if project.link %}<a href="{{ project.link }}" target="_blank" class="x-small">View Project <i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
+                </li>
+                {% empty %}
+                <li class="text-secondary small italic">No projects listed.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Certifications -->
+        <div class="card p-4 mb-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;"><i class="bi bi-award me-2 text-primary"></i> Certifications</h5>
+            <ul class="list-unstyled mb-0">
+                {% for cert in candidate.certifications.all %}
+                <li class="mb-3">
+                    <h6 class="fw-bold mb-1" style="font-size: 0.92rem;">{{ cert.name|safe }}</h6>
+                    <div class="text-secondary x-small">{{ cert.issuing_organization }} | {{ cert.issue_date|date:"M Y"|default:"" }}</div>
+                </li>
+                {% empty %}
+                <li class="text-secondary small italic">No certifications listed.</li>
+                {% endfor %}
+            </ul>
         </div>
 
         <!-- Applications Stage Management -->
@@ -690,16 +553,6 @@ ul.resume-bullets li, ol.resume-ordered li {
         </div>
         {% endif %}
 
-
-
-        <!-- Notes Card -->
-        <div class="card p-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-3">Recruiter Notes</h5>
-            <div class="mb-3">
-                <textarea class="form-control text-sm mb-3" rows="3" placeholder="Add your evaluation notes..."></textarea>
-                <button class="btn btn-primary w-100 text-sm">Save Note</button>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -708,12 +561,12 @@ ul.resume-bullets li, ol.resume-ordered li {
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-kanban me-2"></i>Add to Recruitment Pipeline</h5>
+        <h5 class="modal-title text-dark"><i class="bi bi-kanban me-2"></i>Add to Recruitment Pipeline</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}">
         {% csrf_token %}
-        <div class="modal-body">
+        <div class="modal-body text-dark">
             <div class="mb-3">
                 <label class="form-label small fw-bold">Select Job Opening</label>
                 <select name="job_id" class="form-select" required>
@@ -739,10 +592,10 @@ ul.resume-bullets li, ol.resume-ordered li {
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-share me-2"></i>Share Candidate Profile</h5>
+        <h5 class="modal-title text-dark"><i class="bi bi-share me-2"></i>Share Candidate Profile</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body text-center">
+      <div class="modal-body text-center text-dark">
         <p class="text-secondary small mb-4">Generate a read-only public link for this candidate.</p>
         
         <div class="input-group mb-3">
@@ -787,7 +640,7 @@ ul.resume-bullets li, ol.resume-ordered li {
       </div>
       <form method="POST" action="{% url 'frontend:candidate_delete' candidate.id %}" onsubmit="if (this.submitted) return false; this.submitted = true; const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.innerHTML = '<span class=\'spinner-border spinner-border-sm me-2\' role=\'status\' aria-hidden=\'true\'></span>Deleting...'; return true;">
         {% csrf_token %}
-        <div class="modal-body">
+        <div class="modal-body text-dark">
             <p>Are you sure you want to permanently delete this candidate?</p>
         </div>
         <div class="modal-footer">
@@ -795,60 +648,6 @@ ul.resume-bullets li, ol.resume-ordered li {
           <button type="submit" class="btn btn-danger px-4">Delete</button>
         </div>
       </form>
-    </div>
-  </div>
-</div>
-
-<!-- Resume Preview Modal -->
-<div class="modal fade" id="resumePreviewModal" tabindex="-1" aria-labelledby="resumePreviewModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title text-dark" id="resumePreviewModalLabel">
-          <i class="bi bi-file-earmark-pdf me-2 text-primary"></i>Resume Preview - {{ resume_filename }}
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body p-0 text-dark">
-        {% if resume_exists %}
-        <div class="bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-          <span class="small text-muted">File Name: <strong>{{ resume_filename }}</strong></span>
-          <span class="small text-muted">File Type: <span class="badge bg-secondary">{{ resume_extension|upper }}</span></span>
-        </div>
-        <div class="p-3 text-center bg-light" style="min-height: 400px; display: flex; align-items: center; justify-content: center;">
-          {% if resume_extension == 'pdf' %}
-            <iframe src="{% url 'frontend:candidate_resume_preview' candidate.id %}" width="100%" height="700px" style="border: none; border-radius: 4px;"></iframe>
-          {% elif resume_extension == 'jpg' or resume_extension == 'jpeg' or resume_extension == 'png' %}
-            <div class="w-100 overflow-auto" style="max-height: 700px;">
-              <img src="{% url 'frontend:candidate_resume_preview' candidate.id %}" class="img-fluid border rounded" alt="Resume Preview" style="max-width: 100%; height: auto;">
-            </div>
-          {% else %}
-            <div class="p-5">
-              <div class="fs-1 text-warning mb-3"><i class="bi bi-exclamation-triangle-fill"></i></div>
-              <h5 class="fw-bold">Preview not available for this file type ({{ resume_extension|upper }})</h5>
-              <p class="text-muted">You can download the file to view its contents.</p>
-              <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-success">
-                <i class="bi bi-download me-2"></i>Download {{ resume_filename }}
-              </a>
-            </div>
-          {% endif %}
-        </div>
-        {% else %}
-        <div class="p-5 text-center bg-light">
-          <div class="fs-1 text-danger mb-3"><i class="bi bi-exclamation-octagon-fill"></i></div>
-          <h5 class="fw-bold text-danger">Resume file is not available on site</h5>
-          <p class="text-muted">The physical file is missing from disk or has not been uploaded. Re-upload is required.</p>
-        </div>
-        {% endif %}
-      </div>
-      <div class="modal-footer bg-light">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        {% if resume_exists %}
-        <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-success">
-          <i class="bi bi-download me-2"></i>Download Original File
-        </a>
-        {% endif %}
-      </div>
     </div>
   </div>
 </div>
@@ -1007,6 +806,184 @@ ul.resume-bullets li, ol.resume-ordered li {
 <script>
 let resumeData = {};
 
+document.addEventListener("DOMContentLoaded", function() {
+    // Format Experience durations
+    document.querySelectorAll('.experience-entry').forEach(function(el) {
+        var startStr = el.getAttribute('data-start-date');
+        var endStr = el.getAttribute('data-end-date');
+        if (!startStr || startStr === 'None') return;
+        
+        var start = new Date(startStr);
+        var end = (endStr === 'present' || !endStr || endStr === 'None') ? new Date() : new Date(endStr);
+        
+        var totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+        if (totalMonths <= 0) {
+            totalMonths = 1;
+        }
+        
+        var years = Math.floor(totalMonths / 12);
+        var months = totalMonths % 12;
+        
+        var durationText = "";
+        if (years > 0) {
+            durationText += years + " year" + (years > 1 ? "s" : "") + " ";
+        }
+        if (months > 0) {
+            durationText += months + " month" + (months > 1 ? "s" : "");
+        }
+        
+        var durationSpan = el.querySelector('.experience-duration-text');
+        if (durationSpan && durationText.trim() !== "") {
+            durationSpan.textContent = "(" + durationText.trim() + ")";
+        }
+    });
+     
+    // Format experience descriptions on load
+    function formatExperienceDescriptions() {
+        document.querySelectorAll('.exp-description-area').forEach(function(element) {
+            var rawHtml = element.innerHTML.trim();
+            if (!rawHtml) return;
+            
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = rawHtml;
+            
+            tempDiv.querySelectorAll('style').forEach(function(st) {
+                st.remove();
+            });
+            
+            var rawLines = [];
+            var lis = tempDiv.querySelectorAll('li');
+            
+            if (lis.length > 0) {
+                lis.forEach(function(li) {
+                    var txt = li.innerText.trim();
+                    if (txt) {
+                        rawLines.push(txt);
+                    }
+                });
+            } else {
+                var htmlContent = tempDiv.innerHTML;
+                htmlContent = htmlContent.replace(/<br\s*\/?>/gi, '\n');
+                htmlContent = htmlContent.replace(/<\/p>/gi, '\n');
+                htmlContent = htmlContent.replace(/<\/div>/gi, '\n');
+                htmlContent = htmlContent.replace(/<p[^>]*>/gi, '');
+                htmlContent = htmlContent.replace(/<div[^>]*>/gi, '');
+                
+                var cleanText = htmlContent.replace(/<[^>]+>/g, '');
+                
+                cleanText.split('\n').forEach(function(line) {
+                    var txt = line.trim();
+                    if (txt) {
+                        rawLines.push(txt);
+                    }
+                });
+            }
+            
+            var processedLines = [];
+            rawLines.forEach(function(line) {
+                var lineWithDelimiters = line.replace(/[•●▪◦○\u2022]/g, '\n');
+                lineWithDelimiters = lineWithDelimiters.replace(/\s+[\-\*]\s+/g, '\n');
+                
+                lineWithDelimiters.split('\n').forEach(function(part) {
+                    var cleaned = part.trim();
+                    if (cleaned) {
+                        cleaned = cleaned.replace(/^[•●▪◦○\-\*\+\u2022\s]+/, '').trim();
+                        cleaned = cleaned.replace(/^\d+[\.\)]\s*/, '').trim();
+                        
+                        if (cleaned) {
+                            processedLines.push(cleaned);
+                        }
+                    }
+                });
+            });
+            
+            if (processedLines.length === 0) return;
+            
+            var listContainer = document.createElement('div');
+            listContainer.className = 'ats-experience-list';
+            
+            processedLines.forEach(function(lineText) {
+                var itemDiv = document.createElement('div');
+                itemDiv.className = 'ats-experience-item';
+                
+                var bulletSpan = document.createElement('span');
+                bulletSpan.className = 'ats-bullet';
+                bulletSpan.innerHTML = '●';
+                
+                var textSpan = document.createElement('span');
+                textSpan.className = 'ats-text';
+                textSpan.innerText = lineText;
+                
+                itemDiv.appendChild(bulletSpan);
+                itemDiv.appendChild(textSpan);
+                listContainer.appendChild(itemDiv);
+            });
+            
+            element.innerHTML = '';
+            element.appendChild(listContainer);
+        });
+    }
+    formatExperienceDescriptions();
+    
+    // Format profile summary
+    function formatProfileSummary() {
+        var summaryEl = document.querySelector('.profile-summary-text');
+        if (!summaryEl) return;
+        
+        var text = summaryEl.innerHTML.trim();
+        if (text.length > 400) {
+            var mid = Math.floor(text.length / 2);
+            var splitIndex = -1;
+            
+            for (var offset = 0; offset < mid; offset++) {
+                var checkIndices = [mid + offset, mid - offset];
+                for (var i = 0; i < checkIndices.length; i++) {
+                    var idx = checkIndices[i];
+                    if (idx > 0 && idx < text.length - 10) {
+                        if (text.substring(idx, idx + 4).toLowerCase() === '<br>') {
+                            splitIndex = idx + 4;
+                            break;
+                        }
+                        if (text.charAt(idx) === '.' && text.charAt(idx + 1) === ' ') {
+                            splitIndex = idx + 2;
+                            break;
+                        }
+                    }
+                }
+                if (splitIndex !== -1) break;
+            }
+            
+            if (splitIndex === -1) {
+                splitIndex = text.indexOf(' ', mid);
+                if (splitIndex === -1) {
+                    splitIndex = mid;
+                }
+            }
+            
+            var part1 = text.substring(0, splitIndex).trim();
+            var part2 = text.substring(splitIndex).trim();
+            
+            if (part1 && part2) {
+                var gridDiv = document.createElement('div');
+                gridDiv.className = 'profile-summary-grid';
+                
+                var col1 = document.createElement('div');
+                col1.innerHTML = part1;
+                
+                var col2 = document.createElement('div');
+                col2.innerHTML = part2;
+                
+                gridDiv.appendChild(col1);
+                gridDiv.appendChild(col2);
+                
+                summaryEl.innerHTML = '';
+                summaryEl.appendChild(gridDiv);
+            }
+        }
+    }
+    formatProfileSummary();
+});
+
 function copyShareLink() {
     var copyText = document.getElementById("shareLinkInput");
     copyText.select();
@@ -1026,7 +1003,6 @@ function loadResumeForm() {
         resumeData = {};
     }
     
-    // Set personal info
     const info = resumeData.personal_info || {};
     document.getElementById('edit_name').value = info.name || '';
     document.getElementById('edit_email').value = info.email || '';
@@ -1041,28 +1017,23 @@ function loadResumeForm() {
     document.getElementById('edit_summary').value = resumeData.summary || '';
     document.getElementById('edit_skills').value = (resumeData.skills || []).join(', ');
 
-    // Clear dynamic blocks
     document.getElementById('experience_list').innerHTML = '';
     document.getElementById('education_list').innerHTML = '';
     document.getElementById('projects_list').innerHTML = '';
     document.getElementById('certifications_list').innerHTML = '';
 
-    // Load Experience
     (resumeData.experience || []).forEach(exp => {
         addExperienceRow(exp.company, exp.designation, exp.start_date, exp.end_date, exp.description);
     });
 
-    // Load Education
     (resumeData.education || []).forEach(edu => {
         addEducationRow(edu.institution, edu.degree, edu.field_of_study, edu.start_date, edu.end_date);
     });
 
-    // Load Projects
     (resumeData.projects || []).forEach(proj => {
         addProjectRow(proj.title, proj.description, proj.link);
     });
 
-    // Load Certifications
     (resumeData.certifications || []).forEach(cert => {
         addCertificationRow(cert.name, cert.issuing_organization, cert.issue_date);
     });
@@ -1164,10 +1135,7 @@ function addCertificationRow(name='', org='', date='') {
     container.appendChild(div);
 }
 
-
-
 function saveStructuredResume() {
-    // Compile JSON
     const data = {
         personal_info: {
             name: document.getElementById('edit_name').value,
@@ -1188,7 +1156,6 @@ function saveStructuredResume() {
         certifications: []
     };
 
-    // Gather Experience
     document.querySelectorAll('.exp-row-item').forEach(el => {
         data.experience.push({
             company: el.querySelector('.exp-company').value,
@@ -1199,7 +1166,6 @@ function saveStructuredResume() {
         });
     });
 
-    // Gather Education
     document.querySelectorAll('.edu-row-item').forEach(el => {
         data.education.push({
             institution: el.querySelector('.edu-institution').value,
@@ -1210,7 +1176,6 @@ function saveStructuredResume() {
         });
     });
 
-    // Gather Projects
     document.querySelectorAll('.proj-row-item').forEach(el => {
         data.projects.push({
             title: el.querySelector('.proj-title').value,
@@ -1219,7 +1184,6 @@ function saveStructuredResume() {
         });
     });
 
-    // Gather Certifications
     document.querySelectorAll('.cert-row-item').forEach(el => {
         data.certifications.push({
             name: el.querySelector('.cert-name').value,
@@ -1228,7 +1192,6 @@ function saveStructuredResume() {
         });
     });
 
-    // POST structured edit request
     fetch('{% url "frontend:candidate_edit_json" candidate.id %}', {
         method: 'POST',
         headers: {
@@ -1248,7 +1211,6 @@ function saveStructuredResume() {
 }
 
 function previewAIImprovement() {
-    // Show modal immediately with loading skeletons
     const modalEl = document.getElementById('aiImprovePreviewModal');
     const myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     myModal.show();
@@ -1293,7 +1255,6 @@ function previewAIImprovement() {
             const data = res.preview_data;
             document.getElementById('ai_proposed_summary').innerText = data.summary;
             
-            // Render skills
             const skillsDiv = document.getElementById('ai_proposed_skills');
             skillsDiv.innerHTML = '';
             data.skills.forEach(sk => {
@@ -1303,7 +1264,6 @@ function previewAIImprovement() {
                 skillsDiv.appendChild(s);
             });
 
-            // Render work details
             const workDiv = document.getElementById('ai_proposed_work');
             workDiv.innerHTML = '';
             data.experience.forEach(exp => {
@@ -1313,7 +1273,6 @@ function previewAIImprovement() {
                 workDiv.appendChild(item);
             });
 
-            // Render certs
             const certsDiv = document.getElementById('ai_proposed_certs');
             certsDiv.innerHTML = '';
             data.certifications.forEach(cert => {

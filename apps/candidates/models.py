@@ -51,6 +51,7 @@ class CandidateProfile(BaseAppModel):
     portfolio_url = models.URLField(blank=True, null=True)
     ats_score = models.PositiveIntegerField(default=0, db_index=True, help_text="Calculated ATS suitability score (0-100)")
     profile_photo = models.ImageField(upload_to='candidate_photos/', null=True, blank=True)
+    recruiter_notes = models.TextField(blank=True, default="")
 
     @property
     def has_profile_photo(self):

@@ -51,6 +51,7 @@ class Application(BaseAppModel):
     cover_letter = models.TextField(blank=True, null=True)
     rejection_reason = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    in_pipeline = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         unique_together = ('job', 'candidate')

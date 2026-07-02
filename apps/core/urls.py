@@ -16,6 +16,8 @@ from .views import (
     CandidateDeleteView,
     CandidateRejectView,
     AddToPipelineView,
+    JobCandidatesView,
+    SaveCandidateNotesView,
     PublicCandidateProfileView,
     PublicJobShareView,
     ATSPipelineView,
@@ -59,6 +61,7 @@ urlpatterns = [
     path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
     path('jobs/share/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share'),
     
+    path('jobs/<uuid:job_id>/candidates/', JobCandidatesView.as_view(), name='job_candidates'),
     path('location-search/', LocationSearchView.as_view(), name='location_search'),
     
     path('candidates/', CandidateSearchView.as_view(), name='candidate_search'),
@@ -67,6 +70,7 @@ urlpatterns = [
     path('candidates/<uuid:id>/delete/', CandidateDeleteView.as_view(), name='candidate_delete'),
     path('candidates/<uuid:pk>/reject/', CandidateRejectView.as_view(), name='candidate_reject'),
     path('candidates/<uuid:pk>/add-to-pipeline/', AddToPipelineView.as_view(), name='add_to_pipeline'),
+    path('candidates/<uuid:pk>/save-notes/', SaveCandidateNotesView.as_view(), name='save_candidate_notes'),
     
     # Resume Intelligence API Endpoints
     path('candidates/<uuid:pk>/edit-json/', CandidateJSONEditView.as_view(), name='candidate_edit_json'),

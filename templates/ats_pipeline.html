@@ -34,7 +34,7 @@
             <div class="card shadow-sm border-0 border-start border-3 {% if app.match_score >= 90 %}border-success{% elif app.match_score >= 75 %}border-primary{% elif app.match_score >= 60 %}border-warning{% else %}border-danger{% endif %}" draggable="true" ondragstart="drag(event)" id="app-{{ app.id }}" data-app-id="{{ app.id }}">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="fw-bold small">{{ app.candidate.full_name|default:app.candidate.user.email }}</span>
+                        <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ selected_job.id }}" class="text-decoration-none text-dark fw-bold small">{{ app.candidate.full_name|default:app.candidate.user.email }}</a>
                         <span class="badge {% if app.match_score >= 90 %}bg-success text-white{% elif app.match_score >= 75 %}bg-primary text-white{% elif app.match_score >= 60 %}bg-warning text-dark{% else %}bg-danger text-white{% endif %} small">{{ app.match_score|floatformat:0 }}%</span>
                     </div>
                     <div class="text-secondary x-small mb-3"><i class="bi bi-briefcase me-1"></i> {{ app.job.title }}</div>

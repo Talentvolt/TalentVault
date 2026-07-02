@@ -243,7 +243,7 @@
                             <span class="fw-bold text-success small">{{ job.salary_range_lpa }}</span>
                         </td>
                         <td class="text-center">
-                            <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="apps-badge shadow-sm">
+                            <a href="{% url 'frontend:job_candidates' job.id %}" class="apps-badge shadow-sm">
                                 <i class="bi bi-people-fill"></i> {{ job.app_count|default:0 }} Candidates
                             </a>
                         </td>

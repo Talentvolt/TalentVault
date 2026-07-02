@@ -532,6 +532,121 @@ class CandidateSearchView(LoginRequiredMixin, ListView):
         context['object_list'] = candidates_list
         return context
 
+
+class JobCandidatesView(LoginRequiredMixin, ListView):
+    model = Application
+    template_name = 'job_candidates.html'
+    context_object_name = 'applications'
+    paginate_by = 10
+
+    def get_queryset(self):
+        self.job = get_object_or_404(Job, id=self.kwargs['job_id'])
+        queryset = Application.objects.filter(job=self.job).select_related('candidate__user').prefetch_related('candidate__skills', 'candidate__educations')
+        
+        # Sync ATS scores for applications under this job
+        from services.candidate_matching_service import CandidateMatchingService
+        for app in queryset:
+            if app.match_score == 0.0:
+                CandidateMatchingService.update_ats_scores(candidate_id=app.candidate.id, job_id=self.job.id)
+                
+        # Refetch
+        queryset = Application.objects.filter(job=self.job).select_related('candidate__user').prefetch_related('candidate__skills', 'candidate__educations')
+
+        # Search
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            queryset = queryset.filter(
+                Q(candidate__full_name__icontains=q) | 
+                Q(candidate__user__email__icontains=q) |
+                Q(candidate__current_company__icontains=q) |
+                Q(candidate__current_designation__icontains=q)
+            )
+            
+        # Filters:
+        # Experience
+        exp = self.request.GET.get('experience', '').strip()
+        if exp:
+            if exp == 'fresher':
+                queryset = queryset.filter(candidate__total_experience=0)
+            elif exp == '1-3':
+                queryset = queryset.filter(candidate__total_experience__gte=1, candidate__total_experience__lte=3)
+            elif exp == '3-5':
+                queryset = queryset.filter(candidate__total_experience__gte=3, candidate__total_experience__lte=5)
+            elif exp == '5-10':
+                queryset = queryset.filter(candidate__total_experience__gte=5, candidate__total_experience__lte=10)
+            elif exp == '10+':
+                queryset = queryset.filter(candidate__total_experience__gt=10)
+
+        # Location
+        location = self.request.GET.get('location', '').strip()
+        if location:
+            queryset = queryset.filter(candidate__location__icontains=location)
+            
+        # Education
+        education = self.request.GET.get('education', '').strip()
+        if education:
+            queryset = queryset.filter(candidate__educations__degree__icontains=education).distinct()
+            
+        # ATS Score
+        ats_score = self.request.GET.get('ats_score', '').strip()
+        if ats_score:
+            if ats_score == '90+':
+                queryset = queryset.filter(match_score__gte=90)
+            elif ats_score == '75-90':
+                queryset = queryset.filter(match_score__gte=75, match_score__lt=90)
+            elif ats_score == '60-75':
+                queryset = queryset.filter(match_score__gte=60, match_score__lt=75)
+            elif ats_score == 'below-60':
+                queryset = queryset.filter(match_score__lt=60)
+                
+        # Status
+        status = self.request.GET.get('status', '').strip()
+        if status:
+            queryset = queryset.filter(stage=status)
+            
+        return queryset.order_by('-match_score', '-created_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['job'] = self.job
+        
+        # Get stages lists for filters
+        context['stage_choices'] = Application.ApplicationStage.choices
+        
+        # Capture filter inputs for form persistent state
+        context['q'] = self.request.GET.get('q', '')
+        context['selected_experience'] = self.request.GET.get('experience', '')
+        context['selected_location'] = self.request.GET.get('location', '')
+        context['selected_education'] = self.request.GET.get('education', '')
+        context['selected_ats_score'] = self.request.GET.get('ats_score', '')
+        context['selected_status'] = self.request.GET.get('status', '')
+        
+        return context
+
+
+class SaveCandidateNotesView(LoginRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        profile = get_object_or_404(CandidateProfile, pk=pk)
+        notes = request.POST.get('notes', '').strip()
+        profile.recruiter_notes = notes
+        profile.save()
+        
+        # Add to audit log
+        profile.audit_logs.append({
+            "action": "Updated recruiter notes",
+            "timestamp": timezone.now().isoformat(),
+            "user": request.user.email
+        })
+        profile.save()
+        
+        messages.success(request, "Recruiter notes saved successfully.")
+        
+        next_url = request.POST.get('next') or request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
+        return redirect('frontend:candidate_detail', pk=pk)
+
+
 class MockQuerySet:
     def __init__(self, items):
         self.items = items
@@ -578,15 +693,23 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
         job_id = self.request.GET.get('job_id')
         selected_job = None
         match_details = None
+        is_in_pipeline = False
+        application_id = None
         
         if job_id:
             selected_job = Job.objects.filter(id=job_id).first()
             if selected_job:
                 from services.candidate_matching_service import CandidateMatchingService
                 match_details = CandidateMatchingService.calculate_job_ats_score(self.object, selected_job)
+                app = Application.objects.filter(candidate=self.object, job=selected_job).first()
+                if app:
+                    is_in_pipeline = app.in_pipeline
+                    application_id = app.id
                 
         context['selected_job'] = selected_job
         context['match_details'] = match_details
+        context['is_in_pipeline'] = is_in_pipeline
+        context['application_id'] = application_id
         
         # Check for duplicates
         from services.resume_intelligence import ResumeIntelligenceService
@@ -832,7 +955,12 @@ class CandidateDeleteView(LoginRequiredMixin, View):
 class CandidateRejectView(LoginRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         candidate = get_object_or_404(CandidateProfile, pk=pk)
-        applications = Application.objects.filter(candidate=candidate)
+        job_id = request.POST.get('job_id') or request.GET.get('job_id')
+        if job_id:
+            applications = Application.objects.filter(candidate=candidate, job_id=job_id)
+        else:
+            applications = Application.objects.filter(candidate=candidate)
+            
         if applications.exists():
             for app in applications:
                 old_stage = app.stage
@@ -858,6 +986,9 @@ class CandidateRejectView(LoginRequiredMixin, View):
         else:
             messages.warning(request, "Candidate has no active applications to reject.")
             
+        next_url = request.POST.get('next') or request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
         return redirect('frontend:candidate_detail', pk=pk)
 
 class UpdateApplicationStageDirectView(LoginRequiredMixin, View):
@@ -950,8 +1081,11 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
         application, created = Application.objects.get_or_create(
             candidate=candidate,
             job=job,
-            defaults={'stage': 'OPEN'}
+            defaults={'stage': 'OPEN', 'in_pipeline': True}
         )
+        if not created:
+            application.in_pipeline = True
+            application.save()
         
         # Calculate and sync ATS Score for this application
         from services.candidate_matching_service import CandidateMatchingService
@@ -977,6 +1111,9 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
         else:
             messages.info(request, "Candidate is already in this job's pipeline.")
             
+        next_url = request.POST.get('next') or request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
         return redirect('frontend:ats_pipeline')
 
 import json
@@ -990,6 +1127,22 @@ class UpdateApplicationStageView(LoginRequiredMixin, View):
             
             application = get_object_or_404(Application, id=app_id)
             old_stage = application.stage
+            
+            # Map frontend stage columns back to DB stage representation if applicable
+            stage_mapping = {
+                'APPLIED': 'OPEN',
+                'SCREENING': 'SCREENING_SELECT',
+                'SHORTLISTED': 'SYSTEM_SELECTED',
+                'INTERVIEW': 'INTERVIEW_SCHEDULE',
+                'TECHNICAL': 'INTERVIEW_SELECT',
+                'HR': 'DOCUMENTATION_STAGE',
+                'OFFER': 'OFFER_STAGE',
+                'HIRED': 'JOINED',
+                'REJECTED': 'SYSTEM_REJECTED'
+            }
+            if new_stage in stage_mapping:
+                new_stage = stage_mapping[new_stage]
+                
             application.stage = new_stage
             application.save()
             
@@ -1046,27 +1199,72 @@ class ATSPipelineView(LoginRequiredMixin, TemplateView):
         context['all_jobs'] = Job.objects.filter(status='ACTIVE')
         
         if job:
-            apps = Application.objects.filter(job=job).select_related('candidate__user')
+            apps = Application.objects.filter(job=job, in_pipeline=True).select_related('candidate__user')
+            
+            pipeline_columns = [
+                {
+                    'stage': 'APPLIED',
+                    'label': 'Applied',
+                    'color': '#3b82f6',
+                    'db_stages': ['OPEN', 'SYSTEM_SUBMITTED']
+                },
+                {
+                    'stage': 'SCREENING',
+                    'label': 'Screening',
+                    'color': '#f59e0b',
+                    'db_stages': ['SCREENING_FEEDBACK_PENDING', 'SCREENING_SELECT']
+                },
+                {
+                    'stage': 'SHORTLISTED',
+                    'label': 'Shortlisted',
+                    'color': '#10b981',
+                    'db_stages': ['SYSTEM_SELECTED', 'AUTOMATION_SKIPPED']
+                },
+                {
+                    'stage': 'INTERVIEW',
+                    'label': 'Interview',
+                    'color': '#8b5cf6',
+                    'db_stages': ['INTERVIEW_SCHEDULE', 'INTERVIEW_IN_PROCESS']
+                },
+                {
+                    'stage': 'TECHNICAL',
+                    'label': 'Technical',
+                    'color': '#6366f1',
+                    'db_stages': ['INTERVIEW_SELECT']
+                },
+                {
+                    'stage': 'HR',
+                    'label': 'HR',
+                    'color': '#ec4899',
+                    'db_stages': ['DOCUMENTATION_STAGE', 'NEGOTIATION_STAGE']
+                },
+                {
+                    'stage': 'OFFER',
+                    'label': 'Offer',
+                    'color': '#a855f7',
+                    'db_stages': ['OFFER_STAGE', 'ACCEPTED', 'JOINING_CONFIRMATION_REQUESTED', 'JOINING_CONFIRMATION_RECEIVED']
+                },
+                {
+                    'stage': 'HIRED',
+                    'label': 'Hired',
+                    'color': '#059669',
+                    'db_stages': ['JOINED']
+                },
+                {
+                    'stage': 'REJECTED',
+                    'label': 'Rejected',
+                    'color': '#ef4444',
+                    'db_stages': ['SCREENING_REJECT', 'INTERVIEW_REJECT', 'SYSTEM_REJECTED', 'DROPOUT']
+                }
+            ]
+            
             pipeline_data = []
-            stage_colors = {
-                'OPEN': '#3b82f6', # blue
-                'SCREENING_SELECT': '#198754', # green
-                'SCREENING_REJECT': '#dc3545', # red
-                'INTERVIEW_SCHEDULE': '#ffc107', # yellow
-                'INTERVIEW_SELECT': '#198754', # green
-                'INTERVIEW_REJECT': '#dc3545', # red
-                'OFFER_STAGE': '#6f42c1', # purple
-                'ACCEPTED': '#20c997', # teal
-                'JOINED': '#0f5132', # dark green
-                'DROPOUT': '#6c757d', # gray
-            }
-            for stage_val, stage_label in Application.ApplicationStage.choices:
-                color = stage_colors.get(stage_val, '#cbd5e1')
+            for col in pipeline_columns:
                 pipeline_data.append({
-                    'stage': stage_val,
-                    'label': stage_label,
-                    'apps': apps.filter(stage=stage_val),
-                    'color': color
+                    'stage': col['stage'],
+                    'label': col['label'],
+                    'apps': apps.filter(stage__in=col['db_stages']),
+                    'color': col['color']
                 })
             context['pipeline'] = pipeline_data
         return context
