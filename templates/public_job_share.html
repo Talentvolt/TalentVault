@@ -176,6 +176,7 @@
                     <div class="job-header">
                         <div class="d-flex align-items-center gap-2 mb-3">
                             <span class="badge-info"><i class="bi bi-briefcase-fill"></i> {{ job.get_job_type_display }}</span>
+                            <span class="badge-info"><i class="bi bi-building-fill"></i> {{ job.get_work_mode_display }}</span>
                             {% if job.is_remote %}
                             <span class="badge-info bg-success-subtle text-success border-success-subtle"><i class="bi bi-laptop-fill"></i> Remote</span>
                             {% endif %}

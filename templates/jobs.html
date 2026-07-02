@@ -245,7 +245,7 @@
                     <tr>
                         <td class="ps-4">
                             <div class="fw-bold text-dark fs-6">{{ job.title }}</div>
-                            <div class="text-secondary small mt-0.5"><i class="bi bi-geo-alt-fill me-1 text-secondary opacity-75"></i>{{ job.location }} &bull; {{ job.get_job_type_display }}</div>
+                            <div class="text-secondary small mt-0.5"><i class="bi bi-geo-alt-fill me-1 text-secondary opacity-75"></i>{{ job.location }} &bull; {{ job.get_job_type_display }} &bull; {{ job.get_work_mode_display }}</div>
                         </td>
                         <td>
                             <div class="fw-semibold text-secondary small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</div>

@@ -66,13 +66,16 @@
                 </div>
 
                 <div class="row mb-3">
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <label class="form-label">Location <span class="text-danger">*</span></label>
                         <select name="location" id="id_location" class="form-select select2-location {% if form.location.errors %}is-invalid{% endif %}" required>
                             {% if object %}<option value="{{ object.location }}" selected>{{ object.location }}</option>{% endif %}
                         </select>
                         {% if form.location.errors %}<div class="invalid-feedback d-block">{{ form.location.errors.0 }}</div>{% endif %}
                     </div>
+                </div>
+
+                <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label">Job Type</label>
                         <select name="job_type" class="form-select {% if form.job_type.errors %}is-invalid{% endif %}">
@@ -85,6 +88,15 @@
                             <option value="WORK_FROM_HOME" {% if object.job_type == 'WORK_FROM_HOME' or form.job_type.value == 'WORK_FROM_HOME' %}selected{% endif %}>Work From Home</option>
                         </select>
                         {% if form.job_type.errors %}<div class="invalid-feedback d-block">{{ form.job_type.errors.0 }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Work Mode <span class="text-danger">*</span></label>
+                        <select name="work_mode" class="form-select {% if form.work_mode.errors %}is-invalid{% endif %}" required>
+                            <option value="ONSITE" {% if object.work_mode == 'ONSITE' or form.work_mode.value == 'ONSITE' or not object.work_mode and not form.work_mode.value %}selected{% endif %}>Onsite</option>
+                            <option value="HYBRID" {% if object.work_mode == 'HYBRID' or form.work_mode.value == 'HYBRID' %}selected{% endif %}>Hybrid</option>
+                            <option value="REMOTE" {% if object.work_mode == 'REMOTE' or form.work_mode.value == 'REMOTE' %}selected{% endif %}>Remote</option>
+                        </select>
+                        {% if form.work_mode.errors %}<div class="invalid-feedback d-block">{{ form.work_mode.errors.0 }}</div>{% endif %}
                     </div>
                 </div>
             </div>

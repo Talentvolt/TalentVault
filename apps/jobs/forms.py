@@ -13,7 +13,7 @@ class JobForm(forms.ModelForm):
     class Meta:
         model = Job
         fields = [
-            'title', 'client', 'location', 'job_type',
+            'title', 'client', 'location', 'job_type', 'work_mode',
             'min_experience', 'max_experience',
             'currency', 'min_salary', 'max_salary', 'assets_required', 'description', 'jd_file'
         ]

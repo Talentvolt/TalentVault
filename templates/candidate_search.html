@@ -304,7 +304,7 @@
                                     </span>
                                     <span class="text-secondary x-small">
                                         {% if candidate.latest_application %}
-                                            {{ candidate.latest_application.job.location }}
+                                            {{ candidate.latest_application.job.location }} &bull; {{ candidate.latest_application.job.get_work_mode_display }}
                                         {% else %}
                                             N/A
                                         {% endif %}

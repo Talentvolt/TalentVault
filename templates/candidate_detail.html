@@ -237,6 +237,7 @@ ul.resume-bullets li, ol.resume-ordered li {
                             <div class="text-secondary fw-bold text-uppercase x-small mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">Current Job Status</div>
                             {% if latest_application %}
                                 <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">{{ latest_application.job.title }}</div>
+                                <div class="text-secondary x-small mb-1">{{ latest_application.job.get_work_mode_display }}</div>
                                 <div class="mb-2"><span class="badge {{ latest_application.badge_class }} text-xs px-2 py-1">{{ latest_application.get_stage_display }}</span></div>
                                 {% if latest_application.created_by %}
                                     <div class="text-muted x-small">via {{ latest_application.created_by.first_name|default:latest_application.created_by.email }}</div>

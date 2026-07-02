@@ -30,6 +30,11 @@ class Job(BaseAppModel):
         ('HYBRID', 'Hybrid'),
         ('WORK_FROM_HOME', 'Work From Home'),
     ], default='FULL_TIME')
+    work_mode = models.CharField(max_length=50, choices=[
+        ('ONSITE', 'Onsite'),
+        ('HYBRID', 'Hybrid'),
+        ('REMOTE', 'Remote'),
+    ], default='ONSITE')
     
     jd_file = models.FileField(upload_to='jd_files/', null=True, blank=True)
 
