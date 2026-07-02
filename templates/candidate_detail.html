@@ -197,36 +197,55 @@ ul.resume-bullets li, ol.resume-ordered li {
                     </div>
                 {% endif %}
                 <div class="flex-grow-1">
-                    <div class="d-flex align-items-center gap-3 mb-2">
-                        <h2 class="fw-bold m-0" style="font-size: 1.8rem; color: #111827;">{{ candidate.full_name|default:candidate.user.email }}</h2>
-                        {% if selected_job and match_details %}
-                        <span class="badge {{ match_details.badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Score: {{ match_details.total_score }}%</span>
-                        {% else %}
-                        <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Suitability: {{ candidate.ats_score }}%</span>
-                        {% endif %}
-                    </div>
-                    
-                    <h5 class="text-primary fw-semibold mb-3" style="font-size: 1.1rem;">
-                        {% if candidate.current_designation %}
-                        {{ candidate.current_designation }} <span class="text-secondary fw-normal">at</span> {{ candidate.current_company }}
-                        {% else %}
-                        Professional
-                        {% endif %}
-                    </h5>
-                    
-                    <div class="d-flex flex-wrap gap-4 text-sm text-secondary mb-3 align-items-center" style="font-size: 0.9rem;">
-                        <span><i class="bi bi-briefcase me-1.5"></i> {{ candidate.total_experience|floatformat:1 }} Years Exp</span>
-                        <span><i class="bi bi-geo-alt me-1.5"></i> {{ candidate.location }}</span>
-                        <span><i class="bi bi-envelope me-1.5"></i> {{ candidate.user.email }}</span>
-                        {% if candidate.user.phone_number %}
-                        <span><i class="bi bi-telephone me-1.5"></i> {{ candidate.user.phone_number }}</span>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="d-flex flex-wrap gap-4 text-xs text-muted border-top pt-2" style="font-size: 0.85rem;">
-                        <span><strong>Current CTC:</strong> {{ candidate.current_salary_lpa }}</span>
-                        <span><strong>Expected CTC:</strong> {{ candidate.expected_salary_lpa }}</span>
-                        <span><strong>Notice Period:</strong> {{ candidate.notice_period }} Days</span>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <h2 class="fw-bold m-0" style="font-size: 1.8rem; color: #111827;">{{ candidate.full_name|default:candidate.user.email }}</h2>
+                                {% if selected_job and match_details %}
+                                <span class="badge {{ match_details.badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Score: {{ match_details.total_score }}%</span>
+                                {% else %}
+                                <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Suitability: {{ candidate.ats_score }}%</span>
+                                {% endif %}
+                            </div>
+                            
+                            <h5 class="text-primary fw-semibold mb-3" style="font-size: 1.1rem;">
+                                {% if candidate.current_designation %}
+                                {{ candidate.current_designation }} <span class="text-secondary fw-normal">at</span> {{ candidate.current_company }}
+                                {% else %}
+                                Professional
+                                {% endif %}
+                            </h5>
+                            
+                            <div class="d-flex flex-wrap gap-4 text-sm text-secondary mb-3 align-items-center" style="font-size: 0.9rem;">
+                                <span><i class="bi bi-briefcase me-1.5"></i> {{ candidate.total_experience|floatformat:1 }} Years Exp</span>
+                                <span><i class="bi bi-geo-alt me-1.5"></i> {{ candidate.location }}</span>
+                                <span><i class="bi bi-envelope me-1.5"></i> {{ candidate.user.email }}</span>
+                                {% if candidate.user.phone_number %}
+                                <span><i class="bi bi-telephone me-1.5"></i> {{ candidate.user.phone_number }}</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="d-flex flex-wrap gap-4 text-xs text-muted border-top pt-2" style="font-size: 0.85rem;">
+                                <span><strong>Current CTC:</strong> {{ candidate.current_salary_lpa }}</span>
+                                <span><strong>Expected CTC:</strong> {{ candidate.expected_salary_lpa }}</span>
+                                <span><strong>Notice Period:</strong> {{ candidate.notice_period }} Days</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Current Job Status (Top-Right) -->
+                        <div class="ms-3 p-3 bg-light rounded-3 text-end" style="min-width: 220px; border: 1px solid rgba(0,0,0,0.05);">
+                            <div class="text-secondary fw-bold text-uppercase x-small mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">Current Job Status</div>
+                            {% if latest_application %}
+                                <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">{{ latest_application.job.title }}</div>
+                                <div class="mb-2"><span class="badge {{ latest_application.badge_class }} text-xs px-2 py-1">{{ latest_application.get_stage_display }}</span></div>
+                                {% if latest_application.created_by %}
+                                    <div class="text-muted x-small">via {{ latest_application.created_by.first_name|default:latest_application.created_by.email }}</div>
+                                {% endif %}
+                            {% else %}
+                                <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">Talent Pool</div>
+                                <div><span class="badge bg-secondary text-xs px-2 py-1">Unassigned</span></div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>

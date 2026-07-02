@@ -25,8 +25,8 @@ class JobForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         from apps.clients.models import Client
         self.fields['client'].queryset = Client.objects.filter(status=Client.Status.ACTIVE)
-        self.fields['client'].empty_label = "Select Client (Optional)"
-        self.fields['client'].required = False
+        self.fields['client'].empty_label = "Select Client"
+        self.fields['client'].required = True
         self.fields['client'].widget.attrs.update({'class': 'form-select'})
 
     def clean_assets_required(self):

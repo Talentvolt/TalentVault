@@ -56,12 +56,11 @@ urlpatterns = [
     
     path('jobs/', JobsView.as_view(), name='jobs'),
     path('jobs/new/', JobCreateView.as_view(), name='job_create'),
+    path('jobs/<uuid:job_id>/candidates/', JobCandidatesView.as_view(), name='job_candidates'),
     path('jobs/<uuid:pk>/edit/', JobUpdateView.as_view(), name='job_edit'),
     path('jobs/<uuid:pk>/delete/', JobDeleteView.as_view(), name='job_delete'),
     path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
     path('jobs/share/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share'),
-    
-    path('jobs/<uuid:job_id>/candidates/', JobCandidatesView.as_view(), name='job_candidates'),
     path('location-search/', LocationSearchView.as_view(), name='location_search'),
     
     path('candidates/', CandidateSearchView.as_view(), name='candidate_search'),

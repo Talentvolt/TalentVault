@@ -268,6 +268,11 @@ class JobsView(LoginRequiredMixin, ListView):
         if job_type:
             queryset = queryset.filter(job_type=job_type)
             
+        # Client filter
+        client_id = self.request.GET.get('client', '')
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+            
         # Sorting
         sort_by = self.request.GET.get('sort_by', '-created_at')
         if sort_by in ['title', '-title', 'created_at', '-created_at', 'app_count', '-app_count']:
@@ -290,12 +295,18 @@ class JobsView(LoginRequiredMixin, ListView):
         context['selected_job_type'] = self.request.GET.get('job_type', '')
         context['selected_sort'] = self.request.GET.get('sort_by', '-created_at')
         
+        from apps.clients.models import Client
+        context['clients'] = Client.objects.filter(status='ACTIVE')
+        context['selected_client'] = self.request.GET.get('client', '')
+        
         context['job_types'] = [
             ('FULL_TIME', 'Full Time'),
             ('PART_TIME', 'Part Time'),
             ('CONTRACT', 'Contract'),
             ('FREELANCE', 'Freelance'),
-            ('REMOTE', 'Remote'),
+            ('ON_SITE', 'On Site'),
+            ('HYBRID', 'Hybrid'),
+            ('WORK_FROM_HOME', 'Work From Home'),
         ]
         context['statuses'] = Job.JobStatus.choices
 
@@ -412,7 +423,16 @@ class CandidateSearchView(LoginRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = CandidateProfile.objects.select_related('user').prefetch_related('skills').all()
+        from django.db.models import Prefetch
+        from apps.applications.models import Application
+        
+        queryset = CandidateProfile.objects.select_related('user').prefetch_related(
+            'skills',
+            Prefetch(
+                'job_applications',
+                queryset=Application.objects.select_related('job', 'job__company', 'created_by').order_by('-created_at')
+            )
+        ).all()
         
         # Get Filter Params
         q = self.request.GET.get('q')
@@ -523,6 +543,9 @@ class CandidateSearchView(LoginRequiredMixin, ListView):
         from services.candidate_matching_service import CandidateMatchingService
         candidates_list = list(context.get('candidates') or context.get('object_list') or [])
         for candidate in candidates_list:
+            apps_list = list(candidate.job_applications.all())
+            candidate.latest_application = apps_list[0] if apps_list else None
+            
             if selected_job:
                 candidate.match_details = CandidateMatchingService.calculate_job_ats_score(candidate, selected_job)
             else:
@@ -680,6 +703,7 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         from apps.jobs.models import Job
+        from apps.applications.models import Application
         from datetime import datetime, date
         
         context = super().get_context_data(**kwargs)
@@ -914,6 +938,14 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
         context['public_share_url'] = self.request.build_absolute_uri(
             reverse('frontend:public_candidate_profile', kwargs={'pk': self.object.pk})
         )
+        
+        # Fetch candidate's active/latest Job Application
+        latest_app = None
+        if selected_job:
+            latest_app = Application.objects.filter(candidate_id=self.object.id, job=selected_job).select_related('job', 'created_by').first()
+        if not latest_app:
+            latest_app = Application.objects.filter(candidate_id=self.object.id).select_related('job', 'created_by').order_by('-created_at').first()
+        context['latest_application'] = latest_app
         
         return context
 

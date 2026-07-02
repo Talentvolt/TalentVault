@@ -55,9 +55,9 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Client Company</label>
-                    <select name="client" id="id_client" class="form-select {% if form.client.errors %}is-invalid{% endif %}">
-                        <option value="" {% if not object.client %}selected{% endif %}>Select Client (Optional)</option>
+                    <label class="form-label">Client Company <span class="text-danger">*</span></label>
+                    <select name="client" id="id_client" class="form-select {% if form.client.errors %}is-invalid{% endif %}" required>
+                        <option value="" {% if not object.client %}selected{% endif %}>Select Client</option>
                         {% for choice in form.fields.client.queryset %}
                             <option value="{{ choice.id }}" {% if object.client.id == choice.id or form.client.value == choice.id or form.initial.client == choice.id %}selected{% endif %}>{{ choice.company_name }}</option>
                         {% endfor %}
@@ -76,11 +76,13 @@
                     <div class="col-md-6">
                         <label class="form-label">Job Type</label>
                         <select name="job_type" class="form-select {% if form.job_type.errors %}is-invalid{% endif %}">
-                            <option value="FULL_TIME" {% if object.job_type == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
-                            <option value="PART_TIME" {% if object.job_type == 'PART_TIME' %}selected{% endif %}>Part Time</option>
-                            <option value="CONTRACT" {% if object.job_type == 'CONTRACT' %}selected{% endif %}>Contract</option>
-                            <option value="FREELANCE" {% if object.job_type == 'FREELANCE' %}selected{% endif %}>Freelance</option>
-                            <option value="REMOTE" {% if object.job_type == 'REMOTE' %}selected{% endif %}>Remote</option>
+                            <option value="FULL_TIME" {% if object.job_type == 'FULL_TIME' or form.job_type.value == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
+                            <option value="PART_TIME" {% if object.job_type == 'PART_TIME' or form.job_type.value == 'PART_TIME' %}selected{% endif %}>Part Time</option>
+                            <option value="CONTRACT" {% if object.job_type == 'CONTRACT' or form.job_type.value == 'CONTRACT' %}selected{% endif %}>Contract</option>
+                            <option value="FREELANCE" {% if object.job_type == 'FREELANCE' or form.job_type.value == 'FREELANCE' %}selected{% endif %}>Freelance</option>
+                            <option value="ON_SITE" {% if object.job_type == 'ON_SITE' or form.job_type.value == 'ON_SITE' %}selected{% endif %}>On Site</option>
+                            <option value="HYBRID" {% if object.job_type == 'HYBRID' or form.job_type.value == 'HYBRID' %}selected{% endif %}>Hybrid</option>
+                            <option value="WORK_FROM_HOME" {% if object.job_type == 'WORK_FROM_HOME' or form.job_type.value == 'WORK_FROM_HOME' %}selected{% endif %}>Work From Home</option>
                         </select>
                         {% if form.job_type.errors %}<div class="invalid-feedback d-block">{{ form.job_type.errors.0 }}</div>{% endif %}
                     </div>

@@ -289,33 +289,31 @@
                             <div class="col-12 d-flex justify-content-between align-items-start">
                                 <div class="d-flex flex-column gap-1 overflow-hidden" style="max-width: 75%;">
                                     <span class="fw-semibold text-dark text-truncate small">
-                                        {% if candidate.job_applications.first %}
-                                            {{ candidate.job_applications.first.job.title }}
-                                        {% elif selected_job %}
-                                            {{ selected_job.title }}
+                                        {% if candidate.latest_application %}
+                                            {{ candidate.latest_application.job.title }}
                                         {% else %}
-                                            Business Development Executive
+                                            Talent Pool
                                         {% endif %}
                                     </span>
                                     <span class="text-secondary x-small">
-                                        {% if candidate.job_applications.first %}
-                                            {{ candidate.job_applications.first.job.company.name }}
+                                        {% if candidate.latest_application %}
+                                            {{ candidate.latest_application.job.company.name }}
                                         {% else %}
-                                            Sales & Account Management
+                                            Unassigned
                                         {% endif %}
                                     </span>
                                     <span class="text-secondary x-small">
-                                        {% if candidate.job_applications.first %}
-                                            {{ candidate.job_applications.first.job.location }}
+                                        {% if candidate.latest_application %}
+                                            {{ candidate.latest_application.job.location }}
                                         {% else %}
-                                            Delhi / Gurgaon / Ghaziabad
+                                            N/A
                                         {% endif %}
                                     </span>
                                 </div>
                                 <div class="d-flex flex-column align-items-end gap-1.5" style="min-width: 25%;">
                                     <!-- Stage Badge -->
-                                    <span class="badge {% if candidate.job_applications.first %}{{ candidate.job_applications.first.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-1 rounded-pill small fw-medium">
-                                        Stage: {% if candidate.job_applications.first %}{{ candidate.job_applications.first.get_stage_display }}{% else %}Sourced{% endif %}
+                                    <span class="badge {% if candidate.latest_application %}{{ candidate.latest_application.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-1 rounded-pill small fw-medium">
+                                        Stage: {% if candidate.latest_application %}{{ candidate.latest_application.get_stage_display }}{% else %}Unassigned{% endif %}
                                     </span>
                                     
                                     <!-- ATS Score Badge -->

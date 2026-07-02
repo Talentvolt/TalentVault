@@ -26,7 +26,9 @@ class Job(BaseAppModel):
         ('PART_TIME', 'Part Time'),
         ('CONTRACT', 'Contract'),
         ('FREELANCE', 'Freelance'),
-        ('REMOTE', 'Remote'),
+        ('ON_SITE', 'On Site'),
+        ('HYBRID', 'Hybrid'),
+        ('WORK_FROM_HOME', 'Work From Home'),
     ], default='FULL_TIME')
     
     jd_file = models.FileField(upload_to='jd_files/', null=True, blank=True)

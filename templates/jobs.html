@@ -161,8 +161,19 @@
 <div class="card shadow-sm border-0 mb-4 fade-in" style="border-radius: 16px;">
     <div class="card-body p-4">
         <form method="GET" class="row g-3 align-items-end">
+            <!-- Client Filter -->
+            <div class="col-md-2">
+                <label for="client" class="form-label small fw-bold text-secondary">Client</label>
+                <select name="client" id="client" class="form-select form-select-sm fw-medium">
+                    <option value="">All Clients</option>
+                    {% for c in clients %}
+                        <option value="{{ c.id }}" {% if selected_client == c.id|stringformat:"s" %}selected{% endif %}>{{ c.company_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
             <!-- Search -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="q" class="form-label small fw-bold text-secondary">Search</label>
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
@@ -193,7 +204,7 @@
             </div>
             
             <!-- Sort By -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="sort_by" class="form-label small fw-bold text-secondary">Sort By</label>
                 <select name="sort_by" id="sort_by" class="form-select form-select-sm fw-medium">
                     <option value="-created_at" {% if selected_sort == '-created_at' %}selected{% endif %}>Newest First</option>
