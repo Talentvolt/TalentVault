@@ -42,7 +42,11 @@ SUPPORTED_EXTENSIONS = {'pdf', 'doc', 'docx', 'rtf', 'txt', 'zip'}
 SUPPORTED_MIME_TYPES = {
     'pdf': ['application/pdf'],
     'doc': ['application/msword'],
-    'docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    'docx': [
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/zip',
+        'application/octet-stream'
+    ],
     'rtf': ['application/rtf', 'text/rtf', 'application/x-rtf'],
     'txt': ['text/plain'],
     'zip': ['application/zip', 'application/x-zip-compressed', 'application/x-zip']
@@ -278,48 +282,65 @@ def validate_single_file_content(file_bytes, filename, ext):
     """
     Validate a single file (not a zip) for type, signature, size, password protection, virus, and active content.
     """
-    # 1. Check Magic number / signature
-    if ext in MAGIC_SIGNATURES:
-        sig = MAGIC_SIGNATURES[ext]
-        if not file_bytes.startswith(sig):
-            raise SecurityValidationError("Unsupported file format.", code="MAGIC_MISMATCH")
-            
-    # 2. MIME type check
     mime = get_mime_type(file_bytes, filename, ext)
-    allowed_mimes = SUPPORTED_MIME_TYPES.get(ext, [])
-    if mime not in allowed_mimes:
-        # Special check: sometimes RTF or TXT can have text/plain or application/rtf variations
-        if ext == 'rtf' and mime in ['application/rtf', 'text/rtf', 'application/x-rtf']:
-            pass
-        elif ext == 'txt' and mime.startswith('text/'):
-            pass
+    validation_status = "FAILED"
+    try:
+        # 1. Check Magic number / signature
+        if ext in MAGIC_SIGNATURES:
+            sig = MAGIC_SIGNATURES[ext]
+            if not file_bytes.startswith(sig):
+                raise SecurityValidationError("Unsupported file format.", code="MAGIC_MISMATCH")
+                
+        # 2. MIME type check
+        if HAS_MAGIC:
+            allowed_mimes = SUPPORTED_MIME_TYPES.get(ext, [])
+            if mime not in allowed_mimes:
+                # Special check: sometimes RTF or TXT can have text/plain or application/rtf variations
+                if ext == 'rtf' and mime in ['application/rtf', 'text/rtf', 'application/x-rtf']:
+                    pass
+                elif ext == 'txt' and mime.startswith('text/'):
+                    pass
+                else:
+                    raise SecurityValidationError("Unsupported file format.", code="MIME_MISMATCH")
         else:
-            raise SecurityValidationError("Unsupported file format.", code="MIME_MISMATCH")
+            # Fall back to extension-based validation (already checked by signature and extension check)
+            pass
 
-    # 3. Password protection check
-    if detect_password_protection(file_bytes, ext):
-        raise SecurityValidationError("Password protected document.", code="PASSWORD_PROTECTED")
+        # 3. Password protection check
+        if detect_password_protection(file_bytes, ext):
+            raise SecurityValidationError("Password protected document.", code="PASSWORD_PROTECTED")
 
-    # 4. Malware / Virus Scan
-    status, virus_info = scan_bytes_with_clamd(file_bytes)
-    if status == "INFECTED":
-        raise SecurityValidationError("Virus detected.", code="VIRUS_DETECTED")
+        # 4. Malware / Virus Scan
+        status, virus_info = scan_bytes_with_clamd(file_bytes)
+        if status == "INFECTED":
+            raise SecurityValidationError("Virus detected.", code="VIRUS_DETECTED")
 
-    # 5. Office security scan (macros, active content, etc.)
-    if ext in ['doc', 'docx']:
-        scan_office_security(file_bytes, filename, ext)
+        # 5. Office security scan (macros, active content, etc.)
+        if ext in ['doc', 'docx']:
+            scan_office_security(file_bytes, filename, ext)
 
-    # 6. PDF security scan
-    if ext == 'pdf':
-        scan_pdf_security(file_bytes)
+        # 6. PDF security scan
+        if ext == 'pdf':
+            scan_pdf_security(file_bytes)
 
-    # 7. Plain text check for TXT
-    if ext == 'txt':
-        # Ensure it doesn't contain null bytes (often binary files)
-        if b'\x00' in file_bytes:
-            raise SecurityValidationError("Unsupported file format.", code="BINARY_TXT")
+        # 7. Plain text check for TXT
+        if ext == 'txt':
+            # Ensure it doesn't contain null bytes (often binary files)
+            if b'\x00' in file_bytes:
+                raise SecurityValidationError("Unsupported file format.", code="BINARY_TXT")
 
-    return True
+        validation_status = "PASSED"
+        return True
+    except Exception as e:
+        validation_status = f"FAILED: {str(e)}"
+        raise
+    finally:
+        logger.info(
+            f"[FILE VALIDATION] Filename: {filename} | "
+            f"Extension: {ext} | "
+            f"MIME Type: {mime} | "
+            f"Result: {validation_status}"
+        )
 
 def validate_zip_archive(zip_bytes, current_depth=1):
     """
