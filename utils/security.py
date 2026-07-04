@@ -18,10 +18,8 @@ logger = logging.getLogger(__name__)
 
 try:
     import magic
-    # Verify magic actually works and libmagic is loaded
-    magic.from_buffer(b"", mime=True)
     HAS_MAGIC = True
-except Exception:
+except ImportError:
     magic = None
     HAS_MAGIC = False
 
