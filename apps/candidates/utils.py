@@ -1,6 +1,7 @@
 import re
 import zipfile
 import io
+import hashlib
 import pdfplumber
 import docx
 import logging
@@ -503,13 +504,13 @@ class OpenAIResumeParser:
         print(f"[TIMING] JSON validation & conversion took: {time.time() - t_val:.4f}s")
         return result
 
-def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None):
+def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None):
     import time
     t_process_start = time.time()
     
-    # Support images, screenshots, scanned PDFs, etc.
-    ext = filename.split('.')[-1].lower()
-    if ext not in ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'tiff', 'bmp']:
+    # Support only PDF, DOC, DOCX, RTF, TXT
+    ext = filename.split('.')[-1].lower() if '.' in filename else ''
+    if ext not in ['pdf', 'doc', 'docx', 'rtf', 'txt']:
         logger.error(f"[PARSER ERROR] Invalid format uploaded: {filename}")
         return None, "INVALID_FORMAT"
         
@@ -521,6 +522,15 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     except Exception as e:
         logger.error(f"[PARSER READ ERROR] Error reading file bytes for {filename}: {str(e)}", exc_info=True)
         return None, "READ_ERROR"
+
+    # Enforce security validation if not already done
+    if security_data is None:
+        from utils.security import perform_all_security_validations
+        try:
+            security_data = perform_all_security_validations(file_bytes, filename)
+        except Exception as e:
+            logger.error(f"[PARSER SECURITY REJECT] File {filename} failed security check: {str(e)}")
+            return None, "SECURITY_FAILED"
 
     from services.resume_intelligence import ResumeIntelligenceService
     
@@ -953,11 +963,27 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 "user": "System"
             }]
             
+            if security_data:
+                profile.original_filename = security_data.get("sanitized_filename", filename)
+                profile.secure_filename = security_data.get("secure_filename")
+                profile.sha256 = security_data.get("sha256")
+                profile.mime_type = security_data.get("mime_type")
+                profile.scan_status = security_data.get("scan_status", "PASSED")
+                profile.scan_timestamp = security_data.get("scan_timestamp")
+                profile.parser_status = "SUCCESS"
+                profile.preview_status = "READY"
+            else:
+                profile.original_filename = filename
+                profile.secure_filename = filename
+                profile.parser_status = "SUCCESS"
+                profile.preview_status = "READY"
+
             try:
-                profile.resume.save(filename, ContentFile(file_bytes), save=False)
-                profile.original_file.save("original_" + filename, ContentFile(file_bytes), save=False)
-                logger.info(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
-                print(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {filename}")
+                save_filename = security_data.get("secure_filename") if (security_data and security_data.get("secure_filename")) else filename
+                profile.resume.save(save_filename, ContentFile(file_bytes), save=False)
+                profile.original_file.save("original_" + save_filename, ContentFile(file_bytes), save=False)
+                logger.info(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {save_filename}")
+                print(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {save_filename}")
                 
                 if photo_bytes is None:
                     logger.info("[PHOTO] No valid candidate portrait found.")
@@ -1088,24 +1114,77 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         print(f"[PARSER DATABASE SAVE FAILURE] Exception Traceback in process_resume_file:\n{tb}")
         return None, "SAVE_FAILED"
 
-def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None):
+def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None, user=None):
+    from utils.security import perform_all_security_validations, log_upload_attempt, SecurityValidationError
+    
     results = {'created': [], 'duplicates': 0, 'errors': 0, 'error_reasons': []}
     
+    try:
+        if hasattr(uploaded_file, 'seek'):
+            uploaded_file.seek(0)
+        file_bytes = uploaded_file.read()
+    except Exception as e:
+        log_upload_attempt(uploaded_file.name, None, user, "ERROR", "ERROR", f"Read error: {str(e)}")
+        raise ValueError("Error reading file bytes.")
+
+    sha256 = hashlib.sha256(file_bytes).hexdigest()
+
+    try:
+        # Perform all security validations
+        security_data = perform_all_security_validations(file_bytes, uploaded_file.name)
+        # Log successful upload scan
+        log_upload_attempt(uploaded_file.name, sha256, user, "CLEAN", "CLEAN")
+    except SecurityValidationError as e:
+        # Log rejected attempt
+        log_upload_attempt(uploaded_file.name, sha256, user, "INFECTED" if "Virus" in str(e) else "CLEAN", "INFECTED" if "Malware" in str(e) else "CLEAN", str(e))
+        raise ValueError(str(e))
+    except Exception as e:
+        log_upload_attempt(uploaded_file.name, sha256, user, "ERROR", "ERROR", str(e))
+        raise ValueError(str(e))
+
+    ext = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
+
     reason_map = {
-        "INVALID_FORMAT": "Invalid file format. Supported: PDF, DOC, DOCX, PNG, JPG, JPEG, TIFF, BMP.",
+        "INVALID_FORMAT": "Invalid file format. Supported: PDF, DOC, DOCX, RTF, TXT.",
         "READ_ERROR": "Error reading file bytes.",
         "OCR_FAILED": "OCR engine extraction failed.",
         "NLP_FAILED": "NLP parsing/extraction failed.",
-        "SAVE_FAILED": "Database save failed."
+        "SAVE_FAILED": "Database save failed.",
+        "SECURITY_FAILED": "Security validation failed."
     }
-    
-    if uploaded_file.name.lower().endswith('.zip'):
-        with zipfile.ZipFile(uploaded_file, 'r') as z:
-            for filename in z.namelist():
-                if filename.lower().endswith(('.pdf', '.docx', '.png', '.jpg', '.jpeg')):
+
+    if ext == 'zip':
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes), 'r') as z:
+                for filename in z.namelist():
+                    # Directories or nested zip files are not processed directly
+                    if filename.endswith('/') or filename.lower().endswith('.zip'):
+                        continue
+                    
+                    sub_ext = filename.split('.')[-1].lower() if '.' in filename else ''
+                    if sub_ext not in ['pdf', 'doc', 'docx', 'rtf', 'txt']:
+                        continue
+                        
                     with z.open(filename) as f:
-                        file_obj = io.BytesIO(f.read()) 
-                        profile, status = process_resume_file(file_obj, filename, overwrite, progress_callback)
+                        sub_bytes = f.read()
+                        sub_sha = hashlib.sha256(sub_bytes).hexdigest()
+                        
+                        import magic
+                        from utils.security import sanitize_filename, generate_secure_filename
+                        sub_security_data = {
+                            "sanitized_filename": sanitize_filename(filename),
+                            "secure_filename": generate_secure_filename(filename),
+                            "sha256": sub_sha,
+                            "mime_type": magic.from_buffer(sub_bytes, mime=True),
+                            "scan_status": "PASSED",
+                            "scan_timestamp": timezone.now()
+                        }
+                        
+                        file_obj = io.BytesIO(sub_bytes)
+                        profile, status = process_resume_file(
+                            file_obj, filename, overwrite, progress_callback, security_data=sub_security_data
+                        )
+                        
                         if status == "SUCCESS":
                             results['created'].append(profile)
                         elif status == "DUPLICATE":
@@ -1114,8 +1193,13 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None)
                             results['errors'] += 1
                             err_reason = reason_map.get(status, f"Unknown parsing error ({status})")
                             results['error_reasons'].append(f"{filename}: {err_reason}")
+        except Exception as e:
+            raise ValueError(f"ZIP processing error: {str(e)}")
     else:
-        profile, status = process_resume_file(uploaded_file, uploaded_file.name, overwrite, progress_callback)
+        file_obj = io.BytesIO(file_bytes)
+        profile, status = process_resume_file(
+            file_obj, uploaded_file.name, overwrite, progress_callback, security_data=security_data
+        )
         if status == "SUCCESS":
             results['created'].append(profile)
         elif status == "DUPLICATE":

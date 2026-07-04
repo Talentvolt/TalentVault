@@ -1528,7 +1528,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
             from django.db import connection
             try:
                 connection.close() # Ensure fresh database connection for thread
-                results = handle_resume_upload(in_memory_file, overwrite=overwrite, progress_callback=progress_cb)
+                results = handle_resume_upload(in_memory_file, overwrite=overwrite, progress_callback=progress_cb, user=request.user)
                 created_profiles = results['created']
                 duplicates = results['duplicates']
                 error_reasons = results.get('error_reasons', [])
@@ -1540,8 +1540,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                         reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
                         q.put({"stage": "error", "message": f"Parsing failed: {reason}"})
             except Exception as e:
-                import traceback
-                q.put({"stage": "error", "message": f"Unexpected error: {str(e)}"})
+                q.put({"stage": "error", "message": str(e)})
             finally:
                 connection.close()
                 q.put(None)
@@ -2214,31 +2213,16 @@ class CandidateExportPDFView(LoginRequiredMixin, View):
 @method_decorator(xframe_options_sameorigin, name='dispatch')
 class CandidateResumePreviewView(LoginRequiredMixin, View):
     """
-    Renders inline candidate resume in browser for PDF, JPG, PNG previews.
+    Renders inline candidate resume in browser for PDF, JPG, PNG, DOC, DOCX, RTF, TXT previews.
     Only displays the original uploaded file stored in CandidateProfile.resume.
     """
     def get(self, request, pk, *args, **kwargs):
-        import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
+        candidate.preview_status = 'VIEWED'
+        candidate.save(update_fields=['preview_status'])
         
-        if not candidate.resume:
-            return HttpResponse("No resume file found.", status=404)
-            
-        try:
-            file_path = candidate.resume.path
-            if os.path.exists(file_path):
-                f = open(file_path, 'rb')
-                import mimetypes
-                content_type, _ = mimetypes.guess_type(file_path)
-                if not content_type:
-                    content_type = 'application/octet-stream'
-                response = FileResponse(f, content_type=content_type)
-                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
-                return response
-        except Exception as e:
-            return HttpResponse(f"Error opening resume: {str(e)}", status=500)
-            
-        return HttpResponse("No resume file found on disk.", status=404)
+        from utils.preview import generate_resume_preview_response
+        return generate_resume_preview_response(candidate)
 
 
 class CandidateResumeDownloadView(LoginRequiredMixin, View):
@@ -2255,7 +2239,8 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
         try:
             file_path = candidate.resume.path
             if os.path.exists(file_path):
-                filename = os.path.basename(file_path)
+                # Retrieve the original sanitized filename instead of the secure internal uuid name
+                filename = candidate.original_filename or os.path.basename(file_path)
                 f = open(file_path, 'rb')
                 import mimetypes
                 content_type, _ = mimetypes.guess_type(file_path)
@@ -2276,27 +2261,12 @@ class PublicCandidateResumePreviewView(View):
     Only displays the original uploaded file stored in CandidateProfile.resume.
     """
     def get(self, request, pk, *args, **kwargs):
-        import os
         candidate = get_object_or_404(CandidateProfile, pk=pk)
+        candidate.preview_status = 'VIEWED'
+        candidate.save(update_fields=['preview_status'])
         
-        if not candidate.resume:
-            return HttpResponse("No resume file found.", status=404)
-            
-        try:
-            file_path = candidate.resume.path
-            if os.path.exists(file_path):
-                f = open(file_path, 'rb')
-                import mimetypes
-                content_type, _ = mimetypes.guess_type(file_path)
-                if not content_type:
-                    content_type = 'application/octet-stream'
-                response = FileResponse(f, content_type=content_type)
-                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
-                return response
-        except Exception as e:
-            return HttpResponse(f"Error opening resume: {str(e)}", status=500)
-            
-        return HttpResponse("No resume file found on disk.", status=404)
+        from utils.preview import generate_resume_preview_response
+        return generate_resume_preview_response(candidate)
 
 
 class PublicCandidateResumeDownloadView(View):
@@ -2313,7 +2283,7 @@ class PublicCandidateResumeDownloadView(View):
         try:
             file_path = candidate.resume.path
             if os.path.exists(file_path):
-                filename = os.path.basename(file_path)
+                filename = candidate.original_filename or os.path.basename(file_path)
                 f = open(file_path, 'rb')
                 import mimetypes
                 content_type, _ = mimetypes.guess_type(file_path)

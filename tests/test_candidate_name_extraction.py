@@ -7,6 +7,19 @@ from apps.candidates.utils import process_resume_file
 from apps.candidates.models import CandidateProfile
 from apps.accounts.models import User
 
+@pytest.fixture(scope="module", autouse=True)
+def mock_security_validations():
+    with patch('utils.security.perform_all_security_validations') as mock_val:
+        mock_val.return_value = {
+            "sanitized_filename": "resume.pdf",
+            "secure_filename": "resume_secure.pdf",
+            "sha256": "fake_sha256",
+            "mime_type": "application/pdf",
+            "scan_status": "PASSED",
+            "scan_timestamp": None
+        }
+        yield
+
 # --- Helper Tests for validator ---
 
 def test_is_valid_name_valid_cases():
@@ -102,7 +115,7 @@ def test_process_resume_only_phone_number(mock_ocr):
     }
 
     file_obj = io.BytesIO(b"dummy image content")
-    profile, status = process_resume_file(file_obj, "scanned_resume.png")
+    profile, status = process_resume_file(file_obj, "scanned_resume.pdf")
 
     assert status == "SUCCESS"
     assert profile is not None

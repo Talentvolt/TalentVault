@@ -202,4 +202,10 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
+# ClamAV and Document Processing Security settings
+CLAMAV_HOST = os.environ.get('CLAMAV_HOST', '127.0.0.1')
+CLAMAV_PORT = int(os.environ.get('CLAMAV_PORT', 3310))
+CLAMAV_STRICT = os.environ.get('CLAMAV_STRICT', 'False').lower() in ('true', '1', 'yes')
+SOFFICE_PATH = os.environ.get('SOFFICE_PATH', 'soffice')
+
 

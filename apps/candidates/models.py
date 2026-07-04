@@ -82,6 +82,16 @@ class CandidateProfile(BaseAppModel):
     edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='edited_profiles')
     edited_at = models.DateTimeField(null=True, blank=True)
 
+    # Security and File Processing Audit fields
+    original_filename = models.CharField(max_length=255, blank=True, null=True)
+    secure_filename = models.CharField(max_length=255, blank=True, null=True)
+    sha256 = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    mime_type = models.CharField(max_length=100, blank=True, null=True)
+    scan_status = models.CharField(max_length=50, blank=True, null=True)
+    scan_timestamp = models.DateTimeField(blank=True, null=True)
+    parser_status = models.CharField(max_length=50, blank=True, null=True)
+    preview_status = models.CharField(max_length=50, blank=True, null=True)
+
     # Immutable original resume fields
     raw_resume_text = models.TextField(blank=True, default="")
     original_experience_json = models.JSONField(default=list, blank=True)

@@ -1072,11 +1072,17 @@ class ResumeIntelligenceService:
 
     @staticmethod
     def detect_resume_type(filename: str) -> str:
-        ext = filename.split('.')[-1].lower()
+        ext = filename.split('.')[-1].lower() if '.' in filename else ''
         if ext in ['pdf']:
             return 'PDF'
-        elif ext in ['docx', 'doc']:
+        elif ext in ['docx']:
             return 'DOCX'
+        elif ext in ['doc']:
+            return 'DOC'
+        elif ext in ['rtf']:
+            return 'RTF'
+        elif ext in ['txt']:
+            return 'TXT'
         elif ext in ['png', 'jpg', 'jpeg', 'tiff', 'bmp']:
             return 'IMAGE'
         return 'UNKNOWN'
@@ -1091,6 +1097,61 @@ class ResumeIntelligenceService:
         extracted_text = ""
         used_engine = "None (Direct Text Extraction)"
         confidence = 100.0
+
+        if resume_type == 'TXT':
+            try:
+                extracted_text = file_bytes.decode('utf-8', errors='ignore')
+            except Exception as e:
+                extracted_text = f"TXT Parse Error: {str(e)}"
+            return {
+                "text": extracted_text,
+                "engine": "text-decode",
+                "confidence": 100.0,
+                "resume_type": "TEXT",
+                "largest_bold_name": None
+            }
+
+        if resume_type == 'RTF':
+            from striprtf.striprtf import rtf_to_text
+            try:
+                rtf_content = file_bytes.decode('utf-8', errors='ignore')
+                extracted_text = rtf_to_text(rtf_content)
+            except Exception as e:
+                extracted_text = f"RTF Parse Error: {str(e)}"
+            return {
+                "text": extracted_text,
+                "engine": "striprtf",
+                "confidence": 100.0,
+                "resume_type": "RTF",
+                "largest_bold_name": None
+            }
+
+        if resume_type == 'DOC':
+            import tempfile
+            from utils.preview import convert_doc_to_pdf
+            largest_bold_name = None
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    doc_path = os.path.join(tmpdir, "temp.doc")
+                    with open(doc_path, "wb") as tmp_doc:
+                        tmp_doc.write(file_bytes)
+                    convert_doc_to_pdf(doc_path, tmpdir)
+                    pdf_path = os.path.join(tmpdir, "temp.pdf")
+                    if os.path.exists(pdf_path):
+                        with open(pdf_path, "rb") as tmp_pdf:
+                            pdf_bytes = tmp_pdf.read()
+                        # Run extraction on the generated PDF
+                        return ResumeIntelligenceService.run_ocr_pipeline(pdf_bytes, "temp.pdf")
+            except Exception as e:
+                logger.error(f"DOC to PDF text extraction failed: {e}", exc_info=True)
+                extracted_text = f"DOC Parse Error: {str(e)}"
+            return {
+                "text": extracted_text,
+                "engine": "soffice-pdf-fallback",
+                "confidence": 50.0,
+                "resume_type": "EDITABLE_DOC",
+                "largest_bold_name": None
+            }
 
         if resume_type == 'DOCX':
             # Direct python-docx parsing
