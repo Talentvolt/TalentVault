@@ -18,23 +18,16 @@ logger = logging.getLogger(__name__)
 
 try:
     import magic
-    # Attempt a dummy call to verify that the underlying libmagic library is loaded
+    # Verify magic actually works and libmagic is loaded
     magic.from_buffer(b"", mime=True)
     HAS_MAGIC = True
-except (ImportError, Exception) as e:
+except Exception:
+    magic = None
     HAS_MAGIC = False
+
+if not HAS_MAGIC:
     print("Advanced MIME detection unavailable. Using secure fallback validation.")
     logger.warning("Advanced MIME detection unavailable. Using secure fallback validation.")
-    
-    # Define a dummy module/class to avoid crashes if any code tries to access magic attributes
-    class DummyMagic:
-        @staticmethod
-        def from_buffer(buf, mime=False):
-            return None
-
-    import sys
-    sys.modules['magic'] = DummyMagic
-    magic = DummyMagic
 
 # Resource limits
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB

@@ -32,7 +32,7 @@ def test_generate_secure_filename():
     assert fn.endswith(".pdf")
     assert len(fn) > 30
 
-@patch('magic.from_buffer', return_value="application/pdf")
+@patch('utils.security.get_mime_type', return_value="application/pdf")
 @patch('utils.security.scan_bytes_with_clamd')
 def test_virus_detection(mock_scan, mock_magic):
     mock_scan.return_value = ("INFECTED", "Eicar-Test-Signature")
@@ -87,14 +87,14 @@ def test_zip_dangerous_extension():
         validate_zip_archive(zip_buffer.getvalue())
     assert "Executable found inside ZIP." in str(excinfo.value)
 
-@patch('magic.from_buffer', return_value="application/pdf")
+@patch('utils.security.get_mime_type', return_value="application/pdf")
 def test_pdf_active_content_js(mock_magic):
     pdf_bytes = b"%PDF-1.4 ... /JavaScript ... /JS"
     with pytest.raises(SecurityValidationError) as excinfo:
         perform_all_security_validations(pdf_bytes, "resume.pdf")
     assert "Suspicious PDF content detected." in str(excinfo.value)
 
-@patch('magic.from_buffer', return_value="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+@patch('utils.security.get_mime_type', return_value="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 def test_docx_office_macro_detection(mock_magic):
     with patch('oletools.olevba.VBA_Parser.detect_vba_macros', return_value=True):
         with pytest.raises(SecurityValidationError) as excinfo:
@@ -103,7 +103,7 @@ def test_docx_office_macro_detection(mock_magic):
 
 @pytest.mark.django_db
 @patch('utils.security.scan_pdf_security', return_value=True)
-@patch('magic.from_buffer', return_value="application/pdf")
+@patch('utils.security.get_mime_type', return_value="application/pdf")
 @patch('utils.security.scan_bytes_with_clamd')
 @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
 def test_successful_validation_and_database_store(mock_ocr, mock_scan, mock_magic, mock_pdf):
