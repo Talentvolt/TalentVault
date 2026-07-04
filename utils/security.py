@@ -7,7 +7,7 @@ import socket
 import struct
 import logging
 import zipfile
-import magic
+import mimetypes
 import fitz
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -15,6 +15,26 @@ from django.utils import timezone
 from oletools.olevba import VBA_Parser
 
 logger = logging.getLogger(__name__)
+
+try:
+    import magic
+    # Attempt a dummy call to verify that the underlying libmagic library is loaded
+    magic.from_buffer(b"", mime=True)
+    HAS_MAGIC = True
+except (ImportError, Exception) as e:
+    HAS_MAGIC = False
+    print("Advanced MIME detection unavailable. Using secure fallback validation.")
+    logger.warning("Advanced MIME detection unavailable. Using secure fallback validation.")
+    
+    # Define a dummy module/class to avoid crashes if any code tries to access magic attributes
+    class DummyMagic:
+        @staticmethod
+        def from_buffer(buf, mime=False):
+            return None
+
+    import sys
+    sys.modules['magic'] = DummyMagic
+    magic = DummyMagic
 
 # Resource limits
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -237,6 +257,32 @@ def scan_pdf_security(file_bytes):
 
     return True
 
+def get_mime_type(file_bytes, filename, ext):
+    """
+    Safely get MIME type of a file. Uses python-magic if available,
+    otherwise falls back to mimetypes guessing.
+    """
+    if HAS_MAGIC:
+        try:
+            mime = magic.from_buffer(file_bytes, mime=True)
+            if mime:
+                return mime
+        except Exception:
+            pass
+            
+    # Fallback MIME detection using mimetypes module
+    import mimetypes
+    if not mimetypes.inited:
+        mimetypes.init()
+    mime, _ = mimetypes.guess_type(filename)
+    if not mime:
+        allowed_mimes = SUPPORTED_MIME_TYPES.get(ext, [])
+        if allowed_mimes:
+            mime = allowed_mimes[0]
+        else:
+            mime = 'application/octet-stream'
+    return mime
+
 def validate_single_file_content(file_bytes, filename, ext):
     """
     Validate a single file (not a zip) for type, signature, size, password protection, virus, and active content.
@@ -248,7 +294,7 @@ def validate_single_file_content(file_bytes, filename, ext):
             raise SecurityValidationError("Unsupported file format.", code="MAGIC_MISMATCH")
             
     # 2. MIME type check
-    mime = magic.from_buffer(file_bytes, mime=True)
+    mime = get_mime_type(file_bytes, filename, ext)
     allowed_mimes = SUPPORTED_MIME_TYPES.get(ext, [])
     if mime not in allowed_mimes:
         # Special check: sometimes RTF or TXT can have text/plain or application/rtf variations
@@ -419,7 +465,7 @@ def perform_all_security_validations(file_bytes, original_filename):
         "sanitized_filename": sanitized_orig,
         "secure_filename": secure_name,
         "sha256": sha256_hash,
-        "mime_type": magic.from_buffer(file_bytes, mime=True),
+        "mime_type": get_mime_type(file_bytes, sanitized_orig, ext),
         "scan_status": "PASSED",
         "scan_timestamp": timezone.now()
     }

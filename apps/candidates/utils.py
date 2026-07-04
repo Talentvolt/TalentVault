@@ -1169,13 +1169,12 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
                         sub_bytes = f.read()
                         sub_sha = hashlib.sha256(sub_bytes).hexdigest()
                         
-                        import magic
-                        from utils.security import sanitize_filename, generate_secure_filename
+                        from utils.security import sanitize_filename, generate_secure_filename, get_mime_type
                         sub_security_data = {
                             "sanitized_filename": sanitize_filename(filename),
                             "secure_filename": generate_secure_filename(filename),
                             "sha256": sub_sha,
-                            "mime_type": magic.from_buffer(sub_bytes, mime=True),
+                            "mime_type": get_mime_type(sub_bytes, filename, sub_ext),
                             "scan_status": "PASSED",
                             "scan_timestamp": timezone.now()
                         }

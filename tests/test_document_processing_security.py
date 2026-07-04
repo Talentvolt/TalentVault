@@ -136,3 +136,16 @@ def test_successful_validation_and_database_store(mock_ocr, mock_scan, mock_magi
     assert profile.scan_timestamp is not None
     assert profile.parser_status == "SUCCESS"
     assert profile.preview_status == "READY"
+
+def test_fallback_validation_no_magic():
+    from utils.security import get_mime_type
+    with patch('utils.security.HAS_MAGIC', False):
+        # 1. Test get_mime_type fallback
+        mime = get_mime_type(b"%PDF-1.4\n", "my_resume.pdf", "pdf")
+        assert mime == "application/pdf"
+        
+        # 2. Test validating pdf file content
+        from utils.security import validate_single_file_content
+        # Mock scan_pdf_security to avoid parsing invalid pdf bytes
+        with patch('utils.security.scan_pdf_security', return_value=True):
+            assert validate_single_file_content(b"%PDF-1.4\n", "my_resume.pdf", "pdf") is True
