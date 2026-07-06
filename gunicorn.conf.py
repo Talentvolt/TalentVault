@@ -8,8 +8,8 @@ timeout = 120
 port = os.environ.get("PORT", "10000")
 bind = f"0.0.0.0:{port}"
 
-# Preload app to save memory
-preload_app = True
+# Do not preload app to avoid port binding delays and prevent db connection sharing issues
+preload_app = False
 
 # Access log format
 accesslog = "-"
