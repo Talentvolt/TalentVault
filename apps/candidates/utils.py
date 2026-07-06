@@ -924,19 +924,19 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 print(f"[NAME] Final Name: Unknown Candidate")
                 return "Unknown Candidate"
 
-            candidate_name = get_priority_name()
+            candidate_name = get_priority_name()[:255]
             profile.full_name = candidate_name
             if isinstance(info, dict):
                 info['name'] = candidate_name
             profile.summary = parsed_data.get('summary', '')
-            profile.location = info.get('location') or "Unknown"
+            profile.location = (info.get('location') or "Unknown")[:100]
             profile.current_salary = parsed_data.get('current_ctc')
             profile.expected_salary = parsed_data.get('expected_ctc')
             profile.notice_period = parsed_data.get('notice_period', 30)
             profile.total_experience = info.get('total_experience', 0.0)
             
-            profile.current_company = info.get('current_company')
-            profile.current_designation = info.get('current_designation') or "Professional"
+            profile.current_company = (info.get('current_company') or "")[:255]
+            profile.current_designation = (info.get('current_designation') or "Professional")[:255]
 
             profile.parsed_json = parsed_data
             profile.ocr_engine = ocr_result.get("engine", "None")
@@ -964,17 +964,17 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             }]
             
             if security_data:
-                profile.original_filename = security_data.get("sanitized_filename", filename)
-                profile.secure_filename = security_data.get("secure_filename")
+                profile.original_filename = (security_data.get("sanitized_filename", filename) or "")[:255]
+                profile.secure_filename = (security_data.get("secure_filename") or "")[:255]
                 profile.sha256 = security_data.get("sha256")
-                profile.mime_type = security_data.get("mime_type")
+                profile.mime_type = (security_data.get("mime_type") or "")[:100]
                 profile.scan_status = security_data.get("scan_status", "PASSED")
                 profile.scan_timestamp = security_data.get("scan_timestamp")
                 profile.parser_status = "SUCCESS"
                 profile.preview_status = "READY"
             else:
-                profile.original_filename = filename
-                profile.secure_filename = filename
+                profile.original_filename = (filename or "")[:255]
+                profile.secure_filename = (filename or "")[:255]
                 profile.parser_status = "SUCCESS"
                 profile.preview_status = "READY"
 
@@ -1006,7 +1006,7 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             t_skills_start = time.time()
             profile.skills.all().delete()
             for skill in parsed_data.get('skills', []):
-                CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.title())
+                CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.strip().title()[:100])
             t_skills = time.time() - t_skills_start
             logger.info(f"[TIMING] Skills DB save took: {t_skills:.4f}s")
             print(f"[TIMING] Skills DB save took: {t_skills:.4f}s")

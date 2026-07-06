@@ -173,7 +173,7 @@ def detect_password_protection(file_bytes, ext):
 
 def scan_office_security(file_bytes, filename, ext):
     """
-    Check DOC/DOCX for VBA macros, embedded scripts, OLE objects, external links, active content, and DDE.
+    Check DOC/DOCX for VBA macros, embedded scripts, OLE objects, and active content.
     """
     if ext not in ['doc', 'docx']:
         return True
@@ -189,21 +189,14 @@ def scan_office_security(file_bytes, filename, ext):
         # If not an OLE/OpenXML file, it doesn't have macros
         pass
 
-    # 2. Check for Embedded Objects and External Relationships in DOCX (OpenXML)
+    # 2. Check for Embedded VBA/Macro files in DOCX (OpenXML)
     if ext == 'docx':
         try:
             with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
                 for name in zf.namelist():
-                    # Embedded objects/active content
-                    if 'word/embeddings/' in name or 'embeddings/' in name:
-                        raise SecurityValidationError("Office macro detected.", code="OLE_EMBEDDING")
-                    # Check relationships for external templates / active scripting / DDE
-                    if name.endswith('.rels'):
-                        content = zf.read(name).decode('utf-8', errors='ignore')
-                        # External templates or suspicious targets
-                        if 'TargetMode="External"' in content:
-                            if any(x in content.lower() for x in ['.dotm', '.exe', '.vbs', '.vbe', '.bat', '.cmd', '.js', '.ps1', 'http://', 'https://']):
-                                raise SecurityValidationError("Office macro detected.", code="EXTERNAL_RELATIONSHIP")
+                    name_lower = name.lower()
+                    if 'vbaproject.bin' in name_lower or 'vbadata.xml' in name_lower:
+                        raise SecurityValidationError("Office macro detected.", code="MACRO_DETECTED")
         except SecurityValidationError:
             raise
         except Exception:
@@ -248,7 +241,10 @@ def scan_pdf_security(file_bytes):
     except SecurityValidationError:
         raise
     except Exception as e:
-        raise SecurityValidationError(f"Suspicious PDF content detected.", code="PDF_SCAN_ERROR")
+        # If the file fails to open, check if it was due to embedded active content tags
+        if any(p in file_bytes for p in [b'/JS', b'/JavaScript', b'/Launch', b'/AA', b'/EmbeddedFiles', b'/FS']):
+            raise SecurityValidationError("Suspicious PDF content detected.", code="PDF_SCAN_ERROR")
+        raise SecurityValidationError("Corrupted document.", code="PDF_SCAN_ERROR")
 
     return True
 
@@ -400,15 +396,14 @@ def validate_zip_archive(zip_bytes, current_depth=1):
                 if re.search(r'\.[a-zA-Z0-9]+\s+\.[a-zA-Z0-9]+', filename_lower):
                     raise SecurityValidationError("Executable found inside ZIP.", code="DOUBLE_EXTENSION_ZIP")
 
-                # Extract and recursively validate nested ZIP archives
+                # Extract and recursively validate nested ZIP archives (immediately reject)
                 if filename_lower.endswith('.zip'):
-                    nested_bytes = zf.read(info.filename)
-                    validate_zip_archive(nested_bytes, current_depth + 1)
+                    raise SecurityValidationError("ZIP Bomb detected.", code="NESTED_ZIP_DEPTH")
 
     except SecurityValidationError:
         raise
     except Exception as e:
-        raise SecurityValidationError(f"Unsupported file format.", code="ZIP_READ_ERROR")
+        raise SecurityValidationError("Unsupported file.", code="ZIP_READ_ERROR")
 
     return True
 
@@ -424,7 +419,7 @@ def perform_all_security_validations(file_bytes, original_filename):
     # 2. Extension validation
     ext = original_filename.split('.')[-1].lower() if '.' in original_filename else ''
     if ext not in SUPPORTED_EXTENSIONS:
-        raise SecurityValidationError("Unsupported file format.", code="UNSUPPORTED_EXTENSION")
+        raise SecurityValidationError("Unsupported file.", code="UNSUPPORTED_EXTENSION")
 
     # 3. Secure filename generation & original sanitization
     sanitized_orig = sanitize_filename(original_filename)
@@ -447,15 +442,17 @@ def perform_all_security_validations(file_bytes, original_filename):
             zip_io = io.BytesIO(file_bytes)
             with zipfile.ZipFile(zip_io) as zf:
                 for info in zf.infolist():
-                    if info.is_dir() or info.filename.endswith('.zip'):
+                    # Ignore directories and OS metadata files
+                    if info.is_dir():
+                        continue
+                    
+                    base_filename = os.path.basename(info.filename)
+                    if base_filename.startswith('.') or info.filename.startswith('__MACOSX') or info.filename.endswith('.db'):
                         continue
                     
                     sub_ext = info.filename.split('.')[-1].lower() if '.' in info.filename else ''
                     if sub_ext not in (SUPPORTED_EXTENSIONS - {'zip'}):
-                        # ZIP contains files with unsupported formats
-                        continue # We skip non-resume formats, but wait:
-                        # Requirements say "Only resume files continue", which means we skip unsupported files inside ZIP.
-                        # However, if there are executable files or other dangerous objects inside, we would have already caught them in dangerous_exts check.
+                        raise SecurityValidationError("Unsupported file inside ZIP.", code="UNSUPPORTED_FILE_ZIP")
                     
                     sub_bytes = zf.read(info.filename)
                     # Virus scan each extracted file
@@ -468,7 +465,7 @@ def perform_all_security_validations(file_bytes, original_filename):
         except SecurityValidationError:
             raise
         except Exception as e:
-            raise SecurityValidationError("Unsupported file format.", code="ZIP_PROCESS_ERROR")
+            raise SecurityValidationError("Unsupported file.", code="ZIP_PROCESS_ERROR")
     else:
         # 5. Non-ZIP single file validations
         validate_single_file_content(file_bytes, sanitized_orig, ext)

@@ -1638,11 +1638,11 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
         
         # Sync CandidateProfile
         info = data.get("personal_info", {})
-        profile.full_name = info.get("name", profile.full_name)
+        profile.full_name = info.get("name", profile.full_name)[:255] if info.get("name") else profile.full_name
         profile.summary = data.get("summary", profile.summary)
-        profile.location = info.get("location", profile.location)
-        profile.current_company = info.get("current_company", profile.current_company)
-        profile.current_designation = info.get("current_designation", profile.current_designation)
+        profile.location = info.get("location", profile.location)[:100] if info.get("location") is not None else profile.location
+        profile.current_company = info.get("current_company", profile.current_company)[:255] if info.get("current_company") is not None else profile.current_company
+        profile.current_designation = info.get("current_designation", profile.current_designation)[:255] if info.get("current_designation") is not None else profile.current_designation
         
         try:
             profile.total_experience = Decimal(str(info.get("total_experience", profile.total_experience)))
@@ -1689,7 +1689,7 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
         # Sync Skills relation
         profile.skills.all().delete()
         for sk in data.get("skills", []):
-            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title())
+            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title()[:100])
             
         # Sync Experiences relation
         profile.experiences.all().delete()
@@ -1915,10 +1915,10 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             profile.parsed_json = improved_data
             
             info = improved_data.get("personal_info", {})
-            profile.full_name = info.get("name", profile.full_name)
+            profile.full_name = info.get("name", profile.full_name)[:255] if info.get("name") else profile.full_name
             profile.summary = improved_data.get("summary", profile.summary)
-            profile.current_company = info.get("current_company", profile.current_company)
-            profile.current_designation = info.get("current_designation", profile.current_designation)
+            profile.current_company = info.get("current_company", profile.current_company)[:255] if info.get("current_company") is not None else profile.current_company
+            profile.current_designation = info.get("current_designation", profile.current_designation)[:255] if info.get("current_designation") is not None else profile.current_designation
             
             # Save AI Improved fields separately
             profile.ai_summary = improved_data.get("summary", "")
@@ -1948,7 +1948,7 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             # Sync Skills relation
             profile.skills.all().delete()
             for sk in improved_data.get("skills", []):
-                CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title())
+                CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title()[:100])
                 
             # Sync Experiences relation
             profile.experiences.all().delete()
@@ -2016,11 +2016,11 @@ class CandidateVersionRollbackView(LoginRequiredMixin, View):
         profile.parsed_json = data
         
         info = data.get("personal_info", {})
-        profile.full_name = info.get("name", profile.full_name)
+        profile.full_name = info.get("name", profile.full_name)[:255] if info.get("name") else profile.full_name
         profile.summary = data.get("summary", profile.summary)
-        profile.location = info.get("location", profile.location)
-        profile.current_company = info.get("current_company", profile.current_company)
-        profile.current_designation = info.get("current_designation", profile.current_designation)
+        profile.location = info.get("location", profile.location)[:100] if info.get("location") is not None else profile.location
+        profile.current_company = info.get("current_company", profile.current_company)[:255] if info.get("current_company") is not None else profile.current_company
+        profile.current_designation = info.get("current_designation", profile.current_designation)[:255] if info.get("current_designation") is not None else profile.current_designation
         
         try:
             profile.total_experience = Decimal(str(info.get("total_experience", profile.total_experience)))
@@ -2038,7 +2038,7 @@ class CandidateVersionRollbackView(LoginRequiredMixin, View):
         # Sync relational models
         profile.skills.all().delete()
         for sk in data.get("skills", []):
-            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title())
+            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title()[:100])
             
         from apps.candidates.utils import parse_date_robust
 

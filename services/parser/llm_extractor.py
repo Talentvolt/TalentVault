@@ -424,12 +424,12 @@ def save_llm_parsed_data_to_db(profile: CandidateProfile, validated_data: dict) 
     phone = _flatten(validated_data.get("phone"))
     location = _flatten(validated_data.get("address")) or _flatten(validated_data.get("city")) or "Unknown"
     
-    profile.location = location
+    profile.location = location[:100]
     profile.linkedin_url = _flatten(validated_data.get("linkedin"))
     profile.portfolio_url = _flatten(validated_data.get("portfolio"))
     
-    profile.current_company = _flatten(validated_data.get("current_company"))
-    profile.current_designation = _flatten(validated_data.get("current_designation"))
+    profile.current_company = (_flatten(validated_data.get("current_company")) or "")[:255]
+    profile.current_designation = (_flatten(validated_data.get("current_designation")) or "")[:255]
     
     profile.save()
     
@@ -439,7 +439,7 @@ def save_llm_parsed_data_to_db(profile: CandidateProfile, validated_data: dict) 
     soft_skills = _flatten(validated_data.get("soft_skills")) or []
     for sk in (tech_skills + soft_skills):
         if sk:
-            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title())
+            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title()[:100])
 
     # 4. Sync Experiences
     profile.experiences.all().delete()
