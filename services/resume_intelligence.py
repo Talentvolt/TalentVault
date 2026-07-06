@@ -12,30 +12,13 @@ from apps.candidates.models import (
     CandidateProfile, CandidateSkill, Experience, Education, Project, Certification
 )
 
-# Optional heavy imports handled gracefully
-try:
-    from paddleocr import PaddleOCR
-    PADDLE_AVAILABLE = True
-except ImportError:
-    PADDLE_AVAILABLE = False
+import importlib.util
 
-try:
-    import easyocr
-    EASY_AVAILABLE = True
-except ImportError:
-    EASY_AVAILABLE = False
-
-try:
-    import pytesseract
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
-
-try:
-    import spacy
-    SPACY_AVAILABLE = True
-except ImportError:
-    SPACY_AVAILABLE = False
+# Optional heavy imports handled gracefully using lazy checks to prevent startup crashes
+PADDLE_AVAILABLE = importlib.util.find_spec("paddleocr") is not None
+EASY_AVAILABLE = importlib.util.find_spec("easyocr") is not None
+TESSERACT_AVAILABLE = importlib.util.find_spec("pytesseract") is not None
+SPACY_AVAILABLE = importlib.util.find_spec("spacy") is not None
 
 
 def escape_plain_text(text: str) -> str:
@@ -1555,6 +1538,7 @@ class ResumeIntelligenceService:
             if PADDLE_AVAILABLE:
                 print("[ENGINE_SELECTED] PaddleOCR")
                 try:
+                    from paddleocr import PaddleOCR
                     ocr = PaddleOCR(use_textline_orientation=True, lang='en')
                     print("[ENGINE_INITIALIZED] PaddleOCR: True")
                     text_lines = []
