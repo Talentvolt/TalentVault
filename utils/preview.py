@@ -157,218 +157,140 @@ def generate_resume_preview_response(candidate):
     if not os.path.exists(file_path):
         return HttpResponse(get_error_html_wrapper("Resume file was not found on disk."), status=404)
 
-    # Detect extension
-    filename = candidate.original_filename or candidate.resume.name
+    filename = candidate.original_filename or os.path.basename(candidate.resume.name) or "resume"
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
+    
+    # Calculate file metadata for fallback
+    try:
+        file_size_kb = round(os.path.getsize(file_path) / 1024, 1)
+    except Exception:
+        file_size_kb = 0.0
+        
+    mime_type = candidate.mime_type or f"application/{ext}"
+    download_url = candidate.resume.url
+    extracted_text = candidate.raw_resume_text or "No extracted text available."
+
+    def get_fallback_html():
+        body = f"""
+        <div style="padding: 20px; text-align: center;">
+            <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
+                <svg style="width: 48px; height: 48px; color: #9ca3af; margin-bottom: 15px; display: inline-block;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <h4 style="margin-top: 5px; margin-bottom: 5px; color: #111827; font-size: 18px; font-weight: 600;">{escape(filename)}</h4>
+                <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">{escape(mime_type)} &bull; {file_size_kb} KB</p>
+                <a href="{download_url}" target="_parent" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 14px; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); transition: background-color 0.2s;">Download Resume</a>
+            </div>
+            
+            <div style="text-align: left;">
+                <h5 style="color: #374151; margin-bottom: 10px; font-size: 14px; font-weight: 600;">Extracted Text Content:</h5>
+                <div style="max-height: 400px; overflow-y: auto; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; font-family: 'Courier New', Courier, monospace; font-size: 13px; white-space: pre-wrap; color: #4b5563; line-height: 1.5; text-align: left;">{escape(extracted_text)}</div>
+            </div>
+        </div>
+        """
+        return get_premium_html_wrapper(body, title=filename)
 
     try:
         if ext == 'pdf':
-            # PDF Browser Preview
-            f = open(file_path, 'rb')
-            response = FileResponse(f, content_type='application/pdf')
-            response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
-            return response
-
-        elif ext == 'doc':
-            # DOC Headless conversion to PDF
-            previews_dir = os.path.join(settings.MEDIA_ROOT, 'previews')
-            os.makedirs(previews_dir, exist_ok=True)
-            
-            # Secure name for converted PDF
-            pdf_filename = f"{candidate.id}_preview.pdf"
-            pdf_path = os.path.join(previews_dir, pdf_filename)
-            
-            # Convert if not already cached
-            if not os.path.exists(pdf_path):
-                convert_doc_to_pdf(file_path, previews_dir)
-                # Headless command outputs to <doc_filename>.pdf in outdir
-                # So we find it and rename it to our secure ID filename
-                default_output_name = os.path.splitext(os.path.basename(file_path))[0] + ".pdf"
-                default_output_path = os.path.join(previews_dir, default_output_name)
-                if os.path.exists(default_output_path):
-                    os.rename(default_output_path, pdf_path)
-            
-            if os.path.exists(pdf_path):
-                f = open(pdf_path, 'rb')
-                response = FileResponse(f, content_type='application/pdf')
-                response['Content-Disposition'] = f'inline; filename="{pdf_filename}"'
-                return response
-            else:
-                raise Exception("Converted PDF file was not generated.")
+            # PDF preview using PyMuPDF
+            try:
+                import fitz
+                import base64
+                doc = fitz.open(file_path)
+                html_elements = []
+                for page in doc:
+                    pix = page.get_pixmap(dpi=150)
+                    img_bytes = pix.tobytes("png")
+                    img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+                    html_elements.append(f'<img src="data:image/png;base64,{img_base64}" style="width:100%; max-width: 100%; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e5e7eb;" />')
+                doc.close()
+                html_body = "".join(html_elements)
+                premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
+                return HttpResponse(premium_html, content_type='text/html')
+            except Exception as e_pdf:
+                logger.error(f"PyMuPDF PDF preview failed: {e_pdf}", exc_info=True)
+                # Fallback to direct FileResponse (needed for tests with mock PDF bytes)
+                try:
+                    f = open(file_path, 'rb')
+                    response = FileResponse(f, content_type='application/pdf')
+                    response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                    return response
+                except Exception:
+                    return HttpResponse(get_fallback_html(), content_type='text/html')
 
         elif ext == 'docx':
-            # DOCX Preview Rendering with python-docx
-            html_body = None
+            # DOCX preview using Mammoth
             try:
-                import docx
-                doc = docx.Document(file_path)
-                
-                # Helper function to iterate items in document order
-                from docx.text.paragraph import Paragraph
-                from docx.table import Table
-                
-                def iter_block_items(parent):
-                    # For a Document, parent.element.body contains child elements
-                    parent_elm = parent.element.body
-                    for child in parent_elm.iterchildren():
-                        if child.tag.endswith('p'):
-                            yield Paragraph(child, parent)
-                        elif child.tag.endswith('tbl'):
-                            yield Table(child, parent)
-
-                def is_bullet_paragraph(p):
-                    style_name = p.style.name.lower() if p.style and p.style.name else ""
-                    if 'bullet' in style_name or 'list' in style_name:
-                        return True
-                    text = p.text.strip()
-                    if text and text[0] in ('•', '*', '-', 'o', '■', '▪', '♦', '✓', '✔', '★'):
-                        return True
-                    if text and ord(text[0]) in (0xf0b7, 0xf02d, 0x2022):
-                        return True
-                    return False
-
-                def clean_bullet_text(text):
-                    text = text.strip()
-                    bullet_chars = ('•', '*', '-', 'o', '■', '▪', '♦', '✓', '✔', '★')
-                    while text and (text[0] in bullet_chars or ord(text[0]) in (0xf0b7, 0xf02d, 0x2022)):
-                        text = text[1:].lstrip()
-                    return text
-
-                html_elements = []
-                in_list = False
-                
-                for block in iter_block_items(doc):
-                    if isinstance(block, Paragraph):
-                        text = block.text.strip()
-                        if not text:
-                            if in_list:
-                                html_elements.append("</ul>")
-                                in_list = False
-                            html_elements.append("<br/>")
-                            continue
-                            
-                        # Bullet/List
-                        if is_bullet_paragraph(block):
-                            if not in_list:
-                                html_elements.append("<ul style='margin-top: 0.5em; margin-bottom: 0.5em;'>")
-                                in_list = True
-                            cleaned = clean_bullet_text(text)
-                            html_elements.append(f"<li>{escape(cleaned)}</li>")
-                        else:
-                            if in_list:
-                                html_elements.append("</ul>")
-                                in_list = False
-                                
-                            style_name = block.style.name.lower() if block.style and block.style.name else ""
-                            # Heading
-                            if 'heading' in style_name or style_name in ('title', 'subtitle'):
-                                level = 2
-                                if '1' in style_name:
-                                    level = 1
-                                elif '3' in style_name:
-                                    level = 3
-                                elif '4' in style_name:
-                                    level = 4
-                                html_elements.append(f"<h{level}>{escape(text)}</h{level}>")
-                            else:
-                                html_elements.append(f"<p>{escape(text)}</p>")
-                                
-                    elif isinstance(block, Table):
-                        if in_list:
-                            html_elements.append("</ul>")
-                            in_list = False
-                            
-                        table_html = ["<table border='1' style='border-collapse: collapse; width: 100%; margin-top: 1em; margin-bottom: 1em; border: 1px solid #e5e7eb;'>"]
-                        for row in block.rows:
-                            table_html.append("<tr>")
-                            for cell in row.cells:
-                                cell_paras = []
-                                for cp in cell.paragraphs:
-                                    ctext = cp.text.strip()
-                                    if ctext:
-                                        cell_paras.append(f"<p style='margin: 4px 0;'>{escape(ctext)}</p>")
-                                cell_content = "".join(cell_paras) if cell_paras else "&nbsp;"
-                                table_html.append(f"<td style='padding: 8px; border: 1px solid #e5e7eb;'>{cell_content}</td>")
-                            table_html.append("</tr>")
-                        table_html.append("</table>")
-                        html_elements.append("".join(table_html))
-                        
-                if in_list:
-                    html_elements.append("</ul>")
-                    
-                html_body = "".join(html_elements)
-                if not html_body:
-                    raise Exception("No text block items extracted from document.")
-                    
+                with open(file_path, "rb") as docx_file:
+                    result = mammoth.convert_to_html(docx_file)
+                    html_body = result.value
+                    if not html_body:
+                        raise Exception("Mammoth returned empty HTML.")
+                    premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
+                    return HttpResponse(premium_html, content_type='text/html')
             except Exception as e_docx:
-                import traceback
-                tb_docx = traceback.format_exc()
-                print(f"[PREVIEW FALLBACK] python-docx engine failed: {e_docx}\nTraceback:\n{tb_docx}")
-                logger.error(f"python-docx engine failed: {e_docx}", exc_info=True)
-                
-                # Safe plain text extraction fallback
+                logger.error(f"Mammoth DOCX preview failed: {e_docx}", exc_info=True)
+                # Fallback to python-docx or graceful fallback
                 try:
-                    import zipfile
-                    import xml.etree.ElementTree as ET
-                    text_runs = []
-                    with zipfile.ZipFile(file_path, 'r') as z:
-                        doc_xml = z.read('word/document.xml')
-                        root = ET.fromstring(doc_xml)
-                        namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-                        for p in root.findall('.//w:p', namespaces):
-                            p_text = []
-                            for t in p.findall('.//w:t', namespaces):
-                                if t.text:
-                                    p_text.append(t.text)
-                            para_text = "".join(p_text).strip()
-                            if para_text:
-                                text_runs.append(f"<p>{escape(para_text)}</p>")
-                                
-                    if text_runs:
-                        html_body = "".join(text_runs)
-                    else:
-                        raise Exception("No text runs extracted from document.xml.")
-                except Exception as e_manual:
-                    tb_manual = traceback.format_exc()
-                    print(f"[PREVIEW PARSING FAILURE] XML File: word/document.xml | Exception: {e_manual}\nTraceback:\n{tb_manual}")
-                    logger.error(f"[PREVIEW PARSING FAILURE] XML File: word/document.xml | Exception: {e_manual}", exc_info=True)
-                    
-                    try:
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                            raw_text = f.read()
-                        printable = "".join(c for c in raw_text if c.isprintable() or c in '\n\r\t')
-                        html_body = f"<pre>{escape(printable[:2000])}</pre>"
-                    except Exception:
-                        html_body = "<p>Could not extract text preview from document.</p>"
-            
-            premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
-            return HttpResponse(premium_html, content_type='text/html')
+                    import docx
+                    doc = docx.Document(file_path)
+                    html_elements = []
+                    for para in doc.paragraphs:
+                        text = para.text.strip()
+                        if text:
+                            html_elements.append(f"<p>{escape(text)}</p>")
+                    if not html_elements:
+                        raise Exception("python-docx returned empty text.")
+                    html_body = "".join(html_elements)
+                    premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
+                    return HttpResponse(premium_html, content_type='text/html')
+                except Exception as e_docx_fallback:
+                    logger.error(f"python-docx DOCX preview failed: {e_docx_fallback}", exc_info=True)
+                    return HttpResponse(get_fallback_html(), content_type='text/html')
+
+        elif ext == 'doc':
+            # DOC preview using antiword
+            try:
+                cmd = ["antiword", file_path]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10)
+                text = res.stdout.decode('utf-8', errors='ignore')
+                html_body = "".join([f"<p>{escape(line.strip())}</p>" for line in text.split('\n') if line.strip()])
+                if not html_body:
+                    raise Exception("Antiword returned empty text.")
+                premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
+                return HttpResponse(premium_html, content_type='text/html')
+            except Exception as e_antiword:
+                logger.warning(f"Antiword DOC conversion failed or not installed: {e_antiword}")
+                return HttpResponse(get_fallback_html(), content_type='text/html')
 
         elif ext == 'rtf':
             # RTF Render to HTML
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                rtf_content = f.read()
-            text = rtf_to_text(rtf_content)
-            # Format text paragraphs
-            html_body = "".join([f"<p>{escape(line.strip())}</p>" for line in text.split('\n') if line.strip()])
-            premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
-            return HttpResponse(premium_html, content_type='text/html')
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    rtf_content = f.read()
+                text = rtf_to_text(rtf_content)
+                html_body = "".join([f"<p>{escape(line.strip())}</p>" for line in text.split('\n') if line.strip()])
+                premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
+                return HttpResponse(premium_html, content_type='text/html')
+            except Exception as e_rtf:
+                logger.error(f"RTF preview failed: {e_rtf}", exc_info=True)
+                return HttpResponse(get_fallback_html(), content_type='text/html')
 
         elif ext == 'txt':
             # TXT Render to Plain Text inside styled pre block
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                txt_content = f.read()
-            html_body = f"<pre>{escape(txt_content)}</pre>"
-            premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
-            return HttpResponse(premium_html, content_type='text/html')
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    txt_content = f.read()
+                html_body = f"<pre>{escape(txt_content)}</pre>"
+                premium_html = get_premium_html_wrapper(html_body, title=candidate.full_name or "Resume Preview")
+                return HttpResponse(premium_html, content_type='text/html')
+            except Exception as e_txt:
+                logger.error(f"TXT preview failed: {e_txt}", exc_info=True)
+                return HttpResponse(get_fallback_html(), content_type='text/html')
 
         else:
-            return HttpResponse(get_error_html_wrapper("Unsupported preview format."), status=400)
+            return HttpResponse(get_fallback_html(), content_type='text/html')
 
     except Exception as e:
         logger.error(f"Error generating preview for candidate {candidate.id}: {e}", exc_info=True)
-        # Return a user-friendly message inside the styled iframe
-        err_msg = str(e)
-        if "LibreOffice" in err_msg:
-            err_msg = "LibreOffice not found or failed to execute on server. Headless DOC preview is currently disabled."
-        return HttpResponse(get_error_html_wrapper(f"Could not load document preview. {err_msg}"), status=200)
+        return HttpResponse(get_fallback_html(), content_type='text/html')

@@ -1477,19 +1477,298 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         today = timezone.now().date()
         context['duplicates_found_today'] = DuplicateResumeLog.objects.filter(created_at__date=today).count()
+        from apps.candidates.forms import ManualCandidateForm
+        
+        candidate_id = self.request.GET.get('candidate_id')
+        experiences_json = '[]'
+        if candidate_id:
+            try:
+                profile = CandidateProfile.objects.get(id=candidate_id)
+                context['editing_profile'] = profile
+                
+                # Pre-populate manual form fields
+                initial_data = {
+                    "full_name": profile.full_name,
+                    "email": profile.user.email,
+                    "phone_number": profile.user.phone_number or '',
+                    "current_company": profile.current_company,
+                    "current_designation": profile.current_designation,
+                    "total_experience": profile.total_experience,
+                    "location": profile.location,
+                    "linkedin_url": profile.linkedin_url,
+                    "portfolio_url": profile.portfolio_url,
+                    "summary": profile.summary,
+                }
+                
+                # Fetch qualifications/location/etc. from parsed_json
+                personal_info = profile.parsed_json.get('personal_info', {}) if profile.parsed_json else {}
+                initial_data.update({
+                    "relevant_experience": personal_info.get('relevant_experience', 0.0),
+                    "preferred_location": personal_info.get('preferred_location', ''),
+                    "current_salary": float(profile.current_salary / 100000) if profile.current_salary else None,
+                    "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else None,
+                    "notice_period": profile.notice_period or 30,
+                    "highest_qualification": personal_info.get('highest_qualification', ''),
+                    "college_university": personal_info.get('college_university', ''),
+                    "github_url": personal_info.get('github_url', ''),
+                })
+                
+                skills_list = list(profile.skills.values_list('skill_name', flat=True))
+                if skills_list:
+                    initial_data["primary_skills"] = ", ".join(skills_list[:len(skills_list)//2])
+                    initial_data["secondary_skills"] = ", ".join(skills_list[len(skills_list)//2:])
+                    
+                context['manual_form'] = ManualCandidateForm(initial=initial_data)
+                
+                # Gather experiences
+                experiences_list = []
+                parsed_experiences = profile.parsed_json.get('experience', []) if profile.parsed_json else []
+                if parsed_experiences:
+                    for exp in parsed_experiences:
+                        experiences_list.append({
+                            "company": exp.get('company') or exp.get('company_name') or '',
+                            "designation": exp.get('designation') or exp.get('job_title') or '',
+                            "start_date": exp.get('start_date') or '',
+                            "end_date": exp.get('end_date') or '',
+                            "is_current": exp.get('is_current') or False,
+                            "is_relevant": exp.get('is_relevant') or False,
+                            "description": exp.get('description') or '',
+                            "employment_type": exp.get('employment_type') or 'Full Time',
+                            "location": exp.get('location') or '',
+                            "industry": exp.get('industry') or '',
+                            "skills_used": exp.get('skills_used') or '',
+                            "job_description": exp.get('job_description') or '',
+                            "responsibilities": exp.get('responsibilities') or '',
+                            "achievements": exp.get('achievements') or ''
+                        })
+                else:
+                    for exp in profile.experiences.all().order_by('-start_date'):
+                        experiences_list.append({
+                            "company": exp.company_name,
+                            "designation": exp.designation,
+                            "start_date": exp.start_date.strftime('%Y-%m') if exp.start_date else '',
+                            "end_date": exp.end_date.strftime('%Y-%m') if exp.end_date else '',
+                            "is_current": exp.is_current,
+                            "description": exp.description,
+                            "employment_type": "Full Time",
+                            "location": "",
+                            "industry": "",
+                            "skills_used": ""
+                        })
+                import json as _json
+                experiences_json = _json.dumps(experiences_list)
+            except Exception:
+                pass
+        else:
+            context['manual_form'] = ManualCandidateForm()
+            
+        context['experiences_json'] = experiences_json
         return context
 
     def post(self, request, *args, **kwargs):
-        overwrite = request.POST.get('overwrite') == 'on'
+        from apps.candidates.forms import ManualCandidateForm
+        from django.http import JsonResponse
+        from django.db import transaction
         
+        # Check if this is a manual save request
+        if request.POST.get('action') == 'manual_save':
+            form = ManualCandidateForm(request.POST, request.FILES)
+            if form.is_valid():
+                candidate_id = request.POST.get('candidate_id')
+                email = form.cleaned_data['email']
+                phone = form.cleaned_data['phone_number']
+                
+                # Duplicate email/mobile verification for new candidates
+                if not candidate_id:
+                    existing_user = None
+                    if phone:
+                        existing_user = User.objects.filter(Q(email=email) | Q(phone_number=phone)).first()
+                    else:
+                        existing_user = User.objects.filter(email=email).first()
+                    if existing_user:
+                        return JsonResponse({
+                            "success": False,
+                            "errors": {
+                                "email": ["Candidate with this email or mobile number already exists."]
+                            }
+                        }, status=400)
+                
+                try:
+                    with transaction.atomic():
+                        if candidate_id:
+                            profile = CandidateProfile.objects.get(id=candidate_id)
+                            user = profile.user
+                            user.email = email
+                            user.phone_number = phone if phone else None
+                            user.save()
+                        else:
+                            user = User.objects.create(
+                                email=email,
+                                role=User.Role.CANDIDATE,
+                                phone_number=phone if phone else None
+                            )
+                            user.set_unusable_password()
+                            user.save()
+                            profile = CandidateProfile.objects.create(user=user)
+                        
+                        profile.full_name = form.cleaned_data['full_name']
+                        profile.current_company = form.cleaned_data['current_company']
+                        profile.current_designation = form.cleaned_data['current_designation']
+                        profile.total_experience = form.cleaned_data['total_experience'] or 0.0
+                        profile.location = form.cleaned_data['location'] or "Unknown"
+                        
+                        curr_sal = form.cleaned_data['current_salary']
+                        if curr_sal is not None:
+                            profile.current_salary = curr_sal * 100000
+                        else:
+                            profile.current_salary = None
+                            
+                        exp_sal = form.cleaned_data['expected_salary']
+                        if exp_sal is not None:
+                            profile.expected_salary = exp_sal * 100000
+                        else:
+                            profile.expected_salary = None
+                            
+                        profile.notice_period = form.cleaned_data['notice_period'] or 30
+                        profile.linkedin_url = form.cleaned_data['linkedin_url']
+                        profile.portfolio_url = form.cleaned_data['portfolio_url']
+                        profile.summary = form.cleaned_data['summary'] or ""
+                        
+                        # Store customized parsing payload in parsed_json
+                        parsed_json = profile.parsed_json or {}
+                        parsed_json.update({
+                            "personal_info": {
+                                "name": profile.full_name,
+                                "email": email,
+                                "phone": phone,
+                                "location": profile.location,
+                                "preferred_location": form.cleaned_data['preferred_location'],
+                                "current_company": profile.current_company,
+                                "current_designation": profile.current_designation,
+                                "total_experience": float(profile.total_experience),
+                                "relevant_experience": float(form.cleaned_data['relevant_experience'] or 0.0),
+                                "highest_qualification": form.cleaned_data['highest_qualification'],
+                                "college_university": form.cleaned_data['college_university'],
+                                "linkedin_url": profile.linkedin_url,
+                                "github_url": form.cleaned_data['github_url'],
+                                "portfolio_url": profile.portfolio_url,
+                            },
+                            "skills": [s.strip() for s in (form.cleaned_data['primary_skills'] or '').split(',') if s.strip()] +
+                                      [s.strip() for s in (form.cleaned_data['secondary_skills'] or '').split(',') if s.strip()],
+                            "summary": profile.summary
+                        })
+                        profile.parsed_json = parsed_json
+                        
+                        resume_file = request.FILES.get('resume')
+                        if resume_file:
+                            profile.resume = resume_file
+                            profile.original_file = resume_file
+                            profile.original_filename = resume_file.name
+                            profile.secure_filename = resume_file.name
+                            profile.parser_status = "SUCCESS"
+                            profile.preview_status = "READY"
+                            
+                        profile.save()
+                        
+                        # Save Skills to CandidateSkill model:
+                        profile.skills.all().delete()
+                        for skill in parsed_json.get('skills', []):
+                            CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.strip().title()[:100])
+                            
+                        if form.cleaned_data['highest_qualification'] or form.cleaned_data['college_university']:
+                            profile.educations.all().delete()
+                            Education.objects.create(
+                                profile=profile,
+                                institution=form.cleaned_data['college_university'] or "Unknown",
+                                degree=form.cleaned_data['highest_qualification'] or "Degree",
+                                field_of_study="General"
+                            )
+                            
+                        # Save Experiences
+                        from apps.candidates.utils import parse_date_robust
+                        import json as _json
+                        exps_data = []
+                        idx = 0
+                        while True:
+                            company = request.POST.get(f'experience[{idx}][company]')
+                            if company is None:
+                                break
+                            designation = request.POST.get(f'experience[{idx}][designation]')
+                            start_date = request.POST.get(f'experience[{idx}][start_date]')
+                            end_date = request.POST.get(f'experience[{idx}][end_date]')
+                            is_current = request.POST.get(f'experience[{idx}][is_current]') in ('on', 'true', 'checked', True)
+                            is_relevant = request.POST.get(f'experience[{idx}][is_relevant]') in ('on', 'true', 'checked', True) or request.POST.get(f'experience[{idx}][is_relevant]') is None
+                            employment_type = request.POST.get(f'experience[{idx}][employment_type]', 'Full Time')
+                            location = request.POST.get(f'experience[{idx}][location]', '')
+                            skills_used = request.POST.get(f'experience[{idx}][skills_used]', '')
+                            job_description = request.POST.get(f'experience[{idx}][job_description]', '')
+                            responsibilities = request.POST.get(f'experience[{idx}][responsibilities]', '')
+                            achievements = request.POST.get(f'experience[{idx}][achievements]', '')
+                            
+                            desc_parts = []
+                            if job_description:
+                                desc_parts.append(f"Job Description:\n{job_description}")
+                            if responsibilities:
+                                desc_parts.append(f"Responsibilities:\n{responsibilities}")
+                            if achievements:
+                                desc_parts.append(f"Achievements:\n{achievements}")
+                            description = "\n\n".join(desc_parts)
+                            
+                            exps_data.append({
+                                "company": company,
+                                "designation": designation,
+                                "start_date": start_date,
+                                "end_date": end_date,
+                                "is_current": is_current,
+                                "is_relevant": is_relevant,
+                                "employment_type": employment_type,
+                                "location": location,
+                                "skills_used": skills_used,
+                                "job_description": job_description,
+                                "responsibilities": responsibilities,
+                                "achievements": achievements,
+                                "description": description
+                            })
+                            idx += 1
+                            
+                        if not exps_data:
+                            experiences_json = request.POST.get('experiences_json', '[]')
+                            try:
+                                exps_data = _json.loads(experiences_json)
+                            except Exception:
+                                exps_data = []
+                            
+                        profile.experiences.all().delete()
+                        for exp in exps_data:
+                            description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get('description', ''))
+                            Experience.objects.create(
+                                profile=profile,
+                                company_name=exp.get('company', '')[:100],
+                                designation=exp.get('designation', '')[:100],
+                                description=description_html,
+                                start_date=parse_date_robust(exp.get('start_date'), None),
+                                end_date=parse_date_robust(exp.get('end_date'), None),
+                                is_current=exp.get('is_current', False)
+                            )
+                            
+                        # Store in parsed_json
+                        parsed_json['experience'] = exps_data
+                        profile.parsed_json = parsed_json
+                        profile.save()
+                            
+                    return JsonResponse({"success": True, "candidate_id": str(profile.id), "message": "Candidate saved successfully."})
+                except Exception as e:
+                    return JsonResponse({"success": False, "message": f"Save failed: {str(e)}"}, status=400)
+            else:
+                return JsonResponse({"success": False, "errors": form.errors}, status=400)
+
+        # Standard file/ZIP upload action
+        overwrite = request.POST.get('overwrite') == 'on'
         file_uploaded = 'resume' in request.FILES or 'resumes_zip' in request.FILES
         if not file_uploaded:
-            from django.http import JsonResponse
             return JsonResponse({"stage": "error", "message": "No file was uploaded."}, status=400)
             
         uploaded_file = request.FILES.get('resume') or request.FILES.get('resumes_zip')
-        
-        # Read the file content into memory to ensure thread-safety
         file_bytes = uploaded_file.read()
         file_name = uploaded_file.name
         content_type = getattr(uploaded_file, 'content_type', '')
@@ -1499,7 +1778,6 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         import threading
         import queue
         import json
-        import time
         
         in_memory_file = SimpleUploadedFile(file_name, file_bytes, content_type=content_type)
         q = queue.Queue()
@@ -1515,19 +1793,95 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                     edu_count = profile.educations.count()
                 except Exception:
                     edu_count = 0
+                
+                skills_list = list(profile.skills.values_list('skill_name', flat=True))
+                education_first = profile.educations.first()
+                personal_info = profile.parsed_json.get('personal_info', {}) if profile.parsed_json else {}
+                relevant_exp = personal_info.get('relevant_experience', 0.0)
+                preferred_loc = personal_info.get('preferred_location', '')
+                github_url = personal_info.get('github_url', '')
+                
+                # Fetch and format experiences
+                experiences_list = []
+                parsed_experiences = profile.parsed_json.get('experience', []) if profile.parsed_json else []
+                if parsed_experiences:
+                    for exp in parsed_experiences:
+                        co = exp.get('company') or exp.get('company_name') or ''
+                        des = exp.get('designation') or exp.get('job_title') or ''
+                        sd = exp.get('start_date') or ''
+                        ed = exp.get('end_date') or ''
+                        isc = exp.get('is_current') or False
+                        if not ed and isc:
+                            isc = True
+                        desc = exp.get('description') or ''
+                        loc = exp.get('location') or ''
+                        ind = exp.get('industry') or ''
+                        emp_type = exp.get('employment_type') or 'Full Time'
+                        skills = exp.get('skills_used') or exp.get('key_skills') or ''
+                        if isinstance(skills, list):
+                            skills = ", ".join(skills)
+                        
+                        experiences_list.append({
+                            "company": co,
+                            "designation": des,
+                            "start_date": sd,
+                            "end_date": ed,
+                            "is_current": isc,
+                            "description": desc,
+                            "employment_type": emp_type,
+                            "location": loc,
+                            "industry": ind,
+                            "skills_used": skills
+                        })
+                else:
+                    for exp in profile.experiences.all().order_by('-start_date'):
+                        experiences_list.append({
+                            "company": exp.company_name,
+                            "designation": exp.designation,
+                            "start_date": exp.start_date.strftime('%Y-%m') if exp.start_date else '',
+                            "end_date": exp.end_date.strftime('%Y-%m') if exp.end_date else '',
+                            "is_current": exp.is_current,
+                            "description": exp.description,
+                            "employment_type": "Full Time",
+                            "location": "",
+                            "industry": "",
+                            "skills_used": ""
+                        })
+                
                 data.update({
                     "candidate_id": str(profile.id),
-                    "name": profile.full_name,
+                    "name": profile.full_name or '',
+                    "email": profile.user.email or '',
+                    "phone": profile.user.phone_number or '',
                     "experience": float(profile.total_experience or 0.0),
+                    "relevant_experience": float(relevant_exp),
                     "skills_count": skills_count,
-                    "education_count": edu_count
+                    "education_count": edu_count,
+                    "current_company": profile.current_company or '',
+                    "current_designation": profile.current_designation or '',
+                    "location": profile.location or '',
+                    "preferred_location": preferred_loc or '',
+                    "current_salary": float(profile.current_salary / 100000) if profile.current_salary else '',
+                    "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else '',
+                    "notice_period": profile.notice_period or 30,
+                    "highest_qualification": education_first.degree if education_first else '',
+                    "college_university": education_first.institution if education_first else '',
+                    "primary_skills": ", ".join(skills_list[:len(skills_list)//2]) if skills_list else '',
+                    "secondary_skills": ", ".join(skills_list[len(skills_list)//2:]) if skills_list else '',
+                    "linkedin_url": profile.linkedin_url or '',
+                    "github_url": github_url or '',
+                    "portfolio_url": profile.portfolio_url or '',
+                    "summary": profile.summary or '',
+                    "resume_name": profile.original_filename or '',
+                    "confidence": float(profile.ocr_confidence or 90.0),
+                    "experiences": experiences_list
                 })
             q.put(data)
             
         def run_parser_thread():
             from django.db import connection
             try:
-                connection.close() # Ensure fresh database connection for thread
+                connection.close()
                 results = handle_resume_upload(in_memory_file, overwrite=overwrite, progress_callback=progress_cb, user=request.user)
                 created_profiles = results['created']
                 duplicates = results['duplicates']
@@ -1555,7 +1909,6 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                 try:
                     item = q.get(timeout=1.0)
                 except queue.Empty:
-                    # Heartbeat space to keep connection open
                     yield " "
                     continue
                     

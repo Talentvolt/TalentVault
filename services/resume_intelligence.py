@@ -2502,6 +2502,11 @@ class ResumeIntelligenceService:
             score = 95
             is_duplicate = True
 
+        if c1.sha256 and c2.sha256 and c1.sha256 == c2.sha256:
+            reasons.append("Exact Resume Hash Match")
+            score = 100
+            is_duplicate = True
+
         # Name similarity (Jaccard similarity of name words)
         n1 = set((c1.full_name or "").lower().split())
         n2 = set((c2.full_name or "").lower().split())
@@ -2535,9 +2540,6 @@ class ResumeIntelligenceService:
         if cosine_sim >= 0.70:
             reasons.append(f"Profile Text Cosine Similarity ({int(cosine_sim * 100)}%)")
             score = max(score, int(cosine_sim * 100))
-
-        if score >= 75:
-            is_duplicate = True
 
         return {
             "is_duplicate": is_duplicate,

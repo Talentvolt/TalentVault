@@ -116,33 +116,171 @@
         </div>
     </div>
 
-    <!-- Extraction Info -->
+    <!-- Manual Resume Parsing Panel -->
     <div class="col-lg-6">
-        <div class="card shadow-sm border-0 bg-dark text-white h-100">
-            <div class="card-header border-bottom border-secondary fw-bold py-3">
-                <i class="bi bi-info-circle me-2"></i>Extraction Engine
+        <div class="card shadow-sm border-0 bg-white text-dark h-100">
+            <div class="card-header bg-light border-bottom d-flex justify-content-between align-items-center fw-bold py-3">
+                <span><i class="bi bi-person-plus me-2 text-primary"></i>Manual Resume Parsing</span>
+                <span id="aiStatusBadge" class="badge bg-secondary px-3 py-2 text-white">Manual Entry</span>
             </div>
-            <div class="card-body p-4">
-                <p class="small text-secondary">Our parser extracts the following fields automatically:</p>
-                <div class="row g-2">
-                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Name & Contact</span></div>
-                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Skills & Expertise</span></div>
-                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Experience Years</span></div>
-                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Current CTC</span></div>
-                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Notice Period</span></div>
-                    <div class="col-6"><span class="badge bg-secondary w-100 text-start py-2 px-3 mb-2"><i class="bi bi-check2-circle me-2"></i> Location</span></div>
-                </div>
+            <div class="card-body p-4 overflow-auto" style="max-height: 80vh;">
+                <p class="small text-muted mb-4">Create or edit candidate profiles manually when automatic parsing is unavailable.</p>
                 
-                <hr class="border-secondary my-4">
-                
-                <h6 class="fw-bold"><i class="bi bi-shield-check me-2 text-success"></i>Duplicate Policy</h6>
-                <p class="small text-secondary mb-0">System checks for unique <strong>Email</strong> and <strong>Mobile Number</strong> before creating records.</p>
-                <div class="mt-3 p-3 rounded bg-secondary bg-opacity-25 border border-secondary">
-                    <div class="d-flex justify-content-between">
-                        <span class="small">Total Duplicates Found Today:</span>
-                        <span class="fw-bold">{{ duplicates_found_today|default:"0" }}</span>
+                <form id="manualSaveForm" method="POST" enctype="multipart/form-data" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="manual_save">
+                    <input type="hidden" name="candidate_id" id="manualCandidateId" value="{{ editing_profile.id|default:'' }}">
+                    
+                    <!-- AI Confidence Badge -->
+                    <div id="aiConfidenceContainer" class="d-none alert alert-info py-2 px-3 mb-4 rounded border-info d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-cpu text-info fs-5 me-2"></i>
+                            <span class="small fw-semibold text-info-emphasis">AI Parsed Successfully</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="small text-secondary d-block" style="font-size: 0.75rem;">AI Confidence</span>
+                            <span class="fw-bold fs-6 text-info-emphasis" id="aiConfidenceScore">96%</span>
+                        </div>
                     </div>
-                </div>
+                    
+                    <!-- General Details Section -->
+                    <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Personal Details</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label for="id_full_name" class="form-label small fw-bold">Candidate Name *</label>
+                            <input type="text" name="full_name" id="id_full_name" class="form-control form-control-sm" required>
+                            <div class="invalid-feedback">Name is required and cannot be empty, numeric, or a link.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_email" class="form-label small fw-bold">Email *</label>
+                            <input type="email" name="email" id="id_email" class="form-control form-control-sm" required>
+                            <div class="invalid-feedback">Valid unique email is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_phone_number" class="form-label small fw-bold">Mobile Number *</label>
+                            <input type="text" name="phone_number" id="id_phone_number" class="form-control form-control-sm" required>
+                            <div class="invalid-feedback">Mobile number is required.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Professional Info Section -->
+                    <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Professional Information</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="id_current_company" class="form-label small fw-bold">Current Company</label>
+                            <input type="text" name="current_company" id="id_current_company" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_current_designation" class="form-label small fw-bold">Current Designation</label>
+                            <input type="text" name="current_designation" id="id_current_designation" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_total_experience" class="form-label small fw-bold">Total Experience (Years)</label>
+                            <input type="number" step="0.1" name="total_experience" id="id_total_experience" class="form-control form-control-sm" value="0.0">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_relevant_experience" class="form-label small fw-bold">Relevant Experience (Years)</label>
+                            <input type="number" step="0.1" name="relevant_experience" id="id_relevant_experience" class="form-control form-control-sm" value="0.0">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_location" class="form-label small fw-bold">Current Location</label>
+                            <input type="text" name="location" id="id_location" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_preferred_location" class="form-label small fw-bold">Preferred Location</label>
+                            <input type="text" name="preferred_location" id="id_preferred_location" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_current_salary" class="form-label small fw-bold">Current CTC (LPA)</label>
+                            <input type="number" step="0.1" name="current_salary" id="id_current_salary" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_expected_salary" class="form-label small fw-bold">Expected CTC (LPA)</label>
+                            <input type="number" step="0.1" name="expected_salary" id="id_expected_salary" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-12">
+                            <label for="id_notice_period" class="form-label small fw-bold">Notice Period (Days)</label>
+                            <input type="number" name="notice_period" id="id_notice_period" class="form-control form-control-sm" value="30">
+                        </div>
+                    </div>
+                    
+                    <!-- Work Experience Section -->
+                    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                        <h6 class="fw-bold m-0 text-primary">Work Experience</h6>
+                        <span id="calculatedTotalExperience" class="badge bg-secondary">0 Years, 0 Months</span>
+                    </div>
+                    <div id="experienceCardsContainer" class="mb-3">
+                        <!-- Experience cards inserted dynamically -->
+                    </div>
+                    <button type="button" id="addExperienceBtn" class="btn btn-sm btn-outline-primary fw-bold mb-4 w-100 py-2">
+                        <i class="bi bi-plus-lg me-1"></i>Add Experience
+                    </button>
+                    
+                    <!-- Education and Skills Section -->
+                    <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Education & Skills</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="id_highest_qualification" class="form-label small fw-bold">Highest Qualification</label>
+                            <input type="text" name="highest_qualification" id="id_highest_qualification" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="id_college_university" class="form-label small fw-bold">College / University</label>
+                            <input type="text" name="college_university" id="id_college_university" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-12">
+                            <label for="id_primary_skills" class="form-label small fw-bold">Primary Skills</label>
+                            <input type="text" name="primary_skills" id="id_primary_skills" class="form-control form-control-sm" placeholder="e.g. Python, Django, PostgreSQL">
+                        </div>
+                        <div class="col-md-12">
+                            <label for="id_secondary_skills" class="form-label small fw-bold">Secondary Skills</label>
+                            <input type="text" name="secondary_skills" id="id_secondary_skills" class="form-control form-control-sm" placeholder="e.g. AWS, Docker, HTML5">
+                        </div>
+                    </div>
+                    
+                    <!-- Links Section -->
+                    <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Links & Summary</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label for="id_linkedin_url" class="form-label small fw-bold">LinkedIn URL</label>
+                            <input type="url" name="linkedin_url" id="id_linkedin_url" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="id_github_url" class="form-label small fw-bold">GitHub URL</label>
+                            <input type="url" name="github_url" id="id_github_url" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="id_portfolio_url" class="form-label small fw-bold">Portfolio URL</label>
+                            <input type="url" name="portfolio_url" id="id_portfolio_url" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-12">
+                            <label for="id_summary" class="form-label small fw-bold">Summary</label>
+                            <textarea name="summary" id="id_summary" rows="3" class="form-control form-control-sm"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Resume File attachment -->
+                    <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">Resume Attachment</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <div id="resumeAttachmentContainer" class="d-none alert alert-light border d-flex justify-content-between align-items-center p-2 mb-2">
+                                <span class="small text-muted"><i class="bi bi-file-earmark-pdf me-2 text-danger"></i><span id="attachedResumeName">filename.pdf</span></span>
+                                <div class="d-flex gap-2">
+                                    <a href="#" id="previewResumeBtn" target="_blank" class="btn btn-sm btn-outline-primary px-3 py-1">Preview Resume</a>
+                                </div>
+                            </div>
+                            <label for="id_resume" class="form-label small fw-bold">Upload or Replace Resume</label>
+                            <input type="file" name="resume" id="id_resume" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+                        <button type="button" id="clearFormBtn" class="btn btn-outline-secondary fw-bold btn-sm px-3">Clear Form</button>
+                        <button type="button" id="parseAgainBtn" class="btn btn-outline-primary fw-bold btn-sm px-3">Parse Again</button>
+                        <button type="button" id="saveDraftBtn" class="btn btn-outline-success fw-bold btn-sm px-3">Save Draft</button>
+                        <button type="submit" id="saveCandidateBtn" class="btn btn-success fw-bold btn-sm px-4">Save Candidate</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -168,6 +306,8 @@ document.addEventListener("DOMContentLoaded", function() {
     const viewCandidateBtn = document.getElementById("viewCandidateBtn");
     const resetParserBtn = document.getElementById("resetParserBtn");
     const resetParserErrorBtn = document.getElementById("resetParserErrorBtn");
+    
+    const manualSaveForm = document.getElementById("manualSaveForm");
     
     const stages = ["upload_complete", "reading_pdf", "extracting_text", "ai_parsing", "saving_candidate", "ats_score_generated", "completed"];
     
@@ -214,6 +354,433 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
     
+    let experienceCount = 0;
+    let draggedCard = null;
+
+    function enableDragAndDrop(cardEl) {
+        const handle = cardEl.querySelector(".drag-handle");
+        if (!handle) return;
+        
+        handle.addEventListener("mousedown", () => {
+            cardEl.setAttribute("draggable", "true");
+        });
+        
+        handle.addEventListener("mouseup", () => {
+            cardEl.removeAttribute("draggable");
+        });
+        
+        cardEl.addEventListener("dragstart", (e) => {
+            draggedCard = cardEl;
+            cardEl.classList.add("opacity-50");
+            e.dataTransfer.effectAllowed = "move";
+        });
+        
+        cardEl.addEventListener("dragend", () => {
+            draggedCard = null;
+            cardEl.classList.remove("opacity-50");
+            cardEl.removeAttribute("draggable");
+            calculateTotalExperience();
+            updateExperienceInputNames();
+        });
+        
+        cardEl.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            const container = document.getElementById("experienceCardsContainer");
+            const cards = Array.from(container.querySelectorAll(".experience-card"));
+            const currentIdx = cards.indexOf(cardEl);
+            const draggedIdx = cards.indexOf(draggedCard);
+            
+            if (draggedIdx !== -1 && currentIdx !== -1 && draggedCard !== cardEl) {
+                if (draggedIdx < currentIdx) {
+                    container.insertBefore(draggedCard, cardEl.nextSibling);
+                } else {
+                    container.insertBefore(draggedCard, cardEl);
+                }
+            }
+        });
+    }
+
+    function updateExperienceInputNames() {
+        const cards = document.querySelectorAll(".experience-card");
+        cards.forEach((card, idx) => {
+            const companyInput = card.querySelector(".exp-company");
+            const designationInput = card.querySelector(".exp-designation");
+            const empTypeInput = card.querySelector(".exp-employment-type");
+            const locationInput = card.querySelector(".exp-location");
+            const startInput = card.querySelector(".exp-start-date");
+            const endInput = card.querySelector(".exp-end-date");
+            const currentInput = card.querySelector(".exp-is-current");
+            const relevantInput = card.querySelector(".exp-is-relevant");
+            const techInput = card.querySelector(".exp-skills-used");
+            const jobDescInput = card.querySelector(".exp-job-description");
+            const responsibilitiesInput = card.querySelector(".exp-responsibilities");
+            const achievementsInput = card.querySelector(".exp-achievements");
+            
+            if (companyInput) companyInput.name = `experience[${idx}][company]`;
+            if (designationInput) designationInput.name = `experience[${idx}][designation]`;
+            if (empTypeInput) empTypeInput.name = `experience[${idx}][employment_type]`;
+            if (locationInput) locationInput.name = `experience[${idx}][location]`;
+            if (startInput) startInput.name = `experience[${idx}][start_date]`;
+            if (endInput) endInput.name = `experience[${idx}][end_date]`;
+            if (currentInput) currentInput.name = `experience[${idx}][is_current]`;
+            if (relevantInput) relevantInput.name = `experience[${idx}][is_relevant]`;
+            if (techInput) techInput.name = `experience[${idx}][skills_used]`;
+            if (jobDescInput) jobDescInput.name = `experience[${idx}][job_description]`;
+            if (responsibilitiesInput) responsibilitiesInput.name = `experience[${idx}][responsibilities]`;
+            if (achievementsInput) achievementsInput.name = `experience[${idx}][achievements]`;
+        });
+    }
+
+    function calculateTotalExperience() {
+        let totalMonths = 0;
+        let relevantMonths = 0;
+        const cards = document.querySelectorAll(".experience-card");
+        
+        cards.forEach(card => {
+            const startInput = card.querySelector(".exp-start-date");
+            const endInput = card.querySelector(".exp-end-date");
+            const currentCheckbox = card.querySelector(".exp-is-current");
+            const relevantCheckbox = card.querySelector(".exp-is-relevant");
+            
+            if (startInput && startInput.value) {
+                const startDate = new Date(startInput.value + "-01");
+                let endDate;
+                
+                if (currentCheckbox && currentCheckbox.checked) {
+                    endDate = new Date();
+                } else if (endInput && endInput.value) {
+                    endDate = new Date(endInput.value + "-01");
+                } else {
+                    endDate = new Date();
+                }
+                
+                if (endDate >= startDate) {
+                    const diffYears = endDate.getFullYear() - startDate.getFullYear();
+                    const diffMonths = endDate.getMonth() - startDate.getMonth();
+                    const months = (diffYears * 12) + diffMonths + 1; // inclusive
+                    totalMonths += months;
+                    
+                    if (relevantCheckbox && relevantCheckbox.checked) {
+                        relevantMonths += months;
+                    }
+                }
+            }
+        });
+        
+        const years = Math.floor(totalMonths / 12);
+        const months = totalMonths % 12;
+        
+        const relYears = Math.floor(relevantMonths / 12);
+        const relMonths = relevantMonths % 12;
+        
+        const totalExpDisplay = document.getElementById("calculatedTotalExperience");
+        if (totalExpDisplay) {
+            totalExpDisplay.textContent = `${years} Years, ${months} Months`;
+        }
+        
+        const totalExpInput = document.getElementById("id_total_experience");
+        if (totalExpInput) {
+            totalExpInput.value = (years + (months / 12)).toFixed(1);
+        }
+        
+        const relExpInput = document.getElementById("id_relevant_experience");
+        if (relExpInput) {
+            relExpInput.value = (relYears + (relMonths / 12)).toFixed(1);
+        }
+        
+        updateCurrentJobFromEntries();
+    }
+
+    function updateCurrentJobFromEntries() {
+        const cards = document.querySelectorAll(".experience-card");
+        let currentCompany = "";
+        let currentDesignation = "";
+        let latestStartDate = null;
+        
+        cards.forEach(card => {
+            const companyInput = card.querySelector(".exp-company");
+            const designationInput = card.querySelector(".exp-designation");
+            const startInput = card.querySelector(".exp-start-date");
+            const currentCheckbox = card.querySelector(".exp-is-current");
+            
+            if (currentCheckbox && currentCheckbox.checked) {
+                currentCompany = companyInput ? companyInput.value : "";
+                currentDesignation = designationInput ? designationInput.value : "";
+                latestStartDate = new Date(); // Priority
+            } else if (startInput && startInput.value) {
+                const startDate = new Date(startInput.value + "-01");
+                if (!latestStartDate || startDate > latestStartDate) {
+                    latestStartDate = startDate;
+                    currentCompany = companyInput ? companyInput.value : "";
+                    currentDesignation = designationInput ? designationInput.value : "";
+                }
+            }
+        });
+        
+        if (currentCompany) {
+            document.getElementById("id_current_company").value = currentCompany;
+        }
+        if (currentDesignation) {
+            document.getElementById("id_current_designation").value = currentDesignation;
+        }
+    }
+
+    function validateExperienceCards() {
+        let isValid = true;
+        const cards = document.querySelectorAll(".experience-card");
+        const periods = [];
+        
+        const prevWarning = document.getElementById("overlapWarning");
+        if (prevWarning) prevWarning.remove();
+        
+        cards.forEach(card => {
+            const companyInput = card.querySelector(".exp-company");
+            const designationInput = card.querySelector(".exp-designation");
+            const startInput = card.querySelector(".exp-start-date");
+            const endInput = card.querySelector(".exp-end-date");
+            const currentCheckbox = card.querySelector(".exp-is-current");
+            
+            card.querySelectorAll(".is-invalid").forEach(el => el.classList.remove("is-invalid"));
+            
+            if (companyInput && !companyInput.value.trim()) {
+                companyInput.classList.add("is-invalid");
+                isValid = false;
+            }
+            if (designationInput && !designationInput.value.trim()) {
+                designationInput.classList.add("is-invalid");
+                isValid = false;
+            }
+            if (startInput && !startInput.value) {
+                startInput.classList.add("is-invalid");
+                isValid = false;
+            }
+            
+            if (startInput && startInput.value) {
+                const startDate = new Date(startInput.value + "-01");
+                let endDate = new Date();
+                if (currentCheckbox && !currentCheckbox.checked) {
+                    if (endInput && endInput.value) {
+                        endDate = new Date(endInput.value + "-01");
+                        if (endDate < startDate) {
+                            endInput.classList.add("is-invalid");
+                            isValid = false;
+                        }
+                    } else if (endInput) {
+                        endInput.classList.add("is-invalid");
+                        isValid = false;
+                    }
+                }
+                
+                if (isValid) {
+                    periods.push({
+                        start: startDate,
+                        end: endDate
+                    });
+                }
+            }
+        });
+        
+        // Overlap warning check
+        let hasOverlap = false;
+        for (let i = 0; i < periods.length; i++) {
+            for (let j = i + 1; j < periods.length; j++) {
+                if (periods[i].start <= periods[j].end && periods[j].start <= periods[i].end) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+        }
+        
+        if (hasOverlap) {
+            const container = document.getElementById("experienceCardsContainer");
+            const warningHtml = `
+                <div id="overlapWarning" class="alert alert-warning py-2 px-3 mb-3 small d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle me-2 fs-5"></i>
+                    <div><strong>Warning:</strong> Some of the employment periods overlap. Please verify the dates.</div>
+                </div>
+            `;
+            container.insertAdjacentHTML("beforebegin", warningHtml);
+        }
+        
+        return isValid;
+    }
+
+    function addExperienceCard(data = {}) {
+        const container = document.getElementById("experienceCardsContainer");
+        const count = experienceCount++;
+        
+        let startVal = "";
+        if (data.start_date) {
+            startVal = data.start_date.substring(0, 7);
+        }
+        let endVal = "";
+        if (data.end_date) {
+            endVal = data.end_date.substring(0, 7);
+        }
+        
+        const jobDescVal = data.job_description || data.description || "";
+        const respVal = data.responsibilities || "";
+        const achieveVal = data.achievements || "";
+        
+        const cardHtml = `
+            <div class="card mb-3 border experience-card shadow-sm" id="exp-card-${count}" style="transition: all 0.3s ease;">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <div class="drag-handle me-2 cursor-grab" style="cursor: move;">
+                            <i class="bi bi-grip-vertical text-muted fs-5"></i>
+                        </div>
+                        <div class="bg-secondary bg-opacity-10 rounded p-1 me-2 text-center" style="width: 32px; height: 32px; line-height: 24px;">
+                            <i class="bi bi-building text-secondary fs-6"></i>
+                        </div>
+                        <span class="fw-bold small exp-card-title">${data.company || 'New Experience'}</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none py-0 fs-6 text-secondary toggle-exp-btn">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none py-0 fs-6 text-danger remove-exp-btn">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-3 exp-card-body" id="exp-body-${count}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Company Name *</label>
+                            <input type="text" class="form-control form-control-sm exp-company" value="${data.company || ''}" required>
+                            <div class="invalid-feedback">Company Name is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Job Title / Designation *</label>
+                            <input type="text" class="form-control form-control-sm exp-designation" value="${data.designation || ''}" required>
+                            <div class="invalid-feedback">Job Title is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Employment Type</label>
+                            <select class="form-select form-select-sm exp-employment-type">
+                                <option value="Full Time" ${data.employment_type === 'Full Time' ? 'selected' : ''}>Full Time</option>
+                                <option value="Contract" ${data.employment_type === 'Contract' ? 'selected' : ''}>Contract</option>
+                                <option value="Internship" ${data.employment_type === 'Internship' ? 'selected' : ''}>Internship</option>
+                                <option value="Freelance" ${data.employment_type === 'Freelance' ? 'selected' : ''}>Freelance</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Location</label>
+                            <input type="text" class="form-control form-control-sm exp-location" value="${data.location || ''}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Start Date (Month / Year) *</label>
+                            <input type="month" class="form-control form-control-sm exp-start-date" value="${startVal}" required>
+                            <div class="invalid-feedback">Start date is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">End Date (Month / Year)</label>
+                            <input type="month" class="form-control form-control-sm exp-end-date" value="${endVal}" ${data.is_current ? 'disabled' : ''}>
+                            <div class="invalid-feedback">End date must be after or equal to start date.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input exp-is-current" type="checkbox" ${data.is_current ? 'checked' : ''}>
+                                <label class="form-check-label small fw-semibold">Currently Working Here</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input exp-is-relevant" type="checkbox" ${data.is_relevant !== false ? 'checked' : ''}>
+                                <label class="form-check-label small fw-semibold">Count as Relevant Experience</label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Technologies Used</label>
+                            <input type="text" class="form-control form-control-sm exp-skills-used" value="${data.skills_used || ''}" placeholder="e.g. Python, SQL, Git">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Job Description</label>
+                            <textarea rows="2" class="form-control form-control-sm exp-job-description">${jobDescVal}</textarea>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Responsibilities</label>
+                            <textarea rows="2" class="form-control form-control-sm exp-responsibilities">${respVal}</textarea>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Achievements</label>
+                            <textarea rows="2" class="form-control form-control-sm exp-achievements">${achieveVal}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', cardHtml);
+        const cardEl = document.getElementById(`exp-card-${count}`);
+        
+        enableDragAndDrop(cardEl);
+        
+        cardEl.querySelector(".exp-company").addEventListener("input", function() {
+            cardEl.querySelector(".exp-card-title").textContent = this.value || 'New Experience';
+            updateCurrentJobFromEntries();
+        });
+        cardEl.querySelector(".exp-designation").addEventListener("input", function() {
+            updateCurrentJobFromEntries();
+        });
+        cardEl.querySelector(".exp-start-date").addEventListener("change", calculateTotalExperience);
+        cardEl.querySelector(".exp-end-date").addEventListener("change", calculateTotalExperience);
+        
+        cardEl.querySelector(".exp-is-current").addEventListener("change", function() {
+            const endInput = cardEl.querySelector(".exp-end-date");
+            if (this.checked) {
+                endInput.value = "";
+                endInput.disabled = true;
+            } else {
+                endInput.disabled = false;
+            }
+            calculateTotalExperience();
+        });
+        
+        cardEl.querySelector(".exp-is-relevant").addEventListener("change", calculateTotalExperience);
+        
+        cardEl.querySelector(".remove-exp-btn").addEventListener("click", function() {
+            cardEl.style.opacity = 0;
+            cardEl.style.transform = "scale(0.9)";
+            setTimeout(() => {
+                cardEl.remove();
+                calculateTotalExperience();
+                updateExperienceInputNames();
+            }, 300);
+        });
+        
+        cardEl.querySelector(".toggle-exp-btn").addEventListener("click", function() {
+            const body = cardEl.querySelector(".exp-card-body");
+            const icon = this.querySelector("i");
+            if (body.style.display === "none") {
+                body.style.display = "block";
+                icon.className = "bi bi-chevron-down";
+            } else {
+                body.style.display = "none";
+                icon.className = "bi bi-chevron-up";
+            }
+        });
+        
+        calculateTotalExperience();
+        updateExperienceInputNames();
+    }
+
+    const addExpBtn = document.getElementById("addExperienceBtn");
+    if (addExpBtn) {
+        addExpBtn.addEventListener("click", () => addExperienceCard());
+    }
+
+    // Load initial experiences if editing
+    try {
+        const initialExps = JSON.parse('{{ experiences_json|safe|escapejs }}' || '[]');
+        if (initialExps && initialExps.length) {
+            initialExps.forEach(exp => addExperienceCard(exp));
+        }
+    } catch (e) {
+        console.error("Failed to parse initial experiences:", e);
+    }
+
     function handleProgressUpdate(data) {
         const stage = data.stage;
         
@@ -263,6 +830,62 @@ document.addEventListener("DOMContentLoaded", function() {
             viewCandidateBtn.classList.remove("d-none");
         } else {
             viewCandidateBtn.classList.add("d-none");
+        }
+        
+        // Auto-fill manual parsing fields
+        document.getElementById("manualCandidateId").value = data.candidate_id || "";
+        document.getElementById("id_full_name").value = data.name || "";
+        document.getElementById("id_email").value = data.email || "";
+        document.getElementById("id_phone_number").value = data.phone || "";
+        document.getElementById("id_current_company").value = data.current_company || "";
+        document.getElementById("id_current_designation").value = data.current_designation || "";
+        document.getElementById("id_total_experience").value = data.experience !== undefined ? data.experience : "0.0";
+        document.getElementById("id_relevant_experience").value = data.relevant_experience !== undefined ? data.relevant_experience : "0.0";
+        document.getElementById("id_location").value = data.location || "";
+        document.getElementById("id_preferred_location").value = data.preferred_location || "";
+        document.getElementById("id_current_salary").value = data.current_salary || "";
+        document.getElementById("id_expected_salary").value = data.expected_salary || "";
+        document.getElementById("id_notice_period").value = data.notice_period || "30";
+        document.getElementById("id_highest_qualification").value = data.highest_qualification || "";
+        document.getElementById("id_college_university").value = data.college_university || "";
+        document.getElementById("id_primary_skills").value = data.primary_skills || "";
+        document.getElementById("id_secondary_skills").value = data.secondary_skills || "";
+        document.getElementById("id_linkedin_url").value = data.linkedin_url || "";
+        document.getElementById("id_github_url").value = data.github_url || "";
+        document.getElementById("id_portfolio_url").value = data.portfolio_url || "";
+        document.getElementById("id_summary").value = data.summary || "";
+        
+        // Clear and add work experiences
+        document.getElementById("experienceCardsContainer").innerHTML = "";
+        if (data.experiences && data.experiences.length) {
+            data.experiences.forEach(exp => addExperienceCard(exp));
+        }
+        
+        // Update AI status badge and confidence
+        const aiStatusBadge = document.getElementById("aiStatusBadge");
+        aiStatusBadge.textContent = "AI Parsed";
+        aiStatusBadge.className = "badge bg-success px-3 py-2 text-white";
+        
+        const aiConfidenceContainer = document.getElementById("aiConfidenceContainer");
+        const aiConfidenceScore = document.getElementById("aiConfidenceScore");
+        if (data.confidence) {
+            aiConfidenceContainer.classList.remove("d-none");
+            aiConfidenceScore.textContent = Math.round(data.confidence) + "%";
+        } else {
+            aiConfidenceContainer.classList.add("d-none");
+        }
+        
+        // Update resume attachment
+        const resumeAttachmentContainer = document.getElementById("resumeAttachmentContainer");
+        const attachedResumeName = document.getElementById("attachedResumeName");
+        const previewResumeBtn = document.getElementById("previewResumeBtn");
+        
+        if (data.resume_name && data.candidate_id) {
+            resumeAttachmentContainer.classList.remove("d-none");
+            attachedResumeName.textContent = data.resume_name;
+            previewResumeBtn.href = `/candidates/${data.candidate_id}/preview/`;
+        } else {
+            resumeAttachmentContainer.classList.add("d-none");
         }
         
         submitBtn.innerHTML = '<i class="bi bi-check-lg me-2"></i> Completed';
@@ -355,6 +978,168 @@ document.addEventListener("DOMContentLoaded", function() {
             clearInterval(timerInterval);
             stages.forEach(s => updateStage(s, "failed"));
             showError("Network or server connection error.");
+        }
+    });
+    
+    // Clear Form Action
+    document.getElementById("clearFormBtn").addEventListener("click", function() {
+        manualSaveForm.reset();
+        document.getElementById("manualCandidateId").value = "";
+        
+        const aiStatusBadge = document.getElementById("aiStatusBadge");
+        aiStatusBadge.textContent = "Manual Entry";
+        aiStatusBadge.className = "badge bg-secondary px-3 py-2 text-white";
+        
+        document.getElementById("aiConfidenceContainer").classList.add("d-none");
+        document.getElementById("resumeAttachmentContainer").classList.add("d-none");
+        document.getElementById("experienceCardsContainer").innerHTML = "";
+        manualSaveForm.querySelectorAll(".is-invalid").forEach(el => el.classList.remove("is-invalid"));
+        calculateTotalExperience();
+    });
+    
+    // Parse Again Action
+    document.getElementById("parseAgainBtn").addEventListener("click", function() {
+        resetFormState();
+        const uploadCard = document.getElementById("uploadForm");
+        if (uploadCard) {
+            uploadCard.scrollIntoView({ behavior: 'smooth' });
+        }
+    });
+    
+    // Save Draft Action
+    document.getElementById("saveDraftBtn").addEventListener("click", function() {
+        manualSaveForm.dispatchEvent(new Event("submit"));
+    });
+    
+    // Manual Form Submit
+    manualSaveForm.addEventListener("submit", async function(e) {
+        e.preventDefault();
+        
+        manualSaveForm.querySelectorAll(".is-invalid").forEach(el => el.classList.remove("is-invalid"));
+        
+        let isValid = true;
+        const nameInput = document.getElementById("id_full_name");
+        const emailInput = document.getElementById("id_email");
+        const phoneInput = document.getElementById("id_phone_number");
+        
+        if (!nameInput.value.trim()) {
+            nameInput.classList.add("is-invalid");
+            isValid = false;
+        }
+        if (!emailInput.value.trim() || !emailInput.checkValidity()) {
+            emailInput.classList.add("is-invalid");
+            isValid = false;
+        }
+        if (!phoneInput.value.trim()) {
+            phoneInput.classList.add("is-invalid");
+            isValid = false;
+        }
+        
+        // Experience card validations
+        const expCards = document.querySelectorAll(".experience-card");
+        const isExpValid = validateExperienceCards();
+        if (!isExpValid) {
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            alert("Please fill all required fields correctly.");
+            return;
+        }
+        
+        const saveCandidateBtn = document.getElementById("saveCandidateBtn");
+        const originalText = saveCandidateBtn.innerHTML;
+        saveCandidateBtn.disabled = true;
+        saveCandidateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Saving...';
+        
+        // Ensure input name indexes are aligned before submission
+        updateExperienceInputNames();
+        
+        const manualData = new FormData(manualSaveForm);
+        
+        // Append overwrite switch state
+        const overwriteToggle = document.getElementById("overwriteSwitch");
+        if (overwriteToggle && overwriteToggle.checked) {
+            manualData.append("overwrite", "on");
+        }
+        
+        // Serialize and append experiences as fallback JSON
+        const experiences = [];
+        expCards.forEach(card => {
+            const compVal = card.querySelector(".exp-company").value;
+            const desVal = card.querySelector(".exp-designation").value;
+            const empTypeVal = card.querySelector(".exp-employment-type").value;
+            const locVal = card.querySelector(".exp-location").value;
+            const startVal = card.querySelector(".exp-start-date").value;
+            const endVal = card.querySelector(".exp-end-date").value;
+            const currentVal = card.querySelector(".exp-is-current").checked;
+            const relevantVal = card.querySelector(".exp-is-relevant").checked;
+            const techVal = card.querySelector(".exp-skills-used").value;
+            const jobDescVal = card.querySelector(".exp-job-description").value;
+            const respVal = card.querySelector(".exp-responsibilities").value;
+            const achieveVal = card.querySelector(".exp-achievements").value;
+            
+            const descParts = [];
+            if (jobDescVal) descParts.push("Job Description:\n" + jobDescVal);
+            if (respVal) descParts.push("Responsibilities:\n" + respVal);
+            if (achieveVal) descParts.push("Achievements:\n" + achieveVal);
+            const combinedDesc = descParts.join("\n\n");
+            
+            experiences.push({
+                company: compVal,
+                designation: desVal,
+                employment_type: empTypeVal,
+                location: locVal,
+                start_date: startVal,
+                end_date: endVal,
+                is_current: currentVal,
+                is_relevant: relevantVal,
+                skills_used: techVal,
+                job_description: jobDescVal,
+                responsibilities: respVal,
+                achievements: achieveVal,
+                description: combinedDesc
+            });
+        });
+        manualData.append("experiences_json", JSON.stringify(experiences));
+        
+        try {
+            const response = await fetch("", {
+                method: "POST",
+                body: manualData,
+                headers: {
+                    "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            });
+            
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert(result.message || "Candidate saved successfully.");
+                if (result.candidate_id) {
+                    window.location.href = `/candidates/${result.candidate_id}/`;
+                }
+            } else {
+                if (result.errors) {
+                    for (const [field, messages] of Object.entries(result.errors)) {
+                        const input = document.querySelector(`[name=${field}]`);
+                        if (input) {
+                            input.classList.add("is-invalid");
+                            const feedback = input.nextElementSibling;
+                            if (feedback && feedback.classList.contains("invalid-feedback")) {
+                                feedback.textContent = messages.join(" ");
+                            }
+                        }
+                    }
+                } else {
+                    alert(result.message || "Failed to save candidate.");
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Network error occurred while saving.");
+        } finally {
+            saveCandidateBtn.disabled = false;
+            saveCandidateBtn.innerHTML = originalText;
         }
     });
 });

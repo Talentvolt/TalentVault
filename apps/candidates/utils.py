@@ -667,12 +667,24 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         with transaction.atomic():
             if progress_callback:
                 progress_callback("saving_candidate")
-            # Check for duplicates:
+            # Check for duplicates (Exact: email, phone, LinkedIn URL, or sha256 hash)
             t_user_start = time.time()
-            if phone:
-                existing_user = User.objects.filter(Q(email=email) | Q(phone_number=phone)).first()
-            else:
+            linkedin = info.get('linkedin_url', '') or info.get('linkedin', '')
+            sha256 = security_data.get('sha256', '') if security_data else ''
+            
+            existing_user = None
+            if email:
                 existing_user = User.objects.filter(email=email).first()
+            if not existing_user and phone:
+                existing_user = User.objects.filter(phone_number=phone).first()
+            if not existing_user and linkedin:
+                existing_profile = CandidateProfile.objects.filter(linkedin_url=linkedin).first()
+                if existing_profile:
+                    existing_user = existing_profile.user
+            if not existing_user and sha256:
+                existing_profile = CandidateProfile.objects.filter(sha256=sha256).first()
+                if existing_profile:
+                    existing_user = existing_profile.user
             
             if existing_user and not overwrite:
                 DuplicateResumeLog.objects.create(
