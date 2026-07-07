@@ -1,11 +1,19 @@
 {% extends "layouts/recruiter_base.html" %}
 
-{% block title %}Resume Parser | TalentVault{% endblock %}
+{% block title %}{% if job %}Add Candidates for {{ job.title }}{% else %}Resume Parser{% endif %} | TalentVault{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold m-0">Advanced Resume Parser</h3>
-    <p class="text-secondary small m-0">Fast extraction & duplicate detection</p>
+    <div>
+        {% if job %}
+            <a href="{% url 'frontend:job_candidates' job.id %}" class="text-secondary text-decoration-none small fw-semibold"><i class="bi bi-arrow-left"></i> Back to {{ job.title }} Candidates</a>
+            <h3 class="fw-bold m-0 mt-1"><i class="bi bi-person-plus me-2 text-primary"></i>Add Candidates <span class="text-secondary fw-normal">for {{ job.title }}</span></h3>
+            <p class="text-secondary small m-0">Candidates will be automatically mapped to this job.</p>
+        {% else %}
+            <h3 class="fw-bold m-0">Advanced Resume Parser</h3>
+            <p class="text-secondary small m-0">Fast extraction & duplicate detection</p>
+        {% endif %}
+    </div>
 </div>
 
 <div class="row g-4">
@@ -18,6 +26,7 @@
             <div class="card-body p-4">
                 <form id="uploadForm" method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
+                    <input type="hidden" name="job_id" value="{{ job.id|default:'' }}">
                     
                     <div class="mb-4 text-center p-5 border-2 border-dashed rounded-3 bg-light position-relative">
                         <i class="bi bi-cloud-upload fs-1 text-secondary mb-2"></i>
@@ -55,27 +64,27 @@
                 <ul class="list-group list-group-flush mb-4">
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-upload_complete">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>Upload Complete</span>
+                        <span>Uploading...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-reading_pdf">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>Reading PDF</span>
+                        <span>Reading Resume...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-extracting_text">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>Extracting Text</span>
+                        <span>Extracting Text...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-ai_parsing">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>AI Parsing</span>
+                        <span>AI Parsing...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-saving_candidate">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>Saving Candidate</span>
+                        <span>Saving Candidate...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-ats_score_generated">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>ATS Score Generated</span>
+                        <span>ATS Score...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-completed">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
@@ -130,6 +139,8 @@
                     {% csrf_token %}
                     <input type="hidden" name="action" value="manual_save">
                     <input type="hidden" name="candidate_id" id="manualCandidateId" value="{{ editing_profile.id|default:'' }}">
+                    <input type="hidden" name="job_id" id="manualJobId" value="{{ job.id|default:'' }}">
+                    <input type="hidden" name="ignore_duplicate" id="manualIgnoreDuplicate" value="false">
                     
                     <!-- AI Confidence Badge -->
                     <div id="aiConfidenceContainer" class="d-none alert alert-info py-2 px-3 mb-4 rounded border-info d-flex align-items-center justify-content-between">
@@ -284,6 +295,50 @@
             </div>
         </div>
     </div>
+<!-- Duplicate Detection Modal -->
+<div class="modal fade" id="duplicateModal" tabindex="-1" aria-labelledby="duplicateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-bold text-dark d-flex align-items-center" id="duplicateModalLabel">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2 fs-4"></i> Duplicate Candidate Detected
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-4">
+        <p class="text-secondary small mb-4">A candidate with matching contact details already exists in the system. Here is the summary of the existing profile:</p>
+        
+        <!-- Candidate Summary Card -->
+        <div class="card bg-light border-light-subtle p-3 mb-4 rounded-3 text-dark">
+          <div class="row g-2 text-start">
+            <div class="col-sm-5 fw-bold small text-secondary">Candidate Name:</div>
+            <div class="col-sm-7 small fw-semibold" id="dup-name">-</div>
+            
+            <div class="col-sm-5 fw-bold small text-secondary">Email:</div>
+            <div class="col-sm-7 small fw-semibold" id="dup-email">-</div>
+            
+            <div class="col-sm-5 fw-bold small text-secondary">Mobile:</div>
+            <div class="col-sm-7 small fw-semibold" id="dup-phone">-</div>
+            
+            <div class="col-sm-5 fw-bold small text-secondary">Current Company:</div>
+            <div class="col-sm-7 small fw-semibold" id="dup-company">-</div>
+          </div>
+        </div>
+        
+        <p class="text-dark small mb-0 fw-semibold text-start">Select an action to proceed:</p>
+      </div>
+      <div class="modal-footer border-top-0 pt-0 d-flex flex-column gap-2 w-100 pb-4 px-4">
+        <div class="d-flex gap-2 w-100">
+          <button type="button" id="btnUpdateExisting" class="btn btn-primary btn-sm flex-fill fw-bold py-2"><i class="bi bi-person-check me-1"></i> Update Existing Profile</button>
+          <button type="button" id="btnMergeResume" class="btn btn-outline-primary btn-sm flex-fill fw-bold py-2"><i class="bi bi-file-earmark-diff me-1"></i> Merge Resume</button>
+        </div>
+        <div class="d-flex gap-2 w-100">
+          <button type="button" id="btnCreateNewAnyway" class="btn btn-outline-warning btn-sm flex-fill fw-semibold py-2"><i class="bi bi-person-plus me-1"></i> Create New Candidate Anyway</button>
+          <button type="button" class="btn btn-light btn-sm flex-fill fw-medium py-2" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -784,7 +839,59 @@ document.addEventListener("DOMContentLoaded", function() {
     function handleProgressUpdate(data) {
         const stage = data.stage;
         
-        if (stage === "error" || stage === "duplicate") {
+        if (stage === "duplicate") {
+            clearInterval(timerInterval);
+            stages.forEach(s => {
+                const el = document.getElementById(`stage-${s}`);
+                if (el && (el.classList.contains("text-primary") || el.classList.contains("text-muted"))) {
+                    updateStage(s, "failed");
+                }
+            });
+            
+            // Populate duplicate candidate info from response
+            const dup = data.duplicate_candidate || {};
+            document.getElementById("dup-name").textContent = dup.name || "Unknown";
+            document.getElementById("dup-email").textContent = dup.email || "Not specified";
+            document.getElementById("dup-phone").textContent = dup.phone || "Not specified";
+            document.getElementById("dup-company").textContent = dup.current_company || "Not specified";
+            
+            const dupModal = new bootstrap.Modal(document.getElementById('duplicateModal'));
+            
+            document.getElementById("btnUpdateExisting").onclick = function() {
+                document.getElementById("manualCandidateId").value = dup.candidate_id || "";
+                document.getElementById("manualIgnoreDuplicate").value = "false";
+                dupModal.hide();
+                const manualSaveForm = document.getElementById("manualSaveForm");
+                if (manualSaveForm) {
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                }
+            };
+            
+            document.getElementById("btnMergeResume").onclick = function() {
+                document.getElementById("manualCandidateId").value = dup.candidate_id || "";
+                document.getElementById("manualIgnoreDuplicate").value = "false";
+                dupModal.hide();
+                const manualSaveForm = document.getElementById("manualSaveForm");
+                if (manualSaveForm) {
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                }
+            };
+            
+            document.getElementById("btnCreateNewAnyway").onclick = function() {
+                document.getElementById("manualCandidateId").value = "";
+                document.getElementById("manualIgnoreDuplicate").value = "true";
+                dupModal.hide();
+                const manualSaveForm = document.getElementById("manualSaveForm");
+                if (manualSaveForm) {
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                }
+            };
+            
+            dupModal.show();
+            return;
+        }
+        
+        if (stage === "error") {
             clearInterval(timerInterval);
             stages.forEach(s => {
                 const el = document.getElementById(`stage-${s}`);
@@ -825,8 +932,16 @@ document.addEventListener("DOMContentLoaded", function() {
         resSkills.textContent = data.skills_count !== undefined ? data.skills_count : "0";
         resEducation.textContent = data.education_count !== undefined ? data.education_count : "0";
         
+        const jobIdInput = document.getElementById("manualJobId");
+        const jobIdVal = jobIdInput ? jobIdInput.value : "";
         if (data.candidate_id) {
-            viewCandidateBtn.href = `/candidates/${data.candidate_id}/`;
+            if (jobIdVal) {
+                viewCandidateBtn.href = `/jobs/${jobIdVal}/candidates/`;
+                viewCandidateBtn.innerHTML = '<i class="bi bi-briefcase me-1"></i> View Job Candidates';
+            } else {
+                viewCandidateBtn.href = `/candidates/${data.candidate_id}/`;
+                viewCandidateBtn.innerHTML = 'View Candidate';
+            }
             viewCandidateBtn.classList.remove("d-none");
         } else {
             viewCandidateBtn.classList.add("d-none");
@@ -1115,9 +1230,43 @@ document.addEventListener("DOMContentLoaded", function() {
             const result = await response.json();
             if (response.ok && result.success) {
                 alert(result.message || "Candidate saved successfully.");
-                if (result.candidate_id) {
+                if (result.job_id) {
+                    window.location.href = `/jobs/${result.job_id}/candidates/`;
+                } else if (result.candidate_id) {
                     window.location.href = `/candidates/${result.candidate_id}/`;
                 }
+            } else if (result.stage === "duplicate") {
+                // Populate duplicate candidate info from response
+                const dup = result.duplicate_candidate || {};
+                document.getElementById("dup-name").textContent = dup.name || "Unknown";
+                document.getElementById("dup-email").textContent = dup.email || "Not specified";
+                document.getElementById("dup-phone").textContent = dup.phone || "Not specified";
+                document.getElementById("dup-company").textContent = dup.current_company || "Not specified";
+                
+                const dupModal = new bootstrap.Modal(document.getElementById('duplicateModal'));
+                
+                document.getElementById("btnUpdateExisting").onclick = function() {
+                    document.getElementById("manualCandidateId").value = dup.candidate_id || "";
+                    document.getElementById("manualIgnoreDuplicate").value = "false";
+                    dupModal.hide();
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                };
+                
+                document.getElementById("btnMergeResume").onclick = function() {
+                    document.getElementById("manualCandidateId").value = dup.candidate_id || "";
+                    document.getElementById("manualIgnoreDuplicate").value = "false";
+                    dupModal.hide();
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                };
+                
+                document.getElementById("btnCreateNewAnyway").onclick = function() {
+                    document.getElementById("manualCandidateId").value = "";
+                    document.getElementById("manualIgnoreDuplicate").value = "true";
+                    dupModal.hide();
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                };
+                
+                dupModal.show();
             } else {
                 if (result.errors) {
                     for (const [field, messages] of Object.entries(result.errors)) {
@@ -1142,6 +1291,19 @@ document.addEventListener("DOMContentLoaded", function() {
             saveCandidateBtn.innerHTML = originalText;
         }
     });
+
+    // Auto scroll/focus on manual tab if query param is set
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab') === 'manual') {
+        const manualFormEl = document.getElementById("manualSaveForm");
+        if (manualFormEl) {
+            manualFormEl.scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => {
+                const nameInput = document.getElementById("id_full_name");
+                if (nameInput) nameInput.focus();
+            }, 500);
+        }
+    }
 });
 </script>
 {% endblock %}

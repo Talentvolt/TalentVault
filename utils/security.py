@@ -210,41 +210,58 @@ def scan_pdf_security(file_bytes):
     """
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
+        
         # Embedded files check
         if doc.embfile_count() > 0:
-            raise SecurityValidationError("Suspicious PDF content detected.", code="PDF_EMBEDDED_FILES")
+            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.", code="PDF_EMBEDDED_FILES")
             
         # Catalog check
         catalog = doc.pdf_catalog()
         catalog_obj = doc.xref_object(catalog)
-        if any(x in catalog_obj for x in ['/Names', '/JavaScript', '/OpenAction']):
-            raise SecurityValidationError("Suspicious PDF content detected.", code="PDF_CATALOG_JS")
+        
+        # Benign /Names or standard structures are allowed. Only reject if catalog references JavaScript
+        if '/JavaScript' in catalog_obj:
+            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript was found in the PDF catalog.", code="PDF_CATALOG_JS")
+            
+        if '/OpenAction' in catalog_obj:
+            # Check if OpenAction actually references dangerous actions (JS or Launch)
+            if any(act in catalog_obj for act in ['/JS', '/JavaScript', '/Launch']):
+                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a malicious OpenAction was found in the PDF catalog.", code="PDF_CATALOG_JS")
 
         # Scan objects for suspicious actions
         for xref in range(1, doc.xref_length()):
             obj_defn = doc.xref_object(xref)
             if not obj_defn:
                 continue
-            # Search for JS, JavaScript, Launch, AA (Additional Actions), EmbeddedFiles, FS
-            if any(p in obj_defn for p in ['/JS', '/JavaScript', '/Launch', '/AA', '/EmbeddedFiles', '/FS']):
-                raise SecurityValidationError("Suspicious PDF content detected.", code="PDF_SUSPICIOUS_OBJ")
+            
+            # Reject if JS or JavaScript is found in object definition
+            if '/JS ' in obj_defn or '/JavaScript' in obj_defn:
+                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript (/JS) was detected in object xref.", code="PDF_SUSPICIOUS_OBJ")
+                
+            # Reject if Launch action is found in object definition
+            if '/Launch' in obj_defn:
+                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a Launch Action (/Launch) was detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
+                
+            # Reject if EmbeddedFiles is found in object definition
+            if '/EmbeddedFiles' in obj_defn:
+                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files (/EmbeddedFiles) were detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
 
         # Scan annotations for active content
         for page in doc:
             annot = page.first_annot
             while annot:
                 annot_defn = doc.xref_object(annot.xref)
-                if any(p in annot_defn for p in ['/JS', '/JavaScript', '/Launch', '/AA', '/FS']):
-                    raise SecurityValidationError("Suspicious PDF content detected.", code="PDF_SUSPICIOUS_ANNOT")
+                if any(p in annot_defn for p in ['/JS', '/JavaScript', '/Launch']):
+                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a dangerous action was detected in page annotations.", code="PDF_SUSPICIOUS_ANNOT")
                 annot = annot.next
                 
     except SecurityValidationError:
         raise
     except Exception as e:
         # If the file fails to open, check if it was due to embedded active content tags
-        if any(p in file_bytes for p in [b'/JS', b'/JavaScript', b'/Launch', b'/AA', b'/EmbeddedFiles', b'/FS']):
-            raise SecurityValidationError("Suspicious PDF content detected.", code="PDF_SCAN_ERROR")
-        raise SecurityValidationError("Corrupted document.", code="PDF_SCAN_ERROR")
+        if any(p in file_bytes for p in [b'/JavaScript', b'/Launch']):
+            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because suspicious raw tags were found in the unopenable PDF.", code="PDF_SCAN_ERROR")
+        raise SecurityValidationError(f"Suspicious PDF content detected. Security validation failed because the PDF is corrupted or unopenable: {str(e)}", code="PDF_SCAN_ERROR")
 
     return True
 

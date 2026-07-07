@@ -632,6 +632,7 @@ class JobCandidatesView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['job'] = self.job
+        context['total_applications_count'] = Application.objects.filter(job=self.job).count()
         
         # Get stages lists for filters
         context['stage_choices'] = Application.ApplicationStage.choices
@@ -1102,8 +1103,11 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         candidate = get_object_or_404(CandidateProfile, pk=pk)
         job_id = request.POST.get('job_id')
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == 'application/json' or request.META.get('HTTP_ACCEPT') == 'application/json'
         
         if not job_id:
+            if is_ajax:
+                return JsonResponse({"success": False, "message": "Please select a job."}, status=400)
             messages.error(request, "Please select a job.")
             return redirect('frontend:candidate_detail', pk=pk)
             
@@ -1143,10 +1147,64 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
         else:
             messages.info(request, "Candidate is already in this job's pipeline.")
             
+        if is_ajax:
+            return JsonResponse({
+                "success": True,
+                "created": created,
+                "message": "Candidate moved to Pipeline successfully." if created else "Candidate is already in Pipeline.",
+                "in_pipeline": True
+            })
+            
         next_url = request.POST.get('next') or request.GET.get('next')
         if next_url:
             return redirect(next_url)
         return redirect('frontend:ats_pipeline')
+
+
+class RemoveFromPipelineView(RecruiterRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        candidate = get_object_or_404(CandidateProfile, pk=pk)
+        job_id = request.POST.get('job_id')
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == 'application/json' or request.META.get('HTTP_ACCEPT') == 'application/json'
+        
+        if not job_id:
+            if is_ajax:
+                return JsonResponse({"success": False, "message": "Job ID is required."}, status=400)
+            messages.error(request, "Job ID is required.")
+            return redirect('frontend:candidate_detail', pk=pk)
+            
+        job = get_object_or_404(Job, id=job_id)
+        
+        application = Application.objects.filter(candidate=candidate, job=job).first()
+        if application:
+            application.in_pipeline = False
+            application.save()
+            
+            # Notify Recruiter
+            Notification.objects.create(
+                recipient=request.user,
+                title="Candidate Removed from Pipeline",
+                message=f"Candidate {candidate.full_name or candidate.user.email} was removed from the {job.title} pipeline.",
+                notification_type='APPLICATION_STATUS'
+            )
+            
+            if is_ajax:
+                return JsonResponse({
+                    "success": True,
+                    "message": "Candidate removed from Pipeline successfully.",
+                    "in_pipeline": False
+                })
+            messages.success(request, f"{candidate.full_name or candidate.user.email} removed from {job.title} pipeline.")
+        else:
+            if is_ajax:
+                return JsonResponse({"success": False, "message": "Application not found or not in pipeline."}, status=404)
+            messages.info(request, "Candidate is not in this job's pipeline.")
+            
+        next_url = request.POST.get('next') or request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
+        return redirect('frontend:ats_pipeline')
+
 
 import json
 
@@ -1479,6 +1537,14 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         context['duplicates_found_today'] = DuplicateResumeLog.objects.filter(created_at__date=today).count()
         from apps.candidates.forms import ManualCandidateForm
         
+        from apps.jobs.models import Job
+        job_id = self.request.GET.get('job_id') or self.request.POST.get('job_id')
+        if job_id:
+            try:
+                context['job'] = Job.objects.get(id=job_id)
+            except Exception:
+                pass
+        
         candidate_id = self.request.GET.get('candidate_id')
         experiences_json = '[]'
         if candidate_id:
@@ -1578,20 +1644,38 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                 email = form.cleaned_data['email']
                 phone = form.cleaned_data['phone_number']
                 
+                ignore_duplicate = request.POST.get('ignore_duplicate') == 'true'
+                
                 # Duplicate email/mobile verification for new candidates
-                if not candidate_id:
+                if not candidate_id and not ignore_duplicate:
                     existing_user = None
                     if phone:
                         existing_user = User.objects.filter(Q(email=email) | Q(phone_number=phone)).first()
                     else:
                         existing_user = User.objects.filter(email=email).first()
                     if existing_user:
+                        existing_profile = getattr(existing_user, 'candidate_profile', None)
                         return JsonResponse({
                             "success": False,
-                            "errors": {
-                                "email": ["Candidate with this email or mobile number already exists."]
+                            "stage": "duplicate",
+                            "message": "Candidate profile with this email or phone number already exists.",
+                            "duplicate_candidate": {
+                                "candidate_id": str(existing_profile.id) if existing_profile else "",
+                                "name": existing_profile.full_name if existing_profile else "Unknown",
+                                "email": existing_user.email,
+                                "phone": existing_user.phone_number or "Not specified",
+                                "current_company": existing_profile.current_company if existing_profile else "Not specified"
                             }
                         }, status=400)
+                
+                if not candidate_id and ignore_duplicate:
+                    if User.objects.filter(email=email).exists():
+                        import time
+                        if '@' in email:
+                            parts = email.split('@')
+                            email = f"{parts[0]}+anyway{int(time.time())}@{parts[1]}"
+                        else:
+                            email = f"{email}+anyway{int(time.time())}"
                 
                 try:
                     with transaction.atomic():
@@ -1738,13 +1822,16 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                             except Exception:
                                 exps_data = []
                             
+                        from apps.candidates.utils import sanitize_recursive
+                        exps_data = sanitize_recursive(exps_data, "manual_save.experiences")
+                            
                         profile.experiences.all().delete()
                         for exp in exps_data:
                             description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get('description', ''))
                             Experience.objects.create(
                                 profile=profile,
-                                company_name=exp.get('company', '')[:100],
-                                designation=exp.get('designation', '')[:100],
+                                company_name=(exp.get('company') or '')[:100],
+                                designation=(exp.get('designation') or '')[:100],
                                 description=description_html,
                                 start_date=parse_date_robust(exp.get('start_date'), None),
                                 end_date=parse_date_robust(exp.get('end_date'), None),
@@ -1753,11 +1840,26 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                             
                         # Store in parsed_json
                         parsed_json['experience'] = exps_data
+                        parsed_json = sanitize_recursive(parsed_json, "manual_save.parsed_json")
                         profile.parsed_json = parsed_json
                         profile.save()
+                        
+                        # Add job mapping if job_id is present
+                        job_id = request.POST.get('job_id')
+                        if job_id:
+                            from apps.jobs.models import Job
+                            from apps.applications.models import Application
+                            from services.candidate_matching_service import CandidateMatchingService
+                            try:
+                                job = Job.objects.get(id=job_id)
+                                app, created = Application.objects.get_or_create(job=job, candidate=profile)
+                                CandidateMatchingService.update_ats_scores(candidate_id=profile.id, job_id=job.id)
+                            except Exception as e_map:
+                                logger.error(f"Error mapping manual candidate to job {job_id}: {e_map}", exc_info=True)
                             
-                    return JsonResponse({"success": True, "candidate_id": str(profile.id), "message": "Candidate saved successfully."})
+                    return JsonResponse({"success": True, "candidate_id": str(profile.id), "job_id": request.POST.get('job_id', ''), "message": "Candidate saved successfully."})
                 except Exception as e:
+                    logger.error(f"[MANUAL SAVE FAILED] Exception: {str(e)}", exc_info=True)
                     return JsonResponse({"success": False, "message": f"Save failed: {str(e)}"}, status=400)
             else:
                 return JsonResponse({"success": False, "errors": form.errors}, status=400)
@@ -1878,22 +1980,54 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                 })
             q.put(data)
             
+        job_id = request.POST.get('job_id') or request.GET.get('job_id')
+        
         def run_parser_thread():
             from django.db import connection
             try:
                 connection.close()
                 results = handle_resume_upload(in_memory_file, overwrite=overwrite, progress_callback=progress_cb, user=request.user)
                 created_profiles = results['created']
+                
+                # Automatically map newly created profiles to Job if job_id is provided
+                if job_id and created_profiles:
+                    from apps.jobs.models import Job
+                    from apps.applications.models import Application
+                    from services.candidate_matching_service import CandidateMatchingService
+                    try:
+                        job = Job.objects.get(id=job_id)
+                        for profile in created_profiles:
+                            app, created = Application.objects.get_or_create(job=job, candidate=profile)
+                            CandidateMatchingService.update_ats_scores(candidate_id=profile.id, job_id=job.id)
+                    except Exception as e_map:
+                        logger.error(f"Error mapping uploaded candidate to job {job_id}: {e_map}", exc_info=True)
+                
                 duplicates = results['duplicates']
                 error_reasons = results.get('error_reasons', [])
                 
                 if not created_profiles:
                     if duplicates > 0:
-                        q.put({"stage": "duplicate", "message": "Candidate profile with this email or phone number already exists."})
+                        dup_profiles = results.get('duplicate_profiles', [])
+                        dup_data = None
+                        if dup_profiles:
+                            dp = dup_profiles[0]
+                            dup_data = {
+                                "candidate_id": str(dp.id),
+                                "name": dp.full_name or "Unknown",
+                                "email": dp.user.email,
+                                "phone": dp.user.phone_number or "Not specified",
+                                "current_company": dp.current_company or "Not specified"
+                            }
+                        q.put({
+                            "stage": "duplicate", 
+                            "message": "Candidate profile with this email or phone number already exists.",
+                            "duplicate_candidate": dup_data
+                        })
                     else:
                         reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
                         q.put({"stage": "error", "message": f"Parsing failed: {reason}"})
             except Exception as e:
+                logger.error(f"[BACKGROUND PARSER THREAD ERROR] Exception: {str(e)}", exc_info=True)
                 q.put({"stage": "error", "message": str(e)})
             finally:
                 connection.close()

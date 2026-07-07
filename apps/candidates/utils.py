@@ -17,6 +17,49 @@ from apps.candidates.models import (
 
 logger = logging.getLogger(__name__)
 
+CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]')
+
+def sanitize_text(value, path="", print_on_nul=True):
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
+    
+    if "\x00" in value:
+        if print_on_nul:
+            msg = f"Found NUL byte in: {path or 'unknown'}"
+            print(msg)
+            logger.warning(msg)
+            
+    # remove \x00
+    value = value.replace("\x00", "")
+    # remove control characters except \n and \t
+    value = CONTROL_CHARS_RE.sub("", value)
+    # strip whitespace
+    return value.strip()
+
+def sanitize_recursive(data, path=""):
+    if isinstance(data, dict):
+        sanitized = {}
+        for k, v in data.items():
+            current_path = f"{path}.{k}" if path else k
+            sanitized[k] = sanitize_recursive(v, current_path)
+        return sanitized
+    elif isinstance(data, list):
+        sanitized = []
+        for idx, item in enumerate(data):
+            current_path = f"{path}[{idx}]"
+            sanitized.append(sanitize_recursive(item, current_path))
+        return sanitized
+    elif isinstance(data, str):
+        return sanitize_text(data, path)
+    elif data is None:
+        return ""
+    elif isinstance(data, (bool, int, float)):
+        return data
+    else:
+        return sanitize_text(data, path)
+
 def parse_date_robust(date_str, default=None):
     if not date_str or not isinstance(date_str, str):
         return default
@@ -508,6 +551,8 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     import time
     t_process_start = time.time()
     
+    filename = sanitize_text(filename, "filename")
+    
     # Support only PDF, DOC, DOCX, RTF, TXT
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
     if ext not in ['pdf', 'doc', 'docx', 'rtf', 'txt']:
@@ -646,6 +691,10 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         info = parsed_data['personal_info']
         logger.warning(f"[PARSER FALLBACK] Minimal data built for name={_name_fb!r} email={_email_fb!r}")
     
+    parsed_data = sanitize_recursive(parsed_data, "parsed_data")
+    text = sanitize_text(text, "raw_resume_text")
+    info = parsed_data.get('personal_info', {})
+    
     email = info.get('email', '')
     phone = info.get('phone', '')
     
@@ -693,9 +742,8 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                     filename=filename,
                     action_taken='SKIPPED'
                 )
-                logger.warning(f"[PARSER DUPLICATE] Candidate already exists (skipped): {email} / {phone}")
-                print(f"[PARSER DUPLICATE] Candidate already exists (skipped): {email} / {phone}")
-                return None, "DUPLICATE"
+                existing_profile = getattr(existing_user, 'candidate_profile', None)
+                return existing_profile, "DUPLICATE"
                 
             if existing_user and overwrite:
                 user = existing_user
@@ -1030,8 +1078,8 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get('description', ''))
                 Experience.objects.create(
                     profile=profile,
-                    company_name=exp.get('company', '')[:100],
-                    designation=exp.get('designation', '')[:100],
+                    company_name=(exp.get('company') or '')[:100],
+                    designation=(exp.get('designation') or '')[:100],
                     description=description_html,
                     start_date=parse_date_robust(exp.get('start_date'), None),
                     end_date=parse_date_robust(exp.get('end_date'), None)
@@ -1046,10 +1094,10 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             for edu in parsed_data.get('education', []):
                 Education.objects.create(
                     profile=profile,
-                    institution=edu.get('institution', '')[:100],
-                    degree=edu.get('degree', '')[:100],
-                    field_of_study=edu.get('field_of_study', '')[:100],
-                    percentage_or_cgpa=edu.get('score', '')[:20],
+                    institution=(edu.get('institution') or '')[:100],
+                    degree=(edu.get('degree') or '')[:100],
+                    field_of_study=(edu.get('field_of_study') or '')[:100],
+                    percentage_or_cgpa=(edu.get('score') or '')[:20],
                     start_date=parse_date_robust(edu.get('start_date'), None),
                     end_date=parse_date_robust(edu.get('end_date'), None)
                 )
@@ -1063,7 +1111,7 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             for proj in parsed_data.get('projects', []):
                 Project.objects.create(
                     profile=profile,
-                    title=proj.get('title', '')[:255],
+                    title=(proj.get('title') or '')[:255],
                     description=ResumeIntelligenceService.parse_experience_description_to_html(proj.get('description', '')),
                     link=proj.get('link', '')
                 )
@@ -1077,8 +1125,8 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             for cert in parsed_data.get('certifications', []):
                 Certification.objects.create(
                     profile=profile,
-                    name=cert.get('name', '')[:255],
-                    issuing_organization=cert.get('issuing_organization', '')[:255],
+                    name=(cert.get('name') or '')[:255],
+                    issuing_organization=(cert.get('issuing_organization') or '')[:255],
                     issue_date=parse_date_robust(cert.get('issue_date'), None)
                 )
             t_cert = time.time() - t_cert_start
@@ -1129,7 +1177,7 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
 def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None, user=None):
     from utils.security import perform_all_security_validations, log_upload_attempt, SecurityValidationError
     
-    results = {'created': [], 'duplicates': 0, 'errors': 0, 'error_reasons': []}
+    results = {'created': [], 'duplicates': 0, 'duplicate_profiles': [], 'errors': 0, 'error_reasons': []}
     
     try:
         if hasattr(uploaded_file, 'seek'):
@@ -1200,6 +1248,8 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
                             results['created'].append(profile)
                         elif status == "DUPLICATE":
                             results['duplicates'] += 1
+                            if profile:
+                                results['duplicate_profiles'].append(profile)
                         else:
                             results['errors'] += 1
                             err_reason = reason_map.get(status, f"Unknown parsing error ({status})")
@@ -1215,6 +1265,8 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
             results['created'].append(profile)
         elif status == "DUPLICATE":
             results['duplicates'] += 1
+            if profile:
+                results['duplicate_profiles'].append(profile)
         else:
             results['errors'] += 1
             err_reason = reason_map.get(status, f"Unknown parsing error ({status})")

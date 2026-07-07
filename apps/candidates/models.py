@@ -235,3 +235,42 @@ class Certification(BaseAppModel):
     class Meta:
         verbose_name = _('certification')
         verbose_name_plural = _('certifications')
+
+
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+
+@receiver(pre_save, sender=CandidateProfile)
+@receiver(pre_save, sender=Experience)
+@receiver(pre_save, sender=Education)
+@receiver(pre_save, sender=Project)
+@receiver(pre_save, sender=Certification)
+@receiver(pre_save, sender=CandidateSkill)
+@receiver(pre_save, sender=DuplicateResumeLog)
+def pre_save_sanitize_handler(sender, instance, **kwargs):
+    from apps.candidates.utils import sanitize_text, sanitize_recursive
+    import django.db.models as django_models
+    for field in instance._meta.fields:
+        val = getattr(instance, field.name)
+        if val is not None:
+            if isinstance(field, (django_models.CharField, django_models.TextField)):
+                path = f"{instance.__class__.__name__}.{field.name}"
+                sanitized = sanitize_text(val, path, print_on_nul=True)
+                setattr(instance, field.name, sanitized)
+            elif isinstance(field, django_models.JSONField):
+                path = f"{instance.__class__.__name__}.{field.name}"
+                sanitized = sanitize_recursive(val, path)
+                setattr(instance, field.name, sanitized)
+
+
+@receiver(pre_save, sender=settings.AUTH_USER_MODEL)
+def pre_save_sanitize_user_handler(sender, instance, **kwargs):
+    from apps.candidates.utils import sanitize_text
+    import django.db.models as django_models
+    for field in instance._meta.fields:
+        val = getattr(instance, field.name)
+        if val is not None:
+            if isinstance(field, (django_models.CharField, django_models.TextField)):
+                path = f"{instance.__class__.__name__}.{field.name}"
+                sanitized = sanitize_text(val, path, print_on_nul=True)
+                setattr(instance, field.name, sanitized)

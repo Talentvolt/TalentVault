@@ -5,73 +5,542 @@
 
 {% block content %}
 <style>
-    .ats-score-pill {
-        font-weight: 700;
-        font-size: 0.8rem;
-        padding: 5px 12px;
-        border-radius: 50px;
+    /* Base styles & micro-animations */
+    .fade-in-card {
+        animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
-    .candidate-row:hover {
-        background-color: rgba(0, 0, 0, 0.01);
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
-    .avatar-circle {
-        width: 38px;
-        height: 38px;
+    
+    .btn, .act-btn {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn:hover:not(:disabled), .act-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+    }
+    
+    /* Candidate Cards List Container */
+    .candidate-cards-list {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        width: 100%;
+        margin-bottom: 24px;
+    }
+    
+    /* Candidate Card Styling */
+    .candidate-card {
+        background: #ffffff;
+        border: 1px solid #E8ECF4;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.015);
+        padding: 20px 24px;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        width: 100%;
+    }
+    
+    /* Card hover elevation */
+    .candidate-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(148, 163, 184, 0.12);
+        border-color: #CBD5E1;
+    }
+    
+    /* Desktop Grid layout inside Card with requested proportions */
+    .candidate-card-body {
+        display: grid;
+        grid-template-columns: 18% 20% 10% 10% 8% 8% 26%;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    /* Alignment for each section */
+    .card-section-candidate {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .candidate-avatar {
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+    .candidate-avatar-placeholder {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background-color: #EEF2F6;
+        color: #2563EB;
+        font-size: 1rem;
+        font-weight: 700;
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: rgba(0, 0, 0, 0.05);
-        color: #6c757d;
-        font-weight: 600;
-        font-size: 0.9rem;
+        border: 2px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
-    .filters-bar {
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-    }
-    .candidate-card-table {
-        border-radius: 12px;
+    .candidate-text-block {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
         overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
     }
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
+    .candidate-name {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .candidate-name a {
+        text-decoration: none;
+        color: #1E293B;
+        transition: color 0.15s ease;
+    }
+    .candidate-name a:hover {
+        color: #2563EB;
+    }
+    .candidate-email {
+        font-size: 13px;
+        color: #64748B;
+        text-decoration: none;
+        transition: color 0.15s ease;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .candidate-email:hover {
+        color: #2563EB;
+    }
+    
+    /* Company Section */
+    .card-section-company {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: 200px;
+        overflow: hidden;
+    }
+    .designation-text {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1E293B;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .company-text {
+        font-size: 12px;
+        color: #64748B;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Experience */
+    .experience-badge {
+        background-color: #EFF6FF;
+        color: #2563EB;
+        border: 1px solid #DBEAFE;
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: auto;
+    }
+    .experience-dot {
+        font-size: 8px;
+        color: #2563EB;
+    }
+    
+    /* Location */
+    .card-section-location {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #64748B;
+        font-size: 13px;
+        font-weight: 500;
+        max-width: 120px;
+        overflow: hidden;
+    }
+    .location-icon {
+        color: #94A3B8;
+    }
+    .location-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Education */
+    .card-section-education {
+        max-width: 90px;
+        overflow: hidden;
+    }
+    .education-badge {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1E293B;
+        cursor: help;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         display: inline-block;
-        margin-right: 6px;
+        max-width: 90px;
+    }
+    
+    /* ATS Score */
+    .ats-circle-wrapper {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+    }
+    .ats-percentage {
+        position: absolute;
+        font-size: 9px;
+        font-weight: 700;
+        color: #1E293B;
+    }
+    
+    /* Actions Section */
+    .card-section-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        align-items: center;
+        flex-wrap: nowrap;
+        width: 100%;
+    }
+    
+    /* Action Buttons styling */
+    .act-btn {
+        height: 38px !important;
+        border-radius: 10px !important;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        vertical-align: middle !important;
+    }
+    
+    /* View Profile: Blue outline */
+    .btn-view-profile {
+        border: 2px solid #2563EB;
+        color: #2563EB;
+        background-color: transparent;
+        padding: 0 14px;
+    }
+    .btn-view-profile:hover {
+        background-color: #2563EB;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+    }
+    
+    /* Move to Pipeline: Solid Green */
+    .btn-pipeline-fill {
+        background-color: #16A34A;
+        color: #ffffff;
+        border: 2px solid #16A34A;
+        padding: 0 14px;
+    }
+    .btn-pipeline-fill:hover {
+        background-color: #15803D;
+        border-color: #15803D;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.15);
+    }
+    
+    /* In Pipeline badge style */
+    .pipeline-badge {
+        background-color: #DCFCE7;
+        color: #15803D;
+        border: 1.5px solid #BBF7D0;
+        border-radius: 10px !important;
+        height: 38px;
+        padding: 0 14px;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    
+    /* More dropdown button: Gray */
+    .btn-more {
+        border: 2px solid #E2E8F0;
+        background-color: #F8FAFC;
+        color: #64748B;
+        width: 38px !important;
+        height: 38px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    .btn-more:hover {
+        background-color: #E2E8F0;
+        color: #1E293B;
+        border-color: #CBD5E1;
+    }
+    
+    /* Custom Fixed Dropdown Portal Styling */
+    .portal-dropdown-menu {
+        position: fixed;
+        width: 220px;
+        background: #ffffff;
+        border: 1px solid #E8ECF4;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+        z-index: 10000;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.15s ease, transform 0.15s ease;
+        pointer-events: none;
+    }
+    .portal-dropdown-menu.show {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+    .portal-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        width: 100%;
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #1E293B;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        text-align: left;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .portal-dropdown-item:hover {
+        background-color: #F8FAFC;
+        color: #2563EB;
+    }
+    .portal-dropdown-item.text-danger:hover {
+        background-color: #FEE2E2;
+        color: #EF4444;
+    }
+    
+    /* Filters inputs standardization */
+    .premium-filter-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.025);
+        border: 1px solid #E8ECF4;
+        padding: 24px;
+    }
+    .premium-filter-card .form-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .premium-filter-card .form-control,
+    .premium-filter-card .form-select {
+        border-radius: 10px;
+        border: 1px solid #E2E8F0;
+        background-color: #F8FAFC;
+        color: #1E293B;
+        font-size: 13px;
+        padding: 10px 14px;
+        transition: all 0.2s ease;
+        height: 40px !important;
+    }
+    .premium-filter-card .form-control:focus,
+    .premium-filter-card .form-select:focus {
+        background-color: #ffffff;
+        border-color: #2563EB;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        outline: none;
+    }
+    .premium-filter-card .input-group-text {
+        height: 40px !important;
+        border-radius: 10px 0 0 10px;
+        border: 1px solid #E2E8F0;
+        background-color: #F8FAFC;
+        color: #94A3B8;
+        padding-left: 14px;
+        padding-right: 8px;
+    }
+    .premium-filter-card .input-group .form-control {
+        border-radius: 0 10px 10px 0;
+    }
+    
+    /* Tablet Layout (max-width: 1200px) */
+    @media (max-width: 1200px) {
+        .candidate-card-body {
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .card-section-candidate {
+            grid-column: span 2;
+        }
+        .card-section-company {
+            grid-column: span 1;
+        }
+        .card-section-experience {
+            grid-column: span 1;
+        }
+        .card-section-location {
+            grid-column: span 1;
+        }
+        .card-section-education {
+            grid-column: span 1;
+        }
+        .card-section-ats {
+            grid-column: span 2;
+            justify-content: flex-start;
+        }
+        .card-section-actions {
+            grid-column: span 2;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+    }
+    
+    /* Mobile Layout (max-width: 768px) */
+    @media (max-width: 768px) {
+        .candidate-card-body {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 14px;
+        }
+        .card-section-candidate,
+        .card-section-company,
+        .card-section-experience,
+        .card-section-location,
+        .card-section-education,
+        .card-section-ats,
+        .card-section-actions {
+            grid-column: auto;
+            width: 100%;
+            justify-content: flex-start;
+        }
+        .card-section-actions {
+            flex-direction: column;
+            align-items: stretch;
+            margin-top: 12px;
+            border-top: 1px solid #E8ECF4;
+            padding-top: 14px;
+        }
+        .card-section-actions > form,
+        .card-section-actions > a,
+        .card-section-actions > button,
+        .card-section-actions > div {
+            width: 100%;
+        }
+        .act-btn {
+            width: 100%;
+        }
     }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4 fade-in">
+<div class="d-flex justify-content-between align-items-center mb-4 fade-in-card">
     <div>
         <a href="{% url 'frontend:jobs' %}" class="text-secondary text-decoration-none small fw-semibold"><i class="bi bi-arrow-left"></i> Back to Jobs</a>
-        <h3 class="fw-bold m-0 mt-1"><i class="bi bi-briefcase me-2 text-primary"></i>{{ job.title }} <span class="text-secondary fw-normal">Candidates</span></h3>
-        <p class="text-secondary small m-0">{{ job.location }} &bull; {{ job.get_job_type_display }} &bull; {{ job.get_work_mode_display }} &bull; {{ applications.count }} Applied</p>
+        <h1 class="fw-bold m-0 mt-2" style="font-family: 'Outfit', sans-serif; font-size: 28px; color: #1E293B;">{{ job.title }}</h1>
+        <p class="text-secondary small m-0 mt-1" style="font-weight: 500;">
+            {{ job.location }} • {{ job.get_job_type_display }} • 
+            <span class="badge rounded-pill" style="background-color: #EFF6FF; color: #2563EB; border: 1px solid #DBEAFE; padding: 6px 12px; font-weight: 700; font-size: 12px;">
+                {{ applications.count }} Candidate{{ applications.count|pluralize }}
+            </span>
+        </p>
     </div>
     <div class="d-flex gap-2">
-        <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="btn btn-primary btn-sm"><i class="bi bi-kanban me-1"></i> View Pipeline</a>
+        <a href="{% url 'frontend:ats_pipeline' %}?job_id={{ job.id }}" class="btn btn-outline-secondary px-4 py-2.5 fw-semibold d-inline-flex align-items-center gap-2" style="border-radius: 10px; font-size: 14px;"><i class="bi bi-kanban"></i> View Pipeline</a>
+        <a href="{% url 'frontend:resume_parser' %}?job_id={{ job.id }}" class="btn btn-primary px-4 py-2.5 fw-semibold d-inline-flex align-items-center gap-2" style="border-radius: 10px; font-size: 14px; background-color: #2563EB; border-color: #2563EB;"><i class="bi bi-plus-lg"></i> Add Candidates</a>
     </div>
 </div>
 
-<!-- Naukri ATS Style Filter Panel -->
-<div class="filters-bar bg-white border border-light-subtle p-3 mb-4">
+{% if total_applications_count == 0 %}
+<!-- Empty State for Job -->
+<div class="card border-0 shadow-sm p-5 text-center mb-4 fade-in-card" style="border-radius: 16px; background: #ffffff; border: 1px solid #E8ECF4;">
+    <div class="py-5 d-flex flex-column align-items-center">
+        <!-- SVG Illustration -->
+        <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" class="mb-4">
+            <!-- Outer circle -->
+            <circle cx="80" cy="80" r="72" fill="#EFF6FF" />
+            <circle cx="80" cy="80" r="56" fill="#DBEAFE" />
+            <!-- Folder/Document -->
+            <rect x="58" y="48" width="44" height="60" rx="8" fill="#ffffff" stroke="#2563EB" stroke-width="3" />
+            <line x1="68" y1="62" x2="92" y2="62" stroke="#64748B" stroke-width="3" stroke-linecap="round" />
+            <line x1="68" y1="74" x2="92" y2="74" stroke="#64748B" stroke-width="3" stroke-linecap="round" />
+            <line x1="68" y1="86" x2="80" y2="86" stroke="#2563EB" stroke-width="3" stroke-linecap="round" />
+            <!-- Magnifying glass looking at folder -->
+            <circle cx="102" cy="102" r="16" fill="#ffffff" stroke="#16A34A" stroke-width="4" />
+            <line x1="113.3" y1="113.3" x2="126" y2="126" stroke="#16A34A" stroke-width="4" stroke-linecap="round" />
+        </svg>
+        <h3 class="fw-bold text-dark mb-2">No Candidates Yet</h3>
+        <p class="text-secondary mb-4 mx-auto" style="max-width: 420px; font-size: 0.95rem; line-height: 1.6;">Upload or add candidates to start matching talent.</p>
+        <div class="d-flex justify-content-center gap-3">
+            <a href="{% url 'frontend:resume_parser' %}?job_id={{ job.id }}" class="btn btn-primary px-4 py-2.5 fw-semibold d-inline-flex align-items-center gap-2" style="border-radius: 10px; font-size: 14px; background-color: #2563EB; border-color: #2563EB;">
+                <i class="bi bi-plus-lg"></i> Add Candidates
+            </a>
+            <a href="{% url 'frontend:resume_parser' %}" class="btn btn-outline-secondary px-4 py-2.5 fw-semibold d-inline-flex align-items-center gap-2" style="border-radius: 10px; font-size: 14px;">
+                <i class="bi bi-file-earmark-arrow-up"></i> Resume Parser
+            </a>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Filter Panel -->
+<div class="premium-filter-card mb-4 fade-in-card">
     <form method="GET" id="job-candidates-filter-form">
         <div class="row g-3">
             <!-- Search field -->
             <div class="col-md-3">
-                <label class="form-label text-secondary small fw-semibold mb-1">Search Candidate</label>
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                <label class="form-label">Search Candidate</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input type="text" name="q" class="form-control border-start-0" placeholder="Name, designation, company..." value="{{ q }}">
                 </div>
             </div>
             
             <!-- Experience Filter -->
             <div class="col-md-2">
-                <label class="form-label text-secondary small fw-semibold mb-1">Experience</label>
-                <select name="experience" class="form-select form-select-sm" onchange="this.form.submit()">
+                <label class="form-label">Experience</label>
+                <select name="experience" class="form-select" onchange="this.form.submit()">
                     <option value="">All Experience</option>
                     <option value="fresher" {% if selected_experience == 'fresher' %}selected{% endif %}>Fresher (0 Years)</option>
                     <option value="1-3" {% if selected_experience == '1-3' %}selected{% endif %}>1 - 3 Years</option>
@@ -83,20 +552,20 @@
             
             <!-- Location Filter -->
             <div class="col-md-2">
-                <label class="form-label text-secondary small fw-semibold mb-1">Location</label>
-                <input type="text" name="location" class="form-control form-control-sm" placeholder="City or country..." value="{{ selected_location }}" onchange="this.form.submit()">
+                <label class="form-label">Location</label>
+                <input type="text" name="location" class="form-control" placeholder="City or country..." value="{{ selected_location }}" onchange="this.form.submit()">
             </div>
             
             <!-- Education Filter -->
             <div class="col-md-2">
-                <label class="form-label text-secondary small fw-semibold mb-1">Education</label>
-                <input type="text" name="education" class="form-control form-control-sm" placeholder="Degree, field..." value="{{ selected_education }}" onchange="this.form.submit()">
+                <label class="form-label">Education</label>
+                <input type="text" name="education" class="form-control" placeholder="Degree, field..." value="{{ selected_education }}" onchange="this.form.submit()">
             </div>
             
             <!-- ATS Score Filter -->
             <div class="col-md-2">
-                <label class="form-label text-secondary small fw-semibold mb-1">ATS Match Score</label>
-                <select name="ats_score" class="form-select form-select-sm" onchange="this.form.submit()">
+                <label class="form-label">ATS Match Score</label>
+                <select name="ats_score" class="form-select" onchange="this.form.submit()">
                     <option value="">All Scores</option>
                     <option value="90+" {% if selected_ats_score == '90+' %}selected{% endif %}>Excellent (90%+)</option>
                     <option value="75-90" {% if selected_ats_score == '75-90' %}selected{% endif %}>Good (75%-90%)</option>
@@ -107,8 +576,8 @@
             
             <!-- Status Filter -->
             <div class="col-md-2">
-                <label class="form-label text-secondary small fw-semibold mb-1">Application Stage</label>
-                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                <label class="form-label">Application Stage</label>
+                <select name="status" class="form-select" onchange="this.form.submit()">
                     <option value="">All Stages</option>
                     {% for value, label in stage_choices %}
                         <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
@@ -117,141 +586,139 @@
             </div>
         </div>
         
-        <div class="d-flex justify-content-end gap-2 mt-3 pt-2 border-top border-light-subtle">
-            <a href="{% url 'frontend:job_candidates' job.id %}" class="btn btn-sm btn-outline-secondary px-3">Reset Filters</a>
-            <button type="submit" class="btn btn-sm btn-primary px-4">Search Candidates</button>
+        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top border-light-subtle">
+            <a href="{% url 'frontend:job_candidates' job.id %}" class="btn btn-outline-secondary px-4 py-2 fw-semibold" style="border-radius: 10px; font-size: 13px; height: 40px;">Reset Filters</a>
+            <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold" style="border-radius: 10px; font-size: 13px; background-color: #2563EB; border-color: #2563EB; height: 40px;">Search Candidates</button>
         </div>
     </form>
 </div>
 
-<!-- Candidate List Table -->
-<div class="card border-0 shadow-sm candidate-card-table mb-4">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light text-secondary small">
-                <tr>
-                    <th scope="col" class="ps-4 py-3" style="width: 60px;">Photo</th>
-                    <th scope="col" class="py-3">Candidate Name</th>
-                    <th scope="col" class="py-3">Current Company</th>
-                    <th scope="col" class="py-3">Experience</th>
-                    <th scope="col" class="py-3">Location</th>
-                    <th scope="col" class="py-3">Education</th>
-                    <th scope="col" class="py-3 text-center">ATS Score</th>
-                    <th scope="col" class="py-3">Applied On</th>
-                    <th scope="col" class="py-3">Current Stage</th>
-                    <th scope="col" class="py-3">Resume</th>
-                    <th scope="col" class="py-3 text-end pe-4" style="width: 280px;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for app in object_list %}
-                <tr class="candidate-row">
-                    <td class="ps-4">
-                        {% if app.candidate.has_profile_photo %}
-                            <img src="{{ app.candidate.profile_photo.url }}" class="rounded-circle object-fit-cover" style="width: 38px; height: 38px; border: 1px solid #dee2e6;" alt="Photo">
-                        {% else %}
-                            <div class="avatar-circle">
-                                {{ app.candidate.full_name|slice:":1"|upper|default:"?" }}
-                            </div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="fw-bold text-dark mb-0.5">
-                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}" class="text-decoration-none text-dark">
-                                {{ app.candidate.full_name|default:app.candidate.user.email }}
-                            </a>
-                        </div>
-                        <div class="text-muted x-small">{{ app.candidate.user.email }}</div>
-                    </td>
-                    <td>
-                        <div class="fw-medium small text-secondary">
-                            {% if app.candidate.current_company %}
-                                {{ app.candidate.current_designation|default:"Professional" }} @ {{ app.candidate.current_company }}
-                            {% else %}
-                                <span class="text-muted font-italic">Not specified</span>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td>
-                        <div class="small fw-semibold text-secondary">{{ app.candidate.total_experience|floatformat:1 }} Yrs</div>
-                    </td>
-                    <td>
-                        <div class="small text-secondary"><i class="bi bi-geo-alt-fill text-muted me-1"></i>{{ app.candidate.location }}</div>
-                    </td>
-                    <td>
-                        <div class="small text-secondary text-truncate" style="max-width: 150px;">
-                            {% with edu=app.candidate.educations.first %}
-                                {% if edu %}
-                                    {{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}
-                                {% else %}
-                                    <span class="text-muted x-small">Not specified</span>
-                                {% endif %}
-                            {% endwith %}
-                        </div>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge ats-score-pill {% if app.match_score >= 90 %}bg-success-subtle text-success{% elif app.match_score >= 75 %}bg-primary-subtle text-primary{% elif app.match_score >= 60 %}bg-warning-subtle text-warning{% else %}bg-danger-subtle text-danger{% endif %}">
-                            {{ app.match_score|floatformat:0 }}%
+<!-- Candidate Cards List -->
+<div class="candidate-cards-list">
+    {% for app in object_list %}
+    <div class="candidate-card fade-in-card" data-card-id="{{ app.candidate.id }}">
+        <div class="candidate-card-body">
+            <!-- Left Column: Candidate profile info -->
+            <div class="card-section-candidate">
+                {% if app.candidate.has_profile_photo %}
+                    <img src="{{ app.candidate.profile_photo.url }}" class="candidate-avatar" alt="Photo">
+                {% else %}
+                    <div class="candidate-avatar-placeholder">
+                        {{ app.candidate.full_name|slice:":1"|upper|default:"?" }}
+                    </div>
+                {% endif %}
+                <div class="candidate-text-block">
+                    <h5 class="candidate-name">
+                        <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}">
+                            {{ app.candidate.full_name|default:app.candidate.user.email }}
+                        </a>
+                    </h5>
+                    <a href="mailto:{{ app.candidate.user.email }}" class="candidate-email">
+                        {{ app.candidate.user.email }}
+                    </a>
+                </div>
+            </div>
+
+            <!-- Company -->
+            <div class="card-section-company">
+                <div class="designation-text" title="{{ app.candidate.current_designation|default:'Professional' }}">
+                    {{ app.candidate.current_designation|default:"Professional" }}
+                </div>
+                <div class="company-text" title="{{ app.candidate.current_company|default:'Not specified' }}">
+                    {{ app.candidate.current_company|default:"Not specified" }}
+                </div>
+            </div>
+
+            <!-- Experience Badge -->
+            <div class="card-section-experience">
+                <span class="experience-badge">
+                    <span class="experience-dot">●</span> {{ app.candidate.total_experience|floatformat:1 }} Years
+                </span>
+            </div>
+
+            <!-- Location -->
+            <div class="card-section-location">
+                <i class="bi bi-geo-alt location-icon"></i>
+                <span class="location-text" title="{{ app.candidate.location|default:'Remote' }}">{{ app.candidate.location|default:"Remote" }}</span>
+            </div>
+
+            <!-- Education -->
+            <div class="card-section-education">
+                {% with edu=app.candidate.educations.first %}
+                    {% if edu %}
+                        <span class="education-badge" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}">
+                            🎓 {{ edu.degree }}
                         </span>
-                    </td>
-                    <td>
-                        <div class="small text-secondary">{{ app.created_at|date:"d M Y" }}</div>
-                    </td>
-                    <td>
-                        <span class="badge {{ app.badge_class }} px-2.5 py-1.5 fw-semibold" style="font-size: 0.72rem;">
-                            {{ app.get_stage_display }}
-                        </span>
-                    </td>
-                    <td>
-                        {% if app.candidate.resume %}
-                            <span class="text-success small fw-semibold"><i class="bi bi-file-earmark-check-fill me-1"></i> Uploaded</span>
-                        {% else %}
-                            <span class="text-danger small fw-semibold"><i class="bi bi-file-earmark-x-fill me-1"></i> Missing</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-end pe-4">
-                        <div class="d-flex justify-content-end gap-1.5">
-                            <!-- View profile -->
-                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}" class="btn btn-xs btn-outline-primary fw-medium"><i class="bi bi-eye"></i> View Profile</a>
-                            
-                            <!-- Move to pipeline / In Pipeline status -->
-                            {% if app.in_pipeline %}
-                                <button class="btn btn-xs btn-success fw-medium" disabled><i class="bi bi-check-circle"></i> In Pipeline</button>
-                            {% else %}
-                                <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="job_id" value="{{ job.id }}">
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-xs btn-primary fw-medium"><i class="bi bi-plus-circle"></i> Move to Pipeline</button>
-                                </form>
-                            {% endif %}
-                            
-                            <!-- Reject -->
-                            {% if app.stage == 'SYSTEM_REJECTED' %}
-                                <button class="btn btn-xs btn-outline-danger fw-medium" disabled>Rejected</button>
-                            {% else %}
-                                <form method="POST" action="{% url 'frontend:candidate_reject' app.candidate.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to reject this candidate for this job?');">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="job_id" value="{{ job.id }}">
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-xs btn-outline-danger fw-medium"><i class="bi bi-x-circle"></i> Reject</button>
-                                </form>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="11" class="text-center py-5 text-muted">
-                        <i class="bi bi-people fs-1 text-secondary mb-3 d-block"></i>
-                        <h5 class="fw-bold text-dark">No Candidates Applied</h5>
-                        <p class="small text-secondary mb-0">No candidate applications were found matching your filter criteria.</p>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    {% else %}
+                        <span class="text-muted fst-italic" style="font-size: 13px;">Not specified</span>
+                    {% endif %}
+                {% endwith %}
+            </div>
+
+            <!-- ATS Score Circle -->
+            <div class="card-section-ats">
+                <div class="ats-circle-wrapper">
+                    <svg width="40" height="40" style="transform: rotate(-90deg);">
+                        <circle cx="20" cy="20" r="15" fill="transparent" stroke="#F1F5F9" stroke-width="3"></circle>
+                        <circle cx="20" cy="20" r="15" fill="transparent" 
+                                stroke="{% if app.match_score >= 75 %}#16A34A{% elif app.match_score >= 60 %}#F97316{% else %}#EF4444{% endif %}" 
+                                stroke-width="3" 
+                                stroke-dasharray="94.24" 
+                                style="stroke-dashoffset: calc(94.24 - (94.24 * {{ app.match_score|default:0|floatformat:0 }}) / 100); transition: stroke-dashoffset 0.3s ease; stroke-linecap: round;"
+                        ></circle>
+                    </svg>
+                    <span class="ats-percentage">{{ app.match_score|default:0|floatformat:0 }}%</span>
+                </div>
+            </div>
+
+            <!-- Right Actions Section -->
+            <div class="card-section-actions">
+                <!-- View Profile -->
+                <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}" class="act-btn btn-view-profile">
+                    View Profile
+                </a>
+                
+                <!-- Move to Pipeline / In Pipeline -->
+                {% if app.in_pipeline %}
+                    <span class="pipeline-badge">
+                        🟢 In Pipeline
+                    </span>
+                {% else %}
+                    <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="m-0 p-0 pipeline-move-form" data-candidate-id="{{ app.candidate.id }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="job_id" value="{{ job.id }}">
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="act-btn btn-pipeline-fill">
+                            Move to Pipeline
+                        </button>
+                    </form>
+                {% endif %}
+                
+                <!-- Three-dot portal dropdown trigger -->
+                <button class="act-btn btn-more custom-dropdown-trigger" 
+                        data-candidate-id="{{ app.candidate.id }}"
+                        data-in-pipeline="{% if app.in_pipeline %}true{% else %}false{% endif %}"
+                        data-remove-url="{% url 'frontend:remove_from_pipeline' app.candidate.id %}"
+                        data-interview-url="{% url 'frontend:interviews' %}?candidate_id={{ app.candidate.id }}&job_id={{ job.id }}"
+                        data-reject-url="{% url 'frontend:candidate_reject' app.candidate.id %}"
+                        data-is-rejected="{% if app.stage == 'SYSTEM_REJECTED' %}true{% else %}false{% endif %}"
+                        data-delete-url="{% url 'frontend:candidate_delete' app.candidate.id %}"
+                        data-can-delete="{% if request.user.role == 'SUPER_ADMIN' or request.user.role == 'COMPANY_ADMIN' %}true{% else %}false{% endif %}"
+                        type="button">
+                    ⋮
+                </button>
+            </div>
+        </div>
     </div>
+    {% empty %}
+    <div class="card border-0 shadow-sm p-5 text-center mb-4 fade-in-card" style="border-radius: 16px; background: #ffffff; border: 1px solid #E8ECF4;">
+        <div class="py-4">
+            <i class="bi bi-people fs-1 text-secondary mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Candidates Found</h5>
+            <p class="small text-secondary mb-0">No candidate applications match the selected filter criteria.</p>
+        </div>
+    </div>
+    {% endfor %}
 </div>
 
 <!-- Pagination -->
@@ -289,5 +756,310 @@
     </ul>
 </nav>
 {% endif %}
+{% endif %}
+
+<!-- Toast Notification Container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 10005;">
+    <div id="statusToast" class="toast align-items-center border-0 text-white" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body fw-semibold" id="toastMessage"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<!-- Dropdown Portal & AJAX Javascript Engine -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let activeDropdown = null;
+
+    // Toast show helper function
+    function showToast(message, type = 'success') {
+        const toastEl = document.getElementById('statusToast');
+        const msgEl = document.getElementById('toastMessage');
+        
+        if (type === 'success') {
+            toastEl.className = "toast align-items-center border-0 text-white bg-success";
+        } else if (type === 'info') {
+            toastEl.className = "toast align-items-center border-0 text-white bg-info";
+        } else {
+            toastEl.className = "toast align-items-center border-0 text-white bg-danger";
+        }
+        
+        msgEl.innerHTML = message;
+        const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+        toast.show();
+    }
+
+    // Refresh candidate card markup using AJAX/fetch to parse specific element
+    function refreshCandidateCard(candidateId) {
+        const cardEl = document.querySelector(`.candidate-card[data-card-id="${candidateId}"]`);
+        if (!cardEl) return;
+        
+        fetch(window.location.href, {
+            headers: { 'Accept': 'text/html' }
+        })
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newCardEl = doc.querySelector(`.candidate-card[data-card-id="${candidateId}"]`);
+            
+            if (newCardEl) {
+                cardEl.innerHTML = newCardEl.innerHTML;
+                
+                // Copy new attribute values if changed
+                Array.from(newCardEl.attributes).forEach(attr => {
+                    cardEl.setAttribute(attr.name, attr.value);
+                });
+                
+                // Re-initialize any bootstrap tooltips
+                const tooltips = cardEl.querySelectorAll('[data-bs-toggle="tooltip"]');
+                tooltips.forEach(t => new bootstrap.Tooltip(t));
+            }
+        })
+        .catch(err => console.error("Error refreshing candidate card:", err));
+    }
+
+    // Close active dropdown with transition support
+    function closeActiveDropdown() {
+        if (activeDropdown) {
+            activeDropdown.classList.remove('show');
+            const elToRemove = activeDropdown;
+            setTimeout(() => {
+                if (elToRemove && elToRemove.parentNode) {
+                    elToRemove.parentNode.removeChild(elToRemove);
+                }
+            }, 150);
+            activeDropdown = null;
+        }
+    }
+
+    // Handle trigger click
+    document.addEventListener("click", function(e) {
+        const trigger = e.target.closest(".custom-dropdown-trigger");
+        
+        // Close menu if clicking outside of trigger and dropdown menu
+        if (!trigger && activeDropdown && !e.target.closest(".portal-dropdown-menu")) {
+            closeActiveDropdown();
+            return;
+        }
+
+        if (!trigger) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const candidateId = trigger.getAttribute("data-candidate-id");
+        
+        // If clicking the same trigger that is currently open, close it
+        const alreadyOpen = activeDropdown && activeDropdown.dataset.triggerId === candidateId;
+        closeActiveDropdown();
+        if (alreadyOpen) return;
+
+        // Fetch URLs and state from trigger dataset
+        const inPipeline = trigger.getAttribute("data-in-pipeline") === "true";
+        const removeUrl = trigger.getAttribute("data-remove-url");
+        const interviewUrl = trigger.getAttribute("data-interview-url");
+        const rejectUrl = trigger.getAttribute("data-reject-url");
+        const isRejected = trigger.getAttribute("data-is-rejected") === "true";
+        const deleteUrl = trigger.getAttribute("data-delete-url");
+        const canDelete = trigger.getAttribute("data-can-delete") === "true";
+        const csrfToken = '{{ csrf_token }}';
+        const currentPath = '{{ request.get_full_path }}';
+
+        // Create Dropdown Portal container
+        const menu = document.createElement("div");
+        menu.className = "portal-dropdown-menu";
+        menu.dataset.triggerId = candidateId;
+        
+        // Generate Dropdown Portal items
+        let menuHtml = `
+            <div style="padding: 4px;">
+                <a class="portal-dropdown-item" href="${interviewUrl}" style="color: #4F46E5;">
+                    <span style="font-size: 16px;">📅</span> Schedule Interview
+                </a>
+            </div>
+            <div style="border-top: 1.5px solid #E8ECF4; margin: 4px 0;"></div>
+        `;
+
+        if (inPipeline) {
+            menuHtml += `
+                <div style="padding: 4px;">
+                    <form method="POST" action="${removeUrl}" class="portal-remove-form" style="margin:0; padding:0;" data-candidate-id="${candidateId}">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <input type="hidden" name="job_id" value="{{ job.id }}">
+                        <input type="hidden" name="next" value="${currentPath}">
+                        <button type="submit" class="portal-dropdown-item" style="color: #F59E0B;">
+                            <span style="font-size: 16px;">↩</span> Remove from Pipeline
+                        </button>
+                    </form>
+                </div>
+                <div style="border-top: 1.5px solid #E8ECF4; margin: 4px 0;"></div>
+            `;
+        }
+
+        menuHtml += `<div style="padding: 4px;">`;
+
+        if (isRejected) {
+            menuHtml += `
+                <button class="portal-dropdown-item text-danger" style="opacity: 0.6; cursor: not-allowed;" disabled>
+                    <span style="font-size: 16px;">❌</span> Rejected
+                </button>
+            `;
+        } else {
+            menuHtml += `
+                <form method="POST" action="${rejectUrl}" style="margin:0; padding:0;" onsubmit="return confirm('Are you sure you want to reject this candidate?');">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                    <input type="hidden" name="job_id" value="{{ job.id }}">
+                    <input type="hidden" name="next" value="${currentPath}">
+                    <button type="submit" class="portal-dropdown-item text-danger">
+                        <span style="font-size: 16px;">❌</span> Reject Candidate
+                    </button>
+                </form>
+            `;
+        }
+
+        menuHtml += `</div>`;
+
+        if (canDelete) {
+            menuHtml += `
+                <div style="border-top: 1.5px solid #E8ECF4; margin: 4px 0;"></div>
+                <div style="padding: 4px;">
+                    <form method="POST" action="${deleteUrl}" style="margin:0; padding:0;" onsubmit="return confirm('Are you sure you want to delete this candidate permanently?');">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <input type="hidden" name="next" value="${currentPath}">
+                        <button type="submit" class="portal-dropdown-item text-danger">
+                            <span style="font-size: 16px;">🗑️</span> Delete Candidate
+                        </button>
+                    </form>
+                </div>
+            `;
+        }
+
+        menu.innerHTML = menuHtml;
+        document.body.appendChild(menu);
+        activeDropdown = menu;
+
+        // Bounding calculation for viewport positioning (places above/below, left/right)
+        const rect = trigger.getBoundingClientRect();
+        const menuWidth = 220;
+        const menuHeight = menu.offsetHeight || (canDelete ? 170 : 120);
+        
+        let top = rect.bottom + window.scrollY + 6;
+        let left = rect.right + window.scrollX - menuWidth;
+
+        // If not enough vertical space below button, place above it
+        if (rect.bottom + menuHeight > window.innerHeight && rect.top > menuHeight) {
+            top = rect.top + window.scrollY - menuHeight - 6;
+        }
+
+        // If not enough horizontal space on the left
+        if (rect.left - (menuWidth - rect.width) < 0) {
+            left = rect.left + window.scrollX;
+        }
+
+        menu.style.top = top + "px";
+        menu.style.left = left + "px";
+
+        // Trigger show class for transition slide/fade-in
+        requestAnimationFrame(() => {
+            menu.classList.add('show');
+        });
+    });
+
+    // Handle "Move to Pipeline" AJAX form submission
+    document.addEventListener("submit", function(e) {
+        const moveForm = e.target.closest(".pipeline-move-form");
+        if (moveForm) {
+            e.preventDefault();
+            
+            const btn = moveForm.querySelector("button");
+            const originalContent = btn.innerHTML;
+            
+            // Loading spinner state
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Moving...`;
+            
+            const action = moveForm.action;
+            const formData = new FormData(moveForm);
+            
+            fetch(action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.created) {
+                        showToast("✅ Candidate moved to Pipeline successfully.", "success");
+                    } else {
+                        showToast("ℹ️ Candidate is already in Pipeline.", "info");
+                    }
+                    // Refresh candidate card only
+                    refreshCandidateCard(moveForm.dataset.candidateId);
+                } else {
+                    showToast("❌ " + (data.message || "Failed to move to pipeline."), "danger");
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showToast("❌ An error occurred.", "danger");
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            });
+        }
+    });
+
+    // Handle "Remove from Pipeline" AJAX form submission inside Portal Dropdown
+    document.addEventListener("submit", function(e) {
+        const removeForm = e.target.closest(".portal-remove-form");
+        if (removeForm) {
+            e.preventDefault();
+            
+            if (!confirm("Are you sure you want to remove this candidate from the pipeline?")) {
+                return;
+            }
+            
+            const candidateId = removeForm.dataset.candidateId;
+            closeActiveDropdown();
+            
+            const action = removeForm.action;
+            const formData = new FormData(removeForm);
+            
+            fetch(action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast("✅ Candidate removed from Pipeline successfully.", "info");
+                    // Refresh candidate card only
+                    refreshCandidateCard(candidateId);
+                } else {
+                    showToast("❌ " + (data.message || "Failed to remove from pipeline."), "danger");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showToast("❌ An error occurred.", "danger");
+            });
+        }
+    });
+
+    // Close active dropdown portal on scroll or resize events
+    window.addEventListener("scroll", closeActiveDropdown, { passive: true });
+    window.addEventListener("resize", closeActiveDropdown);
+});
+</script>
 
 {% endblock %}
