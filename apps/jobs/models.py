@@ -56,6 +56,8 @@ class Job(BaseAppModel):
     
     is_remote = models.BooleanField(default=False)
     application_deadline = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='closed_jobs')
 
     @property
     def min_salary_lpa(self):

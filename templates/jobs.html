@@ -152,6 +152,7 @@
             <span class="btn btn-light border btn-sm fw-medium">Active ({{ active_count|default:0 }})</span>
             <span class="btn btn-light border btn-sm fw-medium">Draft ({{ draft_count|default:0 }})</span>
             <span class="btn btn-light border btn-sm fw-medium">On Hold ({{ on_hold_count|default:0 }})</span>
+            <span class="btn btn-light border btn-sm fw-medium">Closed ({{ closed_count|default:0 }})</span>
         </div>
         <a href="{% url 'frontend:job_create' %}" class="btn btn-primary btn-sm px-3 shadow-sm fw-medium"><i class="bi bi-plus-lg me-1"></i> Post New Job</a>
     </div>
@@ -184,11 +185,12 @@
             <!-- Status Filter -->
             <div class="col-md-2">
                 <label for="status" class="form-label small fw-bold text-secondary">Status</label>
-                <select name="status" id="status" class="form-select form-select-sm fw-medium">
-                    <option value="">All Statuses</option>
-                    {% for value, name in statuses %}
-                        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
+                <select name="status" id="status" class="form-select form-select-sm fw-medium" onchange="this.form.submit()">
+                    <option value="" {% if not selected_status %}selected{% endif %}>All Active</option>
+                    <option value="ACTIVE" {% if selected_status == 'ACTIVE' %}selected{% endif %}>Open</option>
+                    <option value="DRAFT" {% if selected_status == 'DRAFT' %}selected{% endif %}>Draft</option>
+                    <option value="ON_HOLD" {% if selected_status == 'ON_HOLD' %}selected{% endif %}>On Hold</option>
+                    <option value="CLOSED" {% if selected_status == 'CLOSED' %}selected{% endif %}>Closed</option>
                 </select>
             </div>
             
@@ -272,49 +274,61 @@
                             {% endif %}
                         </td>
                         <td class="pe-4 text-end">
-                            <div class="dropdown table-actions">
-                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots-vertical"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="border-radius: 12px; min-width: 160px;">
-                                    <li>
-                                        <a class="dropdown-item py-2 fw-medium" href="{% url 'frontend:public_job_share' job.id %}" target="_blank">
-                                            <i class="bi bi-eye text-secondary me-2"></i> View Job
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item py-2 fw-medium" href="{% url 'frontend:job_edit' job.id %}">
-                                            <i class="bi bi-pencil text-secondary me-2"></i> Edit Job
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <button class="dropdown-item py-2 fw-medium" type="button" data-bs-toggle="modal" data-bs-target="#shareJobModal" data-job-title="{{ job.title }}" data-company-name="{{ job.company.name }}" data-share-url="{{ job.share_url }}">
-                                            <i class="bi bi-share text-secondary me-2"></i> Share Job
+                            {% if job.status == 'CLOSED' %}
+                                <div class="d-flex justify-content-end align-items-center gap-2">
+                                    <a class="btn btn-sm btn-outline-secondary fw-semibold d-inline-flex align-items-center gap-1" href="{% url 'frontend:public_job_share' job.id %}" target="_blank" style="border-radius: 8px;">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                    <form method="POST" action="{% url 'frontend:job_action' job.id 'reopen' %}" class="m-0">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-primary fw-semibold d-inline-flex align-items-center gap-1" style="border-radius: 8px; background-color: #2563eb; border-color: #2563eb;">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Reopen Job
                                         </button>
-                                    </li>
-                                    <li>
-                                        <form method="POST" action="{% url 'frontend:job_action' job.id 'clone' %}">
-                                            {% csrf_token %}
-                                            <button type="submit" class="dropdown-item py-2 fw-medium text-primary"><i class="bi bi-copy me-2"></i> Duplicate Job</button>
-                                        </form>
-                                    </li>
-                                    {% if job.status != 'CLOSED' %}
-                                    <li>
-                                        <form method="POST" action="{% url 'frontend:job_action' job.id 'close' %}">
-                                            {% csrf_token %}
-                                            <button type="submit" class="dropdown-item py-2 fw-medium text-warning"><i class="bi bi-slash-circle me-2"></i> Close Job</button>
-                                        </form>
-                                    </li>
-                                    {% endif %}
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <form method="POST" action="{% url 'frontend:job_delete' job.id %}" onsubmit="return confirm('Are you sure you want to delete this job?');">
-                                            {% csrf_token %}
-                                            <button type="submit" class="dropdown-item py-2 fw-medium text-danger"><i class="bi bi-trash me-2"></i> Delete Job</button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </div>
+                                    </form>
+                                </div>
+                            {% else %}
+                                <div class="dropdown table-actions">
+                                    <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="border-radius: 12px; min-width: 160px;">
+                                        <li>
+                                            <a class="dropdown-item py-2 fw-medium" href="{% url 'frontend:public_job_share' job.id %}" target="_blank">
+                                                <i class="bi bi-eye text-secondary me-2"></i> View Job
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item py-2 fw-medium" href="{% url 'frontend:job_edit' job.id %}">
+                                                <i class="bi bi-pencil text-secondary me-2"></i> Edit Job
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item py-2 fw-medium" type="button" data-bs-toggle="modal" data-bs-target="#shareJobModal" data-job-title="{{ job.title }}" data-company-name="{{ job.company.name }}" data-share-url="{{ job.share_url }}">
+                                                <i class="bi bi-share text-secondary me-2"></i> Share Job
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <form method="POST" action="{% url 'frontend:job_action' job.id 'clone' %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="dropdown-item py-2 fw-medium text-primary"><i class="bi bi-copy me-2"></i> Duplicate Job</button>
+                                            </form>
+                                        </li>
+                                        <li>
+                                            <form method="POST" action="{% url 'frontend:job_action' job.id 'close' %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="dropdown-item py-2 fw-medium text-warning"><i class="bi bi-slash-circle me-2"></i> Close Job</button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{% url 'frontend:job_delete' job.id %}" onsubmit="return confirm('Are you sure you want to delete this job?');">
+                                                {% csrf_token %}
+                                                <button type="submit" class="dropdown-item py-2 fw-medium text-danger"><i class="bi bi-trash me-2"></i> Delete Job</button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

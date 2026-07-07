@@ -50,6 +50,9 @@ class JobViewSet(viewsets.ModelViewSet):
         """Close an active job posting."""
         job = self.get_object()
         job.status = Job.JobStatus.CLOSED
+        from django.utils import timezone
+        job.closed_at = timezone.now()
+        job.closed_by = request.user
         job.save()
         return Response({'status': 'Job closed successfully'}, status=status.HTTP_200_OK)
 

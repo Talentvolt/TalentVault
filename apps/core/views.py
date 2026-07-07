@@ -232,11 +232,21 @@ class JobActionView(View):
             job.status = 'ON_HOLD'
         elif action == 'close':
             job.status = 'CLOSED'
+            from django.utils import timezone
+            job.closed_at = timezone.now()
+            job.closed_by = request.user
+        elif action == 'reopen':
+            job.status = 'ACTIVE'
+            job.closed_at = None
+            job.closed_by = None
         elif action == 'clone':
-            new_job = job
+            # Need to clone without mutating original job's PK
+            new_job = Job.objects.get(pk=pk)
             new_job.pk = None
             new_job.title = f"Copy of {job.title}"
             new_job.status = 'DRAFT'
+            new_job.closed_at = None
+            new_job.closed_by = None
             new_job.save()
             return redirect('frontend:job_edit', pk=new_job.pk)
         job.save()
@@ -263,6 +273,8 @@ class JobsView(LoginRequiredMixin, ListView):
         status = self.request.GET.get('status', '')
         if status:
             queryset = queryset.filter(status=status)
+        else:
+            queryset = queryset.exclude(status='CLOSED')
             
         job_type = self.request.GET.get('job_type', '')
         if job_type:
