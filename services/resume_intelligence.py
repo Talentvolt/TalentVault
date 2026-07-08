@@ -3,6 +3,9 @@ import os
 import io
 import math
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from decimal import Decimal
 from django.conf import settings

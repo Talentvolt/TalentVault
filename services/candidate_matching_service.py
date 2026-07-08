@@ -95,6 +95,7 @@ class CandidateMatchingService:
     @staticmethod
     def calculate_job_ats_score(candidate: CandidateProfile, job: Job = None) -> dict:
         import re
+        from django.utils.html import strip_tags
         from apps.jobs.models import Job
         
         if not job:
@@ -111,17 +112,25 @@ class CandidateMatchingService:
                 'location_score': 0,
                 'certifications_score': 0,
                 'completeness_score': 0,
+                'title_score': 0,
+                'ai_semantic_score': 0,
                 'total_score': 0,
                 'match_label': "Weak Match",
                 'badge_class': "bg-danger text-white"
             }
             
         # 1. Skills Match (40% Weight)
-        job_skills = {s.lower() for s in job.skills.values_list('skill_name', flat=True)}
-        candidate_skills = {s.lower() for s in candidate.skills.values_list('skill_name', flat=True)}
+        job_skills = {s.strip().lower() for s in job.skills.values_list('skill_name', flat=True) if s.strip()}
+        candidate_skills = {s.strip().lower() for s in candidate.skills.values_list('skill_name', flat=True) if s.strip()}
         
         if job_skills:
-            matched_skills = job_skills.intersection(candidate_skills)
+            # Substring / partial match of skills
+            matched_skills = set()
+            for js in job_skills:
+                for cs in candidate_skills:
+                    if js in cs or cs in js:
+                        matched_skills.add(js)
+                        break
             skills_score = (len(matched_skills) / len(job_skills)) * 40
             skills_ratio = f"{len(matched_skills)}/{len(job_skills)}"
         else:
@@ -133,7 +142,13 @@ class CandidateMatchingService:
             job_desc_lower = (job.description or "").lower() + " " + (job.title or "").lower()
             extracted_job_skills = {s for s in skill_keywords if s in job_desc_lower}
             if extracted_job_skills:
-                matched_skills = extracted_job_skills.intersection(candidate_skills)
+                # Substring / partial match of fallback skills
+                matched_skills = set()
+                for js in extracted_job_skills:
+                    for cs in candidate_skills:
+                        if js in cs or cs in js:
+                            matched_skills.add(js)
+                            break
                 skills_score = (len(matched_skills) / len(extracted_job_skills)) * 40
                 skills_ratio = f"{len(matched_skills)}/{len(extracted_job_skills)}"
             else:
@@ -150,7 +165,7 @@ class CandidateMatchingService:
         # 3. Education Match (10% Weight)
         educations = candidate.educations.all()
         if educations.exists():
-            degrees = [e.degree.lower() for e in educations if e.degree]
+            degrees = [e.degree.lower().replace('.', '').strip() for e in educations if e.degree]
             if any(any(x in deg for x in ['phd', 'doctorate', 'master', 'mba', 'mtech', 'ms', 'pg', 'post graduate']) for deg in degrees):
                 edu_score = 10
             elif any(any(x in deg for x in ['bachelor', 'btech', 'be', 'bs', 'bca', 'bba', 'bcom', 'bsc', 'graduate', 'degree']) for deg in degrees):
@@ -166,18 +181,31 @@ class CandidateMatchingService:
             
         # 4. Keyword Match (15% Weight)
         job_desc = job.description or ""
-        job_words = set(re.findall(r'\b[a-zA-Z]{4,}\b', job_desc.lower()))
-        stop_words = {'with', 'they', 'that', 'this', 'from', 'have', 'your', 'will', 'about', 'their', 'there', 'would', 'should', 'could'}
+        job_desc_clean = strip_tags(job_desc)
+        job_words = set(re.findall(r'\b[a-zA-Z]{4,}\b', job_desc_clean.lower()))
+        
+        # Extended stop words list to filter out HTML parameters and general noise
+        stop_words = {
+            'with', 'they', 'that', 'this', 'from', 'have', 'your', 'will', 'about', 'their', 'there', 
+            'would', 'should', 'could', 'about', 'here', 'more', 'some', 'than', 'them', 'then', 'these',
+            'what', 'when', 'where', 'who', 'why', 'how', 'description', 'requirements', 'responsibilities',
+            'duties', 'qualifications', 'experience', 'skills', 'benefits', 'company', 'candidate', 'position',
+            'role', 'team', 'work', 'working', 'apply', 'please', 'required', 'preferred', 'highly', 'strong',
+            'ability', 'excellent', 'years', 'using', 'build', 'building', 'join', 'plus', 'preferred'
+        }
         job_words = job_words - stop_words
         
+        candidate_text = f"{(candidate.summary or '')} {(candidate.current_designation or '')} {(candidate.current_company or '')}".lower()
+        for exp in candidate.experiences.all():
+            candidate_text += f" {(exp.designation or '')} {(exp.company_name or '')} {(exp.description or '')}".lower()
+        for proj in candidate.projects.all():
+            candidate_text += f" {(proj.title or '')} {(proj.description or '')}".lower()
+        for cert in candidate.certifications.all():
+            candidate_text += f" {(cert.name or '')}".lower()
+        for skill in candidate.skills.all():
+            candidate_text += f" {skill.skill_name.lower()}"
+            
         if job_words:
-            candidate_text = f"{(candidate.summary or '')} {(candidate.current_designation or '')} {(candidate.current_company or '')}".lower()
-            for exp in candidate.experiences.all():
-                candidate_text += f" {(exp.designation or '')} {(exp.company_name or '')} {(exp.description or '')}".lower()
-            for proj in candidate.projects.all():
-                candidate_text += f" {(proj.title or '')} {(proj.description or '')}".lower()
-            for cert in candidate.certifications.all():
-                candidate_text += f" {(cert.name or '')}".lower()
             matched_words = {w for w in job_words if w in candidate_text}
             keyword_score = (len(matched_words) / len(job_words)) * 15
             keyword_ratio = f"{len(matched_words)}/{len(job_words)}"
@@ -188,8 +216,13 @@ class CandidateMatchingService:
         # 5. Location Match (5% Weight)
         if job.is_remote:
             loc_score = 5
-        elif job.location and candidate.location and job.location.strip().lower() == candidate.location.strip().lower():
-            loc_score = 5
+        elif job.location and candidate.location:
+            j_loc = job.location.strip().lower()
+            c_loc = candidate.location.strip().lower()
+            if j_loc in c_loc or c_loc in j_loc:
+                loc_score = 5
+            else:
+                loc_score = 0
         else:
             loc_score = 0
             
@@ -217,6 +250,20 @@ class CandidateMatchingService:
             
         completeness_score = completeness
         
+        # 8. Extra Metrics (for Final Report: Title match and AI semantic match)
+        title_score = 0
+        if job.title and candidate.current_designation:
+            j_title_words = set(re.findall(r'\w+', job.title.lower()))
+            c_desig_words = set(re.findall(r'\w+', candidate.current_designation.lower()))
+            common = j_title_words.intersection(c_desig_words)
+            if common:
+                title_score = int(round((len(common) / len(j_title_words)) * 10))
+                
+        ai_semantic_score = 0
+        if job_words:
+            overlap = job_words.intersection(set(re.findall(r'\b[a-zA-Z]{4,}\b', candidate_text)))
+            ai_semantic_score = int(round((len(overlap) / len(job_words)) * 10))
+            
         total_ats = int(round(skills_score + exp_score + edu_score + keyword_score + loc_score + cert_score + completeness_score))
         total_ats = min(max(total_ats, 0), 100)
         
@@ -244,6 +291,8 @@ class CandidateMatchingService:
             'location_score': int(round(loc_score)),
             'certifications_score': int(round(cert_score)),
             'completeness_score': int(round(completeness_score)),
+            'title_score': title_score,
+            'ai_semantic_score': ai_semantic_score,
             'total_score': total_ats,
             'match_label': match_label,
             'badge_class': badge_class
