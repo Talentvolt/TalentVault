@@ -12,7 +12,7 @@ SECRET_KEY = os.environ.get(
     "django-insecure-key-for-dev"
 )
 
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -51,14 +51,15 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # Third Party
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'corsheaders',
-    'django_filters',
-    'drf_spectacular',
-    'django_extensions',
-    'crispy_forms',
-    'crispy_bootstrap5',
+   'rest_framework',
+   'rest_framework_simplejwt',
+   'corsheaders',
+   'django_filters',
+   'drf_spectacular',
+   'django_extensions',
+   'crispy_forms',
+   'crispy_bootstrap5',
+   'storages',
     
     # Local Apps
     'apps.core',
@@ -146,17 +147,46 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME")
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = False
+AWS_S3_FILE_OVERWRITE = False
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+
+if not DEBUG and AWS_STORAGE_BUCKET_NAME:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+    MEDIA_URL = (
+        f"https://{AWS_STORAGE_BUCKET_NAME}.s3."
+        f"{AWS_S3_REGION_NAME}.amazonaws.com/"
+    )
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+print("DEBUG =", DEBUG)
+print("AWS_STORAGE_BUCKET_NAME =", AWS_STORAGE_BUCKET_NAME)
+print("STORAGES =", STORAGES)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
