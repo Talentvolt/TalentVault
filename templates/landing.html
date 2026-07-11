@@ -1,0 +1,7 @@
+{% if request.GET.role == 'admin' %}
+    {% include 'landing_admin.html' %}
+{% elif request.GET.role == 'employer' %}
+    {% include 'landing_employer.html' %}
+{% else %}
+    {% include 'landing_candidate.html' %}
+{% endif %}

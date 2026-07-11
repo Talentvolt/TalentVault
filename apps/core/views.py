@@ -7,7 +7,7 @@ from django.views.generic import TemplateView, ListView, DetailView, View, Creat
 from django.utils.decorators import method_decorator
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.db import transaction
 from django.db.models import Count, Q, Avg
@@ -58,19 +58,20 @@ class DashboardView(TemplateView):
         context['recent_activity'] = Notification.objects.all()[:5]
         return context
 
-class RoleRedirectView(LoginRequiredMixin, View):
+class RoleRedirectView(View):
     """
-    Redirect users to their respective dashboards based on their role.
+    Redirect users to their respective dashboards based on their role, or show landing page if not logged in.
     """
     def get(self, request, *args, **kwargs):
-        role = request.user.role
-        if role == User.Role.SUPER_ADMIN:
-            return redirect('frontend:admin_dashboard')
-        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
-            return redirect('frontend:recruiter_dashboard')
-        elif role == User.Role.CANDIDATE:
-            return redirect('frontend:candidate_dashboard')
-        return redirect('frontend:dashboard')
+        if request.user.is_authenticated:
+            role = request.user.role
+            if role == User.Role.SUPER_ADMIN:
+                return redirect('frontend:admin_dashboard')
+            elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+                return redirect('frontend:recruiter_dashboard')
+            elif role == User.Role.CANDIDATE:
+                return redirect('frontend:candidate_dashboard')
+        return render(request, 'landing.html')
 
 class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_dashboard.html'
@@ -933,9 +934,9 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
         file_physically_exists = False
         if self.object.resume:
             try:
-                if self.object.resume.name and os.path.exists(self.object.resume.path):
+                if self.object.resume.name and self.object.resume.storage.exists(self.object.resume.name):
                     file_physically_exists = True
-            except (ValueError, AssertionError):
+            except Exception:
                 pass
                 
         if file_physically_exists:
@@ -1083,9 +1084,9 @@ class PublicCandidateProfileView(DetailView):
         file_physically_exists = False
         if self.object.resume:
             try:
-                if self.object.resume.name and os.path.exists(self.object.resume.path):
+                if self.object.resume.name and self.object.resume.storage.exists(self.object.resume.name):
                     file_physically_exists = True
-            except (ValueError, AssertionError):
+            except Exception:
                 pass
                 
         if file_physically_exists:
@@ -2736,13 +2737,12 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
             return HttpResponse("No resume file found.", status=404)
             
         try:
-            file_path = candidate.resume.path
-            if os.path.exists(file_path):
+            if candidate.resume and candidate.resume.storage.exists(candidate.resume.name):
                 # Retrieve the original sanitized filename instead of the secure internal uuid name
-                filename = candidate.original_filename or os.path.basename(file_path)
-                f = open(file_path, 'rb')
+                filename = candidate.original_filename or os.path.basename(candidate.resume.name)
+                f = candidate.resume.open('rb')
                 import mimetypes
-                content_type, _ = mimetypes.guess_type(file_path)
+                content_type, _ = mimetypes.guess_type(candidate.resume.name)
                 if not content_type:
                     content_type = 'application/octet-stream'
                 response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
@@ -2750,7 +2750,7 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
         except Exception as e:
             return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
             
-        return HttpResponse("No resume file found on disk.", status=404)
+        return HttpResponse("No resume file found.", status=404)
 
 
 @method_decorator(xframe_options_sameorigin, name='dispatch')
@@ -2780,12 +2780,11 @@ class PublicCandidateResumeDownloadView(View):
             return HttpResponse("No resume file found.", status=404)
             
         try:
-            file_path = candidate.resume.path
-            if os.path.exists(file_path):
-                filename = candidate.original_filename or os.path.basename(file_path)
-                f = open(file_path, 'rb')
+            if candidate.resume and candidate.resume.storage.exists(candidate.resume.name):
+                filename = candidate.original_filename or os.path.basename(candidate.resume.name)
+                f = candidate.resume.open('rb')
                 import mimetypes
-                content_type, _ = mimetypes.guess_type(file_path)
+                content_type, _ = mimetypes.guess_type(candidate.resume.name)
                 if not content_type:
                     content_type = 'application/octet-stream'
                 response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
@@ -2793,4 +2792,4 @@ class PublicCandidateResumeDownloadView(View):
         except Exception as e:
             return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
             
-        return HttpResponse("No resume file found on disk.", status=404)
+        return HttpResponse("No resume file found.", status=404)

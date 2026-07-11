@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Your Account | TalentVault</title>
+    <title>Employer Registration | TalentVault</title>
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
     
@@ -45,7 +45,7 @@
             border-radius: 22px;
             box-shadow: 0 20px 40px -15px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
             width: 100%;
-            max-width: 560px;
+            max-width: 580px;
             padding: 48px;
             animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -99,44 +99,12 @@
             box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
         }
 
-        /* --- RADIO CARDS --- */
-        .radio-card-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        .radio-card-wrapper {
-            position: relative;
-        }
-
-        .radio-card-input {
-            position: absolute;
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .radio-card-label {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 54px;
-            border: 1.5px solid var(--border-light);
-            border-radius: 14px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.25s ease;
-            user-select: none;
-        }
-
-        .radio-card-input:checked + .radio-card-label {
-            border-color: var(--primary-purple);
-            background: rgba(124, 58, 237, 0.04);
-            color: var(--primary-purple);
-            box-shadow: 0 0 0 1px var(--primary-purple);
+        .form-select-custom {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23475569' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 18px center;
+            background-size: 14px 12px;
         }
 
         /* --- BUTTONS --- */
@@ -165,56 +133,6 @@
             color: white;
         }
 
-        .btn-outline-custom {
-            height: 54px;
-            border-radius: 14px;
-            border: 1.5px solid var(--border-light);
-            background: #ffffff;
-            color: var(--text-dark);
-            font-weight: 600;
-            font-size: 0.95rem;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            transition: all 0.25s ease;
-            text-decoration: none;
-        }
-
-        .btn-outline-custom:hover {
-            background: #f8fafc;
-            border-color: var(--text-muted);
-            transform: translateY(-1px);
-            color: var(--text-dark);
-        }
-
-        /* --- DIVIDER --- */
-        .auth-divider {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            color: var(--text-muted);
-            margin: 28px 0;
-            font-size: 0.85rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
-
-        .auth-divider::before, .auth-divider::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1.5px solid #f1f5f9;
-        }
-
-        .auth-divider:not(:empty)::before {
-            margin-right: 16px;
-        }
-
-        .auth-divider:not(:empty)::after {
-            margin-left: 16px;
-        }
-
         /* --- ERRORS --- */
         .alert-error {
             background-color: #fef2f2;
@@ -235,10 +153,6 @@
                 padding: 32px 24px;
                 border-radius: 18px;
             }
-            .radio-card-group {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
             .auth-title {
                 font-size: 1.5rem;
             }
@@ -256,8 +170,8 @@
         </div>
 
         <div class="text-center">
-            <h3 class="auth-title">Create your account</h3>
-            <p class="auth-subtitle">Start your career journey with TalentVault AI.</p>
+            <h3 class="auth-title">Create Employer Account</h3>
+            <p class="auth-subtitle">Source, evaluate, and hire exceptional talent at scale.</p>
         </div>
 
         {% if form.errors or form.non_field_errors %}
@@ -277,31 +191,25 @@
         </div>
         {% endif %}
 
-        <form method="post" action="{% url 'account_signup' %}" id="signup-form">
+        <form method="post" action="{% url 'employer_signup' %}" id="signup-form">
             {% csrf_token %}
 
-            <!-- Hidden Fields for Django Form split -->
-            <input type="hidden" name="first_name" id="first_name_hidden">
-            <input type="hidden" name="last_name" id="last_name_hidden">
-            <!-- Default candidate role -->
-            <input type="hidden" name="role" value="CANDIDATE">
-
-            <!-- Full Name -->
+            <!-- Organization Name -->
             <div class="mb-4">
-                <label for="full_name" class="form-label">Full Name</label>
-                <input type="text" id="full_name" required class="form-control-custom" placeholder="e.g. John Doe">
+                <label for="org_name" class="form-label">Organization Name</label>
+                <input type="text" name="org_name" id="org_name" required class="form-control-custom" placeholder="e.g. Acme Corporation" value="{{ form.org_name.value|default:'' }}">
             </div>
 
-            <!-- Email Address -->
+            <!-- Official Work Email -->
             <div class="mb-4">
-                <label for="id_email" class="form-label">Email Address</label>
-                <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="e.g. john@example.com" value="{{ form.email.value|default:'' }}">
+                <label for="id_email" class="form-label">Official Work Email</label>
+                <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="official@company.com" value="{{ form.email.value|default:'' }}">
             </div>
 
-            <!-- Mobile Number -->
+            <!-- Phone Number -->
             <div class="mb-4">
-                <label for="id_phone_number" class="form-label">Mobile Number</label>
-                <input type="text" name="phone_number" id="id_phone_number" class="form-control-custom" placeholder="e.g. +91 98765 43210" value="{{ form.phone_number.value|default:'' }}">
+                <label for="id_phone_number" class="form-label">Phone Number</label>
+                <input type="text" name="phone_number" id="id_phone_number" required class="form-control-custom" placeholder="e.g. +1 555 123 4567" value="{{ form.phone_number.value|default:'' }}">
             </div>
 
             <!-- Password -->
@@ -316,29 +224,49 @@
                 <input type="password" id="confirm_password_input" required class="form-control-custom" placeholder="••••••••">
             </div>
 
-            <!-- Experience Radio Cards -->
+            <!-- Hiring Type Radio Buttons (Horizontal aligned) -->
             <div class="mb-4">
-                <label class="form-label d-block">Experience</label>
-                <div class="radio-card-group">
-                    <div class="radio-card-wrapper">
-                        <input type="radio" name="experience" id="exp_fresher" value="fresher" class="radio-card-input" checked>
-                        <label for="exp_fresher" class="radio-card-label">
-                            I'm a Fresher
+                <label class="form-label d-block">Hiring Type</label>
+                <div class="d-flex align-items-center gap-4 py-2">
+                    <div class="form-check d-flex align-items-center gap-2">
+                        <input class="form-check-input" type="radio" name="hiring_type" id="type_org" value="organization" checked style="cursor: pointer;">
+                        <label class="form-check-label small text-dark fw-medium" for="type_org" style="cursor: pointer; user-select: none;">
+                            Organization
                         </label>
                     </div>
-                    <div class="radio-card-wrapper">
-                        <input type="radio" name="experience" id="exp_experienced" value="experienced" class="radio-card-input">
-                        <label for="exp_experienced" class="radio-card-label">
-                            Experienced Professional
+                    <div class="form-check d-flex align-items-center gap-2">
+                        <input class="form-check-input" type="radio" name="hiring_type" id="type_ind" value="independent" style="cursor: pointer;">
+                        <label class="form-check-label small text-dark fw-medium" for="type_ind" style="cursor: pointer; user-select: none;">
+                            Independent Recruiter
                         </label>
                     </div>
                 </div>
             </div>
 
-            <!-- Current Location -->
+            <!-- Company Website (Optional) -->
             <div class="mb-4">
-                <label for="id_location" class="form-label">Current Location</label>
-                <input type="text" name="location" id="id_location" class="form-control-custom" placeholder="e.g. Bangalore, India" value="{{ form.location.value|default:'' }}">
+                <label for="website" class="form-label">Company Website (Optional)</label>
+                <input type="url" name="website" id="website" class="form-control-custom" placeholder="e.g. https://company.com" value="{{ form.website.value|default:'' }}">
+            </div>
+
+            <div class="row">
+                <!-- Company Size -->
+                <div class="col-md-6 mb-4">
+                    <label for="company_size" class="form-label">Company Size</label>
+                    <select name="company_size" id="company_size" class="form-control-custom form-select-custom">
+                        <option value="1-10">1-10 employees</option>
+                        <option value="11-50">11-50 employees</option>
+                        <option value="51-200">51-200 employees</option>
+                        <option value="201-500">201-500 employees</option>
+                        <option value="501+">501+ employees</option>
+                    </select>
+                </div>
+
+                <!-- Industry -->
+                <div class="col-md-6 mb-4">
+                    <label for="industry" class="form-label">Industry</label>
+                    <input type="text" name="industry" id="industry" class="form-control-custom" placeholder="e.g. Technology" value="{{ form.industry.value|default:'' }}">
+                </div>
             </div>
 
             <!-- Terms Checkbox -->
@@ -351,46 +279,18 @@
 
             <!-- Primary Button -->
             <button type="submit" class="btn-purple-gradient mb-3">
-                Create Account
+                Create Employer Account
             </button>
         </form>
 
-        <div class="auth-divider">OR</div>
-
-        <!-- Social Login -->
-        <div class="d-flex flex-column gap-3 mb-4">
-            <a href="#" class="btn-outline-custom">
-                <i class="bi bi-google text-danger"></i> Continue with Google
-            </a>
-            <a href="#" class="btn-outline-custom">
-                <i class="bi bi-linkedin text-primary"></i> Continue with LinkedIn
-            </a>
-        </div>
-
         <!-- Footer -->
         <p class="text-center text-muted small mb-0">
-            Already have an account? <a href="{% url 'candidate_login' %}" class="text-primary text-decoration-none fw-semibold">Sign In</a>
+            Already have an account? <a href="{% url 'employer_login' %}" class="text-primary text-decoration-none fw-semibold">Sign In</a>
         </p>
     </div>
 
     <script>
         document.getElementById('signup-form').addEventListener('submit', function(e) {
-            const fullNameVal = document.getElementById('full_name').value.trim();
-            const spaceIndex = fullNameVal.indexOf(' ');
-            let firstName = '';
-            let lastName = '';
-            
-            if (spaceIndex === -1) {
-                firstName = fullNameVal;
-                lastName = '.';
-            } else {
-                firstName = fullNameVal.substring(0, spaceIndex);
-                lastName = fullNameVal.substring(spaceIndex + 1).trim();
-            }
-            
-            document.getElementById('first_name_hidden').value = firstName;
-            document.getElementById('last_name_hidden').value = lastName;
-
             const passwordVal = document.getElementById('password_input').value;
             const confirmPasswordVal = document.getElementById('confirm_password_input').value;
             if (passwordVal !== confirmPasswordVal) {

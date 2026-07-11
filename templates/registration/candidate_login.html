@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Your Account | TalentVault</title>
+    <title>Candidate Sign In | TalentVault</title>
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
     
@@ -45,7 +45,7 @@
             border-radius: 22px;
             box-shadow: 0 20px 40px -15px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
             width: 100%;
-            max-width: 560px;
+            max-width: 520px;
             padding: 48px;
             animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -97,46 +97,6 @@
         .form-control-custom:focus {
             border-color: var(--primary-purple);
             box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
-        }
-
-        /* --- RADIO CARDS --- */
-        .radio-card-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        .radio-card-wrapper {
-            position: relative;
-        }
-
-        .radio-card-input {
-            position: absolute;
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .radio-card-label {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 54px;
-            border: 1.5px solid var(--border-light);
-            border-radius: 14px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.25s ease;
-            user-select: none;
-        }
-
-        .radio-card-input:checked + .radio-card-label {
-            border-color: var(--primary-purple);
-            background: rgba(124, 58, 237, 0.04);
-            color: var(--primary-purple);
-            box-shadow: 0 0 0 1px var(--primary-purple);
         }
 
         /* --- BUTTONS --- */
@@ -235,10 +195,6 @@
                 padding: 32px 24px;
                 border-radius: 18px;
             }
-            .radio-card-group {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
             .auth-title {
                 font-size: 1.5rem;
             }
@@ -256,8 +212,8 @@
         </div>
 
         <div class="text-center">
-            <h3 class="auth-title">Create your account</h3>
-            <p class="auth-subtitle">Start your career journey with TalentVault AI.</p>
+            <h3 class="auth-title">Welcome back</h3>
+            <p class="auth-subtitle">Sign in to continue your career journey with TalentVault AI.</p>
         </div>
 
         {% if form.errors or form.non_field_errors %}
@@ -266,31 +222,15 @@
             <span>
                 {% if form.non_field_errors %}
                     {{ form.non_field_errors.0 }}
-                {% elif form.errors %}
-                    {% for field, errors in form.errors.items %}
-                        {{ errors.0 }}
-                    {% endfor %}
                 {% else %}
-                    Please correct the errors below.
+                    Invalid email or password.
                 {% endif %}
             </span>
         </div>
         {% endif %}
 
-        <form method="post" action="{% url 'account_signup' %}" id="signup-form">
+        <form method="post" action="{% url 'candidate_login' %}">
             {% csrf_token %}
-
-            <!-- Hidden Fields for Django Form split -->
-            <input type="hidden" name="first_name" id="first_name_hidden">
-            <input type="hidden" name="last_name" id="last_name_hidden">
-            <!-- Default candidate role -->
-            <input type="hidden" name="role" value="CANDIDATE">
-
-            <!-- Full Name -->
-            <div class="mb-4">
-                <label for="full_name" class="form-label">Full Name</label>
-                <input type="text" id="full_name" required class="form-control-custom" placeholder="e.g. John Doe">
-            </div>
 
             <!-- Email Address -->
             <div class="mb-4">
@@ -298,60 +238,26 @@
                 <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="e.g. john@example.com" value="{{ form.email.value|default:'' }}">
             </div>
 
-            <!-- Mobile Number -->
-            <div class="mb-4">
-                <label for="id_phone_number" class="form-label">Mobile Number</label>
-                <input type="text" name="phone_number" id="id_phone_number" class="form-control-custom" placeholder="e.g. +91 98765 43210" value="{{ form.phone_number.value|default:'' }}">
-            </div>
-
             <!-- Password -->
             <div class="mb-4">
-                <label for="password_input" class="form-label">Password</label>
-                <input type="password" name="password" id="password_input" required class="form-control-custom" placeholder="••••••••">
+                <label for="id_password" class="form-label">Password</label>
+                <input type="password" name="password" id="id_password" required class="form-control-custom" placeholder="••••••••">
             </div>
 
-            <!-- Confirm Password -->
-            <div class="mb-4">
-                <label for="confirm_password_input" class="form-label">Confirm Password</label>
-                <input type="password" id="confirm_password_input" required class="form-control-custom" placeholder="••••••••">
-            </div>
-
-            <!-- Experience Radio Cards -->
-            <div class="mb-4">
-                <label class="form-label d-block">Experience</label>
-                <div class="radio-card-group">
-                    <div class="radio-card-wrapper">
-                        <input type="radio" name="experience" id="exp_fresher" value="fresher" class="radio-card-input" checked>
-                        <label for="exp_fresher" class="radio-card-label">
-                            I'm a Fresher
-                        </label>
-                    </div>
-                    <div class="radio-card-wrapper">
-                        <input type="radio" name="experience" id="exp_experienced" value="experienced" class="radio-card-input">
-                        <label for="exp_experienced" class="radio-card-label">
-                            Experienced Professional
-                        </label>
-                    </div>
+            <!-- Remember Me & Forgot Password -->
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <div class="form-check d-flex align-items-center gap-2">
+                    <input type="checkbox" name="remember_me" id="id_remember_me" class="form-check-input" style="cursor: pointer;">
+                    <label class="small text-muted mb-0" for="id_remember_me" style="cursor: pointer; user-select: none;">
+                        Remember Me
+                    </label>
                 </div>
-            </div>
-
-            <!-- Current Location -->
-            <div class="mb-4">
-                <label for="id_location" class="form-label">Current Location</label>
-                <input type="text" name="location" id="id_location" class="form-control-custom" placeholder="e.g. Bangalore, India" value="{{ form.location.value|default:'' }}">
-            </div>
-
-            <!-- Terms Checkbox -->
-            <div class="mb-4 d-flex align-items-start gap-2">
-                <input type="checkbox" id="terms" required class="form-check-input mt-1" style="cursor: pointer;">
-                <label for="terms" class="small text-muted" style="cursor: pointer; user-select: none;">
-                    I agree to the Terms of Service and Privacy Policy.
-                </label>
+                <a href="#" class="small text-decoration-none fw-semibold" style="color: var(--primary-purple);">Forgot password?</a>
             </div>
 
             <!-- Primary Button -->
             <button type="submit" class="btn-purple-gradient mb-3">
-                Create Account
+                Sign In
             </button>
         </form>
 
@@ -369,35 +275,9 @@
 
         <!-- Footer -->
         <p class="text-center text-muted small mb-0">
-            Already have an account? <a href="{% url 'candidate_login' %}" class="text-primary text-decoration-none fw-semibold">Sign In</a>
+            Don't have an account? <a href="{% url 'candidate_signup' %}" class="text-primary text-decoration-none fw-semibold">Sign Up</a>
         </p>
     </div>
 
-    <script>
-        document.getElementById('signup-form').addEventListener('submit', function(e) {
-            const fullNameVal = document.getElementById('full_name').value.trim();
-            const spaceIndex = fullNameVal.indexOf(' ');
-            let firstName = '';
-            let lastName = '';
-            
-            if (spaceIndex === -1) {
-                firstName = fullNameVal;
-                lastName = '.';
-            } else {
-                firstName = fullNameVal.substring(0, spaceIndex);
-                lastName = fullNameVal.substring(spaceIndex + 1).trim();
-            }
-            
-            document.getElementById('first_name_hidden').value = firstName;
-            document.getElementById('last_name_hidden').value = lastName;
-
-            const passwordVal = document.getElementById('password_input').value;
-            const confirmPasswordVal = document.getElementById('confirm_password_input').value;
-            if (passwordVal !== confirmPasswordVal) {
-                e.preventDefault();
-                alert("Passwords do not match!");
-            }
-        });
-    </script>
 </body>
 </html>

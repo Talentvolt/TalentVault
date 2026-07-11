@@ -55,9 +55,8 @@ class CandidateProfile(BaseAppModel):
 
     @property
     def has_profile_photo(self):
-        import os
         try:
-            return bool(self.profile_photo and self.profile_photo.name and os.path.exists(self.profile_photo.path))
+            return bool(self.profile_photo and self.profile_photo.name and self.profile_photo.storage.exists(self.profile_photo.name))
         except Exception:
             return False
 

@@ -998,7 +998,7 @@ document.addEventListener("DOMContentLoaded", function() {
         if (data.resume_name && data.candidate_id) {
             resumeAttachmentContainer.classList.remove("d-none");
             attachedResumeName.textContent = data.resume_name;
-            previewResumeBtn.href = `/candidates/${data.candidate_id}/preview/`;
+            previewResumeBtn.href = `/candidates/${data.candidate_id}/resume/preview/`;
         } else {
             resumeAttachmentContainer.classList.add("d-none");
         }

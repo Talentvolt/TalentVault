@@ -1,0 +1,1192 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TalentVault Recruiter | AI-Powered Applicant Sourcing & Matching</title>
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+    <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
+    
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-purple: #7c3aed;
+            --primary-purple-hover: #6d28d9;
+            --accent-indigo: #4f46e5;
+            --accent-indigo-light: #818cf8;
+            --text-dark: #0f172a;
+            --text-muted: #4b5563;
+            --text-light: #9ca3af;
+            --bg-light: #fcfbfe;
+            --border-color: rgba(124, 58, 237, 0.08);
+            --border-heavy: #e5e7eb;
+            --font-family: 'Plus Jakarta Sans', sans-serif;
+            --title-font: 'Outfit', sans-serif;
+            
+            --card-shadow: 0 20px 40px -15px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
+            --card-shadow-hover: 0 30px 60px -10px rgba(124, 58, 237, 0.12), 0 10px 20px -5px rgba(124, 58, 237, 0.04);
+            --glass-shadow: 0 8px 32px 0 rgba(124, 58, 237, 0.04);
+        }
+
+        body {
+            font-family: var(--font-family);
+            color: var(--text-dark);
+            background-color: #ffffff;
+            background-image: 
+                radial-gradient(circle at top right, rgba(124, 58, 237, 0.04) 0%, transparent 45%),
+                radial-gradient(circle at 10% 40%, rgba(79, 70, 229, 0.02) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(124, 58, 237, 0.03) 0%, transparent 45%);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* --- CONTAINER SIZING --- */
+        @media (min-width: 1200px) {
+            .container {
+                max-width: 1280px;
+                padding-left: 2rem;
+                padding-right: 2rem;
+            }
+        }
+
+        /* --- SECTION SPACING --- */
+        section {
+            padding: 120px 0;
+        }
+
+        /* --- PREMIUM LIGHT NAVBAR --- */
+        .navbar-custom {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid rgba(124, 58, 237, 0.06);
+            transition: all 0.3s ease;
+            z-index: 1050;
+            padding: 18px 0;
+        }
+        .navbar-custom.scrolled {
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.03);
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.12);
+        }
+        .navbar-brand-custom {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 1.65rem;
+            color: var(--text-dark);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .navbar-brand-custom span {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+        .nav-link-custom {
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: color 0.2s ease;
+            font-size: 0.95rem;
+            padding: 0 4px;
+        }
+        .nav-link-custom:hover {
+            color: var(--primary-purple) !important;
+        }
+        .candidate-toggle-btn {
+            background: rgba(124, 58, 237, 0.05);
+            color: var(--primary-purple);
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 9px 20px;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: all 0.25s ease;
+            border: 1px solid rgba(124, 58, 237, 0.10);
+        }
+        .candidate-toggle-btn:hover {
+            background: var(--primary-purple);
+            color: white;
+            border-color: var(--primary-purple);
+        }
+
+        /* --- BUTTONS --- */
+        .btn-purple {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            color: white !important;
+            font-weight: 600;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 14px;
+            box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.25);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-purple:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px -5px rgba(124, 58, 237, 0.4);
+        }
+        .btn-outline-custom {
+            border: 2px solid rgba(124, 58, 237, 0.12);
+            color: var(--text-dark) !important;
+            font-weight: 600;
+            padding: 12px 28px;
+            border-radius: 14px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            background: transparent;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-outline-custom:hover {
+            background: rgba(124, 58, 237, 0.03);
+            border-color: var(--primary-purple);
+            transform: translateY(-2px);
+            color: var(--primary-purple) !important;
+        }
+
+        /* --- HERO SECTION --- */
+        .hero-section {
+            padding: 200px 0 100px;
+            position: relative;
+        }
+        .hero-badge {
+            background: rgba(124, 58, 237, 0.05);
+            border: 1px solid rgba(124, 58, 237, 0.12);
+            color: var(--primary-purple);
+            padding: 8px 18px;
+            border-radius: 100px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: inline-block;
+            margin-bottom: 28px;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }
+        .hero-title {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 4.8rem;
+            line-height: 1.05;
+            letter-spacing: -0.04em;
+            margin-bottom: 28px;
+            color: var(--text-dark);
+        }
+        .hero-title span {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            line-height: 1.7;
+            margin-bottom: 44px;
+            max-width: 580px;
+        }
+
+        /* --- FLOATING CARDS (HERO RIGHT) --- */
+        .hero-visual-wrapper {
+            position: relative;
+            min-height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .visual-glow {
+            position: absolute;
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.07) 0%, transparent 70%);
+            z-index: 1;
+            top: 10%;
+            right: 10%;
+            filter: blur(40px);
+        }
+        .visual-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(124, 58, 237, 0.08);
+            border-radius: 24px;
+            box-shadow: var(--card-shadow);
+            padding: 24px;
+            position: absolute;
+            z-index: 2;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .visual-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: var(--card-shadow-hover);
+            border-color: rgba(124, 58, 237, 0.18);
+        }
+        
+        .card-main {
+            width: 350px;
+            top: 0px;
+            left: 20px;
+            animation: float-slow 8s ease-in-out infinite;
+        }
+        .card-secondary {
+            width: 300px;
+            bottom: 20px;
+            right: 0px;
+            animation: float-fast 6s ease-in-out infinite;
+        }
+        .card-badge-floating {
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 8px 14px;
+            border-radius: 100px;
+            box-shadow: 0 10px 20px rgba(124, 58, 237, 0.2);
+            animation: float-slow 7s ease-in-out infinite alternate;
+        }
+
+        /* --- KEYFRAMES --- */
+        @keyframes float-slow {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-12px) rotate(0.5deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        @keyframes float-fast {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(-0.5deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+
+        /* --- COMMON SECTION STYLES --- */
+        .section-tag {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--primary-purple);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
+            display: block;
+        }
+        .section-title {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 3.2rem;
+            letter-spacing: -0.04em;
+            color: var(--text-dark);
+            margin-bottom: 20px;
+        }
+        .section-title span {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            max-width: 650px;
+            margin: 0 auto 60px;
+            line-height: 1.65;
+        }
+
+        /* --- AI INTELLIGENCE SECTION --- */
+        .feature-showcase-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 40px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            height: 100%;
+        }
+        .feature-showcase-card:hover {
+            box-shadow: var(--card-shadow-hover);
+            border-color: rgba(124, 58, 237, 0.15);
+            transform: translateY(-4px);
+        }
+        .feature-icon-wrapper {
+            width: 56px;
+            height: 56px;
+            background: rgba(124, 58, 237, 0.05);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-purple);
+            font-size: 1.5rem;
+            margin-bottom: 28px;
+            border: 1px solid rgba(124, 58, 237, 0.06);
+        }
+
+        /* --- CANDIDATE PIPELINE SECTION --- */
+        .pipeline-wrapper {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 32px;
+            box-shadow: var(--card-shadow);
+            padding: 40px;
+            margin-top: 40px;
+        }
+        .pipeline-column {
+            background: #fcfbfe;
+            border: 1px solid #f1f5f9;
+            border-radius: 20px;
+            padding: 20px;
+            height: 100%;
+        }
+        .pipeline-col-header {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-dark);
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pipeline-card {
+            background: #ffffff;
+            border: 1px solid rgba(124, 58, 237, 0.06);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+            transition: all 0.25s ease;
+        }
+        .pipeline-card:hover {
+            border-color: var(--primary-purple);
+            box-shadow: 0 10px 20px -5px rgba(124, 58, 237, 0.05);
+            transform: translateY(-2px);
+        }
+
+        /* --- HIRING WORKFLOW --- */
+        .workflow-step-card {
+            position: relative;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            text-align: left;
+            height: 100%;
+        }
+        .workflow-step-card:hover {
+            border-color: rgba(124, 58, 237, 0.15);
+            transform: translateY(-3px);
+            box-shadow: var(--card-shadow-hover);
+        }
+        .step-number {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--primary-purple);
+            background: rgba(124, 58, 237, 0.05);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        /* --- INTEGRATIONS --- */
+        .integration-item {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--card-shadow);
+            transition: all 0.25s ease;
+            height: 100%;
+        }
+        .integration-item:hover {
+            border-color: var(--primary-purple);
+            transform: translateY(-4px);
+            box-shadow: var(--card-shadow-hover);
+        }
+        .integration-item i {
+            font-size: 2.2rem;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* --- FEATURES GRID --- */
+        .feature-grid-item {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+        .feature-grid-item:hover {
+            border-color: rgba(124, 58, 237, 0.15);
+            transform: translateY(-3px);
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        /* --- METRICS --- */
+        .metrics-section {
+            background: linear-gradient(135deg, #FAF8FF 0%, #FFFFFF 100%);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 100px 0;
+        }
+        .metric-card {
+            text-align: center;
+        }
+        .metric-value {
+            font-family: var(--title-font);
+            font-size: 3.8rem;
+            font-weight: 800;
+            color: var(--primary-purple);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .metric-label {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
+        .metric-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+        }
+
+        /* --- TESTIMONIALS --- */
+        .testimonial-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 40px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+        .testimonial-card:hover {
+            border-color: rgba(124, 58, 237, 0.15);
+            box-shadow: var(--card-shadow-hover);
+        }
+        .testimonial-text {
+            font-size: 1.15rem;
+            line-height: 1.7;
+            color: var(--text-dark);
+            font-style: italic;
+            margin-bottom: 28px;
+        }
+
+        /* --- ENTERPRISE FOOTER --- */
+        .footer-custom {
+            background: #fbfcfe;
+            border-top: 1px solid var(--border-color);
+            padding: 90px 0 40px;
+        }
+        .footer-brand {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 1.6rem;
+            color: var(--text-dark);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .footer-brand span {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+        .footer-link {
+            display: block;
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            transition: color 0.2s ease;
+        }
+        .footer-link:hover {
+            color: var(--primary-purple);
+        }
+        .social-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 1px solid var(--border-heavy);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        .social-btn:hover {
+            background: var(--primary-purple);
+            color: white;
+            border-color: var(--primary-purple);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container">
+            <a class="navbar-brand-custom" href="/">
+                <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 42px; width: auto; object-fit: contain;">
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarText">
+                <ul class="navbar-nav mx-auto mb-2 mb-lg-0 gap-lg-4">
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="#">Product</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="#">Solutions</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="#">Pricing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="#">Enterprise</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="#">Resources</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <a href="/" class="candidate-toggle-btn">For Candidates</a>
+                    <a href="{% url 'employer_login' %}" class="nav-link-custom text-decoration-none me-2">Login</a>
+                    <a href="{% url 'employer_signup' %}" class="btn btn-purple">Register</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="row align-items-center justify-content-between g-5">
+                <!-- Hero Left Side -->
+                <div class="col-lg-6 text-start">
+                    <div class="hero-badge">TalentVault for Enterprise</div>
+                    <h1 class="hero-title">
+                        Hire Smarter.<br><span>Hire Faster.</span>
+                    </h1>
+                    <p class="hero-subtitle">
+                        Source, screen, evaluate and hire exceptional talent using TalentVault AI. Automate every stage of recruitment while making faster and better hiring decisions.
+                    </p>
+                    
+                    <div class="d-flex flex-wrap gap-3">
+                        <a href="{% url 'employer_signup' %}" class="btn btn-purple">Start Hiring</a>
+                        <a href="{% url 'employer_login' %}" class="btn btn-outline-custom">Book Demo</a>
+                    </div>
+                </div>
+
+                <!-- Hero Right Side (Floating AI Cards Concept) -->
+                <div class="col-lg-6">
+                    <div class="hero-visual-wrapper">
+                        <div class="visual-glow"></div>
+                        
+                        <!-- Floating Card 1: Core AI Match -->
+                        <div class="visual-card card-main">
+                            <div class="card-badge-floating">98% Fit Score</div>
+                            <div class="d-flex align-items-center gap-3 mb-4">
+                                <div class="p-3 bg-purple bg-opacity-10 rounded-circle" style="background: rgba(124, 58, 237, 0.08);">
+                                    <i class="bi bi-cpu text-purple" style="font-size: 1.5rem; color: var(--primary-purple);"></i>
+                                </div>
+                                <div class="text-start">
+                                    <h5 class="fw-bold mb-1 text-dark">AI Match Engine</h5>
+                                    <span class="text-muted small">Deep Semantic Matching Active</span>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column gap-3 text-start">
+                                <div class="d-flex justify-content-between border-bottom pb-2">
+                                    <span class="text-muted small">Candidate</span>
+                                    <span class="fw-bold small">Sarah Connor</span>
+                                </div>
+                                <div class="d-flex justify-content-between border-bottom pb-2">
+                                    <span class="text-muted small">Target Role</span>
+                                    <span class="fw-bold small">Lead Fullstack Developer</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted small">Skill Matching</span>
+                                    <span class="text-success small fw-bold">12/12 Verified</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floating Card 2: Parser Intel -->
+                        <div class="visual-card card-secondary">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span class="fw-bold text-dark small">Resume Layout Parsed</span>
+                            </div>
+                            <div class="text-start">
+                                <div class="mb-2">
+                                    <span class="text-muted small">Education</span>
+                                    <div class="fw-bold small">B.Tech Computer Science</div>
+                                </div>
+                                <div>
+                                    <span class="text-muted small">Recent Experience</span>
+                                    <div class="fw-bold small text-truncate">Sr. Software Engineer @ TCS</div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AI INTELLIGENCE SECTION -->
+    <section class="bg-light-section" style="background: #faf9fd; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+        <div class="container text-center">
+            <span class="section-tag">AI Intelligence</span>
+            <h2 class="section-title">Deep <span>Parser & Matching</span> Engine</h2>
+            <p class="section-subtitle">How TalentVault reads, understands, and ranks resumes with human-like contextual accuracy.</p>
+            
+            <div class="row g-4 mt-2">
+                <div class="col-lg-3 col-md-6">
+                    <div class="feature-showcase-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-file-earmark-pdf"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3 text-start">Layout Reconstruction</h5>
+                        <p class="text-muted text-start small mb-0">Rebuilds complex PDF tables, column splits, and visual blocks into structured raw text context blocks without losing structural headers.</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="feature-showcase-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-tags"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3 text-start">Smart Skill Mapping</h5>
+                        <p class="text-muted text-start small mb-0">Extracts direct and secondary skills, calculating contextual overlaps instead of basic character-by-character search matches.</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="feature-showcase-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-briefcase"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3 text-start">Experience Normalization</h5>
+                        <p class="text-muted text-start small mb-0">Normalizes job titles, company tiers, and tenure durations to give an accurate, standardized view of a candidate's history.</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="feature-showcase-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-compass"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3 text-start">Semantic Alignment</h5>
+                        <p class="text-muted text-start small mb-0">Discovers hidden talents whose resumes use synonyms or adjacent technical phrasing, ensuring exceptional candidates are never filtered out.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CANDIDATE PIPELINE SECTION -->
+    <section>
+        <div class="container text-center">
+            <span class="section-tag">Applicant Tracking</span>
+            <h2 class="section-title">The Unified <span>Hiring Pipeline</span></h2>
+            <p class="section-subtitle">A modern visual interface built for tracking applications, progress metrics, and interviews seamlessly.</p>
+            
+            <div class="pipeline-wrapper text-start">
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-4 mb-4 flex-wrap gap-3">
+                    <div>
+                        <span class="text-muted small d-block">Active Hiring Campaign</span>
+                        <h4 class="fw-bold text-dark mb-0">Senior Frontend Architect</h4>
+                    </div>
+                    <div class="d-flex gap-4">
+                        <div class="text-center">
+                            <span class="text-muted small d-block">Match Threshold</span>
+                            <span class="fw-bold text-purple" style="color: var(--primary-purple);">80%+ Match</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="text-muted small d-block">Time to Hire</span>
+                            <span class="fw-bold text-success">14 Days Avg</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row g-4">
+                    <!-- Column 1 -->
+                    <div class="col-lg-3 col-md-6">
+                        <div class="pipeline-column">
+                            <div class="pipeline-col-header">
+                                <span>Sourced</span>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary px-2">3 Candidates</span>
+                            </div>
+                            
+                            <div class="pipeline-card">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold small">Sarah Connor</span>
+                                    <span class="badge bg-success bg-opacity-10 text-success small">98% Match</span>
+                                </div>
+                                <span class="text-muted small d-block mb-3">6.5 Yrs Exp &bull; Bangalore</span>
+                                <div class="w-100 bg-light rounded-pill" style="height: 6px;">
+                                    <div class="bg-success rounded-pill" style="width: 98%; height: 6px;"></div>
+                                </div>
+                            </div>
+
+                            <div class="pipeline-card">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold small">Alex Mercer</span>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary small">88% Match</span>
+                                </div>
+                                <span class="text-muted small d-block mb-3">5 Yrs Exp &bull; Remote</span>
+                                <div class="w-100 bg-light rounded-pill" style="height: 6px;">
+                                    <div class="bg-primary" style="width: 88%; height: 6px; border-radius: 10px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 2 -->
+                    <div class="col-lg-3 col-md-6">
+                        <div class="pipeline-column">
+                            <div class="pipeline-col-header">
+                                <span>AI Screened</span>
+                                <span class="badge bg-purple bg-opacity-10 text-purple px-2" style="color: var(--primary-purple);">2 Candidates</span>
+                            </div>
+                            
+                            <div class="pipeline-card">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold small">David Miller</span>
+                                    <span class="badge bg-success bg-opacity-10 text-success small">92% Match</span>
+                                </div>
+                                <span class="text-muted small d-block mb-3">8 Yrs Exp &bull; Mumbai</span>
+                                <div class="w-100 bg-light rounded-pill" style="height: 6px;">
+                                    <div class="bg-success rounded-pill" style="width: 92%; height: 6px;"></div>
+                                </div>
+                            </div>
+
+                            <div class="pipeline-card">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold small">Elena Rostova</span>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary small">86% Match</span>
+                                </div>
+                                <span class="text-muted small d-block mb-3">4.5 Yrs Exp &bull; Pune</span>
+                                <div class="w-100 bg-light rounded-pill" style="height: 6px;">
+                                    <div class="bg-primary" style="width: 86%; height: 6px; border-radius: 10px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3 -->
+                    <div class="col-lg-3 col-md-6">
+                        <div class="pipeline-column">
+                            <div class="pipeline-col-header">
+                                <span>Interviewing</span>
+                                <span class="badge bg-warning bg-opacity-10 text-warning px-2">1 Candidate</span>
+                            </div>
+                            
+                            <div class="pipeline-card" style="border-left: 3px solid var(--primary-purple);">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold small">Marcus Aurelius</span>
+                                    <span class="badge bg-success bg-opacity-10 text-success small">94% Match</span>
+                                </div>
+                                <span class="text-muted small d-block mb-2">7 Yrs Exp &bull; Noida</span>
+                                <span class="badge bg-warning bg-opacity-10 text-warning small py-1 px-2"><i class="bi bi-calendar me-1"></i>Today at 4:00 PM</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 4 -->
+                    <div class="col-lg-3 col-md-6">
+                        <div class="pipeline-column">
+                            <div class="pipeline-col-header">
+                                <span>Offer / Hired</span>
+                                <span class="badge bg-success bg-opacity-10 text-success px-2">1 Hired</span>
+                            </div>
+                            
+                            <div class="pipeline-card" style="background: rgba(220, 252, 231, 0.2);">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold small">Sophia Loren</span>
+                                    <span class="badge bg-success bg-opacity-10 text-success small">96% Match</span>
+                                </div>
+                                <span class="text-muted small d-block mb-2">6 Yrs Exp &bull; Chennai</span>
+                                <span class="badge bg-success bg-opacity-10 text-success small py-1 px-2"><i class="bi bi-check-circle me-1"></i>Hired & Onboarded</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HIRING WORKFLOW SECTION -->
+    <section class="bg-light-section" style="background: #fdfdfd; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+        <div class="container text-center">
+            <span class="section-tag">Process Streamlining</span>
+            <h2 class="section-title">Automated <span>Hiring Flow</span></h2>
+            <p class="section-subtitle">Every phase of candidate acquisition is connected and enhanced with deep learning matching intelligence.</p>
+            
+            <div class="row g-4 mt-2">
+                <div class="col-lg-4 col-md-6">
+                    <div class="workflow-step-card">
+                        <div class="step-number">1</div>
+                        <h5 class="fw-bold mb-3 text-dark">Create Job Post</h5>
+                        <p class="text-muted small mb-0">Input basic descriptions and let TalentVault auto-generate structural keyword requirements, skill priorities, and candidate expectations.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="workflow-step-card">
+                        <div class="step-number">2</div>
+                        <h5 class="fw-bold mb-3 text-dark">AI Screening</h5>
+                        <p class="text-muted small mb-0">Profiles coming in from any channel are parsed instantly. Visual structures are reconstructed and plain text is fed into LLMs.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="workflow-step-card">
+                        <div class="step-number">3</div>
+                        <h5 class="fw-bold mb-3 text-dark">AI Matching</h5>
+                        <p class="text-muted small mb-0">Algorithms calculate semantic overlap across skills, experience duration, and educational levels to provide a percentage score.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="workflow-step-card">
+                        <div class="step-number">4</div>
+                        <h5 class="fw-bold mb-3 text-dark">Coordination / Interview</h5>
+                        <p class="text-muted small mb-0">Synchronize candidate availability and calendar schedules automatically, reserving slots and sending reminders to everyone.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="workflow-step-card">
+                        <div class="step-number">5</div>
+                        <h5 class="fw-bold mb-3 text-dark">Offer Benchmarking</h5>
+                        <p class="text-muted small mb-0">Formulate visual offers with salary benchmarking data, historical negotiation details, and compliance templates.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="workflow-step-card">
+                        <div class="step-number">6</div>
+                        <h5 class="fw-bold mb-3 text-dark">Seamless Hire</h5>
+                        <p class="text-muted small mb-0">Transition selected profiles directly into your core HRMS dashboard with full pipeline documentation and resume logs preserved.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTEGRATIONS SECTION -->
+    <section>
+        <div class="container text-center">
+            <span class="section-tag">Seamless Sync</span>
+            <h2 class="section-title">Connects With <span>Your Ecosystem</span></h2>
+            <p class="section-subtitle">Sync candidate profiles, calendars, and communications across the enterprise systems you use daily.</p>
+            
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4 mt-2 justify-content-center">
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-slack"></i>
+                        <span class="fw-bold small text-dark">Slack</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-microsoft"></i>
+                        <span class="fw-bold small text-dark">Teams</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-google"></i>
+                        <span class="fw-bold small text-dark">Workspace</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-camera-video"></i>
+                        <span class="fw-bold small text-dark">Zoom</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-envelope"></i>
+                        <span class="fw-bold small text-dark">Outlook</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-linkedin"></i>
+                        <span class="fw-bold small text-dark">LinkedIn</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-github"></i>
+                        <span class="fw-bold small text-dark">GitHub</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-journal-text"></i>
+                        <span class="fw-bold small text-dark">Notion</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-arrow-down-up"></i>
+                        <span class="fw-bold small text-dark">ATS Import</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="integration-item">
+                        <i class="bi bi-database"></i>
+                        <span class="fw-bold small text-dark">HRMS Sync</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AI FEATURES GRID -->
+    <section class="bg-light-section" style="background: #fafafc; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+        <div class="container text-center">
+            <span class="section-tag">Feature Suite</span>
+            <h2 class="section-title">Built For <span>Modern Sourcing Teams</span></h2>
+            <p class="section-subtitle">Everything recruiters require to accelerate resume review, filter bad fits, and sign exceptional talent.</p>
+            
+            <div class="row g-4 mt-2">
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-file-earmark-check me-2 text-purple" style="color: var(--primary-purple);"></i>Resume Parsing</h5>
+                        <p class="text-muted text-start small mb-0">Rebuilds layout files into clean plain text data context fields contextually within milliseconds.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-search me-2 text-purple" style="color: var(--primary-purple);"></i>Semantic Search</h5>
+                        <p class="text-muted text-start small mb-0">Filters candidate profile repositories contextually with NLP keywords, matching intent rather than exact letters.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-cpu me-2 text-purple" style="color: var(--primary-purple);"></i>Candidate Matching</h5>
+                        <p class="text-muted text-start small mb-0">Calculates precise multidimensional fit scores relative to education background, skills, and industry tenure.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-calendar-event me-2 text-purple" style="color: var(--primary-purple);"></i>Smart Scheduling</h5>
+                        <p class="text-muted text-start small mb-0">Coordinates calendar slots dynamically, sending automated links and synchronization triggers.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-cloud-arrow-up me-2 text-purple" style="color: var(--primary-purple);"></i>Bulk PDF Upload</h5>
+                        <p class="text-muted text-start small mb-0">Process hundreds of application profiles concurrently, logging data columns contextually.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-envelope me-2 text-purple" style="color: var(--primary-purple);"></i>Email Automation</h5>
+                        <p class="text-muted text-start small mb-0">Dispatch candidate email sequences to keep applicant updates synchronized across active campaigns.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-graph-up-arrow me-2 text-purple" style="color: var(--primary-purple);"></i>Analytics Engine</h5>
+                        <p class="text-muted text-start small mb-0">Visual pipelines, tracking candidate conversion benchmarks, time-to-hire logs, and sourcer performance.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-people me-2 text-purple" style="color: var(--primary-purple);"></i>Talent CRM</h5>
+                        <p class="text-muted text-start small mb-0">Auditable applicant log history with notes, custom tags, status columns, and pipeline filters.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-grid-item">
+                        <h5 class="fw-bold mb-3 text-dark text-start"><i class="bi bi-diagram-3 me-2 text-purple" style="color: var(--primary-purple);"></i>Pipeline Control</h5>
+                        <p class="text-muted text-start small mb-0">Transition profiles easily across dynamic customizable recruitment columns with immediate status updates.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ENTERPRISE METRICS -->
+    <section class="metrics-section">
+        <div class="container">
+            <div class="row g-5 justify-content-center">
+                <div class="col-md-4 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-value">95%</div>
+                        <div class="metric-label">Match Accuracy</div>
+                        <div class="metric-desc">Tested against hand-reviewed semantic evaluation benchmarks.</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-value">10M+</div>
+                        <div class="metric-label">Candidates Parsed</div>
+                        <div class="metric-desc">Uncompromised parsing pipeline processing records at scale.</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-value">500K+</div>
+                        <div class="metric-label">Profiles Matched</div>
+                        <div class="metric-desc">Successful matches logged across active enterprise campaigns.</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-value">40%</div>
+                        <div class="metric-label">Faster Hiring Cycle</div>
+                        <div class="metric-desc">Reduction in calendar scheduling and manual profile review lag.</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-value">70%</div>
+                        <div class="metric-label">Less Manual Screening</div>
+                        <div class="metric-desc">Minimizes time spent manually scanning layout files and tables.</div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="metric-card">
+                        <div class="metric-value">99.9%</div>
+                        <div class="metric-label">Platform Uptime</div>
+                        <div class="metric-desc">SLA-backed database infrastructure built for enterprise availability.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CLIENT TESTIMONIALS -->
+    <section>
+        <div class="container text-center">
+            <span class="section-tag">Success Stories</span>
+            <h2 class="section-title">Trusted By <span>Hiring Leaders</span></h2>
+            <p class="section-subtitle">How enterprise recruitment teams accelerate sourcing cycles and close candidates with confidence.</p>
+            
+            <div class="row g-4 mt-2">
+                <div class="col-md-6">
+                    <div class="testimonial-card text-start">
+                        <p class="testimonial-text">"TalentVault completely redefined how we scale engineering roles. We went from spending weeks reviewing PDFs to interviewing qualified matches in less than 24 hours."</p>
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="https://ui-avatars.com/api/?name=Sarah+Jenkins&background=7c3aed&color=fff" class="rounded-circle" width="48" height="48" alt="Sarah Jenkins">
+                            <div>
+                                <h6 class="fw-bold mb-0 text-dark">Sarah Jenkins</h6>
+                                <span class="text-muted small">VP of Talent Acquisitions, TechM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="testimonial-card text-start">
+                        <p class="testimonial-text">"The semantic candidate mapping engine is incredibly precise. It uncovers deep technical profiles that traditional keyword matches completely filter out."</p>
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="https://ui-avatars.com/api/?name=Rajesh+Kumar&background=4f46e5&color=fff" class="rounded-circle" width="48" height="48" alt="Rajesh Kumar">
+                            <div>
+                                <h6 class="fw-bold mb-0 text-dark">Rajesh Kumar</h6>
+                                <span class="text-muted small">Director of Global Sourcing, InnovateLab</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ENTERPRISE FOOTER -->
+    <footer class="footer-custom">
+        <div class="container">
+            <div class="row g-5 mb-5 text-start">
+                <div class="col-lg-4">
+                    <a class="footer-brand" href="/">
+                        <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 42px; width: auto; object-fit: contain;">
+                    </a>
+                    <p class="mb-4 text-muted mt-3">Connecting Exceptional Talent With Exceptional Companies through advanced semantic matching intelligence.</p>
+                    <div class="d-flex gap-3">
+                        <a href="#" class="social-btn"><i class="bi bi-twitter-x"></i></a>
+                        <a href="#" class="social-btn"><i class="bi bi-linkedin"></i></a>
+                        <a href="#" class="social-btn"><i class="bi bi-github"></i></a>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-2 offset-lg-1">
+                    <h6 class="text-dark fw-bold mb-4">Product</h6>
+                    <a href="{% url 'frontend:jobs' %}" class="footer-link">Jobs Search</a>
+                    <a href="{% url 'frontend:resume_parser' %}" class="footer-link">Resume Parser</a>
+                    <a href="{% url 'frontend:ats_pipeline' %}" class="footer-link">ATS Pipeline</a>
+                    <a href="{% url 'frontend:analytics' %}" class="footer-link">Analytics Dashboard</a>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-2">
+                    <h6 class="text-dark fw-bold mb-4">Resources</h6>
+                    <a href="#" class="footer-link">Documentation</a>
+                    <a href="#" class="footer-link">Help Center</a>
+                    <a href="#" class="footer-link">Integrations</a>
+                    <a href="#" class="footer-link">System Status</a>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-3">
+                    <h6 class="text-dark fw-bold mb-4">Subscribe to our newsletter</h6>
+                    <p class="small text-muted mb-4">Get the latest recruiting insights and product feature releases directly to your inbox.</p>
+                    <div class="input-group">
+                        <input type="email" class="form-control border-light" placeholder="Email address">
+                        <button class="btn btn-purple" type="button" style="border-radius: 0 10px 10px 0;"><i class="bi bi-send"></i></button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-top pt-4 border-light d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <span class="small text-muted">&copy; 2026 TalentVault Technologies. All rights reserved.</span>
+                <div class="d-flex gap-4 small">
+                    <a href="#" class="text-decoration-none text-muted hover-purple">Privacy Policy</a>
+                    <a href="#" class="text-decoration-none text-muted hover-purple">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Script -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Sticky Header scroll styling
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar-custom');
+            if (window.scrollY > 20) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+    </script>
+</body>
+</html>

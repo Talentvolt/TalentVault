@@ -1,0 +1,1205 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TalentVault | Find Your Dream Job & Build Your Future</title>
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+    <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
+    
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-purple: #7c3aed;
+            --primary-purple-hover: #6d28d9;
+            --accent-indigo: #4f46e5;
+            --accent-indigo-light: #e0e7ff;
+            --bg-light: #faf5ff;
+            --text-dark: #0f172a;
+            --text-muted: #475569;
+            --border-color: rgba(124, 58, 237, 0.08);
+            --font-family: 'Plus Jakarta Sans', sans-serif;
+            --title-font: 'Outfit', sans-serif;
+            --card-shadow: 0 10px 30px -10px rgba(124, 58, 237, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+            --card-shadow-hover: 0 25px 50px -12px rgba(124, 58, 237, 0.12), 0 4px 12px rgba(124, 58, 237, 0.04);
+        }
+
+        body {
+            font-family: var(--font-family);
+            color: var(--text-dark);
+            background: radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.04) 0%, transparent 40%),
+                        radial-gradient(circle at 90% 80%, rgba(79, 70, 229, 0.04) 0%, transparent 40%),
+                        #ffffff;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* --- CONTAINER SIZING (1360px Max Width) --- */
+        @media (min-width: 1200px) {
+            .container {
+                max-width: 1360px;
+                padding-left: 2rem;
+                padding-right: 2rem;
+            }
+        }
+
+        /* --- STICKY GLASSMORPHISM NAVBAR --- */
+        .navbar-custom {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1050;
+            min-height: 96px;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-custom.scrolled {
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03);
+            border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+            min-height: 86px;
+        }
+        .navbar-brand-custom {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 1.8rem;
+            color: var(--primary-purple);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .navbar-brand-custom span {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+        .nav-link-custom {
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: color 0.2s ease;
+            font-size: 1.05rem;
+        }
+        .nav-link-custom:hover {
+            color: var(--primary-purple) !important;
+        }
+        .recruiter-toggle-btn {
+            background: rgba(124, 58, 237, 0.08);
+            color: var(--primary-purple);
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 10px 22px;
+            border-radius: 14px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(124, 58, 237, 0.1);
+        }
+        .recruiter-toggle-btn:hover {
+            background: var(--primary-purple);
+            color: white;
+            border-color: var(--primary-purple);
+        }
+
+        /* --- BUTTONS --- */
+        .btn-purple {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            color: white;
+            font-weight: 600;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 14px;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.2);
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        .btn-purple:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.3);
+            color: white;
+        }
+        .btn-outline-purple {
+            border: 2px solid var(--primary-purple);
+            color: var(--primary-purple);
+            font-weight: 600;
+            padding: 10px 28px;
+            border-radius: 14px;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        .btn-outline-purple:hover {
+            background: var(--primary-purple);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* --- HERO SECTION --- */
+        .hero-section {
+            padding: 150px 0 100px;
+            position: relative;
+        }
+        .hero-badge {
+            background: rgba(124, 58, 237, 0.08);
+            color: var(--primary-purple);
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            display: inline-block;
+            margin-bottom: 24px;
+            border: 1px solid rgba(124, 58, 237, 0.15);
+        }
+        .hero-title {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 4.5rem;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            margin-bottom: 24px;
+        }
+        .hero-title span {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 40px;
+            font-weight: 400;
+        }
+
+        /* --- HERO SEARCH BAR --- */
+        .search-box-wrapper {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.06);
+            border-radius: 24px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+            max-width: 100%;
+        }
+        .search-field {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            padding: 8px 16px;
+            border-right: 1px solid #e2e8f0;
+        }
+        .search-field:last-of-type {
+            border-right: none;
+        }
+        .search-field i {
+            color: var(--primary-purple);
+            font-size: 1.35rem;
+        }
+        .search-field input {
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: var(--text-dark);
+        }
+        .search-field input::placeholder {
+            color: #94a3b8;
+        }
+        .search-box-wrapper .btn-purple {
+            padding: 14px 38px;
+            border-radius: 16px;
+            font-size: 1.05rem;
+        }
+
+        /* --- Popular Chips --- */
+        .popular-chips {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+        .chip {
+            background: rgba(124, 58, 237, 0.06);
+            color: var(--primary-purple);
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(124, 58, 237, 0.03);
+        }
+        .chip:hover {
+            background: var(--primary-purple);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+        }
+
+        /* --- HERO RIGHT SIDE GLASS MOCKUP & ILLUSTRATION --- */
+        .mockup-container {
+            position: relative;
+            width: 100%;
+            height: 560px;
+            max-width: 600px;
+            margin-left: auto;
+        }
+        .mockup-bg-glow {
+            position: absolute;
+            width: 440px;
+            height: 440px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.22) 0%, transparent 70%);
+            top: 10%;
+            right: 5%;
+            z-index: 0;
+            filter: blur(28px);
+        }
+        .mockup-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(124, 58, 237, 0.12);
+            box-shadow: 0 30px 60px -15px rgba(15, 23, 42, 0.08);
+            border-radius: 24px;
+            padding: 28px;
+            position: absolute;
+            z-index: 2;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .mockup-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 35px 65px -10px rgba(124, 58, 237, 0.16);
+            border-color: rgba(124, 58, 237, 0.24);
+        }
+
+        /* Profile Card */
+        .card-profile {
+            width: 360px;
+            top: 15px;
+            left: -20px;
+            z-index: 3;
+        }
+        .mockup-badge {
+            background: rgba(124, 58, 237, 0.08);
+            color: var(--primary-purple);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: inline-block;
+        }
+        .match-circle-wrapper {
+            position: relative;
+            width: 72px;
+            height: 72px;
+        }
+        .match-circle-svg {
+            transform: rotate(-90deg);
+        }
+        .circle-bg {
+            fill: none;
+            stroke: #f1f5f9;
+            stroke-width: 6;
+        }
+        .circle-progress {
+            fill: none;
+            stroke: var(--primary-purple);
+            stroke-width: 6;
+            stroke-dasharray: 188.4; /* 2 * pi * 30 */
+            stroke-dashoffset: 15.07; /* 92% progress -> 188.4 * 0.08 */
+            stroke-linecap: round;
+        }
+        .match-circle-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--primary-purple);
+        }
+
+        /* Score Card */
+        .card-score {
+            width: 250px;
+            right: -20px;
+            top: 50px;
+            z-index: 2;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 245, 255, 0.95));
+        }
+
+        /* Activity Card */
+        .card-activity {
+            width: 320px;
+            bottom: 20px;
+            right: -10px;
+            z-index: 3;
+        }
+
+        /* --- COMPANIES SECTION --- */
+        .companies-section {
+            background: rgba(124, 58, 237, 0.02);
+            padding: 100px 0;
+            border-top: 1px solid rgba(124, 58, 237, 0.04);
+            border-bottom: 1px solid rgba(124, 58, 237, 0.04);
+        }
+        .company-logo-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 24px 40px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100px;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #94a3b8;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.01);
+            transition: all 0.3s ease;
+        }
+        .company-logo-card:hover {
+            border-color: var(--primary-purple);
+            color: var(--primary-purple);
+            box-shadow: 0 12px 28px -5px rgba(124, 58, 237, 0.12);
+            transform: translateY(-4px);
+        }
+
+        /* --- SECTION HEADING STYLING --- */
+        .section-title {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 2.85rem;
+            text-align: center;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+        .section-subtitle {
+            color: var(--text-muted);
+            text-align: center;
+            max-width: 680px;
+            margin: 0 auto 60px;
+            font-size: 1.2rem;
+            line-height: 1.65;
+        }
+
+        /* --- CATEGORIES SECTION --- */
+        .category-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 32px;
+            padding: 48px 36px;
+            text-align: center;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-decoration: none;
+            color: var(--text-dark);
+            display: block;
+            height: 100%;
+        }
+        .category-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--card-shadow-hover);
+            border-color: rgba(124, 58, 237, 0.2);
+            color: var(--text-dark);
+        }
+        .category-icon-wrapper {
+            width: 80px;
+            height: 80px;
+            border-radius: 24px;
+            background: rgba(124, 58, 237, 0.05);
+            color: var(--primary-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            margin: 0 auto 28px;
+            transition: all 0.3s ease;
+        }
+        .category-card:hover .category-icon-wrapper {
+            background: var(--primary-purple);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* --- FEATURE CARDS --- */
+        .feature-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 32px;
+            padding: 52px 40px;
+            height: 100%;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--card-shadow-hover);
+            border-color: rgba(124, 58, 237, 0.18);
+        }
+        .feature-icon-box {
+            width: 72px;
+            height: 72px;
+            border-radius: 20px;
+            background: rgba(79, 70, 229, 0.05);
+            color: var(--accent-indigo);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin-bottom: 32px;
+        }
+
+        /* --- CAREER SECTION (MOCKUP ON RIGHT) --- */
+        .career-card-left {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            margin-bottom: 24px;
+        }
+        .career-card-left:hover {
+            border-color: var(--primary-purple);
+            box-shadow: var(--card-shadow-hover);
+            transform: translateX(6px);
+        }
+
+        /* --- STATISTICS SECTION --- */
+        .stats-section {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            color: white;
+            padding: 100px 60px;
+            border-radius: 40px;
+            box-shadow: 0 25px 60px rgba(124, 58, 237, 0.2);
+            margin: 100px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .stats-bg-pattern {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0.1;
+            background-image: radial-gradient(white 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+        }
+        .stat-number {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 5.5rem;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+        .stat-label {
+            font-weight: 600;
+            font-size: 1.35rem;
+            opacity: 0.9;
+        }
+
+        /* --- FOOTER --- */
+        .footer-custom {
+            background: #0f172a;
+            color: #94a3b8;
+            padding: 100px 0 40px;
+            border-top: 1px solid #1e293b;
+        }
+        .footer-brand {
+            font-family: var(--title-font);
+            font-weight: 800;
+            font-size: 1.85rem;
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        .footer-brand span {
+            background: linear-gradient(135deg, #a78bfa, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .footer-link {
+            color: #94a3b8;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            font-weight: 500;
+            display: block;
+            margin-bottom: 16px;
+            font-size: 1.05rem;
+        }
+        .footer-link:hover {
+            color: white;
+        }
+        .social-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #1e293b;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 1.2rem;
+        }
+        .social-btn:hover {
+            background: var(--primary-purple);
+            color: white;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+        }
+        
+        .footer-custom input.form-control {
+            height: 56px;
+            border-radius: 14px 0 0 14px;
+            padding-left: 22px;
+            font-size: 1rem;
+        }
+        .footer-custom .btn-purple {
+            height: 56px;
+            border-radius: 0 14px 14px 0;
+            padding: 0 28px;
+        }
+        /* --- BOTTOM CTA SECTION --- */
+        .cta-section-candidate {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            color: white;
+            padding: 80px 40px;
+            border-radius: 40px;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(124, 58, 237, 0.2);
+            margin: 80px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-light-custom {
+            background: white;
+            color: var(--primary-purple) !important;
+            font-weight: 600;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 14px;
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-light-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.25);
+            background: #f8fafc;
+        }
+        .btn-outline-light-custom {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white !important;
+            font-weight: 600;
+            padding: 10px 28px;
+            border-radius: 14px;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+            background: transparent;
+        }
+        .btn-outline-light-custom:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: white;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- STICKY NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top py-3">
+        <div class="container">
+            <a class="navbar-brand-custom" href="/">
+                <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 42px; width: auto; object-fit: contain;">
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarText">
+                <ul class="navbar-nav mx-auto mb-2 mb-lg-0 gap-lg-4">
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="{% url 'frontend:jobs' %}">Jobs</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="{% url 'frontend:candidate_search' %}">Companies</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="#">Career Resources</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom" href="{% url 'frontend:resume_parser' %}">Services</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <a href="/?role=employer" class="recruiter-toggle-btn">For Employers</a>
+                    <a href="{% url 'candidate_login' %}" class="btn btn-outline-purple">Login</a>
+                    <a href="{% url 'candidate_signup' %}" class="btn btn-purple">Register</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="row align-items-center justify-content-between g-5">
+                <!-- Hero Left Side -->
+                <div class="col-lg-6 text-start">
+                    <div class="hero-badge">Powered by AI. Built for Your Success.</div>
+                    <h1 class="hero-title">
+                        Let's Find<br>Your Next Job<br><span>Starts Here.</span>
+                    </h1>
+                    <p class="hero-subtitle">
+                        Find verified opportunities from India's leading companies. TalentVault AI intelligently matches your skills with the right roles, helping you get hired faster and build a career you'll love.
+                    </p>
+                    
+                    <!-- Search Box -->
+                    <form action="{% url 'frontend:jobs' %}" method="get">
+                        <div class="search-box-wrapper">
+                            <div class="search-field">
+                                <i class="bi bi-search"></i>
+                                <input type="text" name="search" placeholder="Search jobs, companies, skills or technologies...">
+                            </div>
+                            <div class="search-field d-none d-sm-flex">
+                                <i class="bi bi-geo-alt"></i>
+                                <input type="text" name="location" placeholder="Preferred Location">
+                            </div>
+                            <button type="submit" class="btn btn-purple"><span class="d-none d-sm-inline">Find Jobs</span><i class="bi bi-search d-sm-none"></i></button>
+                        </div>
+                    </form>
+                    
+                    <!-- Popular chips -->
+                    <div class="popular-chips">
+                        <span class="text-secondary small fw-semibold">Popular Searches:</span>
+                        <a href="{% url 'frontend:jobs' %}?search=Frontend+Developer" class="chip">Frontend Developer</a>
+                        <a href="{% url 'frontend:jobs' %}?search=Backend+Developer" class="chip">Backend Developer</a>
+                        <a href="{% url 'frontend:jobs' %}?search=Python" class="chip">Python</a>
+                        <a href="{% url 'frontend:jobs' %}?search=React" class="chip">React</a>
+                        <a href="{% url 'frontend:jobs' %}?search=Data+Analyst" class="chip">Data Analyst</a>
+                        <a href="{% url 'frontend:jobs' %}?search=UI%2FUX+Designer" class="chip">UI/UX Designer</a>
+                        <a href="{% url 'frontend:jobs' %}?search=DevOps" class="chip">DevOps</a>
+                        <a href="{% url 'frontend:jobs' %}?search=Remote+Jobs" class="chip">Remote Jobs</a>
+                    </div>
+                </div>
+
+                <!-- Hero Right Side (Dashboard Mockup & Illustration) -->
+                <div class="col-lg-6 d-none d-lg-block">
+                    <div class="mockup-container">
+                        <div class="mockup-bg-glow"></div>
+                        
+                        <!-- Cartoon Young Male Developer Character SVG Illustration (Purple Shirt, Laptop) -->
+                        <svg width="460" height="460" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 50px; left: 80px; z-index: 1;">
+                            <!-- Abstract Backplate -->
+                            <circle cx="200" cy="200" r="140" fill="url(#hero_bg_glow)" />
+                            <circle cx="200" cy="200" r="110" fill="#f5f3ff" opacity="0.6"/>
+                            <path d="M120 220 C 120 180, 280 180, 280 220" stroke="#ddd6fe" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 6"/>
+
+                            <!-- Desk Surface -->
+                            <rect x="80" y="320" width="240" height="8" rx="4" fill="#cbd5e1" />
+
+                            <!-- Character: Male Developer -->
+                            <!-- Shoulders / Body -->
+                            <path d="M130 350 C130 295, 270 295, 270 350 Z" fill="#7c3aed" /> <!-- Purple Shirt -->
+                            <path d="M165 295 L200 325 L235 295 Z" fill="#5b21b6" /> <!-- Neck V-collar -->
+
+                            <!-- Neck -->
+                            <rect x="188" y="225" width="24" height="25" rx="3" fill="#ffedd5" /> <!-- Skin tone -->
+
+                            <!-- Head -->
+                            <rect x="165" y="150" width="70" height="80" rx="35" fill="#ffedd5" />
+                            <path d="M165 185 C165 130, 235 130, 235 185 Z" fill="#78350f" /> <!-- Brown hair top -->
+                            <path d="M165 185 C160 195, 160 205, 168 200 C168 190, 165 188, 165 185 Z" fill="#78350f" /> <!-- Hair sideburn left -->
+                            <path d="M235 185 C240 195, 240 205, 232 200 C232 190, 235 188, 235 185 Z" fill="#78350f" /> <!-- Hair sideburn right -->
+                            <!-- Hair bangs -->
+                            <path d="M165 170 Q185 155 200 170 Q215 155 235 170" stroke="#78350f" stroke-width="12" stroke-linecap="round"/>
+
+                            <!-- Face details -->
+                            <circle cx="185" cy="190" r="3" fill="#1e293b" /> <!-- Eye L -->
+                            <circle cx="215" cy="190" r="3" fill="#1e293b" /> <!-- Eye R -->
+                            <path d="M194 212 Q200 218 206 212" stroke="#e11d48" stroke-width="3" stroke-linecap="round" fill="none"/> <!-- Smile -->
+                            <path d="M180 182 Q185 178 190 182" stroke="#451a03" stroke-width="2" stroke-linecap="round" fill="none"/> <!-- Eyebrow L -->
+                            <path d="M210 182 Q215 178 220 182" stroke="#451a03" stroke-width="2" stroke-linecap="round" fill="none"/> <!-- Eyebrow R -->
+
+                            <!-- Laptop -->
+                            <rect x="150" y="295" width="100" height="6" rx="3" fill="#94a3b8" /> <!-- Base -->
+                            <rect x="160" y="240" width="80" height="55" rx="6" fill="#475569" /> <!-- Screen shell -->
+                            <rect x="164" y="244" width="72" height="47" rx="4" fill="#0f172a" /> <!-- Inner screen -->
+                            <rect x="172" y="252" width="24" height="4" rx="2" fill="#a78bfa" /> <!-- Code L1 -->
+                            <rect x="172" y="260" width="40" height="4" rx="2" fill="#818cf8" /> <!-- Code L2 -->
+                            <rect x="172" y="268" width="32" height="4" rx="2" fill="#34d399" /> <!-- Code L3 -->
+                            <rect x="172" y="276" width="48" height="4" rx="2" fill="#f43f5e" /> <!-- Code L4 -->
+
+                            <!-- Hands typing -->
+                            <circle cx="148" cy="298" r="8" fill="#ffedd5" />
+                            <circle cx="252" cy="298" r="8" fill="#ffedd5" />
+
+                            <!-- Coffee Cup on Desk -->
+                            <rect x="290" y="290" width="18" height="30" rx="3" fill="#f97316" />
+                            <path d="M308 296 H313 V308 H308" stroke="#f97316" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+                            <!-- Gradients -->
+                            <defs>
+                                <radialGradient id="hero_bg_glow" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#ddd6fe" />
+                                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+                                </radialGradient>
+                            </defs>
+                        </svg>
+
+                        <!-- Match Card -->
+                        <div class="mockup-card card-profile">
+                            <div class="d-flex align-items-center justify-content-between mb-4">
+                                <div class="mockup-badge">AI Compatibility</div>
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 py-1.5 px-2.5">Immediate Joiner</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-3 mb-4">
+                                <img src="https://ui-avatars.com/api/?name=Sarah+Connor&background=7c3aed&color=fff" class="rounded-circle" width="56" height="56" alt="Sarah Connor">
+                                <div class="text-start">
+                                    <h5 class="fw-bold mb-1 text-dark" style="font-size: 1.15rem;">Sarah Connor</h5>
+                                    <p class="text-secondary small mb-0">Lead Fullstack Developer</p>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between pt-3 border-top">
+                                <div class="text-start">
+                                    <span class="text-secondary small d-block mb-1">Experience</span>
+                                    <span class="fw-bold text-dark" style="font-size: 1.05rem;">6.5 Years</span>
+                                </div>
+                                <div class="text-start">
+                                    <span class="text-secondary small d-block mb-1">Expected Salary</span>
+                                    <span class="fw-bold text-dark" style="font-size: 1.05rem;">18 LPA</span>
+                                </div>
+                                <div class="match-circle-wrapper">
+                                    <svg class="match-circle-svg" width="72" height="72">
+                                        <circle class="circle-bg" cx="36" cy="36" r="30"></circle>
+                                        <circle class="circle-progress" cx="36" cy="36" r="30"></circle>
+                                    </svg>
+                                    <div class="match-circle-text">92%</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Score Card -->
+                        <div class="mockup-card card-score">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <div class="p-2.5 rounded bg-purple bg-opacity-10 text-purple" style="background: rgba(124, 58, 237, 0.08);">
+                                    <i class="bi bi-shield-check" style="font-size: 1.3rem; color: var(--primary-purple);"></i>
+                                </div>
+                                <span class="fw-bold text-dark" style="font-size: 1rem;">Resume Health</span>
+                            </div>
+                            <div class="text-start mb-3">
+                                <span class="text-secondary small d-block">AI Scoring Rating</span>
+                                <h3 class="fw-extrabold text-purple m-0" style="color: var(--primary-purple); font-weight: 800; font-size: 1.9rem;">95/100</h3>
+                            </div>
+                            <div class="progress" style="height: 6px; background-color: #f1f5f9;">
+                                <div class="progress-bar" role="progressbar" style="width: 95%; background-color: var(--primary-purple);" aria-valuenow="95" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Card -->
+                        <div class="mockup-card card-activity">
+                            <h6 class="fw-bold text-dark mb-3 text-start"><i class="bi bi-arrow-up-right-circle text-success me-2"></i>Live Pipeline Activity</h6>
+                            <div class="d-flex flex-column gap-3 text-start">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <span class="fw-bold text-dark d-block" style="font-size: 0.95rem;">UI/UX Designer Role</span>
+                                        <span class="text-secondary small">Interview Scheduled</span>
+                                    </div>
+                                    <span class="badge bg-warning bg-opacity-15 text-warning border border-warning border-opacity-10 small py-1.5 px-2.5">Today</span>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-between border-top pt-3">
+                                    <div>
+                                        <span class="fw-bold text-dark d-block" style="font-size: 0.95rem;">Python Engineer Role</span>
+                                        <span class="text-secondary small">Shortlisted by TCS</span>
+                                    </div>
+                                    <span class="badge bg-primary bg-opacity-15 text-primary border border-primary border-opacity-10 small py-1.5 px-2.5">Active</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMPANIES SECTION -->
+    <section class="companies-section">
+        <div class="container text-center">
+            <p class="text-secondary fw-bold small text-uppercase mb-5" style="letter-spacing: 1.5px;">Trusted by India's Leading Employers</p>
+            <div class="row row-cols-2 row-cols-md-4 row-cols-lg-7 g-4 justify-content-center">
+                <div class="col">
+                    <div class="company-logo-card">TCS</div>
+                </div>
+                <div class="col">
+                    <div class="company-logo-card">Infosys</div>
+                </div>
+                <div class="col">
+                    <div class="company-logo-card">Wipro</div>
+                </div>
+                <div class="col">
+                    <div class="company-logo-card">Accenture</div>
+                </div>
+                <div class="col">
+                    <div class="company-logo-card">HCL</div>
+                </div>
+                <div class="col">
+                    <div class="company-logo-card">IBM</div>
+                </div>
+                <div class="col">
+                    <div class="company-logo-card">TechM</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CATEGORIES SECTION -->
+    <section class="py-5 my-5">
+        <div class="container">
+            <h2 class="section-title">Explore Careers Across Every Industry</h2>
+            <p class="section-subtitle">Search jobs across popular industries and start your next career leap today.</p>
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}?search=IT" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-laptop"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">IT & Software</h5>
+                        <p class="text-secondary small mb-0">12,000+ Active Jobs</p>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}?search=Banking" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-bank"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">Banking & Finance</h5>
+                        <p class="text-secondary small mb-0">8,500+ Active Jobs</p>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}?search=Healthcare" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-heart-pulse"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">Healthcare</h5>
+                        <p class="text-secondary small mb-0">5,400+ Active Jobs</p>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}?search=Education" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-book"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">Education</h5>
+                        <p class="text-secondary small mb-0">3,100+ Active Jobs</p>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}?search=Sales" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-cart3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">Sales & Marketing</h5>
+                        <p class="text-secondary small mb-0">9,800+ Active Jobs</p>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}?search=Design" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-palette"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">Creative & Design</h5>
+                        <p class="text-secondary small mb-0">4,200+ Active Jobs</p>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{% url 'frontend:jobs' %}" class="category-card">
+                        <div class="category-icon-wrapper">
+                            <i class="bi bi-grid-3x3-gap"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">View More</h5>
+                        <p class="text-secondary small mb-0">Explore 50+ Roles</p>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURE CARDS -->
+    <section class="py-5 my-5" style="border-radius: 48px; background: rgba(124, 58, 237, 0.015); border: 1px solid rgba(124, 58, 237, 0.03);">
+        <div class="container py-4">
+            <h2 class="section-title">AI-Powered Career Acceleration</h2>
+            <p class="section-subtitle">A state-of-the-art applicant tracking platform designed for candidates and recruiters alike.</p>
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+                <div class="col">
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <i class="bi bi-lightning-charge"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3">AI Resume Score</h5>
+                        <p class="text-secondary small mb-0">Instantly score and identify parsing problems, keyword omissions, and formatting gaps inside your uploaded resume.</p>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <i class="bi bi-bullseye"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3">Smart Job Matches</h5>
+                        <p class="text-secondary small mb-0">Get matched with suitable job postings based on skills overlapping calculations, education, and years of experience.</p>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3">Easy Apply</h5>
+                        <p class="text-secondary small mb-0">Submit your profile directly to job vacancies. One click updates your application status in the recruiters pipeline.</p>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <i class="bi bi-calendar-check"></i>
+                        </div>
+                        <h5 class="fw-bold mb-3">Interview Tracker</h5>
+                        <p class="text-secondary small mb-0">Access interview dates, schedule schedules, and receive status reminders directly from your candidate dashboard.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CAREER SECTION -->
+    <section class="py-5 my-5">
+        <div class="container">
+            <div class="row align-items-center justify-content-between g-5">
+                <!-- Left Details -->
+                <div class="col-lg-6">
+                    <h2 class="section-title text-start mb-4">Everything You Need To Get Hired Faster</h2>
+                    <p class="text-secondary mb-5">Our AI recruiter engine analyses matching criteria across multiple dimensions to guarantee candidates stand out from the crowd.</p>
+                    
+                    <div class="career-card-left d-flex align-items-start gap-4">
+                        <div class="p-3 bg-purple bg-opacity-10 rounded-circle text-purple" style="background: rgba(124, 58, 237, 0.08);">
+                            <i class="bi bi-journal-check" style="font-size: 1.6rem; color: var(--primary-purple);"></i>
+                        </div>
+                        <div class="text-start">
+                            <h5 class="fw-bold mb-2">Resume Layout Reconstruction</h5>
+                            <p class="text-secondary small mb-0">Converts image scans and raw layouts into high-precision, clean plain text without losing structural headers.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="career-card-left d-flex align-items-start gap-4">
+                        <div class="p-3 bg-purple bg-opacity-10 rounded-circle text-purple" style="background: rgba(124, 58, 237, 0.08);">
+                            <i class="bi bi-people-fill" style="font-size: 1.6rem; color: var(--primary-purple);"></i>
+                        </div>
+                        <div class="text-start">
+                            <h5 class="fw-bold mb-2">Recruiter-Candidate Sync</h5>
+                            <p class="text-secondary small mb-0">Ensures candidate profiles sync perfectly with the company's applicant pipeline without structural database delays.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Mockup / Cartoon Female Character Illustration -->
+                <div class="col-lg-6">
+                    <div class="p-4 border shadow-sm rounded-4" style="background: linear-gradient(135deg, #ffffff, #faf5ff); border-color: rgba(124, 58, 237, 0.08) !important;">
+                        <h5 class="fw-bold mb-4 text-start"><i class="bi bi-briefcase me-2 text-purple" style="color: var(--primary-purple);"></i>Smart Dashboard Interface</h5>
+                        
+                        <!-- Cartoon Young Female Developer Character SVG Illustration (Purple theme, sitting with laptop) -->
+                        <svg width="100%" height="320" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" style="max-height: 320px;" class="mb-4">
+                            <!-- Abstract Backplate -->
+                            <circle cx="200" cy="150" r="110" fill="url(#career_bg_glow)" />
+                            <circle cx="200" cy="150" r="90" fill="#f5f3ff" opacity="0.6"/>
+
+                            <!-- Cozy Chair Backrest -->
+                            <path d="M120 220 Q120 120 200 120 Q280 120 280 220 Z" fill="#e0e7ff" />
+
+                            <!-- Character: Female Developer -->
+                            <!-- Hair (Back) -->
+                            <path d="M165 145 C150 190, 150 240, 160 250 C170 240, 168 180, 165 145 Z" fill="#1e1b4b" />
+                            <path d="M235 145 C250 190, 250 240, 240 250 C230 240, 232 180, 235 145 Z" fill="#1e1b4b" />
+
+                            <!-- Body / Purple Sweater -->
+                            <path d="M140 270 C140 215, 260 215, 260 270 Z" fill="#7c3aed" />
+
+                            <!-- Neck -->
+                            <rect x="188" y="195" width="24" height="25" rx="3" fill="#ffedd5" />
+
+                            <!-- Head -->
+                            <rect x="165" y="125" width="70" height="75" rx="35" fill="#ffedd5" />
+                            <path d="M165 150 C165 105, 235 105, 235 150 Z" fill="#1e1b4b" /> <!-- Hair Top -->
+                            <!-- Hair Front Bangs -->
+                            <path d="M165 145 Q200 125 235 145 Q200 135 165 145" fill="#1e1b4b" />
+
+                            <!-- Face details -->
+                            <circle cx="185" cy="160" r="2.5" fill="#1e293b" /> <!-- Eye L -->
+                            <circle cx="215" cy="160" r="2.5" fill="#1e293b" /> <!-- Eye R -->
+                            <path d="M196 176 Q200 180 204 176" stroke="#e11d48" stroke-width="2.5" stroke-linecap="round" fill="none"/> <!-- Smile -->
+
+                            <!-- Laptop on Lap -->
+                            <rect x="155" y="235" width="90" height="5" rx="2.5" fill="#cbd5e1" />
+                            <rect x="165" y="190" width="70" height="45" rx="4" fill="#64748B" />
+                            <rect x="169" y="194" width="62" height="37" rx="2" fill="#0f172a" />
+                            <!-- Sparkles of code -->
+                            <rect x="175" y="200" width="20" height="3" rx="1.5" fill="#a78bfa" />
+                            <rect x="175" y="206" width="30" height="3" rx="1.5" fill="#818cf8" />
+                            <rect x="175" y="212" width="15" height="3" rx="1.5" fill="#34d399" />
+                            <rect x="175" y="218" width="25" height="3" rx="1.5" fill="#f43f5e" />
+
+                            <!-- Hands holding laptop -->
+                            <circle cx="152" cy="237" r="7" fill="#ffedd5" />
+                            <circle cx="248" cy="237" r="7" fill="#ffedd5" />
+
+                            <!-- Gradients -->
+                            <defs>
+                                <radialGradient id="career_bg_glow" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#ddd6fe" stop-opacity="0.8" />
+                                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+                                </radialGradient>
+                            </defs>
+                        </svg>
+
+                        <div class="d-flex align-items-center justify-content-between p-3 rounded bg-white border border-light">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="p-2.5 rounded-circle bg-success text-white"><i class="bi bi-check-lg animate-pulse"></i></div>
+                                <div class="text-start">
+                                    <span class="fw-bold text-dark d-block" style="font-size: 0.95rem;">Resume Verified</span>
+                                    <span class="text-muted small">Checked against 12 formatting rules</span>
+                                </div>
+                            </div>
+                            <span class="fw-bold text-success" style="font-size: 0.95rem;">100% Secure</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- STATISTICS SECTION -->
+    <section class="container">
+        <div class="stats-section">
+            <div class="stats-bg-pattern"></div>
+            <div class="container position-relative z-2">
+                <div class="row g-4 justify-content-center text-center">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="stat-number">5L+</div>
+                        <div class="stat-label">Active Candidates</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="stat-number">50K+</div>
+                        <div class="stat-label">Monthly Matches</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="stat-number">10M+</div>
+                        <div class="stat-label">Total Resumes</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="stat-number">98%</div>
+                        <div class="stat-label">AI Precision</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BOTTOM CTA -->
+    <section class="container mb-5 pb-5">
+        <div class="cta-section-candidate">
+            <div class="stats-bg-pattern"></div>
+            <div class="position-relative z-2">
+                <h2 class="fw-bold mb-3" style="font-family: var(--title-font); font-size: 2.5rem;">Ready to Build Your Future?</h2>
+                <p class="mb-5 mx-auto" style="max-width: 600px; font-size: 1.1rem; opacity: 0.9;">Create your TalentVault profile today and let AI connect you with companies actively hiring professionals like you.</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'candidate_signup' %}" class="btn-light-custom">Create Free Profile</a>
+                    <a href="{% url 'frontend:jobs' %}" class="btn-outline-light-custom">Browse Jobs</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer-custom">
+        <div class="container">
+            <div class="row g-5 mb-5 text-start">
+                <div class="col-lg-4">
+                    <a class="footer-brand" href="/">
+                        <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 42px; width: auto; object-fit: contain;">
+                    </a>
+                    <p class="mb-4 text-secondary">Connecting Exceptional Talent With Exceptional Companies.</p>
+                    <div class="d-flex gap-3">
+                        <a href="#" class="social-btn"><i class="bi bi-twitter-x"></i></a>
+                        <a href="#" class="social-btn"><i class="bi bi-linkedin"></i></a>
+                        <a href="#" class="social-btn"><i class="bi bi-github"></i></a>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-2 offset-lg-1">
+                    <h6 class="text-white fw-bold mb-4">Product</h6>
+                    <a href="{% url 'frontend:jobs' %}" class="footer-link">Jobs Search</a>
+                    <a href="{% url 'frontend:resume_parser' %}" class="footer-link">Resume Parser</a>
+                    <a href="{% url 'frontend:ats_pipeline' %}" class="footer-link">ATS Pipeline</a>
+                    <a href="{% url 'frontend:analytics' %}" class="footer-link">Analytics Dashboard</a>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-2">
+                    <h6 class="text-white fw-bold mb-4">Resources</h6>
+                    <a href="#" class="footer-link">Documentation</a>
+                    <a href="#" class="footer-link">Help Center</a>
+                    <a href="#" class="footer-link">Integrations</a>
+                    <a href="#" class="footer-link">System Status</a>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-3">
+                    <h6 class="text-white fw-bold mb-4">Subscribe to our newsletter</h6>
+                    <p class="small text-secondary mb-4">Get the latest jobs updates and ATS platform news directly to your inbox.</p>
+                    <div class="input-group">
+                        <input type="email" class="form-control bg-dark border-0 text-white" placeholder="Email address">
+                        <button class="btn btn-purple" type="button"><i class="bi bi-send"></i></button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-top border-secondary pt-4 border-opacity-10 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <span class="small">&copy; 2026 TalentVault Technologies. All rights reserved.</span>
+                <div class="d-flex gap-4 small">
+                    <a href="#" class="text-decoration-none text-secondary hover-white">Privacy Policy</a>
+                    <a href="#" class="text-decoration-none text-secondary hover-white">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Script -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Sticky Header scroll styling
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar-custom');
+            if (window.scrollY > 20) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+    </script>
+</body>
+</html>

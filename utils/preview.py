@@ -153,9 +153,31 @@ def generate_resume_preview_response(candidate):
     if not candidate.resume:
         return HttpResponse(get_error_html_wrapper("No resume file associated with this profile."), status=404)
 
-    file_path = candidate.resume.path
-    if not os.path.exists(file_path):
-        return HttpResponse(get_error_html_wrapper("Resume file was not found on disk."), status=404)
+    if not candidate.resume.storage.exists(candidate.resume.name):
+        return HttpResponse(get_error_html_wrapper("Resume file was not found in storage."), status=404)
+
+    import tempfile
+    import os
+    
+    file_path = None
+    is_temp = False
+    
+    try:
+        file_path = candidate.resume.path
+    except NotImplementedError:
+        # S3 storage or other non-local storage
+        ext = os.path.splitext(candidate.resume.name)[1]
+        try:
+            candidate.resume.open("rb")
+            file_content = candidate.resume.read()
+            temp_file = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+            temp_file.write(file_content)
+            temp_file.close()
+            file_path = temp_file.name
+            is_temp = True
+        except Exception as temp_err:
+            logger.error(f"Failed to create temporary file for preview: {temp_err}", exc_info=True)
+            return HttpResponse(get_error_html_wrapper("Failed to retrieve resume from cloud storage."), status=500)
 
     filename = candidate.original_filename or os.path.basename(candidate.resume.name) or "resume"
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
@@ -294,3 +316,9 @@ def generate_resume_preview_response(candidate):
     except Exception as e:
         logger.error(f"Error generating preview for candidate {candidate.id}: {e}", exc_info=True)
         return HttpResponse(get_fallback_html(), content_type='text/html')
+    finally:
+        if is_temp and file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass

@@ -23,15 +23,36 @@ router.register(r'candidates/education', EducationViewSet, basename='candidate-e
 router.register(r'applications', ApplicationViewSet, basename='application')
 router.register(r'interviews', InterviewViewSet, basename='interview')
 
-from apps.accounts.views import CustomLoginView, CustomLogoutView, SignupView
+from apps.accounts.views import (
+    CustomLoginView, 
+    CustomLogoutView, 
+    SignupView,
+    CandidateLoginView,
+    CandidateSignupView,
+    EmployerLoginView,
+    EmployerSignupView,
+    AdminLoginView
+)
 
 urlpatterns = [
     # Frontend Dashboard UI
     path('', include('apps.core.urls', namespace='frontend')),
     path("clients/", include(("apps.clients.urls", "clients"), namespace="clients")),
-    path('accounts/login/', CustomLoginView.as_view(), name='account_login'),
+    
+    # Candidate Auth
+    path('accounts/login/', CandidateLoginView.as_view(), name='account_login'),
+    path('accounts/signup/', CandidateSignupView.as_view(), name='account_signup'),
+    path('accounts/login/candidate/', CandidateLoginView.as_view(), name='candidate_login'),
+    path('accounts/signup/candidate/', CandidateSignupView.as_view(), name='candidate_signup'),
+    
+    # Employer Auth
+    path('accounts/login/employer/', EmployerLoginView.as_view(), name='employer_login'),
+    path('accounts/signup/employer/', EmployerSignupView.as_view(), name='employer_signup'),
+    
+    # Admin Auth
+    path('accounts/login/admin/', AdminLoginView.as_view(), name='admin_login'),
+    
     path('accounts/logout/', CustomLogoutView.as_view(), name='account_logout'),
-    path('accounts/signup/', SignupView.as_view(), name='account_signup'),
 
     path('admin/', admin.site.urls),
     

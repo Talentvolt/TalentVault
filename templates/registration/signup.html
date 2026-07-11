@@ -4,198 +4,400 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up | TalentVault</title>
+    <title>Create Your Account | TalentVault</title>
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
+    
+    <!-- Bootstrap & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --background: #fafafa;
+            --primary-purple: #7c3aed;
+            --primary-purple-hover: #6d28d9;
+            --accent-indigo: #4f46e5;
             --text-dark: #0f172a;
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(226, 232, 240, 0.8);
-            --card-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.05);
+            --text-muted: #64748b;
+            --border-light: #e2e8f0;
+            --font-family: 'Plus Jakarta Sans', sans-serif;
         }
 
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--background);
-            color: var(--text-dark);
-            margin: 0;
+            font-family: var(--font-family);
+            background-color: #f8fafc;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(79, 70, 229, 0.03) 0%, transparent 40%);
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            position: relative;
-            padding: 2rem 0;
+            padding: 60px 20px;
         }
 
-        body::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
-            background-size: 24px 24px;
-            opacity: 0.4;
-            z-index: 1;
-        }
-
-        .signup-container {
+        .auth-card {
+            background: #ffffff;
+            border: 1px solid rgba(124, 58, 237, 0.08);
+            border-radius: 22px;
+            box-shadow: 0 20px 40px -15px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
             width: 100%;
-            max-width: 480px;
-            z-index: 2;
-            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 560px;
+            padding: 48px;
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(24px); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            box-shadow: var(--card-shadow);
-            padding: 3rem 2.5rem;
-            transition: all 0.3s ease;
+        .logo-wrapper {
+            margin-bottom: 24px;
         }
 
+        .auth-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .auth-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
+
+        /* --- INPUT FIELDS --- */
         .form-label {
             font-weight: 600;
-            font-size: 0.85rem;
-            color: #475569;
-            margin-bottom: 0.5rem;
+            font-size: 0.88rem;
+            color: var(--text-dark);
+            margin-bottom: 8px;
         }
 
-        .form-control-custom, .form-select-custom {
-            background-color: #ffffff;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 0.75rem 1rem;
+        .form-control-custom {
+            height: 54px;
+            border-radius: 14px;
+            border: 1.5px solid var(--border-light);
+            padding: 0 18px;
             font-size: 0.95rem;
-            color: #0f172a;
+            color: var(--text-dark);
+            background-color: #ffffff;
             width: 100%;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             outline: none;
         }
 
-        .form-control-custom:focus, .form-select-custom:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        .form-control-custom:focus {
+            border-color: var(--primary-purple);
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
         }
 
-        .btn-signup {
-            background-color: var(--primary);
-            color: #ffffff;
+        /* --- RADIO CARDS --- */
+        .radio-card-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .radio-card-wrapper {
+            position: relative;
+        }
+
+        .radio-card-input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .radio-card-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 54px;
+            border: 1.5px solid var(--border-light);
+            border-radius: 14px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.25s ease;
+            user-select: none;
+        }
+
+        .radio-card-input:checked + .radio-card-label {
+            border-color: var(--primary-purple);
+            background: rgba(124, 58, 237, 0.04);
+            color: var(--primary-purple);
+            box-shadow: 0 0 0 1px var(--primary-purple);
+        }
+
+        /* --- BUTTONS --- */
+        .btn-purple-gradient {
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
+            color: white;
+            font-weight: 600;
+            height: 54px;
+            border-radius: 14px;
             border: none;
-            border-radius: 12px;
+            width: 100%;
+            box-shadow: 0 8px 20px -4px rgba(124, 58, 237, 0.25);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-purple-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px -4px rgba(124, 58, 237, 0.4);
+            opacity: 0.95;
+            color: white;
+        }
+
+        .btn-outline-custom {
+            height: 54px;
+            border-radius: 14px;
+            border: 1.5px solid var(--border-light);
+            background: #ffffff;
+            color: var(--text-dark);
             font-weight: 600;
             font-size: 0.95rem;
-            padding: 0.8rem 1.5rem;
             width: 100%;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: all 0.25s ease;
+            text-decoration: none;
         }
 
-        .btn-signup:hover {
-            background-color: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+        .btn-outline-custom:hover {
+            background: #f8fafc;
+            border-color: var(--text-muted);
+            transform: translateY(-1px);
+            color: var(--text-dark);
         }
 
+        /* --- DIVIDER --- */
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: var(--text-muted);
+            margin: 28px 0;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .auth-divider::before, .auth-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1.5px solid #f1f5f9;
+        }
+
+        .auth-divider:not(:empty)::before {
+            margin-right: 16px;
+        }
+
+        .auth-divider:not(:empty)::after {
+            margin-left: 16px;
+        }
+
+        /* --- ERRORS --- */
         .alert-error {
             background-color: #fef2f2;
             border: 1px solid #fee2e2;
-            border-radius: 12px;
+            border-radius: 14px;
             color: #b91c1c;
-            font-size: 0.85rem;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1.5rem;
+            font-size: 0.88rem;
+            padding: 12px 16px;
+            margin-bottom: 24px;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 10px;
+        }
+
+        /* --- MOBILE --- */
+        @media (max-width: 576px) {
+            .auth-card {
+                padding: 32px 24px;
+                border-radius: 18px;
+            }
+            .radio-card-group {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .auth-title {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="signup-container">
-        <div class="glass-card">
-            <div class="text-center mb-4">
-                <div class="d-inline-flex p-3 rounded-4 bg-primary bg-opacity-10 text-primary mb-3">
-                    <i class="bi bi-person-plus-fill fs-3"></i>
-                </div>
-                <h3 class="fw-bold">Create Account</h3>
-                <p class="text-secondary small">Join TalentVault today and start scaling your hiring cockpit</p>
-            </div>
 
-            {% if form.errors or form.non_field_errors %}
-            <div class="alert-error">
-                <i class="bi bi-exclamation-circle-fill"></i>
-                <span>
-                    {% if form.non_field_errors %}
-                        {{ form.non_field_errors.0 }}
-                    {% else %}
-                        Please correct the errors below.
-                    {% endif %}
-                </span>
-            </div>
-            {% endif %}
-
-            <form method="post" action="{% url 'account_signup' %}">
-                {% csrf_token %}
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="id_first_name" class="form-label">First Name</label>
-                        <input type="text" name="first_name" id="id_first_name" required class="form-control-custom" placeholder="John" value="{{ form.first_name.value|default:'' }}">
-                        {% if form.first_name.errors %}<div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>{% endif %}
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="id_last_name" class="form-label">Last Name</label>
-                        <input type="text" name="last_name" id="id_last_name" required class="form-control-custom" placeholder="Doe" value="{{ form.last_name.value|default:'' }}">
-                        {% if form.last_name.errors %}<div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>{% endif %}
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label for="id_email" class="form-label">Email Address</label>
-                    <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="name@company.com" value="{{ form.email.value|default:'' }}">
-                    {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
-                </div>
-
-                <div class="mb-3">
-                    <label for="id_role" class="form-label">User Role</label>
-                    <select name="role" id="id_role" class="form-select form-control-custom">
-                        <option value="RECRUITER" selected>Recruiter</option>
-                        <option value="COMPANY_ADMIN">Company Admin</option>
-                        <option value="CANDIDATE">Candidate</option>
-                    </select>
-                    {% if form.role.errors %}<div class="text-danger small mt-1">{{ form.role.errors.0 }}</div>{% endif %}
-                </div>
-
-                <div class="mb-4">
-                    <label for="id_password" class="form-label">Password</label>
-                    <input type="password" name="password" id="id_password" required class="form-control-custom" placeholder="••••••••">
-                    {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>{% endif %}
-                </div>
-
-                <button type="submit" class="btn btn-signup">
-                    Sign Up
-                </button>
-            </form>
-
-            <p class="text-secondary small text-center mt-4 mb-0">
-                Already have an account? <a href="{% url 'account_login' %}" class="text-primary text-decoration-none fw-medium">Sign In</a>
-            </p>
+    <div class="auth-card">
+        <!-- Logo -->
+        <div class="logo-wrapper d-flex justify-content-center">
+            <a href="/">
+                <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 45px; width: auto; object-fit: contain;">
+            </a>
         </div>
+
+        <div class="text-center">
+            <h3 class="auth-title">Create your account</h3>
+            <p class="auth-subtitle">Start your career journey with TalentVault AI.</p>
+        </div>
+
+        {% if form.errors or form.non_field_errors %}
+        <div class="alert-error">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            <span>
+                {% if form.non_field_errors %}
+                    {{ form.non_field_errors.0 }}
+                {% elif form.errors %}
+                    {% for field, errors in form.errors.items %}
+                        {{ errors.0 }}
+                    {% endfor %}
+                {% else %}
+                    Please correct the errors below.
+                {% endif %}
+            </span>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'account_signup' %}" id="signup-form">
+            {% csrf_token %}
+
+            <!-- Hidden Fields for Django Form split -->
+            <input type="hidden" name="first_name" id="first_name_hidden">
+            <input type="hidden" name="last_name" id="last_name_hidden">
+            <!-- Default candidate role -->
+            <input type="hidden" name="role" value="CANDIDATE">
+
+            <!-- Full Name -->
+            <div class="mb-4">
+                <label for="full_name" class="form-label">Full Name</label>
+                <input type="text" id="full_name" required class="form-control-custom" placeholder="e.g. John Doe">
+            </div>
+
+            <!-- Email Address -->
+            <div class="mb-4">
+                <label for="id_email" class="form-label">Email Address</label>
+                <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="e.g. john@example.com" value="{{ form.email.value|default:'' }}">
+            </div>
+
+            <!-- Mobile Number -->
+            <div class="mb-4">
+                <label for="id_phone_number" class="form-label">Mobile Number</label>
+                <input type="text" name="phone_number" id="id_phone_number" class="form-control-custom" placeholder="e.g. +91 98765 43210" value="{{ form.phone_number.value|default:'' }}">
+            </div>
+
+            <!-- Password -->
+            <div class="mb-4">
+                <label for="password_input" class="form-label">Password</label>
+                <input type="password" name="password" id="password_input" required class="form-control-custom" placeholder="••••••••">
+            </div>
+
+            <!-- Confirm Password -->
+            <div class="mb-4">
+                <label for="confirm_password_input" class="form-label">Confirm Password</label>
+                <input type="password" id="confirm_password_input" required class="form-control-custom" placeholder="••••••••">
+            </div>
+
+            <!-- Experience Radio Cards -->
+            <div class="mb-4">
+                <label class="form-label d-block">Experience</label>
+                <div class="radio-card-group">
+                    <div class="radio-card-wrapper">
+                        <input type="radio" name="experience" id="exp_fresher" value="fresher" class="radio-card-input" checked>
+                        <label for="exp_fresher" class="radio-card-label">
+                            I'm a Fresher
+                        </label>
+                    </div>
+                    <div class="radio-card-wrapper">
+                        <input type="radio" name="experience" id="exp_experienced" value="experienced" class="radio-card-input">
+                        <label for="exp_experienced" class="radio-card-label">
+                            Experienced Professional
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Location -->
+            <div class="mb-4">
+                <label for="id_location" class="form-label">Current Location</label>
+                <input type="text" name="location" id="id_location" class="form-control-custom" placeholder="e.g. Bangalore, India" value="{{ form.location.value|default:'' }}">
+            </div>
+
+            <!-- Terms Checkbox -->
+            <div class="mb-4 d-flex align-items-start gap-2">
+                <input type="checkbox" id="terms" required class="form-check-input mt-1" style="cursor: pointer;">
+                <label for="terms" class="small text-muted" style="cursor: pointer; user-select: none;">
+                    I agree to the Terms of Service and Privacy Policy.
+                </label>
+            </div>
+
+            <!-- Primary Button -->
+            <button type="submit" class="btn-purple-gradient mb-3">
+                Create Account
+            </button>
+        </form>
+
+        <div class="auth-divider">OR</div>
+
+        <!-- Social Login -->
+        <div class="d-flex flex-column gap-3 mb-4">
+            <a href="#" class="btn-outline-custom">
+                <i class="bi bi-google text-danger"></i> Continue with Google
+            </a>
+            <a href="#" class="btn-outline-custom">
+                <i class="bi bi-linkedin text-primary"></i> Continue with LinkedIn
+            </a>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-muted small mb-0">
+            Already have an account? <a href="{% url 'candidate_login' %}" class="text-primary text-decoration-none fw-semibold">Sign In</a>
+        </p>
     </div>
+
+    <script>
+        document.getElementById('signup-form').addEventListener('submit', function(e) {
+            const fullNameVal = document.getElementById('full_name').value.trim();
+            const spaceIndex = fullNameVal.indexOf(' ');
+            let firstName = '';
+            let lastName = '';
+            
+            if (spaceIndex === -1) {
+                firstName = fullNameVal;
+                lastName = '.';
+            } else {
+                firstName = fullNameVal.substring(0, spaceIndex);
+                lastName = fullNameVal.substring(spaceIndex + 1).trim();
+            }
+            
+            document.getElementById('first_name_hidden').value = firstName;
+            document.getElementById('last_name_hidden').value = lastName;
+
+            const passwordVal = document.getElementById('password_input').value;
+            const confirmPasswordVal = document.getElementById('confirm_password_input').value;
+            if (passwordVal !== confirmPasswordVal) {
+                e.preventDefault();
+                alert("Passwords do not match!");
+            }
+        });
+    </script>
 </body>
 </html>
