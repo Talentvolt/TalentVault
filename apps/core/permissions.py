@@ -22,7 +22,7 @@ class SuperAdminRequiredMixin(RoleRequiredMixin):
     allowed_roles = [User.Role.SUPER_ADMIN]
 
 class RecruiterRequiredMixin(RoleRequiredMixin):
-    allowed_roles = [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]
+    allowed_roles = [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]
 
 class CandidateRequiredMixin(RoleRequiredMixin):
     allowed_roles = [User.Role.CANDIDATE]

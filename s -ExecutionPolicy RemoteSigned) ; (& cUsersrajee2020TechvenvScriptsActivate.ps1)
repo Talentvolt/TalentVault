@@ -1,0 +1,72 @@
+[1mdiff --git a/apps/core/views.py b/apps/core/views.py[m
+[1mindex 42192ce..0bf056e 100644[m
+[1m--- a/apps/core/views.py[m
+[1m+++ b/apps/core/views.py[m
+[36m@@ -933,7 +933,7 @@[m [mclass CandidateDetailView(LoginRequiredMixin, DetailView):[m
+         file_physically_exists = False[m
+         if self.object.resume:[m
+             try:[m
+[31m-                if self.object.resume.name and os.path.exists(self.object.resume.path):[m
+[32m+[m[32m                if self.object.resume.name and self.object.resume.storage.exists(self.object.resume.name):[m
+                     file_physically_exists = True[m
+             except (ValueError, AssertionError):[m
+                 pass[m
+[36m@@ -1083,7 +1083,7 @@[m [mclass PublicCandidateProfileView(DetailView):[m
+         file_physically_exists = False[m
+         if self.object.resume:[m
+             try:[m
+[31m-                if self.object.resume.name and os.path.exists(self.object.resume.path):[m
+[32m+[m[32m                if self.object.resume.name and self.object.resume.storage.exists(self.object.resume.name):[m
+                     file_physically_exists = True[m
+             except (ValueError, AssertionError):[m
+                 pass[m
+[36m@@ -2736,13 +2736,12 @@[m [mclass CandidateResumeDownloadView(LoginRequiredMixin, View):[m
+             return HttpResponse("No resume file found.", status=404)[m
+             [m
+         try:[m
+[31m-            file_path = candidate.resume.path[m
+[31m-            if os.path.exists(file_path):[m
+[32m+[m[32m            if candidate.resume and candidate.resume.storage.exists(candidate.resume.name):[m
+                 # Retrieve the original sanitized filename instead of the secure internal uuid name[m
+[31m-                filename = candidate.original_filename or os.path.basename(file_path)[m
+[31m-                f = open(file_path, 'rb')[m
+[32m+[m[32m                filename = candidate.original_filename or os.path.basename(candidate.resume.name)[m
+[32m+[m[32m                f = candidate.resume.open('rb')[m
+                 import mimetypes[m
+[31m-                content_type, _ = mimetypes.guess_type(file_path)[m
+[32m+[m[32m                content_type, _ = mimetypes.guess_type(candidate.resume.name)[m
+                 if not content_type:[m
+                     content_type = 'application/octet-stream'[m
+                 response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)[m
+[36m@@ -2750,7 +2749,7 @@[m [mclass CandidateResumeDownloadView(LoginRequiredMixin, View):[m
+         except Exception as e:[m
+             return HttpResponse(f"Error downloading resume: {str(e)}", status=500)[m
+             [m
+[31m-        return HttpResponse("No resume file found on disk.", status=404)[m
+[32m+[m[32m        return HttpResponse("No resume file found.", status=404)[m
+ [m
+ [m
+ @method_decorator(xframe_options_sameorigin, name='dispatch')[m
+[36m@@ -2780,12 +2779,11 @@[m [mclass PublicCandidateResumeDownloadView(View):[m
+             return HttpResponse("No resume file found.", status=404)[m
+             [m
+         try:[m
+[31m-            file_path = candidate.resume.path[m
+[31m-            if os.path.exists(file_path):[m
+[31m-                filename = candidate.original_filename or os.path.basename(file_path)[m
+[31m-                f = open(file_path, 'rb')[m
+[32m+[m[32m            if candidate.resume and candidate.resume.storage.exists(candidate.resume.name):[m
+[32m+[m[32m                filename = candidate.original_filename or os.path.basename(candidate.resume.name)[m
+[32m+[m[32m                f = candidate.resume.open('rb')[m
+                 import mimetypes[m
+[31m-                content_type, _ = mimetypes.guess_type(file_path)[m
+[32m+[m[32m                content_type, _ = mimetypes.guess_type(candidate.resume.name)[m
+                 if not content_type:[m
+                     content_type = 'application/octet-stream'[m
+                 response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)[m
+[36m@@ -2793,4 +2791,4 @@[m [mclass PublicCandidateResumeDownloadView(View):[m
+         except Exception as e:[m
+             return HttpResponse(f"Error downloading resume: {str(e)}", status=500)[m
+             [m
+[31m-        return HttpResponse("No resume file found on disk.", status=404)[m
+[32m+[m[32m        return HttpResponse("No resume file found.", status=404)[m

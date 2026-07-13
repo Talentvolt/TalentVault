@@ -30,7 +30,7 @@ from services.candidate_matching_service import CandidateMatchingService
 
 from apps.core.models import Location
 
-class LocationSearchView(View):
+class LocationSearchView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         q = request.GET.get('q', '')
         locations = Location.objects.filter(
@@ -58,9 +58,21 @@ class DashboardView(TemplateView):
         context['recent_activity'] = Notification.objects.all()[:5]
         return context
 
-class RoleRedirectView(View):
+class LandingPageView(TemplateView):
+    template_name = 'landing.html'
+
+
+class EmployerLandingView(TemplateView):
+    template_name = 'landing_employer.html'
+
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class RoleRedirectView(LoginRequiredMixin, View):
     """
-    Redirect users to their respective dashboards based on their role, or show landing page if not logged in.
+    Redirect users to their respective dashboards based on their role.
+    This is used after login (LOGIN_REDIRECT_URL) to route to the correct dashboard.
     """
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
@@ -71,7 +83,7 @@ class RoleRedirectView(View):
                 return redirect('frontend:recruiter_dashboard')
             elif role == User.Role.CANDIDATE:
                 return redirect('frontend:candidate_dashboard')
-        return render(request, 'landing.html')
+        return redirect('frontend:dashboard')
 
 class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_dashboard.html'
@@ -222,7 +234,7 @@ class AdminDashboardView(SuperAdminRequiredMixin, TemplateView):
         context['total_recruiters'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN]).count()
         return context
 
-class JobActionView(View):
+class JobActionView(RecruiterRequiredMixin, View):
     def post(self, request, pk, action):
         job = get_object_or_404(Job, pk=pk)
         if action == 'publish':
@@ -255,45 +267,68 @@ class JobActionView(View):
 
 class JobsView(LoginRequiredMixin, ListView):
     model = Job
-    template_name = 'jobs.html'
     context_object_name = 'jobs'
     paginate_by = 10
 
+    def get_template_names(self):
+        if self.request.user.role == 'CANDIDATE':
+            return ['candidate_jobs.html']
+        return ['jobs.html']
+
     def get_queryset(self):
-        queryset = Job.objects.annotate(
-            app_count=Count('applications'),
-            interview_count=Count('applications__interviews')
-        )
-        
-        # Search
-        q = self.request.GET.get('q', '')
-        if q:
-            queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q))
+        if self.request.user.role == 'CANDIDATE':
+            queryset = Job.objects.filter(status='ACTIVE')
             
-        # Filters
-        status = self.request.GET.get('status', '')
-        if status:
-            queryset = queryset.filter(status=status)
+            # Search
+            q = self.request.GET.get('q', '')
+            if q:
+                queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(skills_required__icontains=q))
+                
+            # Filters
+            location = self.request.GET.get('location', '')
+            if location:
+                queryset = queryset.filter(location__icontains=location)
+                
+            job_type = self.request.GET.get('job_type', '')
+            if job_type:
+                queryset = queryset.filter(job_type=job_type)
+                
+            return queryset
         else:
-            queryset = queryset.exclude(status='CLOSED')
+            queryset = Job.objects.annotate(
+                app_count=Count('applications'),
+                interview_count=Count('applications__interviews')
+            )
             
-        job_type = self.request.GET.get('job_type', '')
-        if job_type:
-            queryset = queryset.filter(job_type=job_type)
-            
-        # Client filter
-        client_id = self.request.GET.get('client', '')
-        if client_id:
-            queryset = queryset.filter(client_id=client_id)
-            
-        # Sorting
-        sort_by = self.request.GET.get('sort_by', '-created_at')
-        if sort_by in ['title', '-title', 'created_at', '-created_at', 'app_count', '-app_count']:
-            queryset = queryset.order_by(sort_by)
-        else:
-            queryset = queryset.order_by('-created_at')
-            
-        return queryset
+            # Search
+            q = self.request.GET.get('q', '')
+            if q:
+                queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q))
+                
+            # Filters
+            status = self.request.GET.get('status', '')
+            if status:
+                queryset = queryset.filter(status=status)
+            else:
+                queryset = queryset.exclude(status='CLOSED')
+                
+            job_type = self.request.GET.get('job_type', '')
+            if job_type:
+                queryset = queryset.filter(job_type=job_type)
+                
+            # Client filter
+            client_id = self.request.GET.get('client', '')
+            if client_id:
+                queryset = queryset.filter(client_id=client_id)
+                
+            # Sorting
+            sort_by = self.request.GET.get('sort_by', '-created_at')
+            if sort_by in ['title', '-title', 'created_at', '-created_at', 'app_count', '-app_count']:
+                queryset = queryset.order_by(sort_by)
+            else:
+                queryset = queryset.order_by('-created_at')
+                
+            return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -333,7 +368,7 @@ class JobsView(LoginRequiredMixin, ListView):
 
 from apps.jobs.models import Job, JobSkill
 
-class JobCreateView(LoginRequiredMixin, CreateView):
+class JobCreateView(RecruiterRequiredMixin, CreateView):
     model = Job
     form_class = JobForm
     template_name = 'job_create.html'
@@ -375,7 +410,7 @@ class JobCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, f"Job '{self.object.title}' created successfully!")
         return response
 
-class JobUpdateView(LoginRequiredMixin, UpdateView):
+class JobUpdateView(RecruiterRequiredMixin, UpdateView):
     model = Job
     form_class = JobForm
     template_name = 'job_create.html'
@@ -419,7 +454,7 @@ class JobUpdateView(LoginRequiredMixin, UpdateView):
         
         return response
 
-class JobDeleteView(LoginRequiredMixin, DeleteView):
+class JobDeleteView(RecruiterRequiredMixin, DeleteView):
     model = Job
     success_url = reverse_lazy('frontend:jobs')
     template_name = 'job_confirm_delete.html'
@@ -429,7 +464,7 @@ class JobDeleteView(LoginRequiredMixin, DeleteView):
         return super().form_valid(form)
 
 
-class CandidateSearchView(LoginRequiredMixin, ListView):
+class CandidateSearchView(RecruiterRequiredMixin, ListView):
     model = CandidateProfile
     template_name = 'candidate_search.html'
     context_object_name = 'candidates'
@@ -569,7 +604,7 @@ class CandidateSearchView(LoginRequiredMixin, ListView):
         return context
 
 
-class JobCandidatesView(LoginRequiredMixin, ListView):
+class JobCandidatesView(RecruiterRequiredMixin, ListView):
     model = Application
     template_name = 'job_candidates.html'
     context_object_name = 'applications'
@@ -661,7 +696,7 @@ class JobCandidatesView(LoginRequiredMixin, ListView):
         return context
 
 
-class SaveCandidateNotesView(LoginRequiredMixin, View):
+class SaveCandidateNotesView(RecruiterRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         profile = get_object_or_404(CandidateProfile, pk=pk)
         notes = request.POST.get('notes', '').strip()
@@ -710,7 +745,7 @@ class CandidateProfileWrapper:
     def __str__(self):
         return str(self._original)
 
-class CandidateDetailView(LoginRequiredMixin, DetailView):
+class CandidateDetailView(RecruiterRequiredMixin, DetailView):
     model = CandidateProfile
     template_name = 'candidate_detail.html'
     context_object_name = 'candidate'
@@ -965,7 +1000,7 @@ class CandidateDetailView(LoginRequiredMixin, DetailView):
 
 from apps.candidates.forms import CandidateProfileForm
 
-class CandidateUpdateView(LoginRequiredMixin, UpdateView):
+class CandidateUpdateView(RecruiterRequiredMixin, UpdateView):
     model = CandidateProfile
     template_name = 'candidate_form.html'
     form_class = CandidateProfileForm
@@ -980,7 +1015,7 @@ class CandidateUpdateView(LoginRequiredMixin, UpdateView):
         CandidateMatchingService.update_ats_scores(candidate_id=self.object.id)
         return response
 
-class CandidateDeleteView(LoginRequiredMixin, View):
+class CandidateDeleteView(RecruiterRequiredMixin, View):
     def post(self, request, id, *args, **kwargs):
         try:
             with transaction.atomic():
@@ -998,7 +1033,7 @@ class CandidateDeleteView(LoginRequiredMixin, View):
             messages.error(request, "An unexpected error occurred while deleting the candidate.")
         return redirect('frontend:candidate_search')
 
-class CandidateRejectView(LoginRequiredMixin, View):
+class CandidateRejectView(RecruiterRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         candidate = get_object_or_404(CandidateProfile, pk=pk)
         job_id = request.POST.get('job_id') or request.GET.get('job_id')
@@ -1037,7 +1072,7 @@ class CandidateRejectView(LoginRequiredMixin, View):
             return redirect(next_url)
         return redirect('frontend:candidate_detail', pk=pk)
 
-class UpdateApplicationStageDirectView(LoginRequiredMixin, View):
+class UpdateApplicationStageDirectView(RecruiterRequiredMixin, View):
     def post(self, request, app_id, *args, **kwargs):
         application = get_object_or_404(Application, id=app_id)
         old_stage = application.stage
@@ -1221,7 +1256,7 @@ class RemoveFromPipelineView(RecruiterRequiredMixin, View):
 
 import json
 
-class UpdateApplicationStageView(LoginRequiredMixin, View):
+class UpdateApplicationStageView(RecruiterRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         try:
             data = json.loads(request.body)
@@ -1269,7 +1304,7 @@ class UpdateApplicationStageView(LoginRequiredMixin, View):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
-class CompleteTaskView(LoginRequiredMixin, View):
+class CompleteTaskView(RecruiterRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         task_type = request.POST.get('task_type')
         object_id = request.POST.get('object_id')
@@ -1287,7 +1322,7 @@ class CompleteTaskView(LoginRequiredMixin, View):
             
         return redirect('frontend:recruiter_dashboard')
 
-class ATSPipelineView(LoginRequiredMixin, TemplateView):
+class ATSPipelineView(RecruiterRequiredMixin, TemplateView):
     template_name = 'ats_pipeline.html'
 
     def get_context_data(self, **kwargs):
@@ -1382,7 +1417,10 @@ class InterviewsView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        if self.request.user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+        if self.request.user.role == 'CANDIDATE':
+            context['base_template'] = 'layouts/candidate_base.html'
+        else:
+            context['base_template'] = 'layouts/recruiter_base.html'
             context['applications'] = Application.objects.select_related('candidate__user', 'job').all()
             context['recruiters'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN])
         return context
@@ -1442,7 +1480,7 @@ class InterviewsView(LoginRequiredMixin, ListView):
             
         return redirect('frontend:interviews')
 
-class InterviewCalendarEventsView(LoginRequiredMixin, View):
+class InterviewCalendarEventsView(RecruiterRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         events = []
         interviews = Interview.objects.select_related('application__candidate__user', 'application__job').all()
@@ -1510,7 +1548,7 @@ class ExportInterviewsView(RecruiterRequiredMixin, View):
 
 from apps.candidates.models import CandidateSkill
 
-class AnalyticsView(LoginRequiredMixin, TemplateView):
+class AnalyticsView(RecruiterRequiredMixin, TemplateView):
     template_name = 'analytics.html'
     
     def get_context_data(self, **kwargs):
@@ -1536,7 +1574,10 @@ class AnalyticsView(LoginRequiredMixin, TemplateView):
         return context
 
 class SettingsView(LoginRequiredMixin, TemplateView):
-    template_name = 'settings.html'
+    def get_template_names(self):
+        if self.request.user.role == 'CANDIDATE':
+            return ['candidate_settings.html']
+        return ['settings.html']
 
 from apps.candidates.utils import handle_resume_upload
 from django.contrib import messages
@@ -2793,3 +2834,46 @@ class PublicCandidateResumeDownloadView(View):
             return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
             
         return HttpResponse("No resume file found.", status=404)
+
+
+# --- NEW CANDIDATE PORTAL VIEWS ---
+from apps.core.permissions import CandidateRequiredMixin
+
+class CandidateProfileView(CandidateRequiredMixin, TemplateView):
+    template_name = 'candidate_profile.html'
+
+
+class CandidateResumeUploadView(CandidateRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        if 'resume' not in request.FILES:
+            return JsonResponse({'success': False, 'message': 'No file uploaded.'}, status=400)
+        
+        uploaded_file = request.FILES['resume']
+        try:
+            results = handle_resume_upload(uploaded_file, overwrite=True, user=request.user)
+            if results['errors'] > 0:
+                return JsonResponse({'success': False, 'message': results['error_reasons'][0]}, status=400)
+            
+            profile = request.user.candidate_profile
+            from services.candidate_matching_service import CandidateMatchingService
+            CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
+            
+            return JsonResponse({
+                'success': True, 
+                'message': 'Resume uploaded and parsed successfully!',
+                'filename': profile.original_filename or uploaded_file.name
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+class CandidateCareerResourcesView(CandidateRequiredMixin, TemplateView):
+    template_name = 'career_resources.html'
+
+class CandidateSavedJobsView(CandidateRequiredMixin, TemplateView):
+    template_name = 'candidate_saved_jobs.html'
+
+class CandidateRecommendedJobsView(CandidateRequiredMixin, TemplateView):
+    template_name = 'candidate_recommended_jobs.html'
+
+class CandidateApplicationsView(CandidateRequiredMixin, TemplateView):
+    template_name = 'candidate_applications.html'

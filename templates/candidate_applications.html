@@ -1,0 +1,170 @@
+{% extends "layouts/candidate_base.html" %}
+{% load static %}
+
+{% block mobile_page_title %}Applications{% endblock %}
+
+{% block title %}My Applications — TalentVault AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .app-row-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1.25rem;
+        transition: all 0.25s ease;
+    }
+    .dark .app-row-card {
+        background: #0f172a;
+        border-color: #1e293b;
+    }
+    
+    .pipeline-step {
+        position: relative;
+    }
+    .pipeline-step::after {
+        content: '';
+        position: absolute;
+        height: 2px;
+        width: 100%;
+        background: #e2e8f0;
+        top: 10px;
+        left: 50%;
+        z-index: 0;
+    }
+    .dark .pipeline-step::after {
+        background: #1e293b;
+    }
+    .pipeline-step:last-child::after {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8 pb-16">
+    
+    <div>
+        <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">Applications Tracking</h2>
+        <p class="text-xs text-slate-500 mt-1">Real-time status tracking for your submitted applications.</p>
+    </div>
+
+    <div class="space-y-6">
+        
+        <!-- Application 1 -->
+        <div class="app-row-card p-6 flex flex-col gap-6">
+            
+            <!-- Company & Status Header -->
+            <div class="flex justify-between items-start gap-4 flex-wrap">
+                <div class="flex gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg font-black">S</div>
+                    <div>
+                        <h3 class="font-extrabold text-slate-950 dark:text-white text-sm">Lead Django Developer</h3>
+                        <p class="text-xs text-slate-450 font-semibold mt-0.5">Stripe Technologies • Bangalore</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs bg-brandGreen/10 text-brandGreen px-3 py-1 rounded-full font-bold">Interviewing</span>
+                    <span class="text-[10px] text-slate-400 font-bold block mt-1">Applied: July 8, 2026</span>
+                </div>
+            </div>
+
+            <!-- Pipeline Progress bar -->
+            <div class="grid grid-cols-4 gap-2 pt-4 border-t border-slate-50 dark:border-slate-800 text-center">
+                
+                <!-- Step 1 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-brandGreen text-white flex items-center justify-center text-[10px] z-10 relative">
+                        <i class="bi bi-check"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-900 dark:text-white mt-2">Applied</span>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-brandGreen text-white flex items-center justify-center text-[10px] z-10 relative">
+                        <i class="bi bi-check"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-900 dark:text-white mt-2">Reviewing</span>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] z-10 relative ring-4 ring-primary/20 animate-pulse">
+                        3
+                    </div>
+                    <span class="text-[10px] font-extrabold text-primary mt-2">Interviewing</span>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] z-10 relative">
+                        4
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-400 mt-2">Offered</span>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Application 2 -->
+        <div class="app-row-card p-6 flex flex-col gap-6">
+            
+            <!-- Company & Status Header -->
+            <div class="flex justify-between items-start gap-4 flex-wrap">
+                <div class="flex gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-lg font-black">V</div>
+                    <div>
+                        <h3 class="font-extrabold text-slate-950 dark:text-white text-sm">AI Product Engineer</h3>
+                        <p class="text-xs text-slate-450 font-semibold mt-0.5">Vercel • Hybrid</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs bg-slate-100 dark:bg-slate-850 text-slate-500 px-3 py-1 rounded-full font-bold">Reviewing</span>
+                    <span class="text-[10px] text-slate-400 font-bold block mt-1">Applied: July 12, 2026</span>
+                </div>
+            </div>
+
+            <!-- Pipeline Progress bar -->
+            <div class="grid grid-cols-4 gap-2 pt-4 border-t border-slate-50 dark:border-slate-800 text-center">
+                
+                <!-- Step 1 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-brandGreen text-white flex items-center justify-center text-[10px] z-10 relative">
+                        <i class="bi bi-check"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-900 dark:text-white mt-2">Applied</span>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] z-10 relative ring-4 ring-primary/20 animate-pulse">
+                        2
+                    </div>
+                    <span class="text-[10px] font-extrabold text-primary mt-2">Reviewing</span>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] z-10 relative">
+                        3
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-400 mt-2">Interviewing</span>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="pipeline-step flex flex-col items-center">
+                    <div class="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] z-10 relative">
+                        4
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-400 mt-2">Offered</span>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

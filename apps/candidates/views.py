@@ -70,3 +70,29 @@ class EducationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         profile = CandidateProfile.objects.get(user=self.request.user)
         serializer.save(profile=profile)
+
+from apps.candidates.models import Project, Certification
+from .serializers import ProjectSerializer, CertificationSerializer
+
+class ProjectViewSet(viewsets.ModelViewSet):
+    serializer_class = ProjectSerializer
+    permission_classes = [IsCandidate]
+
+    def get_queryset(self):
+        return Project.objects.filter(profile__user=self.request.user)
+
+    def perform_create(self, serializer):
+        profile = CandidateProfile.objects.get(user=self.request.user)
+        serializer.save(profile=profile)
+
+class CertificationViewSet(viewsets.ModelViewSet):
+    serializer_class = CertificationSerializer
+    permission_classes = [IsCandidate]
+
+    def get_queryset(self):
+        return Certification.objects.filter(profile__user=self.request.user)
+
+    def perform_create(self, serializer):
+        profile = CandidateProfile.objects.get(user=self.request.user)
+        serializer.save(profile=profile)
+

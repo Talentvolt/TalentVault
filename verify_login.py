@@ -14,7 +14,7 @@ def run_verification():
     client = Client()
 
     # 1. Test GET request on login page
-    login_url = reverse('account_login')
+    login_url = reverse('employer_login')
     print(f"GET login page: {login_url}")
     response = client.get(login_url)
     assert response.status_code == 200, f"Expected 200 on login page, got {response.status_code}"

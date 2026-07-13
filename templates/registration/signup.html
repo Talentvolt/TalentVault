@@ -1,403 +1,670 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Your Account | TalentVault</title>
+    <title>Join TalentVault AI — Elevate Your Career</title>
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
     
-    <!-- Bootstrap & Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Tailwind CSS & Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6D4AFF',
+                        accent: '#8B5CF6',
+                        brandBlue: '#2563EB',
+                        brandGreen: '#22C55E',
+                        bgSlate: '#F8FAFC',
+                        borderGray: '#E5E7EB',
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
 
     <style>
-        :root {
-            --primary-purple: #7c3aed;
-            --primary-purple-hover: #6d28d9;
-            --accent-indigo: #4f46e5;
-            --text-dark: #0f172a;
-            --text-muted: #64748b;
-            --border-light: #e2e8f0;
-            --font-family: 'Plus Jakarta Sans', sans-serif;
+        .animated-gradient {
+            background: linear-gradient(-45deg, #6d4aff, #8b5cf6, #3b82f6, #4f46e5);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
         }
 
-        body {
-            font-family: var(--font-family);
-            background-color: #f8fafc;
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.03) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(79, 70, 229, 0.03) 0%, transparent 40%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 20px;
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
 
-        .auth-card {
-            background: #ffffff;
-            border: 1px solid rgba(124, 58, 237, 0.08);
-            border-radius: 22px;
-            box-shadow: 0 20px 40px -15px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
-            width: 100%;
-            max-width: 560px;
-            padding: 48px;
-            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        /* Glassmorphism utility classes */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        .glass-card-light {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
 
-        .logo-wrapper {
-            margin-bottom: 24px;
+        /* Floating animations for the glass cards */
+        @keyframes float-1 {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+        }
+        @keyframes float-2 {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(-1.5deg); }
+        }
+        @keyframes float-3 {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(0.5deg); }
         }
 
-        .auth-title {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: var(--text-dark);
-            margin-bottom: 8px;
-            letter-spacing: -0.02em;
-        }
+        .float-delay-1 { animation: float-1 6s ease-in-out infinite; }
+        .float-delay-2 { animation: float-2 8s ease-in-out infinite; }
+        .float-delay-3 { animation: float-3 7s ease-in-out infinite; }
 
-        .auth-subtitle {
-            font-size: 0.95rem;
-            color: var(--text-muted);
-            margin-bottom: 32px;
+        /* Custom Input Focus Ring */
+        .premium-input:focus {
+            border-color: #6D4AFF;
+            box-shadow: 0 0 0 4px rgba(109, 74, 255, 0.12);
         }
-
-        /* --- INPUT FIELDS --- */
-        .form-label {
-            font-weight: 600;
-            font-size: 0.88rem;
-            color: var(--text-dark);
-            margin-bottom: 8px;
-        }
-
-        .form-control-custom {
-            height: 54px;
-            border-radius: 14px;
-            border: 1.5px solid var(--border-light);
-            padding: 0 18px;
-            font-size: 0.95rem;
-            color: var(--text-dark);
-            background-color: #ffffff;
-            width: 100%;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            outline: none;
-        }
-
-        .form-control-custom:focus {
-            border-color: var(--primary-purple);
-            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
-        }
-
-        /* --- RADIO CARDS --- */
-        .radio-card-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        .radio-card-wrapper {
+        
+        /* Shimmer loading for CTA and primary actions */
+        .shimmer-btn {
             position: relative;
+            overflow: hidden;
         }
-
-        .radio-card-input {
-            position: absolute;
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .radio-card-label {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 54px;
-            border: 1.5px solid var(--border-light);
-            border-radius: 14px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.25s ease;
-            user-select: none;
-        }
-
-        .radio-card-input:checked + .radio-card-label {
-            border-color: var(--primary-purple);
-            background: rgba(124, 58, 237, 0.04);
-            color: var(--primary-purple);
-            box-shadow: 0 0 0 1px var(--primary-purple);
-        }
-
-        /* --- BUTTONS --- */
-        .btn-purple-gradient {
-            background: linear-gradient(135deg, var(--primary-purple), var(--accent-indigo));
-            color: white;
-            font-weight: 600;
-            height: 54px;
-            border-radius: 14px;
-            border: none;
-            width: 100%;
-            box-shadow: 0 8px 20px -4px rgba(124, 58, 237, 0.25);
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            font-size: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-        }
-
-        .btn-purple-gradient:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 25px -4px rgba(124, 58, 237, 0.4);
-            opacity: 0.95;
-            color: white;
-        }
-
-        .btn-outline-custom {
-            height: 54px;
-            border-radius: 14px;
-            border: 1.5px solid var(--border-light);
-            background: #ffffff;
-            color: var(--text-dark);
-            font-weight: 600;
-            font-size: 0.95rem;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            transition: all 0.25s ease;
-            text-decoration: none;
-        }
-
-        .btn-outline-custom:hover {
-            background: #f8fafc;
-            border-color: var(--text-muted);
-            transform: translateY(-1px);
-            color: var(--text-dark);
-        }
-
-        /* --- DIVIDER --- */
-        .auth-divider {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            color: var(--text-muted);
-            margin: 28px 0;
-            font-size: 0.85rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
-
-        .auth-divider::before, .auth-divider::after {
+        .shimmer-btn::after {
             content: '';
-            flex: 1;
-            border-bottom: 1.5px solid #f1f5f9;
+            position: absolute;
+            top: -50%;
+            left: -60%;
+            width: 30%;
+            height: 200%;
+            background: rgba(255, 255, 255, 0.25);
+            transform: rotate(30deg);
+            transition: none;
+            animation: shimmer 4s infinite linear;
         }
-
-        .auth-divider:not(:empty)::before {
-            margin-right: 16px;
-        }
-
-        .auth-divider:not(:empty)::after {
-            margin-left: 16px;
-        }
-
-        /* --- ERRORS --- */
-        .alert-error {
-            background-color: #fef2f2;
-            border: 1px solid #fee2e2;
-            border-radius: 14px;
-            color: #b91c1c;
-            font-size: 0.88rem;
-            padding: 12px 16px;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* --- MOBILE --- */
-        @media (max-width: 576px) {
-            .auth-card {
-                padding: 32px 24px;
-                border-radius: 18px;
-            }
-            .radio-card-group {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-            .auth-title {
-                font-size: 1.5rem;
-            }
+        @keyframes shimmer {
+            0% { left: -60%; }
+            100% { left: 140%; }
         }
     </style>
 </head>
-<body>
+<body class="h-full bg-bgSlate font-sans text-slate-900 selection:bg-primary/20 selection:text-primary">
 
-    <div class="auth-card">
-        <!-- Logo -->
-        <div class="logo-wrapper d-flex justify-content-center">
-            <a href="/">
-                <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 45px; width: auto; object-fit: contain;">
-            </a>
-        </div>
-
-        <div class="text-center">
-            <h3 class="auth-title">Create your account</h3>
-            <p class="auth-subtitle">Start your career journey with TalentVault AI.</p>
-        </div>
-
-        {% if form.errors or form.non_field_errors %}
-        <div class="alert-error">
-            <i class="bi bi-exclamation-circle-fill"></i>
-            <span>
-                {% if form.non_field_errors %}
-                    {{ form.non_field_errors.0 }}
-                {% elif form.errors %}
-                    {% for field, errors in form.errors.items %}
-                        {{ errors.0 }}
-                    {% endfor %}
-                {% else %}
-                    Please correct the errors below.
-                {% endif %}
-            </span>
-        </div>
-        {% endif %}
-
-        <form method="post" action="{% url 'account_signup' %}" id="signup-form">
-            {% csrf_token %}
-
-            <!-- Hidden Fields for Django Form split -->
-            <input type="hidden" name="first_name" id="first_name_hidden">
-            <input type="hidden" name="last_name" id="last_name_hidden">
-            <!-- Default candidate role -->
-            <input type="hidden" name="role" value="CANDIDATE">
-
-            <!-- Full Name -->
-            <div class="mb-4">
-                <label for="full_name" class="form-label">Full Name</label>
-                <input type="text" id="full_name" required class="form-control-custom" placeholder="e.g. John Doe">
-            </div>
-
-            <!-- Email Address -->
-            <div class="mb-4">
-                <label for="id_email" class="form-label">Email Address</label>
-                <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="e.g. john@example.com" value="{{ form.email.value|default:'' }}">
-            </div>
-
-            <!-- Mobile Number -->
-            <div class="mb-4">
-                <label for="id_phone_number" class="form-label">Mobile Number</label>
-                <input type="text" name="phone_number" id="id_phone_number" class="form-control-custom" placeholder="e.g. +91 98765 43210" value="{{ form.phone_number.value|default:'' }}">
-            </div>
-
-            <!-- Password -->
-            <div class="mb-4">
-                <label for="password_input" class="form-label">Password</label>
-                <input type="password" name="password" id="password_input" required class="form-control-custom" placeholder="••••••••">
-            </div>
-
-            <!-- Confirm Password -->
-            <div class="mb-4">
-                <label for="confirm_password_input" class="form-label">Confirm Password</label>
-                <input type="password" id="confirm_password_input" required class="form-control-custom" placeholder="••••••••">
-            </div>
-
-            <!-- Experience Radio Cards -->
-            <div class="mb-4">
-                <label class="form-label d-block">Experience</label>
-                <div class="radio-card-group">
-                    <div class="radio-card-wrapper">
-                        <input type="radio" name="experience" id="exp_fresher" value="fresher" class="radio-card-input" checked>
-                        <label for="exp_fresher" class="radio-card-label">
-                            I'm a Fresher
-                        </label>
+    <div class="min-h-screen flex flex-col lg:flex-row">
+        
+        <!-- LEFT SIDE: AI Illustration & Animated Glass Cards -->
+        <div class="lg:w-[45%] xl:w-[40%] animated-gradient relative hidden lg:flex flex-col justify-between p-12 overflow-hidden text-white">
+            <!-- Background Decorative Spheres -->
+            <div class="absolute w-96 h-96 rounded-full bg-white/10 blur-3xl -top-20 -left-20"></div>
+            <div class="absolute w-[500px] h-[500px] rounded-full bg-white/5 blur-3xl -bottom-40 -right-20"></div>
+            
+            <!-- Logo -->
+            <div class="relative z-10">
+                <a href="/" class="inline-flex items-center gap-2 group">
+                    <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-md transition-transform duration-300 group-hover:scale-105">
+                        <span class="text-primary font-black text-xl">T</span>
                     </div>
-                    <div class="radio-card-wrapper">
-                        <input type="radio" name="experience" id="exp_experienced" value="experienced" class="radio-card-input">
-                        <label for="exp_experienced" class="radio-card-label">
-                            Experienced Professional
-                        </label>
+                    <span class="font-extrabold text-xl tracking-tight text-white">TalentVault<span class="text-white/80 font-normal">.ai</span></span>
+                </a>
+            </div>
+
+            <!-- Animated Glass Cards Container -->
+            <div class="my-auto relative py-12 flex flex-col gap-6 z-10">
+                
+                <!-- Card 1: Resume Score -->
+                <div class="glass-card rounded-2xl p-4 flex items-center gap-4 max-w-sm float-delay-1 self-start transform hover:scale-105 transition-all duration-300">
+                    <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-2xl">
+                        <i class="bi bi-file-earmark-check text-brandGreen"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-white/60 font-semibold tracking-wider uppercase">Resume Score</div>
+                        <div class="text-xl font-bold flex items-baseline gap-1">
+                            <span>89</span><span class="text-xs text-white/50">/100</span>
+                            <span class="ml-2 text-xs bg-brandGreen/20 text-brandGreen px-2 py-0.5 rounded-full font-medium">Excellent</span>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Card 2: AI Match % -->
+                <div class="glass-card rounded-2xl p-4 flex items-center gap-4 max-w-sm float-delay-2 self-end transform hover:scale-105 transition-all duration-300 mr-4">
+                    <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-2xl">
+                        <i class="bi bi-cpu text-accent animate-pulse"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-white/60 font-semibold tracking-wider uppercase">AI Agent Matching</div>
+                        <div class="text-xl font-bold flex items-center gap-2">
+                            <span>94% Fit Score</span>
+                            <span class="w-2 h-2 rounded-full bg-brandGreen animate-ping"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Top Companies -->
+                <div class="glass-card rounded-2xl p-4 flex flex-col gap-2 max-w-xs float-delay-3 self-start transform hover:scale-105 transition-all duration-300">
+                    <div class="text-xs text-white/60 font-semibold uppercase tracking-wider">Top Companies Hiring</div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-bold text-sm">G</div>
+                        <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-bold text-sm">M</div>
+                        <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-bold text-sm">S</div>
+                        <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-bold text-sm">+18</div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Hiring Alerts & Career Growth -->
+                <div class="glass-card rounded-2xl p-4 flex items-center gap-3 max-w-xs float-delay-2 self-center transform hover:scale-105 transition-all duration-300">
+                    <div class="w-8 h-8 rounded-lg bg-brandGreen/20 flex items-center justify-center">
+                        <i class="bi bi-lightning-fill text-brandGreen"></i>
+                    </div>
+                    <div class="text-sm font-semibold">5 Active hiring invites today</div>
+                </div>
+
             </div>
 
-            <!-- Current Location -->
-            <div class="mb-4">
-                <label for="id_location" class="form-label">Current Location</label>
-                <input type="text" name="location" id="id_location" class="form-control-custom" placeholder="e.g. Bangalore, India" value="{{ form.location.value|default:'' }}">
+            <!-- Headline / Bottom Info -->
+            <div class="relative z-10 mt-auto">
+                <h1 class="text-4xl font-extrabold tracking-tight leading-tight mb-4">
+                    Find Your Dream Career <br>with AI
+                </h1>
+                <p class="text-white/80 text-base font-light mb-8 max-w-md">
+                    TalentVault AI intelligently matches your skills, experience, and aspirations with verified, high-growth opportunities.
+                </p>
+                <a href="#register-section" class="inline-flex items-center gap-2 bg-white text-primary font-bold px-6 py-3.5 rounded-2xl shadow-lg hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300 text-sm">
+                    Get Started Free <i class="bi bi-arrow-right"></i>
+                </a>
             </div>
-
-            <!-- Terms Checkbox -->
-            <div class="mb-4 d-flex align-items-start gap-2">
-                <input type="checkbox" id="terms" required class="form-check-input mt-1" style="cursor: pointer;">
-                <label for="terms" class="small text-muted" style="cursor: pointer; user-select: none;">
-                    I agree to the Terms of Service and Privacy Policy.
-                </label>
-            </div>
-
-            <!-- Primary Button -->
-            <button type="submit" class="btn-purple-gradient mb-3">
-                Create Account
-            </button>
-        </form>
-
-        <div class="auth-divider">OR</div>
-
-        <!-- Social Login -->
-        <div class="d-flex flex-column gap-3 mb-4">
-            <a href="#" class="btn-outline-custom">
-                <i class="bi bi-google text-danger"></i> Continue with Google
-            </a>
-            <a href="#" class="btn-outline-custom">
-                <i class="bi bi-linkedin text-primary"></i> Continue with LinkedIn
-            </a>
         </div>
 
-        <!-- Footer -->
-        <p class="text-center text-muted small mb-0">
-            Already have an account? <a href="{% url 'candidate_login' %}" class="text-primary text-decoration-none fw-semibold">Sign In</a>
-        </p>
+        <!-- RIGHT SIDE: Premium Register Card -->
+        <div class="flex-1 flex flex-col justify-center px-6 py-12 lg:px-16 xl:px-24 bg-bgSlate overflow-y-auto">
+            <div class="max-w-xl w-full mx-auto" id="register-section">
+                
+                <!-- Logo for mobile -->
+                <div class="flex lg:hidden items-center gap-2 mb-8">
+                    <div class="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-md">
+                        <span class="text-white font-black text-xl">T</span>
+                    </div>
+                    <span class="font-extrabold text-xl tracking-tight text-slate-900">TalentVault<span class="text-primary font-black">.ai</span></span>
+                </div>
+
+                <!-- Header Title -->
+                <div class="mb-8">
+                    <h2 class="text-3xl font-extrabold tracking-tight text-slate-900">Create your account</h2>
+                    <p class="text-slate-500 mt-2 text-sm">Step into a premium, AI-driven hiring experience.</p>
+                </div>
+
+                <!-- Errors -->
+                {% if form.errors or form.non_field_errors %}
+                <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm flex items-start gap-3">
+                    <i class="bi bi-exclamation-circle-fill text-lg mt-0.5 flex-shrink-0"></i>
+                    <div>
+                        <p class="font-semibold">Please review the following:</p>
+                        <ul class="list-disc pl-4 mt-1 space-y-1">
+                            {% if form.non_field_errors %}
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            {% endif %}
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    <li><strong>{{ field|title }}:</strong> {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Form -->
+                <form method="post" action="{% url 'candidate_signup' %}" id="signup-form" class="space-y-5">
+                    {% csrf_token %}
+                    
+                    <!-- Hidden inputs -->
+                    <input type="hidden" name="role" value="CANDIDATE">
+                    <input type="hidden" name="first_name" id="first_name_hidden">
+                    <input type="hidden" name="last_name" id="last_name_hidden">
+
+                    <!-- Name Fields (Row) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="first_name_input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">First Name</label>
+                            <input type="text" id="first_name_input" required class="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="e.g. John">
+                        </div>
+                        <div>
+                            <label for="last_name_input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Last Name</label>
+                            <input type="text" id="last_name_input" required class="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="e.g. Doe">
+                        </div>
+                    </div>
+
+                    <!-- Email Field -->
+                    <div>
+                        <label for="id_email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email Address</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
+                                <i class="bi bi-envelope"></i>
+                            </span>
+                            <input type="email" name="email" id="id_email" required class="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="name@domain.com" value="{{ form.email.value|default:'' }}">
+                        </div>
+                    </div>
+
+                    <!-- Phone Number Field -->
+                    <div>
+                        <label for="id_phone_number" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Phone Number</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
+                                <i class="bi bi-telephone"></i>
+                            </span>
+                            <input type="tel" name="phone_number" id="id_phone_number" class="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="+91 99999 99999" value="{{ form.phone_number.value|default:'' }}">
+                        </div>
+                    </div>
+
+                    <!-- Location Field -->
+                    <div>
+                        <label for="id_location" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Current Location</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
+                                <i class="bi bi-geo-alt"></i>
+                            </span>
+                            <input type="text" name="location" id="id_location" required autocomplete="off" class="w-full h-12 pl-11 pr-10 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="e.g. Bangalore, India" value="{{ form.location.value|default:'' }}">
+                            <!-- Loading indicator spinner -->
+                            <span id="location-spinner" class="absolute inset-y-0 right-0 pr-4 flex items-center hidden">
+                                <svg class="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </span>
+                            <!-- Dropdown container -->
+                            <div id="location-dropdown" class="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto hidden">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Experience Choice -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Professional Experience</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <label class="relative flex items-center justify-between p-4 border border-slate-200 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition-all duration-150">
+                                <div class="flex items-center gap-3">
+                                    <input type="radio" name="experience" value="fresher" class="w-4 h-4 text-primary focus:ring-primary border-slate-300" checked>
+                                    <span class="text-sm font-semibold text-slate-800">I am a Fresher</span>
+                                </div>
+                            </label>
+                            <label class="relative flex items-center justify-between p-4 border border-slate-200 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition-all duration-150">
+                                <div class="flex items-center gap-3">
+                                    <input type="radio" name="experience" value="experienced" class="w-4 h-4 text-primary focus:ring-primary border-slate-300">
+                                    <span class="text-sm font-semibold text-slate-800">Experienced</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Password Fields (Row) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="password_input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+                            <input type="password" name="password" id="password_input" required class="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="••••••••">
+                            <!-- Strength Meter -->
+                            <div class="mt-2 space-y-1.5 hidden" id="strength-meter-container">
+                                <div class="flex h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                    <div class="h-full w-0 transition-all duration-300" id="strength-bar"></div>
+                                </div>
+                                <div class="flex justify-between items-center text-[10px] font-bold">
+                                    <span class="text-slate-400">Password Strength:</span>
+                                    <span id="strength-text" class="uppercase text-red-500">Weak</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="confirm_password_input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Confirm Password</label>
+                            <input type="password" name="confirm_password" id="confirm_password_input" required class="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium transition-all duration-200 focus:outline-none premium-input" placeholder="••••••••">
+                        </div>
+                    </div>
+
+                    <!-- Terms checkbox -->
+                    <div class="flex items-start gap-3 pt-2">
+                        <input type="checkbox" id="terms" required class="w-4 h-4 mt-0.5 rounded border-slate-300 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <label for="terms" class="text-xs text-slate-500 leading-normal select-none cursor-pointer">
+                            By creating an account, I agree to TalentVault's <a href="#" class="text-primary hover:underline font-semibold">Terms of Service</a> and <a href="#" class="text-primary hover:underline font-semibold">Privacy Policy</a>.
+                        </label>
+                    </div>
+
+                    <!-- Create Account Button -->
+                    <div class="pt-4">
+                        <button type="submit" class="w-full h-12 rounded-xl bg-primary hover:bg-accent text-white font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 flex items-center justify-center gap-2 shimmer-btn">
+                            Create Account <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Divider -->
+                <div class="relative my-8">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-slate-200"></div>
+                    </div>
+                    <div class="relative flex justify-center text-xs uppercase">
+                        <span class="bg-bgSlate px-3 font-semibold text-slate-400 tracking-wider">Or continue with</span>
+                    </div>
+                </div>
+
+                <!-- Social OAuth Buttons -->
+                <div class="grid grid-cols-3 gap-3">
+                    <button onclick="window.location.href='{% url 'google_login' %}'" type="button" class="flex items-center justify-center gap-2 h-12 border border-slate-200 bg-white rounded-xl text-slate-700 text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 hover:translate-y-[-1px]">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.24 10.285V13.4h6.887c-.648 2.41-2.519 4.19-5.136 4.19A5.28 5.28 0 0 1 8.68 12.31a5.28 5.28 0 0 1 5.31-5.283c1.3 0 2.457.484 3.348 1.28l2.42-2.42A9.1 9.1 0 0 0 13.99 4c-5.11 0-9.25 4.14-9.25 9.25s4.14 9.25 9.25 9.25c5.36 0 9.19-3.77 9.19-9.35 0-.6-.05-1.19-.14-1.865H12.24Z"/>
+                        </svg>
+                        <span class="hidden sm:inline">Google</span>
+                    </button>
+                    <button onclick="window.location.href='{% url 'linkedin_login' %}'" type="button" class="flex items-center justify-center gap-2 h-12 border border-slate-200 bg-white rounded-xl text-slate-700 text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 hover:translate-y-[-1px]">
+                        <svg class="w-5 h-5 text-[#0A66C2]" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M22.23 0H1.77C.8 0 0 .77 0 1.72v20.56C0 23.23.8 24 1.77 24h20.46c.98 0 1.77-.77 1.77-1.72V1.72C24 .77 23.2 0 22.23 0zM7.12 20.45H3.56V9h3.56v11.45zM5.34 7.43c-1.14 0-2.06-.92-2.06-2.06 0-1.14.92-2.06 2.06-2.06 1.14 0 2.06.92 2.06 2.06 0 1.14-.92 2.06-2.06 2.06zM20.45 20.45h-3.56v-5.6c0-1.34-.03-3.05-1.86-3.05-1.86 0-2.14 1.45-2.14 2.95v5.7h-3.56V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29z"/>
+                        </svg>
+                        <span class="hidden sm:inline">LinkedIn</span>
+                    </button>
+                    <button onclick="window.location.href='{% url 'github_login' %}'" type="button" class="flex items-center justify-center gap-2 h-12 border border-slate-200 bg-white rounded-xl text-slate-700 text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 hover:translate-y-[-1px]">
+                        <svg class="w-5 h-5 text-slate-900" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+                        </svg>
+                        <span class="hidden sm:inline">GitHub</span>
+                    </button>
+                </div>
+
+                <!-- Footer Sign In Link -->
+                <p class="text-center text-sm text-slate-500 mt-8">
+                    Already have an account? 
+                    <a href="{% url 'candidate_login' %}" class="text-primary hover:underline font-bold transition-all duration-200">Sign in</a>
+                </p>
+                <p class="text-center text-xs text-slate-400 mt-4 border-t border-slate-100 pt-4">
+                    Already Employer? 
+                    <a href="{% url 'employer_signup' %}" class="text-primary hover:underline font-semibold transition-all duration-200">Employer Register</a>
+                </p>
+
+            </div>
+        </div>
+
     </div>
 
+    <!-- Script to format first name and last name, and perform password matching -->
     <script>
         document.getElementById('signup-form').addEventListener('submit', function(e) {
-            const fullNameVal = document.getElementById('full_name').value.trim();
-            const spaceIndex = fullNameVal.indexOf(' ');
-            let firstName = '';
-            let lastName = '';
+            const firstNameVal = document.getElementById('first_name_input').value.trim();
+            const lastNameVal = document.getElementById('last_name_input').value.trim();
             
-            if (spaceIndex === -1) {
-                firstName = fullNameVal;
-                lastName = '.';
-            } else {
-                firstName = fullNameVal.substring(0, spaceIndex);
-                lastName = fullNameVal.substring(spaceIndex + 1).trim();
-            }
-            
-            document.getElementById('first_name_hidden').value = firstName;
-            document.getElementById('last_name_hidden').value = lastName;
+            document.getElementById('first_name_hidden').value = firstNameVal;
+            document.getElementById('last_name_hidden').value = lastNameVal;
 
             const passwordVal = document.getElementById('password_input').value;
             const confirmPasswordVal = document.getElementById('confirm_password_input').value;
+            
             if (passwordVal !== confirmPasswordVal) {
                 e.preventDefault();
                 alert("Passwords do not match!");
             }
         });
+
+        // Dynamic Live Password Strength Meter
+        (function() {
+            const pwd = document.getElementById('password_input');
+            const container = document.getElementById('strength-meter-container');
+            const bar = document.getElementById('strength-bar');
+            const text = document.getElementById('strength-text');
+
+            pwd.addEventListener('input', function() {
+                const val = pwd.value;
+                if (val.length === 0) {
+                    container.classList.add('hidden');
+                    return;
+                }
+                container.classList.remove('hidden');
+
+                let score = 0;
+                if (val.length >= 8) score++;
+                if (/[A-Z]/.test(val)) score++;
+                if (/[a-z]/.test(val)) score++;
+                if (/[0-9]/.test(val)) score++;
+                if (/[^A-Za-z0-9]/.test(val)) score++;
+
+                let color = 'bg-red-500';
+                let label = 'Weak';
+                let width = '20%';
+
+                if (score >= 4) {
+                    color = 'bg-green-500';
+                    label = 'Strong';
+                    width = '100%';
+                } else if (score >= 2) {
+                    color = 'bg-yellow-500';
+                    label = 'Medium';
+                    width = '60%';
+                }
+
+                bar.className = `h-full transition-all duration-300 ${color}`;
+                bar.style.width = width;
+                text.innerText = label;
+
+                if (label === 'Strong') {
+                    text.className = 'uppercase text-brandGreen';
+                } else if (label === 'Medium') {
+                    text.className = 'uppercase text-amber-500';
+                } else {
+                    text.className = 'uppercase text-red-500';
+                }
+            });
+        })();
+
+        // Mock Social Auth Experience
+        function handleSocialAuth(provider) {
+            // Fill mock data
+            document.getElementById('first_name_input').value = "Raj";
+            document.getElementById('last_name_input').value = "Kumar";
+            document.getElementById('id_email').value = "raj.kumar@" + provider.toLowerCase() + ".demo";
+            document.getElementById('id_phone_number').value = "+91 98765 43210";
+            document.getElementById('id_location').value = "Bangalore, India";
+            document.getElementById('password_input').value = "DemoSocial123!";
+            document.getElementById('confirm_password_input').value = "DemoSocial123!";
+            document.getElementById('terms').checked = true;
+            
+            // Notify User
+            setTimeout(() => {
+                notify.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => notify.remove(), 500);
+            }, 3000);
+        }
+
+        // --- LOCATION AUTOCOMPLETE LOGIC ---
+        (function() {
+            const input = document.getElementById('id_location');
+            const dropdown = document.getElementById('location-dropdown');
+            const spinner = document.getElementById('location-spinner');
+            
+            let debounceTimer = null;
+            let currentFocusIndex = -1;
+            let suggestions = [];
+
+            // Popular Indian locations for instant offline matching & fallback
+            const localSuggestions = [
+                "Bangalore, Karnataka, India",
+                "Pune, Maharashtra, India",
+                "Mumbai, Maharashtra, India",
+                "Delhi, National Capital Territory of Delhi, India",
+                "Chennai, Tamil Nadu, India",
+                "Hyderabad, Telangana, India",
+                "Kolkata, West Bengal, India",
+                "Noida, Uttar Pradesh, India",
+                "Greater Noida, Uttar Pradesh, India",
+                "Gurgaon, Haryana, India",
+                "Ahmedabad, Gujarat, India",
+                "Surat, Gujarat, India",
+                "Nagpur, Maharashtra, India",
+                "Jaipur, Rajasthan, India",
+                "Lucknow, Uttar Pradesh, India",
+                "Patna, Bihar, India",
+                "Gaya, Bihar, India",
+                "Muzaffarpur, Bihar, India",
+                "Darbhanga, Bihar, India",
+                "Ara, Bihar, India",
+                "Bettiah, Bihar, India",
+                "Chapra, Bihar, India",
+                "Pimpri, Maharashtra, India",
+                "Pimpri Chinchwad, Maharashtra, India"
+            ];
+
+            input.addEventListener('input', function() {
+                const query = this.value.trim();
+                clearTimeout(debounceTimer);
+                currentFocusIndex = -1;
+                
+                if (query.length === 0) {
+                    hideDropdown();
+                    return;
+                }
+
+                // Show local instant matches immediately first
+                const instantMatches = localSuggestions.filter(loc => 
+                    loc.toLowerCase().includes(query.toLowerCase())
+                );
+                if (instantMatches.length > 0) {
+                    suggestions = instantMatches;
+                    renderDropdown(query);
+                }
+
+                // Debounce external Nominatim fetch to OSM
+                debounceTimer = setTimeout(() => {
+                    fetchSuggestions(query);
+                }, 300);
+            });
+
+            // Keyboard navigation
+            input.addEventListener('keydown', function(e) {
+                const items = dropdown.getElementsByTagName('div');
+                if (items.length === 0) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    currentFocusIndex = (currentFocusIndex + 1) % items.length;
+                    setActiveItem(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    currentFocusIndex = (currentFocusIndex - 1 + items.length) % items.length;
+                    setActiveItem(items);
+                } else if (e.key === 'Enter') {
+                    if (currentFocusIndex > -1) {
+                        e.preventDefault();
+                        items[currentFocusIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    hideDropdown();
+                }
+            });
+
+            // Hide dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                    hideDropdown();
+                }
+            });
+
+            function fetchSuggestions(query) {
+                spinner.classList.remove('hidden');
+                
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&addressdetails=1&limit=8`;
+                
+                fetch(url, {
+                    headers: {
+                        'Accept-Language': 'en'
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    spinner.classList.add('hidden');
+                    // Format results
+                    const fetchedLocs = data.map(item => item.display_name);
+                    
+                    // Combine with local matches, deduplicate
+                    const combined = [...suggestions, ...fetchedLocs];
+                    suggestions = [...new Set(combined)].slice(0, 10);
+                    
+                    if (suggestions.length > 0) {
+                        renderDropdown(query);
+                    } else {
+                        hideDropdown();
+                    }
+                })
+                .catch(err => {
+                    console.error("OSM fetch failed: ", err);
+                    spinner.classList.add('hidden');
+                });
+            }
+
+            function renderDropdown(query) {
+                dropdown.innerHTML = '';
+                dropdown.classList.remove('hidden');
+
+                suggestions.forEach((loc, idx) => {
+                    const row = document.createElement('div');
+                    row.className = "px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition-all duration-150 border-b border-slate-100 last:border-b-0 flex items-center gap-2";
+                    
+                    // Highlight matching text
+                    const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+                    const highlighted = loc.replace(regex, `<span class="text-primary font-bold">$1</span>`);
+                    
+                    row.innerHTML = `<i class="bi bi-geo-alt-fill text-slate-400"></i> <span>${highlighted}</span>`;
+                    
+                    row.addEventListener('click', function() {
+                        input.value = loc;
+                        hideDropdown();
+                    });
+                    
+                    dropdown.appendChild(row);
+                });
+            }
+
+            function setActiveItem(items) {
+                // Clear active class from all
+                Array.from(items).forEach(item => {
+                    item.classList.remove('bg-slate-100');
+                });
+                
+                if (currentFocusIndex > -1 && currentFocusIndex < items.length) {
+                    const item = items[currentFocusIndex];
+                    item.classList.add('bg-slate-100');
+                    item.scrollIntoView({ block: 'nearest' });
+                }
+            }
+
+            function hideDropdown() {
+                dropdown.classList.add('hidden');
+                dropdown.innerHTML = '';
+            }
+
+            function escapeRegExp(string) {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+        })();
     </script>
 </body>
 </html>

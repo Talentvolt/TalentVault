@@ -191,7 +191,7 @@ print("STORAGES =", STORAGES)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'account_login'
-LOGIN_REDIRECT_URL = 'frontend:dashboard'
+LOGIN_REDIRECT_URL = 'frontend:login_redirect'
 LOGOUT_REDIRECT_URL = 'frontend:dashboard'
 
 REST_FRAMEWORK = {

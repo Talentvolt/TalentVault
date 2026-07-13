@@ -1,1 +1,602 @@
-{% extends "base.html" %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Candidate Portal — TalentVault AI{% endblock %}</title>
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+    <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
+    
+    <!-- Tailwind CSS & Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6D4AFF',
+                        accent: '#8B5CF6',
+                        brandBlue: '#2563EB',
+                        brandGreen: '#22C55E',
+                        bgSlate: '#F8FAFC',
+                        borderGray: '#E5E7EB',
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Early Theme Check */
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .active-sidebar-link {
+            background-color: rgba(109, 74, 255, 0.08);
+            color: #6D4AFF;
+            border-left: 4px solid #6D4AFF;
+        }
+
+        .dark .active-sidebar-link {
+            background-color: rgba(109, 74, 255, 0.15);
+            color: #a78bfa;
+            border-left: 4px solid #a78bfa;
+        }
+
+        .sidebar-transition {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* --- Mobile-first Styles & Typography --- */
+        @media (max-width: 767.98px) {
+            /* Global Typography */
+            h1, .text-3xl, .text-2xl, .heading-large {
+                font-size: 28px !important;
+                line-height: 1.2 !important;
+                letter-spacing: -0.5px !important;
+            }
+            h3, .text-xl, .text-lg, .heading-medium {
+                font-size: 18px !important;
+                line-height: 1.3 !important;
+            }
+            p, .text-base, .text-sm, .body-text {
+                font-size: 15px !important;
+                line-height: 1.5 !important;
+            }
+            button, .btn, a.btn, .h-11, .h-10 {
+                font-size: 16px !important;
+            }
+
+            /* Responsive Spacing & Layout */
+            .content-area, main {
+                padding: 16px !important;
+                gap: 20px !important;
+            }
+
+            /* Card Tap Scaling animation */
+            .gradient-border-card:active,
+            .job-search-card:active,
+            .saved-card:active,
+            .recommended-card:active,
+            .profile-card:active {
+                transform: scale(0.98) !important;
+                transition: transform 0.1s ease !important;
+            }
+        }
+
+        /* Active dot indicator on mobile bottom bar */
+        .mobile-nav-active {
+            color: #6D4AFF !important;
+            position: relative;
+        }
+        .dark .mobile-nav-active {
+            color: #a78bfa !important;
+        }
+        .mobile-nav-active::after {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: #6D4AFF;
+        }
+        .dark .mobile-nav-active::after {
+            background-color: #a78bfa;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans selection:bg-primary/20 selection:text-primary">
+
+    <div class="h-full flex flex-col">
+        
+        <!-- DESKTOP TOP STICKY NAVBAR -->
+        <header class="hidden md:flex sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 w-full h-16 items-center justify-between px-6">
+            <div class="flex items-center gap-4">
+                <!-- Hamburger menu for mobile -->
+                <button onclick="toggleMobileSidebar()" class="lg:hidden text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none">
+                    <i class="bi bi-list text-2xl"></i>
+                </button>
+
+                <!-- Brand Logo -->
+                <a href="{% url 'frontend:candidate_dashboard' %}" class="flex items-center gap-2 group">
+                    <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-200">
+                        <span class="text-white font-black text-lg">T</span>
+                    </div>
+                    <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault<span class="text-primary font-bold">.ai</span></span>
+                </a>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="flex items-center gap-4">
+                
+                <!-- Dark Mode Toggle -->
+                <button onclick="toggleDarkMode()" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all duration-200">
+                    <i class="bi bi-sun hidden dark:block text-lg"></i>
+                    <i class="bi bi-moon dark:hidden text-lg"></i>
+                </button>
+
+                <!-- Messages -->
+                <a href="#" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all duration-200">
+                    <i class="bi bi-chat-text text-lg"></i>
+                    <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                </a>
+
+                <!-- Notification Bell -->
+                <button onclick="toggleDrawer('notifications-drawer')" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all duration-200">
+                    <i class="bi bi-bell text-lg"></i>
+                    <span class="absolute top-1 right-1 bg-primary text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-white dark:border-slate-900">3</span>
+                </button>
+
+                <!-- Profile Avatar -->
+                <button onclick="toggleDrawer('profile-drawer')" class="flex items-center gap-2.5 hover:opacity-90 focus:outline-none ml-2">
+                    <div class="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                        {% if request.user.profile_picture %}
+                            <img src="{{ request.user.profile_picture }}" alt="Avatar" class="w-full h-full object-cover">
+                        {% else %}
+                            <img src="https://ui-avatars.com/api/?name={{ request.user.first_name|urlencode }}&background=6d4aff&color=fff&bold=true" alt="Avatar" class="w-full h-full object-cover">
+                        {% endif %}
+                    </div>
+                    <span class="hidden md:inline text-sm font-bold text-slate-700 dark:text-slate-300">{{ request.user.first_name }} 👋</span>
+                </button>
+
+            </div>
+        </header>
+
+        <!-- MOBILE TOP STICKY NAVBAR -->
+        <header class="flex md:hidden sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 w-full h-16 items-center justify-between px-4">
+            <!-- Left: TalentVault logo -->
+            <a href="{% url 'frontend:candidate_dashboard' %}" class="flex items-center gap-2 group">
+                <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-md">
+                    <span class="text-white font-black text-sm">T</span>
+                </div>
+                <span class="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">TalentVault<span class="text-primary font-bold">.ai</span></span>
+            </a>
+
+            <!-- Center: Current page title -->
+            <div class="absolute left-1/2 -translate-x-1/2 flex items-center pointer-events-none">
+                <span class="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">{% block mobile_page_title %}Dashboard{% endblock %}</span>
+            </div>
+
+            <!-- Right: Notification, Profile, Hamburger Menu -->
+            <div class="flex items-center gap-2">
+                <!-- Notification -->
+                <button onclick="toggleDrawer('notifications-drawer')" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-650 dark:text-slate-300 relative">
+                    <i class="bi bi-bell text-base"></i>
+                    <span class="absolute top-0.5 right-0.5 bg-primary text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white dark:border-slate-900">3</span>
+                </button>
+
+                <!-- Profile -->
+                <button onclick="toggleDrawer('profile-drawer')" class="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                    {% if request.user.profile_picture %}
+                        <img src="{{ request.user.profile_picture }}" alt="Avatar" class="w-full h-full object-cover">
+                    {% else %}
+                        <img src="https://ui-avatars.com/api/?name={{ request.user.first_name|urlencode }}&background=6d4aff&color=fff&bold=true" alt="Avatar" class="w-full h-full object-cover">
+                    {% endif %}
+                </button>
+
+                <!-- Hamburger Menu -->
+                <button onclick="toggleMenuDrawer()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-750 dark:text-slate-300">
+                    <i class="bi bi-list text-xl"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- APP SHELL CONTAINER -->
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- LEFT SIDEBAR -->
+            <aside id="sidebar-panel" class="hidden md:flex md:w-20 lg:w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col justify-between pt-0 z-30 sidebar-transition">
+                <div class="flex-1 overflow-y-auto py-6 px-3 lg:px-4 space-y-7">
+                    
+                    <!-- Navigation Menu Group -->
+                    <div class="space-y-1.5">
+                        <div class="text-[10px] font-black text-slate-400 dark:text-slate-650 uppercase tracking-widest px-3 mb-2 lg:block hidden">Core Dashboard</div>
+                        
+                        <a href="{% url 'frontend:candidate_dashboard' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_dashboard' %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-grid-1x2-fill text-lg"></i> <span class="lg:inline hidden">Dashboard</span>
+                        </a>
+                        
+                        <a href="{% url 'frontend:jobs' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'jobs' and not 'saved' in request.path and not 'recommended' in request.path %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-briefcase-fill text-lg"></i> <span class="lg:inline hidden">Find Jobs</span>
+                        </a>
+                        
+                        <a href="{% url 'frontend:candidate_recommended_jobs' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if 'recommended' in request.path %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-cpu-fill text-lg"></i> <span class="lg:inline hidden">Recommended</span>
+                        </a>
+
+                        <a href="{% url 'frontend:candidate_saved_jobs' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if 'saved' in request.path %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-bookmark-heart-fill text-lg"></i> <span class="lg:inline hidden">Saved Jobs</span>
+                        </a>
+
+                        <a href="{% url 'frontend:candidate_applications' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_applications' %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-send-fill text-lg"></i> <span class="lg:inline hidden">Applications</span>
+                        </a>
+
+                        <a href="{% url 'frontend:interviews' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'interviews' %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-calendar-event-fill text-lg"></i> <span class="lg:inline hidden">Interviews</span>
+                        </a>
+                    </div>
+
+                    <!-- Profile & Documents Group -->
+                    <div class="space-y-1.5">
+                        <div class="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mb-2 lg:block hidden">My Profile</div>
+                        
+                        <a href="{% url 'frontend:candidate_profile' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_profile' %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-person-badge-fill text-lg"></i> <span class="lg:inline hidden">My Profile</span>
+                        </a>
+
+                        <a href="{% url 'frontend:candidate_profile' %}#resume-section" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150">
+                            <i class="bi bi-file-earmark-arrow-up-fill text-lg"></i> <span class="lg:inline hidden">Resume</span>
+                        </a>
+                    </div>
+
+                    <!-- Career Resources Group -->
+                    <div class="space-y-1.5">
+                        <div class="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mb-2 lg:block hidden">Resources</div>
+                        
+                        <a href="{% url 'frontend:candidate_career_resources' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_career_resources' %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-journal-bookmark-fill text-lg"></i> <span class="lg:inline hidden">Career Hub</span>
+                        </a>
+
+                        <a href="{% url 'frontend:settings' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'settings' %}active-sidebar-link{% endif %}">
+                            <i class="bi bi-gear-fill text-lg"></i> <span class="lg:inline hidden">Settings</span>
+                        </a>
+                    </div>
+
+                </div>
+
+                <!-- Sidebar Footer -->
+                <div class="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+                    <form id="candidate-logout-form" action="{% url 'account_logout' %}" method="post" style="display: none;">
+                        {% csrf_token %}
+                    </form>
+                    <a href="#" onclick="event.preventDefault(); document.getElementById('candidate-logout-form').submit();" class="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all duration-150">
+                        <i class="bi bi-box-arrow-left text-lg"></i> <span class="lg:inline hidden">Logout</span>
+                    </a>
+                </div>
+            </aside>
+
+            <!-- MAIN WORKING AREA -->
+            <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-28 md:pb-8">
+                {% block content %}{% endblock %}
+            </main>
+
+        </div>
+
+    </div>
+
+    <!-- OVERLAY FOR DRAWERS / SIDEBAR -->
+    <div id="drawer-overlay" onclick="closeAllDrawers()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden transition-opacity duration-300"></div>
+
+    <!-- PROFILE DRAWER (Slide Panel) -->
+    <div id="profile-drawer" class="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 transform translate-x-full transition-transform duration-300 flex flex-col justify-between">
+        <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex items-center justify-between border-b pb-4 mb-6">
+                <h3 class="font-extrabold text-lg text-slate-950 dark:text-white">Profile Overview</h3>
+                <button onclick="toggleDrawer('profile-drawer')" class="text-slate-400 hover:text-slate-600"><i class="bi bi-x-lg text-xl"></i></button>
+            </div>
+            
+            <!-- Quick Stats -->
+                <div class="w-20 h-20 rounded-full border-4 border-primary/20 overflow-hidden relative">
+                    {% if request.user.profile_picture %}
+                        <img src="{{ request.user.profile_picture }}" class="w-full h-full object-cover">
+                    {% else %}
+                        <img src="https://ui-avatars.com/api/?name={{ request.user.first_name|urlencode }}+{{ request.user.last_name|urlencode }}&background=6d4aff&color=fff&bold=true" class="w-full h-full object-cover">
+                    {% endif %}
+                </div>
+                <div class="text-center">
+                    <h4 class="font-extrabold text-slate-900 dark:text-white">{{ request.user.get_full_name }}</h4>
+                    <p class="text-xs text-slate-500">Software Engineer Candidate</p>
+                </div>
+            </div>
+
+            <!-- Interactive quick actions inside drawer -->
+            <div class="space-y-4">
+                <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs text-slate-500 font-bold">Resume Health</span>
+                        <span class="text-xs font-bold text-brandGreen">89% Score</span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div class="bg-brandGreen h-full" style="width: 89%"></div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs text-slate-500 font-bold">Profile Completion</span>
+                        <span class="text-xs font-bold text-primary">75% Complete</span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div class="bg-primary h-full" style="width: 75%"></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2 pt-2">
+                    <a href="{% url 'frontend:candidate_profile' %}" class="w-full h-11 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850">
+                        <i class="bi bi-person-gear"></i> Edit Profile
+                    </a>
+                    <a href="{% url 'frontend:settings' %}" class="w-full h-11 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850">
+                        <i class="bi bi-sliders2"></i> Account Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATIONS DRAWER (Slide Panel) -->
+    <div id="notifications-drawer" class="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 transform translate-x-full transition-transform duration-300 flex flex-col justify-between">
+        <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex items-center justify-between border-b pb-4 mb-6">
+                <h3 class="font-extrabold text-lg text-slate-950 dark:text-white">Notifications</h3>
+                <button onclick="toggleDrawer('notifications-drawer')" class="text-slate-400 hover:text-slate-600"><i class="bi bi-x-lg text-xl"></i></button>
+            </div>
+            
+            <!-- Grouped Notifications list -->
+            <div class="space-y-4">
+                
+                <!-- Notification Item 1: Interview Scheduled -->
+                <div class="p-4 border border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-800/50 rounded-2xl relative">
+                    <span class="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary"></span>
+                    <div class="flex gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm flex-shrink-0">
+                            <i class="bi bi-calendar-event"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Interview Request</div>
+                            <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-0.5">Google Tech Round Scheduled</h4>
+                            <p class="text-xs text-slate-500 mt-1">Scheduled for tomorrow at 10:00 AM. Join link is available.</p>
+                            <span class="text-[10px] text-slate-400 font-bold block mt-2">1 hour ago</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notification Item 2: Job Alert -->
+                <div class="p-4 border border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-800/50 rounded-2xl relative">
+                    <span class="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary"></span>
+                    <div class="flex gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-brandBlue/10 text-brandBlue flex items-center justify-center text-sm flex-shrink-0">
+                            <i class="bi bi-briefcase"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">New Match Alert</div>
+                            <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-0.5">94% AI Match at Stripe</h4>
+                            <p class="text-xs text-slate-500 mt-1">A Backend Engineer (Django) opening matches your profile perfectly.</p>
+                            <span class="text-[10px] text-slate-400 font-bold block mt-2">4 hours ago</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notification Item 3: Resume Review -->
+                <div class="p-4 border border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+                    <div class="flex gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-brandGreen/10 text-brandGreen flex items-center justify-center text-sm flex-shrink-0">
+                            <i class="bi bi-file-earmark-check"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Resume Analytics</div>
+                            <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-0.5">Resume Downloaded</h4>
+                            <p class="text-xs text-slate-500 mt-1">Stripe Hiring team downloaded your verified resume PDF.</p>
+                            <span class="text-[10px] text-slate-400 font-bold block mt-2">1 day ago</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="p-6 border-t bg-slate-50 dark:bg-slate-900/50">
+            <button onclick="markAllNotificationsRead()" class="w-full h-11 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 rounded-xl text-slate-700 dark:text-slate-300 font-bold text-sm">
+                Mark All as Read
+            </button>
+        </div>
+    </div>
+
+    </div>
+    
+    <!-- MOBILE MENU DRAWER (Slide Panel) -->
+    <div id="menu-drawer" class="fixed inset-y-0 right-0 w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 transform translate-x-full transition-transform duration-300 flex flex-col justify-between">
+        <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex items-center justify-between border-b pb-4 mb-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-md">
+                        <span class="text-white font-black text-lg">T</span>
+                    </div>
+                    <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault<span class="text-primary font-bold">.ai</span></span>
+                </div>
+                <button onclick="toggleMenuDrawer()" class="text-slate-400 hover:text-slate-650"><i class="bi bi-x-lg text-xl"></i></button>
+            </div>
+            
+            <nav class="space-y-2">
+                <div class="text-[10px] font-black text-slate-400 dark:text-slate-650 uppercase tracking-widest px-3 mb-2">Navigation</div>
+                
+                <a href="{% url 'frontend:candidate_dashboard' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'candidate_dashboard' %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-grid-1x2-fill text-lg"></i> <span>Dashboard</span>
+                </a>
+                
+                <a href="{% url 'frontend:jobs' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'jobs' and not 'saved' in request.path and not 'recommended' in request.path %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-briefcase-fill text-lg"></i> <span>Find Jobs</span>
+                </a>
+                
+                <a href="{% url 'frontend:candidate_recommended_jobs' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if 'recommended' in request.path %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-cpu-fill text-lg"></i> <span>Recommended</span>
+                </a>
+
+                <a href="{% url 'frontend:candidate_saved_jobs' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if 'saved' in request.path %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-bookmark-heart-fill text-lg"></i> <span>Saved Jobs</span>
+                </a>
+
+                <a href="{% url 'frontend:candidate_applications' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'candidate_applications' %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-send-fill text-lg"></i> <span>Applications</span>
+                </a>
+
+                <a href="{% url 'frontend:interviews' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'interviews' %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-calendar-event-fill text-lg"></i> <span>Interviews</span>
+                </a>
+
+                <div class="text-[10px] font-black text-slate-400 dark:text-slate-655 uppercase tracking-widest px-3 my-4 block">Settings & Theme</div>
+                
+                <button onclick="toggleDarkMode();" class="w-full flex items-center justify-between px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <span class="flex items-center gap-3"><i class="bi bi-moon-fill dark:hidden"></i><i class="bi bi-sun-fill hidden dark:inline"></i> Theme</span>
+                    <span class="text-xs bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full font-bold dark:text-purple-300 text-primary">Toggle</span>
+                </button>
+
+                <a href="{% url 'frontend:candidate_profile' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-655 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'candidate_profile' %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-person-badge-fill text-lg"></i> <span>My Profile</span>
+                </a>
+
+                <a href="{% url 'frontend:settings' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-655 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'settings' %}active-sidebar-link{% endif %}">
+                    <i class="bi bi-gear-fill text-lg"></i> <span>Settings</span>
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- BOTTOM FLOATING NAVIGATION FOR MOBILE -->
+    <nav class="fixed bottom-4 left-4 right-4 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-xl flex md:hidden justify-around items-center h-16 px-2">
+        <a href="{% url 'frontend:candidate_dashboard' %}" class="flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_dashboard' %}mobile-nav-active{% else %}text-slate-450 dark:text-slate-400{% endif %}">
+            <i class="bi bi-grid-1x2-fill text-lg"></i>
+            <span class="text-[9px] font-bold mt-0.5">Home</span>
+        </a>
+        <a href="{% url 'frontend:jobs' %}" class="flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all duration-150 {% if request.resolver_match.url_name == 'jobs' and not 'saved' in request.path and not 'recommended' in request.path %}mobile-nav-active{% else %}text-slate-450 dark:text-slate-400{% endif %}">
+            <i class="bi bi-briefcase-fill text-lg"></i>
+            <span class="text-[9px] font-bold mt-0.5">Jobs</span>
+        </a>
+        <a href="{% url 'frontend:candidate_applications' %}" class="flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_applications' %}mobile-nav-active{% else %}text-slate-450 dark:text-slate-400{% endif %}">
+            <i class="bi bi-send-fill text-lg"></i>
+            <span class="text-[9px] font-bold mt-0.5">Apps</span>
+        </a>
+        <a href="{% url 'frontend:candidate_profile' %}" class="flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_profile' %}mobile-nav-active{% else %}text-slate-450 dark:text-slate-400{% endif %}">
+            <i class="bi bi-person-badge-fill text-lg"></i>
+            <span class="text-[9px] font-bold mt-0.5">Profile</span>
+        </a>
+        <button onclick="toggleMenuDrawer()" class="flex flex-col items-center justify-center w-12 h-12 rounded-xl text-slate-455 dark:text-slate-400 transition-all duration-150">
+            <i class="bi bi-list text-xl"></i>
+            <span class="text-[9px] font-bold mt-0.5">Menu</span>
+        </button>
+    </nav>
+
+    <!-- SCRIPT FOR NAVIGATION & DRAWER INTERACTIVES -->
+    <script>
+        // Init Theme
+        const theme = localStorage.getItem('theme') || 'light';
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.contains('dark');
+            if (isDark) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // Drawer Operations
+        function toggleDrawer(id) {
+            const drawer = document.getElementById(id);
+            const overlay = document.getElementById('drawer-overlay');
+            const isOpen = !drawer.classList.contains('translate-x-full');
+            
+            closeAllDrawers();
+            
+            if (!isOpen) {
+                drawer.classList.remove('translate-x-full');
+                overlay.classList.remove('hidden');
+            }
+        }
+
+        function closeAllDrawers() {
+            document.getElementById('profile-drawer').classList.add('translate-x-full');
+            document.getElementById('notifications-drawer').classList.add('translate-x-full');
+            if (document.getElementById('menu-drawer')) {
+                document.getElementById('menu-drawer').classList.add('translate-x-full');
+            }
+            document.getElementById('sidebar-panel').classList.add('-translate-x-full');
+            document.getElementById('drawer-overlay').classList.add('hidden');
+        }
+
+        function toggleMenuDrawer() {
+            toggleDrawer('menu-drawer');
+        }
+
+        // Mobile Navigation Toggle
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar-panel');
+            const overlay = document.getElementById('drawer-overlay');
+            const isCollapsed = sidebar.classList.contains('-translate-x-full');
+            
+            if (isCollapsed) {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function markAllNotificationsRead() {
+            const pings = document.querySelectorAll('#notifications-drawer .bg-primary');
+            pings.forEach(ping => ping.remove());
+            alert('Notifications marked as read!');
+            closeAllDrawers();
+        }
+    </script>
+</body>
+</html>

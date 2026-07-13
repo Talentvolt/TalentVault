@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, Education
+from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, Education, Project, Certification
 from apps.accounts.serializers import UserSerializer
 
 class CandidateSkillSerializer(serializers.ModelSerializer):
@@ -17,18 +17,31 @@ class EducationSerializer(serializers.ModelSerializer):
         model = Education
         fields = ('id', 'institution', 'degree', 'field_of_study', 'start_date', 'end_date', 'percentage_or_cgpa')
 
+class ProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
+        fields = ('id', 'title', 'description', 'link')
+
+class CertificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Certification
+        fields = ('id', 'name', 'issuing_organization', 'issue_date')
+
 class CandidateProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     skills = CandidateSkillSerializer(many=True, read_only=True)
     experiences = ExperienceSerializer(many=True, read_only=True)
     educations = EducationSerializer(many=True, read_only=True)
+    projects = ProjectSerializer(many=True, read_only=True)
+    certifications = CertificationSerializer(many=True, read_only=True)
 
     class Meta:
         model = CandidateProfile
         fields = (
             'id', 'user', 'summary', 'resume', 'location', 'total_experience',
             'current_salary', 'expected_salary', 'notice_period', 'is_immediate_joiner',
-            'linkedin_url', 'portfolio_url', 'skills', 'experiences', 'educations', 'profile_photo', 'created_at'
+            'linkedin_url', 'portfolio_url', 'skills', 'experiences', 'educations', 
+            'projects', 'certifications', 'profile_photo', 'created_at'
         )
         read_only_fields = ('id', 'created_at')
 
@@ -39,3 +52,4 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
         if instance.expected_salary is not None:
             ret['expected_salary'] = instance.expected_salary_lpa
         return ret
+

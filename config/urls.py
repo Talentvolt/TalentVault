@@ -8,7 +8,14 @@ from django.views.static import serve
 from apps.companies.views import CompanyViewSet, CompanyMemberViewSet
 from apps.jobs.views import JobViewSet
 from apps.jobs.matching_views import MatchingCandidatesView
-from apps.candidates.views import CandidateProfileViewSet, CandidateSkillViewSet, ExperienceViewSet, EducationViewSet
+from apps.candidates.views import (
+    CandidateProfileViewSet, 
+    CandidateSkillViewSet, 
+    ExperienceViewSet, 
+    EducationViewSet,
+    ProjectViewSet,
+    CertificationViewSet
+)
 from apps.applications.views import ApplicationViewSet
 from apps.interviews.views import InterviewViewSet
 
@@ -20,6 +27,8 @@ router.register(r'candidates/profiles', CandidateProfileViewSet, basename='candi
 router.register(r'candidates/skills', CandidateSkillViewSet, basename='candidate-skill')
 router.register(r'candidates/experience', ExperienceViewSet, basename='candidate-experience')
 router.register(r'candidates/education', EducationViewSet, basename='candidate-education')
+router.register(r'candidates/projects', ProjectViewSet, basename='candidate-project')
+router.register(r'candidates/certifications', CertificationViewSet, basename='candidate-certification')
 router.register(r'applications', ApplicationViewSet, basename='application')
 router.register(r'interviews', InterviewViewSet, basename='interview')
 
@@ -27,11 +36,23 @@ from apps.accounts.views import (
     CustomLoginView, 
     CustomLogoutView, 
     SignupView,
+    LoginSelectView,
+    SignupSelectView,
     CandidateLoginView,
     CandidateSignupView,
     EmployerLoginView,
     EmployerSignupView,
-    AdminLoginView
+    AdminLoginView,
+    CandidateForgotPasswordView,
+    CandidateEmailVerificationView,
+    CandidateOTPVerificationView,
+    CandidateResetPasswordView,
+    GoogleLoginRedirectView,
+    GoogleLoginCallbackView,
+    GitHubLoginRedirectView,
+    GitHubLoginCallbackView,
+    LinkedInLoginRedirectView,
+    LinkedInLoginCallbackView
 )
 
 urlpatterns = [
@@ -39,11 +60,24 @@ urlpatterns = [
     path('', include('apps.core.urls', namespace='frontend')),
     path("clients/", include(("apps.clients.urls", "clients"), namespace="clients")),
     
-    # Candidate Auth
+    # Candidate Auth & Selects
     path('accounts/login/', CandidateLoginView.as_view(), name='account_login'),
-    path('accounts/signup/', CandidateSignupView.as_view(), name='account_signup'),
+    path('accounts/login/select/', LoginSelectView.as_view(), name='login_select'),
+    path('accounts/signup/', SignupSelectView.as_view(), name='account_signup'),
     path('accounts/login/candidate/', CandidateLoginView.as_view(), name='candidate_login'),
     path('accounts/signup/candidate/', CandidateSignupView.as_view(), name='candidate_signup'),
+    path('accounts/forgot-password/', CandidateForgotPasswordView.as_view(), name='candidate_forgot_password'),
+    path('accounts/verify-email/', CandidateEmailVerificationView.as_view(), name='candidate_verify_email'),
+    path('accounts/verify-otp/', CandidateOTPVerificationView.as_view(), name='candidate_verify_otp'),
+    path('accounts/reset-password/', CandidateResetPasswordView.as_view(), name='candidate_reset_password'),
+    
+    # OAuth Routes
+    path('accounts/login/google/', GoogleLoginRedirectView.as_view(), name='google_login'),
+    path('accounts/login/google/callback/', GoogleLoginCallbackView.as_view(), name='google_login_callback'),
+    path('accounts/login/github/', GitHubLoginRedirectView.as_view(), name='github_login'),
+    path('accounts/login/github/callback/', GitHubLoginCallbackView.as_view(), name='github_login_callback'),
+    path('accounts/login/linkedin/', LinkedInLoginRedirectView.as_view(), name='linkedin_login'),
+    path('accounts/login/linkedin/callback/', LinkedInLoginCallbackView.as_view(), name='linkedin_login_callback'),
     
     # Employer Auth
     path('accounts/login/employer/', EmployerLoginView.as_view(), name='employer_login'),

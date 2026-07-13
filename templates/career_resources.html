@@ -1,0 +1,198 @@
+{% extends "layouts/candidate_base.html" %}
+{% load static %}
+
+{% block title %}Career Hub — TalentVault AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .resource-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1.25rem;
+        transition: all 0.2s ease;
+    }
+    .dark .resource-card {
+        background: #0f172a;
+        border-color: #1e293b;
+    }
+    
+    .faq-trigger[aria-expanded="true"] i {
+        transform: rotate(180deg);
+    }
+    .faq-trigger i {
+        transition: transform 0.2s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8 pb-16">
+    
+    <div>
+        <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">Career Development Hub</h2>
+        <p class="text-xs text-slate-500 mt-1">SaaS curated preparation materials, roadmaps, and guidelines.</p>
+    </div>
+
+    <!-- TABS ROW -->
+    <div class="border-b border-slate-200 dark:border-slate-800 flex gap-6 text-sm font-semibold text-slate-500 dark:text-slate-400">
+        <button onclick="switchTab('roadmaps')" id="tab-btn-roadmaps" class="pb-3 border-b-2 border-primary text-primary font-bold">Career Roadmaps</button>
+        <button onclick="switchTab('faq')" id="tab-btn-faq" class="pb-3 border-b-2 border-transparent hover:text-slate-900">Interview Prep</button>
+        <button onclick="switchTab('resume')" id="tab-btn-resume" class="pb-3 border-b-2 border-transparent hover:text-slate-900">Resume Guidelines</button>
+        <button onclick="switchTab('courses')" id="tab-btn-courses" class="pb-3 border-b-2 border-transparent hover:text-slate-900">Recommended Courses</button>
+    </div>
+
+    <!-- PANELS CONTAINER -->
+    <div>
+        
+        <!-- ROADMAPS PANEL -->
+        <div id="panel-roadmaps" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Django Architect Roadmap -->
+                <div class="resource-card p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base">Django Backend Architect</h3>
+                        <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                            Complete step-by-step checklist to level up from a standard MVC developer to a high-scale Backend System Engineer.
+                        </p>
+                        
+                        <div class="space-y-3.5 mt-6 border-t border-slate-100 dark:border-slate-850 pt-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-brandGreen/10 text-brandGreen flex items-center justify-center text-[10px]"><i class="bi bi-check"></i></span> Advanced ORM Queries & Indexing</div>
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-brandGreen/10 text-brandGreen flex items-center justify-center text-[10px]"><i class="bi bi-check"></i></span> Celery Task Orchestration & Redis locks</div>
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px]">3</span> Microservices & REST API Gateways</div>
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[10px]">4</span> Kubernetes Deployment & CI/CD Pipelines</div>
+                        </div>
+                    </div>
+                    <button class="w-full h-10 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl mt-6">Launch Roadmap Tracker</button>
+                </div>
+
+                <!-- React Frontend Architect -->
+                <div class="resource-card p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base">React Frontend Architect</h3>
+                        <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                            Establish solid understanding of virtual rendering engines, server-side caching, and modern state machines.
+                        </p>
+                        
+                        <div class="space-y-3.5 mt-6 border-t border-slate-100 dark:border-slate-850 pt-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-brandGreen/10 text-brandGreen flex items-center justify-center text-[10px]"><i class="bi bi-check"></i></span> React Rendering Cycle & Fiber Hooks</div>
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px]">2</span> Server Component Hydration & Suspense</div>
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[10px]">3</span> Global State Engines & Caching (Query)</div>
+                            <div class="flex items-center gap-3"><span class="w-5 h-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[10px]">4</span> Webpack/Vite build optimizers</div>
+                        </div>
+                    </div>
+                    <button class="w-full h-10 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl mt-6">Launch Roadmap Tracker</button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- FAQ PANEL (INTERACTIVE ACCORDION) -->
+        <div id="panel-faq" class="hidden space-y-4 max-w-3xl">
+            
+            <!-- FAQ 1 -->
+            <div class="resource-card p-4">
+                <button onclick="toggleFaq('faq-1')" class="w-full flex items-center justify-between text-sm font-bold text-slate-900 dark:text-white text-left faq-trigger" id="faq-1-trigger">
+                    <span>What is the difference between select_related and prefetch_related in Django?</span>
+                    <i class="bi bi-chevron-down text-slate-400"></i>
+                </button>
+                <div id="faq-1-content" class="hidden mt-3 text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed border-t pt-3">
+                    <strong>select_related</strong> works by creating an SQL join and retrieving the related fields in the same query. It is used for single-valued relationships (ForeignKey, OneToOne).<br><br>
+                    <strong>prefetch_related</strong> does a separate lookup for each relationship and does the joining in Python. It is used for multi-valued relationships (ManyToMany, reverse ForeignKeys).
+                </div>
+            </div>
+
+            <!-- FAQ 2 -->
+            <div class="resource-card p-4">
+                <button onclick="toggleFaq('faq-2')" class="w-full flex items-center justify-between text-sm font-bold text-slate-900 dark:text-white text-left faq-trigger" id="faq-2-trigger">
+                    <span>How do you handle transactional race conditions in PostgreSQL Django databases?</span>
+                    <i class="bi bi-chevron-down text-slate-400"></i>
+                </button>
+                <div id="faq-2-content" class="hidden mt-3 text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed border-t pt-3">
+                    Use <strong>select_for_update()</strong> inside a <code>transaction.atomic()</code> block. This locks the database rows until the outermost transaction is committed, preventing other threads from modifying them simultaneously.
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RESUME PANEL -->
+        <div id="panel-resume" class="hidden space-y-6 max-w-3xl">
+            <div class="resource-card p-6 space-y-4">
+                <h3 class="font-extrabold text-slate-900 dark:text-white text-base">Verified ATS Styling Advice</h3>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    Modern AI matching parsers scan PDF documents using OCR models. To guarantee high indexing match rates, avoid:
+                </p>
+                <ul class="text-xs font-semibold text-slate-500 space-y-3 list-disc pl-4">
+                    <li><strong class="text-rose-500">Dual-column layouts:</strong> Most parser algorithms read line by line from left-to-right, mixing descriptions. Use single-column layouts.</li>
+                    <li><strong class="text-rose-500">Custom graphical skill bars:</strong> Progress meters cannot be parsed. State skills explicitly as text keywords.</li>
+                    <li><strong class="text-primary">Action Verbs:</strong> Start experience bullet points with keywords like "Architected", "Optimized", or "Maintained".</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- COURSES PANEL -->
+        <div id="panel-courses" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <!-- Course 1 -->
+                <div class="resource-card p-5 flex flex-col justify-between h-56">
+                    <div>
+                        <span class="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase">System Design</span>
+                        <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mt-2">Scale API Systems Masterclass</h4>
+                        <p class="text-xs text-slate-500 mt-1.5 line-clamp-2">Learn load balancers, reverse proxies, database partition indexes, and HTTP cache controls.</p>
+                    </div>
+                    <a href="#" class="text-xs font-bold text-primary hover:underline">Start Course <i class="bi bi-arrow-right"></i></a>
+                </div>
+
+                <!-- Course 2 -->
+                <div class="resource-card p-5 flex flex-col justify-between h-56">
+                    <div>
+                        <span class="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase">Python Advanced</span>
+                        <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mt-2">Celery Worker Pools & Redis</h4>
+                        <p class="text-xs text-slate-500 mt-1.5 line-clamp-2">Manage background workers, distributed tasks, rate limit queues, and task failures.</p>
+                    </div>
+                    <a href="#" class="text-xs font-bold text-primary hover:underline">Start Course <i class="bi bi-arrow-right"></i></a>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    function switchTab(tabId) {
+        // Hide all panels
+        document.getElementById('panel-roadmaps').classList.add('hidden');
+        document.getElementById('panel-faq').classList.add('hidden');
+        document.getElementById('panel-resume').classList.add('hidden');
+        document.getElementById('panel-courses').classList.add('hidden');
+        
+        // Remove active class from buttons
+        const btns = ['roadmaps', 'faq', 'resume', 'courses'];
+        btns.forEach(btn => {
+            const el = document.getElementById(`tab-btn-${btn}`);
+            el.className = "pb-3 border-b-2 border-transparent hover:text-slate-900";
+        });
+
+        // Show selected panel & active button
+        document.getElementById(`panel-${tabId}`).classList.remove('hidden');
+        document.getElementById(`tab-btn-${tabId}`).className = "pb-3 border-b-2 border-primary text-primary font-bold";
+    }
+
+    function toggleFaq(id) {
+        const content = document.getElementById(`${id}-content`);
+        const trigger = document.getElementById(`${id}-trigger`);
+        const isOpen = !content.classList.contains('hidden');
+
+        if (isOpen) {
+            content.classList.add('hidden');
+            trigger.setAttribute('aria-expanded', 'false');
+        } else {
+            content.classList.remove('hidden');
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+    }
+</script>
+{% endblock %}

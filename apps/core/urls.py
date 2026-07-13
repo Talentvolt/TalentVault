@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     DashboardView,
     RoleRedirectView,
+    LandingPageView,
     CandidateDashboardView,
     RecruiterDashboardView,
     AdminDashboardView,
@@ -43,14 +44,29 @@ from .views import (
     CandidateResumePreviewView,
     CandidateResumeDownloadView,
     PublicCandidateResumePreviewView,
-    PublicCandidateResumeDownloadView
+    PublicCandidateResumeDownloadView,
+    CandidateProfileView,
+    CandidateCareerResourcesView,
+    CandidateSavedJobsView,
+    CandidateRecommendedJobsView,
+    CandidateApplicationsView,
+    EmployerLandingView,
+    CandidateResumeUploadView
 )
 
 app_name = 'frontend'
 
 urlpatterns = [
-    path('', RoleRedirectView.as_view(), name='dashboard'),
+    path('', LandingPageView.as_view(), name='dashboard'),
+    path('accounts/login-redirect/', RoleRedirectView.as_view(), name='login_redirect'),
+    path('employers/', EmployerLandingView.as_view(), name='employer_landing'),
     path('dashboard/candidate/', CandidateDashboardView.as_view(), name='candidate_dashboard'),
+    path('profile/', CandidateProfileView.as_view(), name='candidate_profile'),
+    path('profile/resume/upload/', CandidateResumeUploadView.as_view(), name='candidate_resume_upload_ajax'),
+    path('career-resources/', CandidateCareerResourcesView.as_view(), name='candidate_career_resources'),
+    path('jobs/saved/', CandidateSavedJobsView.as_view(), name='candidate_saved_jobs'),
+    path('jobs/recommended/', CandidateRecommendedJobsView.as_view(), name='candidate_recommended_jobs'),
+    path('applications/', CandidateApplicationsView.as_view(), name='candidate_applications'),
     path('dashboard/recruiter/', RecruiterDashboardView.as_view(), name='recruiter_dashboard'),
     path('dashboard/recruiter/complete-task/', CompleteTaskView.as_view(), name='complete_task'),
     path('dashboard/admin/', AdminDashboardView.as_view(), name='admin_dashboard'),

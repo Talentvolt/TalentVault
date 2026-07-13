@@ -1,0 +1,152 @@
+{% extends "layouts/candidate_base.html" %}
+{% load static %}
+
+{% block mobile_page_title %}Settings{% endblock %}
+
+{% block title %}Settings — TalentVault AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1.25rem;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    }
+    .dark .settings-card {
+        background: #0f172a;
+        border-color: #1e293b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-8 pb-16">
+    
+    <div>
+        <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">Account Settings</h2>
+        <p class="text-xs text-slate-500 mt-1">Configure your portal theme, notifications, and security profile.</p>
+    </div>
+
+    <!-- Interface Options -->
+    <div class="settings-card p-6 space-y-6">
+        <h3 class="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider border-b pb-3"><i class="bi bi-palette me-2 text-primary"></i> Interface Settings</h3>
+        
+        <div class="flex items-center justify-between">
+            <div>
+                <h4 class="text-sm font-bold text-slate-850 dark:text-slate-200">Dark Mode Theme</h4>
+                <p class="text-xs text-slate-500 mt-0.5">Toggle light and dark canvas colors.</p>
+            </div>
+            <button onclick="toggleDarkMode()" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border hover:bg-slate-200 text-slate-700 dark:text-slate-350">
+                <i class="bi bi-sun hidden dark:block text-lg"></i>
+                <i class="bi bi-moon dark:hidden text-lg"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Notification Alerts -->
+    <div class="settings-card p-6 space-y-6">
+        <h3 class="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider border-b pb-3"><i class="bi bi-bell me-2 text-primary"></i> Alert Preferences</h3>
+        
+        <div class="space-y-4">
+            <!-- Alert 1 -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h4 class="text-sm font-bold text-slate-850 dark:text-slate-200">Email Notifications</h4>
+                    <p class="text-xs text-slate-500 mt-0.5">Receive interview schedules and recruiter notes via email.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked onchange="toggleAlertMock('Email Alerts', this)" class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+            </div>
+
+            <!-- Alert 2 -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h4 class="text-sm font-bold text-slate-850 dark:text-slate-200">Instant Match Alerts</h4>
+                    <p class="text-xs text-slate-500 mt-0.5">Alert me immediately when an active listing matches over 90% suitability.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked onchange="toggleAlertMock('Instant Match Alerts', this)" class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security & Password Reset -->
+    <div class="settings-card p-6 space-y-6">
+        <h3 class="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider border-b pb-3"><i class="bi bi-shield-lock me-2 text-primary"></i> Security</h3>
+        
+        <form onsubmit="handleSettingsPasswordReset(event)" class="space-y-4 max-w-sm">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-450 uppercase mb-2">Current Password</label>
+                <input type="password" required id="curr-pass" class="w-full h-12 px-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="••••••••">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-450 uppercase mb-2">New Password</label>
+                <input type="password" required id="new-pass" class="w-full h-12 px-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="••••••••">
+            </div>
+            <button type="submit" class="h-12 w-full sm:w-auto px-6 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center shadow-md shadow-primary/20">Update Password</button>
+        </form>
+    </div>
+
+    <!-- Critical Actions (Delete Account) -->
+    <div class="settings-card p-6 border-l-4 border-l-rose-500 space-y-6">
+        <h3 class="font-extrabold text-sm text-rose-600 dark:text-rose-450 uppercase tracking-wider border-b pb-3"><i class="bi bi-exclamation-triangle me-2"></i> Danger Zone</h3>
+        
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div>
+                <h4 class="text-sm font-bold text-slate-850 dark:text-slate-200">Delete Candidate Account</h4>
+                <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">Permanently remove your parsed profile and matching data. This cannot be undone.</p>
+            </div>
+            <button onclick="triggerDeleteAccount()" class="h-12 w-full sm:w-auto px-6 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center flex-shrink-0">Delete Account</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function toggleAlertMock(type, input) {
+        const state = input.checked ? "Enabled" : "Disabled";
+        showToast(`${type} status set to: ${state}`);
+    }
+
+    function handleSettingsPasswordReset(e) {
+        e.preventDefault();
+        document.getElementById('curr-pass').value = '';
+        document.getElementById('new-pass').value = '';
+        showToast("Password updated successfully!");
+    }
+
+    function triggerDeleteAccount() {
+        const check = confirm("Are you absolutely sure you want to delete your TalentVault candidate account? This action is irreversible.");
+        if (check) {
+            alert("Mock Account deletion successful. Redirecting to landing page.");
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = "{% url 'account_logout' %}";
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = "{{ csrf_token }}";
+            form.appendChild(csrfInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 transform translate-y-10 opacity-0 transition-all duration-500 z-50 font-bold text-sm";
+        toast.innerHTML = `<i class="bi bi-check-circle-fill text-brandGreen"></i> ${message}`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 50);
+        setTimeout(() => {
+            toast.classList.add('translate-y-10', 'opacity-0');
+            setTimeout(() => toast.remove(), 500);
+        }, 3000);
+    }
+</script>
+{% endblock %}

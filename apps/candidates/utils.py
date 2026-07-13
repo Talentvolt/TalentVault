@@ -547,7 +547,7 @@ class OpenAIResumeParser:
         print(f"[TIMING] JSON validation & conversion took: {time.time() - t_val:.4f}s")
         return result
 
-def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None):
+def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None, user=None):
     import time
     t_process_start = time.time()
     
@@ -721,21 +721,22 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             linkedin = info.get('linkedin_url', '') or info.get('linkedin', '')
             sha256 = security_data.get('sha256', '') if security_data else ''
             
-            existing_user = None
-            if email:
-                existing_user = User.objects.filter(email=email).first()
-            if not existing_user and phone:
-                existing_user = User.objects.filter(phone_number=phone).first()
-            if not existing_user and linkedin:
-                existing_profile = CandidateProfile.objects.filter(linkedin_url=linkedin).first()
-                if existing_profile:
-                    existing_user = existing_profile.user
-            if not existing_user and sha256:
-                existing_profile = CandidateProfile.objects.filter(sha256=sha256).first()
-                if existing_profile:
-                    existing_user = existing_profile.user
+            existing_user = user
+            if not existing_user:
+                if email:
+                    existing_user = User.objects.filter(email=email).first()
+                if not existing_user and phone:
+                    existing_user = User.objects.filter(phone_number=phone).first()
+                if not existing_user and linkedin:
+                    existing_profile = CandidateProfile.objects.filter(linkedin_url=linkedin).first()
+                    if existing_profile:
+                        existing_user = existing_profile.user
+                if not existing_user and sha256:
+                    existing_profile = CandidateProfile.objects.filter(sha256=sha256).first()
+                    if existing_profile:
+                        existing_user = existing_profile.user
             
-            if existing_user and not overwrite:
+            if existing_user and not overwrite and user is None:
                 DuplicateResumeLog.objects.create(
                     email=email,
                     phone=phone,
@@ -1241,7 +1242,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
                         
                         file_obj = io.BytesIO(sub_bytes)
                         profile, status = process_resume_file(
-                            file_obj, filename, overwrite, progress_callback, security_data=sub_security_data
+                            file_obj, filename, overwrite, progress_callback, security_data=sub_security_data, user=user
                         )
                         
                         if status == "SUCCESS":
@@ -1259,7 +1260,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
     else:
         file_obj = io.BytesIO(file_bytes)
         profile, status = process_resume_file(
-            file_obj, uploaded_file.name, overwrite, progress_callback, security_data=security_data
+            file_obj, uploaded_file.name, overwrite, progress_callback, security_data=security_data, user=user
         )
         if status == "SUCCESS":
             results['created'].append(profile)

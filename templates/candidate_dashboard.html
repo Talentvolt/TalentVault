@@ -1,32 +1,600 @@
 {% extends "layouts/candidate_base.html" %}
+{% load static %}
 
-{% block title %}Candidate Dashboard | TalentVault{% endblock %}
+{% block mobile_page_title %}Dashboard{% endblock %}
+
+{% block title %}Candidate Dashboard | TalentVault AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Gradient borders on cards */
+    .gradient-border-card {
+        position: relative;
+        background: rgb(255, 255, 255);
+        border-radius: 1.25rem;
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+        border: 1px solid #e5e7eb;
+    }
+    .dark .gradient-border-card {
+        background: rgb(15, 23, 42);
+        border: 1px solid #1e293b;
+    }
+    
+    .gradient-border-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 20px 25px -5px rgba(109, 74, 255, 0.1), 0 10px 10px -5px rgba(109, 74, 255, 0.04);
+        border-color: rgba(109, 74, 255, 0.4);
+    }
+
+    /* Radial Progress */
+    .radial-progress-circle {
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+    }
+
+    /* Horizontal scroll snap */
+    .scroll-snap-x {
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none; /* Firefox */
+    }
+    .scroll-snap-x::-webkit-scrollbar {
+        display: none; /* Safari / Chrome */
+    }
+    .scroll-snap-item {
+        scroll-snap-align: start;
+    }
+</style>
+<!-- Load Chart.js for analytics -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold m-0">My Dashboard</h3>
-    <a href="{% url 'frontend:jobs' %}" class="btn btn-primary"><i class="bi bi-search me-1"></i> Find Jobs</a>
-</div>
+<div class="space-y-8 pb-12">
+    
+    <!-- TOP HEADER -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 md:p-8 rounded-3xl shadow-sm">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-3 py-1 rounded-full font-bold uppercase tracking-wider">verified profile</span>
+                <span class="text-xs bg-brandGreen/10 text-brandGreen dark:bg-brandGreen/20 dark:text-emerald-300 px-3 py-1 rounded-full font-bold uppercase tracking-wider flex items-center gap-1"><i class="bi bi-shield-fill-check"></i> AI Match Active</span>
+            </div>
+            <h2 class="text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight mt-3">Good Morning, {{ request.user.first_name|default:"Candidate" }} 👋</h2>
+            <p class="text-slate-500 dark:text-slate-400 mt-1.5 text-sm">Your AI matches have updated. Today you have <span class="font-extrabold text-primary">12 new opportunities</span>.</p>
+        </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-md-6">
-        <div class="card p-4 border-bottom border-primary border-4 shadow-sm h-100 text-center">
-            <p class="text-secondary text-sm fw-medium text-uppercase mb-1">My Applications</p>
-            <h2 class="fw-bold m-0 text-primary">{{ applications_count|default:"0" }}</h2>
+        <!-- Quick Actions -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            <button onclick="document.getElementById('hidden-resume-upload').click()" class="h-12 px-5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2">
+                <i class="bi bi-file-earmark-arrow-up-fill text-primary"></i> Upload Resume
+            </button>
+            <input type="file" id="hidden-resume-upload" class="hidden" onchange="uploadResumeFile(this)">
+
+            <a href="{% url 'frontend:jobs' %}" class="h-12 px-5 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:translate-y-[-1px]">
+                <i class="bi bi-search"></i> Find Jobs
+            </a>
+            
+            <a href="{% url 'frontend:candidate_profile' %}" class="h-12 px-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2">
+                <i class="bi bi-pencil-square"></i> Update Profile
+            </a>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card p-4 border-bottom border-success border-4 shadow-sm h-100 text-center">
-            <p class="text-secondary text-sm fw-medium text-uppercase mb-1">Upcoming Interviews</p>
-            <h2 class="fw-bold m-0 text-success">{{ interviews_count|default:"0" }}</h2>
+
+    <!-- STATS CARDS GRID -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        
+        <!-- Card 1: Applications -->
+        <div class="gradient-border-card p-5 md:p-6 flex flex-col justify-between h-40">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Applications</span>
+                <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-lg"><i class="bi bi-send-fill"></i></div>
+            </div>
+            <div>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white" id="count-applications">18</h3>
+                <span class="text-xs text-brandGreen font-bold flex items-center gap-1 mt-1"><i class="bi bi-arrow-up-short"></i> +2 this week</span>
+            </div>
         </div>
+
+        <!-- Card 2: Saved Jobs -->
+        <div class="gradient-border-card p-5 md:p-6 flex flex-col justify-between h-40">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Saved Jobs</span>
+                <div class="w-10 h-10 rounded-xl bg-brandBlue/10 text-brandBlue flex items-center justify-center text-lg"><i class="bi bi-bookmark-heart-fill"></i></div>
+            </div>
+            <div>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white" id="count-saved">12</h3>
+                <span class="text-xs text-slate-400 font-bold mt-1 block">Quick access items</span>
+            </div>
+        </div>
+
+        <!-- Card 3: Interviews Scheduled -->
+        <div class="gradient-border-card p-5 md:p-6 flex flex-col justify-between h-40">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Interviews</span>
+                <div class="w-10 h-10 rounded-xl bg-brandGreen/10 text-brandGreen flex items-center justify-center text-lg"><i class="bi bi-calendar-check-fill"></i></div>
+            </div>
+            <div>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white">4</h3>
+                <span class="text-xs text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1 mt-1"><i class="bi bi-clock-history"></i> Next: Tomorrow</span>
+            </div>
+        </div>
+
+        <!-- Card 4: Recruiter Views -->
+        <div class="gradient-border-card p-5 md:p-6 flex flex-col justify-between h-40">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Recruiter Views</span>
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg"><i class="bi bi-eye-fill"></i></div>
+            </div>
+            <div>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white">45</h3>
+                <span class="text-xs text-brandGreen font-bold flex items-center gap-1 mt-1"><i class="bi bi-arrow-up-short"></i> +14% growth</span>
+            </div>
+        </div>
+
     </div>
+
+    <!-- MAIN BODY SECTION: TWO COLUMNS -->
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        
+        <!-- Left 2 Columns: Carousel, Analytics, Activity -->
+        <div class="xl:col-span-2 space-y-8">
+            
+            <!-- RECOMMENDED JOB CAROUSEL -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">AI Recommended Jobs</h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="scrollCarousel(-1)" class="w-8 h-8 rounded-lg bg-white border dark:bg-slate-900 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50"><i class="bi bi-chevron-left text-sm"></i></button>
+                        <button onclick="scrollCarousel(1)" class="w-8 h-8 rounded-lg bg-white border dark:bg-slate-900 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50"><i class="bi bi-chevron-right text-sm"></i></button>
+                    </div>
+                </div>
+
+                <!-- Carousel Slider container -->
+                <div id="job-carousel" class="flex gap-6 overflow-x-auto scroll-snap-x py-2 px-1">
+                    
+                    <!-- Job Item 1 -->
+                    <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
+                        <div class="flex items-start justify-between">
+                            <div class="flex gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black">S</div>
+                                <div>
+                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">Backend Engineer (Django)</h4>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Stripe • Remote / Bangalore</p>
+                                </div>
+                            </div>
+                            <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-1 rounded-full font-bold">96% Match</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
+                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹18 - 25 LPA</span>
+                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 2-5 Yrs</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="handleDashboardJobApply('Stripe', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                            <button onclick="handleDashboardJobSave(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark"></i></button>
+                            <button onclick="handleDashboardJobShare('Backend Engineer at Stripe')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Job Item 2 -->
+                    <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
+                        <div class="flex items-start justify-between">
+                            <div class="flex gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-slate-950 text-white flex items-center justify-center text-xl font-black">L</div>
+                                <div>
+                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">Senior Frontend Dev (React)</h4>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Linear • Remote / India</p>
+                                </div>
+                            </div>
+                            <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-1 rounded-full font-bold">94% Match</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
+                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹22 - 30 LPA</span>
+                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 4-7 Yrs</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="handleDashboardJobApply('Linear', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                            <button onclick="handleDashboardJobSave(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark"></i></button>
+                            <button onclick="handleDashboardJobShare('Frontend Lead at Linear')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Job Item 3 -->
+                    <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
+                        <div class="flex items-start justify-between">
+                            <div class="flex gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black">V</div>
+                                <div>
+                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">AI Product Engineer</h4>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Vercel • Hybrid / Bangalore</p>
+                                </div>
+                            </div>
+                            <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-1 rounded-full font-bold">92% Match</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
+                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹25 - 35 LPA</span>
+                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 3-6 Yrs</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="handleDashboardJobApply('Vercel', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                            <button onclick="handleDashboardJobSave(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark"></i></button>
+                            <button onclick="handleDashboardJobShare('AI Engineer at Vercel')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share"></i></button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- APPLICATION ANALYTICS CHART -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+                <h3 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-6">Application Analytics</h3>
+                <div class="h-64">
+                    <canvas id="dashboard-analytics-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- RECENT ACTIVITY TIMELINE -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Recent Activity</h3>
+                    <button class="text-xs text-primary font-bold hover:underline">View All</button>
+                </div>
+                
+                <div class="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 space-y-8">
+                    
+                    <!-- Activity 1 -->
+                    <div class="relative">
+                        <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-brandGreen border-4 border-white dark:border-slate-900 ring-2 ring-brandGreen/20"></span>
+                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Interview Scheduled</div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">Stripe recruiter scheduled Technical Round 1</h4>
+                        <p class="text-xs text-slate-500 mt-1">Scheduled for July 14, 2026, 10:00 AM. Join details sent to email.</p>
+                    </div>
+
+                    <!-- Activity 2 -->
+                    <div class="relative">
+                        <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-primary border-4 border-white dark:border-slate-900 ring-2 ring-primary/20"></span>
+                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Applied</div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">Applied to Senior Developer at Vercel</h4>
+                        <p class="text-xs text-slate-500 mt-1">Application was reviewed by AI matching parser.</p>
+                    </div>
+
+                    <!-- Activity 3 -->
+                    <div class="relative">
+                        <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-brandBlue border-4 border-white dark:border-slate-900 ring-2 ring-brandBlue/20"></span>
+                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Viewed</div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">Stripe Hiring Manager viewed your resume</h4>
+                        <p class="text-xs text-slate-500 mt-1">Resume was accessed through verified sharing pipeline.</p>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right 1 Column: Profile Completion, Upcoming, Skills, AI Recommendations -->
+        <div class="space-y-8">
+            
+            <!-- PROFILE COMPLETION RADIAL PROGRESS -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm text-center">
+                <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-4 text-left">Profile Progress</h3>
+                
+                <div class="inline-flex items-center justify-center relative mb-6">
+                    <svg class="w-32 h-32">
+                        <circle class="text-slate-100 dark:text-slate-800" stroke-width="8" stroke="currentColor" fill="transparent" r="50" cx="64" cy="64"/>
+                        <circle class="text-primary radial-progress-circle" stroke-width="8" stroke-dasharray="314.15" stroke-dashoffset="78.53" stroke-linecap="round" stroke="currentColor" fill="transparent" r="50" cx="64" cy="64"/>
+                    </svg>
+                    <div class="absolute text-center">
+                        <span class="text-2xl font-black text-slate-900 dark:text-white block">75%</span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">complete</span>
+                    </div>
+                </div>
+
+                <!-- Checklist -->
+                <div class="space-y-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <div class="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                        <i class="bi bi-check-circle-fill text-brandGreen text-sm"></i>
+                        <span>Upload original resume PDF</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                        <i class="bi bi-check-circle-fill text-brandGreen text-sm"></i>
+                        <span>Add professional experience details</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                        <i class="bi bi-check-circle-fill text-brandGreen text-sm"></i>
+                        <span>Complete primary skill chips</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-slate-400 line-through">
+                        <i class="bi bi-circle text-slate-300 text-sm"></i>
+                        <span>Add profile display photo</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-slate-450">
+                        <i class="bi bi-circle text-slate-300 text-sm"></i>
+                        <span>Connect verified GitHub portfolio</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UPCOMING INTERVIEWS -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+                <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-4">Upcoming Interviews</h3>
+                
+                <div class="p-4 bg-primary/[0.03] dark:bg-slate-950 border border-primary/10 dark:border-slate-800 rounded-2xl flex flex-col justify-between">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">Django Dev Tech Round 1</h4>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">Google LLC • 45 Mins</p>
+                        </div>
+                        <div class="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-700 flex items-center justify-center font-black text-xs">G</div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 my-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                        <i class="bi bi-clock text-primary"></i>
+                        <span>Tomorrow at 10:00 AM (IST)</span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <a href="https://meet.google.com" target="_blank" class="flex-1 h-12 bg-brandGreen hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all duration-150">
+                            <i class="bi bi-camera-video-fill text-sm"></i> Join Meet
+                        </a>
+                        <button onclick="simulateReschedule()" class="h-12 px-4 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-655 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center justify-center">
+                            Reschedule
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SKILL ANALYTICS / ADD AND REMOVE -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+                <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-3">Skill Analytics</h3>
+                
+                <!-- Skill input -->
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="new-skill-input" class="flex-1 h-12 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 text-xs font-semibold focus:outline-none focus:border-primary" placeholder="Add custom skill...">
+                    <button onclick="addCustomSkillDashboard()" class="w-12 h-12 bg-primary hover:bg-accent text-white flex items-center justify-center rounded-xl text-lg font-black">+</button>
+                </div>
+
+                <!-- Chips container -->
+                <div class="flex flex-wrap gap-1.5" id="skill-chips-container">
+                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold">
+                        Python <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold">
+                        Django <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold">
+                        React <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-xl text-xs font-bold">
+                        Git <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
+                    </span>
+                </div>
+
+                <!-- AI Suggestions chips -->
+                <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <div class="text-[10px] font-black text-slate-400 dark:text-slate-650 uppercase tracking-widest mb-2.5">AI Recommended (Click to add)</div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="addSkillFromClick('Docker')" class="px-2.5 py-1.5 border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-semibold">+ Docker</button>
+                        <button onclick="addSkillFromClick('PostgreSQL')" class="px-2.5 py-1.5 border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-semibold">+ PostgreSQL</button>
+                        <button onclick="addSkillFromClick('Redis')" class="px-2.5 py-1.5 border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-semibold">+ Redis</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI HIGHLIGHTS & SUGGESTIONS -->
+            <div class="bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/10 p-6 rounded-3xl">
+                <div class="flex items-center gap-2 text-primary">
+                    <i class="bi bi-cpu text-lg"></i>
+                    <h3 class="font-extrabold text-slate-900 dark:text-white tracking-tight">AI Resume Enhancer</h3>
+                </div>
+                
+                <ul class="mt-4 space-y-3 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <li class="flex items-start gap-2">
+                        <span class="text-brandGreen text-sm"><i class="bi bi-check-circle-fill"></i></span>
+                        <span>Django experiences look very solid and clear.</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-amber-500 text-sm"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                        <span>Add Docker / Deployment details to match Stripe requirements (increases match to 99%).</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-primary text-sm"><i class="bi bi-lightbulb-fill"></i></span>
+                        <span>Complete the "Google Cloud" certificate in your education section.</span>
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+
+    </div>
+
 </div>
 
-<div class="card shadow-sm border-0">
-    <div class="card-header bg-white border-bottom fw-bold py-3">Welcome to TalentVault</div>
-    <div class="card-body">
-        <p class="text-secondary">Track your job applications, view interview schedules, and discover new opportunities through your TalentVault portal.</p>
-    </div>
-</div>
+<!-- SCRIPT TO RUN INTERACTIVES AND ANALYTICS -->
+<script>
+    // Initialize chart
+    const ctx = document.getElementById('dashboard-analytics-chart').getContext('2d');
+    
+    // Gradient effect for chart
+    const primaryGrad = ctx.createLinearGradient(0, 0, 0, 300);
+    primaryGrad.addColorStop(0, 'rgba(109, 74, 255, 0.4)');
+    primaryGrad.addColorStop(1, 'rgba(109, 74, 255, 0)');
+    
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+            datasets: [
+                {
+                    label: 'Applications sent',
+                    data: [4, 8, 11, 15, 12, 18],
+                    borderColor: '#6D4AFF',
+                    backgroundColor: primaryGrad,
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 3
+                },
+                {
+                    label: 'Interviews scheduled',
+                    data: [1, 2, 3, 5, 2, 4],
+                    borderColor: '#22C55E',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            family: 'Plus Jakarta Sans',
+                            weight: '600',
+                            size: 11
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(229, 231, 235, 0.5)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+
+    // Carousel scrolling
+    function scrollCarousel(dir) {
+        const c = document.getElementById('job-carousel');
+        const scrollAmount = 320;
+        c.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' });
+    }
+
+    // Apply simulation
+    function handleDashboardJobApply(company, btn) {
+        if (btn.disabled) return;
+        
+        btn.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Applying...`;
+        btn.disabled = true;
+
+        setTimeout(() => {
+            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
+            btn.className = "flex-1 h-10 bg-brandGreen text-white font-bold text-xs rounded-xl";
+            
+            // Increment application counters
+            const appCounter = document.getElementById('count-applications');
+            let val = parseInt(appCounter.innerText) || 0;
+            appCounter.innerText = val + 1;
+
+            alert(`Application successfully submitted to ${company}! Your resume profile was parsed and matched.`);
+        }, 1200);
+    }
+
+    // Save simulation
+    function handleDashboardJobSave(btn) {
+        const icon = btn.querySelector('i');
+        const countSaved = document.getElementById('count-saved');
+        let currentSaved = parseInt(countSaved.innerText) || 0;
+
+        if (icon.classList.contains('bi-bookmark')) {
+            icon.className = "bi bi-bookmark-fill text-primary";
+            countSaved.innerText = currentSaved + 1;
+        } else {
+            icon.className = "bi bi-bookmark";
+            countSaved.innerText = Math.max(0, currentSaved - 1);
+        }
+    }
+
+    // Share simulation
+    function handleDashboardJobShare(title) {
+        navigator.clipboard.writeText(window.location.href);
+        alert(`Link to "${title}" copied to clipboard! Share it with your colleagues.`);
+    }
+
+    // Reschedule simulation
+    function simulateReschedule() {
+        const newTime = prompt("Enter preferred rescheduling date and time (e.g. Wednesday 2:00 PM):");
+        if (newTime) {
+            alert(`Reschedule request for "${newTime}" submitted to Google recruiter successfully!`);
+        }
+    }
+
+    // Skill analytics add custom
+    function addCustomSkillDashboard() {
+        const input = document.getElementById('new-skill-input');
+        const skill = input.value.trim();
+        if (skill) {
+            addSkillFromClick(skill);
+            input.value = '';
+        }
+    }
+
+    function addSkillFromClick(skillName) {
+        const container = document.getElementById('skill-chips-container');
+        
+        // Prevent duplicate check
+        let exists = false;
+        container.querySelectorAll('span').forEach(span => {
+            if (span.innerText.trim().toLowerCase() === skillName.toLowerCase()) {
+                exists = true;
+            }
+        });
+
+        if (exists) {
+            alert("Skill already listed!");
+            return;
+        }
+
+        const chip = document.createElement('span');
+        chip.className = "inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold";
+        chip.innerHTML = `${skillName} <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>`;
+        container.appendChild(chip);
+    }
+
+    // Real resume file upload
+    function uploadResumeFile(input) {
+        if (input.files.length === 0) return;
+        const file = input.files[0];
+        
+        // Show loading alert or toast
+        alert("Uploading and parsing resume via AI Match... Click OK to start extraction.");
+        
+        const formData = new FormData();
+        formData.append('resume', file);
+        
+        fetch("{% url 'frontend:candidate_resume_upload_ajax' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Upload failed.');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            alert("Resume parsed successfully! Re-routing to your updated profile...");
+            window.location.href = "{% url 'frontend:candidate_profile' %}";
+        })
+        .catch(err => {
+            alert("Error parsing resume: " + err.message);
+        });
+    }
+</script>
 {% endblock %}

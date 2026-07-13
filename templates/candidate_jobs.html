@@ -1,0 +1,507 @@
+{% extends "layouts/candidate_base.html" %}
+{% load static %}
+
+{% block mobile_page_title %}Jobs{% endblock %}
+
+{% block title %}Explore Jobs — TalentVault AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .job-search-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1.25rem;
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+    }
+    .dark .job-search-card {
+        background: #0f172a;
+        border-color: #1e293b;
+    }
+    .job-search-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px -8px rgba(109, 74, 255, 0.08);
+        border-color: rgba(109, 74, 255, 0.3);
+    }
+    
+    .premium-input:focus {
+        border-color: #6D4AFF;
+        box-shadow: 0 0 0 3px rgba(109, 74, 255, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8 pb-16">
+    
+    <!-- SEARCH HEADER & FILTERS -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 md:p-8 rounded-3xl shadow-sm space-y-6">
+        <div>
+            <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">Discover Opportunities</h2>
+            <p class="text-xs text-slate-500 mt-1">Intelligent AI matches computed based on your verified resume skills.</p>
+        </div>
+
+        <!-- Search Bar Row -->
+        <form method="get" action="{% url 'frontend:jobs' %}" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <!-- Skill / Role Search -->
+            <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                    <i class="bi bi-search text-base"></i>
+                </span>
+                <input type="text" name="q" value="{{ q|default:'' }}" class="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 text-xs font-semibold focus:outline-none premium-input" placeholder="Search title, role, skills...">
+            </div>
+
+            <!-- Location with Autocomplete -->
+            <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                    <i class="bi bi-geo-alt text-base"></i>
+                </span>
+                <input type="text" name="location" id="id_job_location" autocomplete="off" value="{{ request.GET.location|default:'' }}" class="w-full h-12 pl-10 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 text-xs font-semibold focus:outline-none premium-input" placeholder="Location autocomplete...">
+                
+                <!-- Autocomplete spinner -->
+                <span id="location-spinner" class="absolute inset-y-0 right-0 pr-3.5 flex items-center hidden">
+                    <svg class="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </span>
+                <!-- Autocomplete Dropdown -->
+                <div id="location-dropdown" class="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto hidden">
+                </div>
+            </div>
+
+            <!-- Submit Button & Filters toggle -->
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2">
+                    <i class="bi bi-search text-base"></i> Search Jobs
+                </button>
+                <button type="button" onclick="resetFilters()" class="h-12 px-5 border border-slate-250 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 rounded-xl text-sm font-bold flex items-center justify-center">
+                    Reset
+                </button>
+            </div>
+
+        </form>
+
+        <!-- Advanced Filter badges -->
+        <div class="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+            <span class="text-xs font-bold text-slate-450 uppercase tracking-wide mr-2">Quick filters:</span>
+            
+            <button onclick="toggleFilterBadge('job_type', 'FULL_TIME')" class="h-10 px-4 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-1.5">
+                Full-Time
+            </button>
+            <button onclick="toggleFilterBadge('job_type', 'REMOTE')" class="h-10 px-4 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-1.5">
+                Remote
+            </button>
+            <button onclick="toggleFilterBadge('salary', '15LPA')" class="h-10 px-4 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-1.5">
+                ₹15+ LPA
+            </button>
+            <button onclick="toggleFilterBadge('exp', 'fresher')" class="h-10 px-4 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-1.5">
+                Fresher Friendly
+            </button>
+        </div>
+    </div>
+
+    <!-- JOB CARDS LISTING -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="job-cards-container">
+        
+        <!-- Job Card 1 -->
+        <div class="job-search-card p-6 flex flex-col justify-between h-auto min-h-64">
+            <div>
+                <div class="flex items-start justify-between flex-wrap gap-3">
+                    <div class="flex gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">S</div>
+                        <div>
+                            <h3 class="font-extrabold text-slate-950 dark:text-white text-base">Backend Engineer (Django)</h3>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">Stripe Technologies • Bangalore</p>
+                        </div>
+                    </div>
+                    <span class="text-xs bg-brandGreen/10 text-brandGreen dark:bg-brandGreen/20 px-2.5 py-1 rounded-full font-bold self-start sm:self-auto">96% AI Match</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-3">
+                    Build financial ledgers and payment systems at scale. Optimize Celery task worker loops and query transaction tables.
+                </p>
+            </div>
+            
+            <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-850">
+                <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹18 - 25 LPA</span>
+                <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 2-5 Years</span>
+                <span class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-bold">Remote</span>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="triggerEasyApply('Stripe', 'Backend Engineer', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                <button onclick="toggleSaveJob(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark text-base"></i></button>
+                <button onclick="shareJob('Backend Engineer at Stripe')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share text-base"></i></button>
+            </div>
+        </div>
+
+        <!-- Job Card 2 -->
+        <div class="job-search-card p-6 flex flex-col justify-between h-auto min-h-64">
+            <div>
+                <div class="flex items-start justify-between flex-wrap gap-3">
+                    <div class="flex gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-950 text-white flex items-center justify-center text-xl font-black flex-shrink-0">L</div>
+                        <div>
+                            <h3 class="font-extrabold text-slate-950 dark:text-white text-base">Senior Frontend Dev (React)</h3>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">Linear Systems • Remote / India</p>
+                        </div>
+                    </div>
+                    <span class="text-xs bg-brandGreen/10 text-brandGreen dark:bg-brandGreen/20 px-2.5 py-1 rounded-full font-bold self-start sm:self-auto">94% AI Match</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-3">
+                    Own user experience workflows. Integrate reactive component graphs and complex websocket events.
+                </p>
+            </div>
+            
+            <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-850">
+                <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹22 - 30 LPA</span>
+                <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 4-7 Years</span>
+                <span class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-bold">Remote</span>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="triggerEasyApply('Linear', 'Senior Frontend Dev', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                <button onclick="toggleSaveJob(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark text-base"></i></button>
+                <button onclick="shareJob('Frontend Lead at Linear')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share text-base"></i></button>
+            </div>
+        </div>
+
+        <!-- Job Card 3 -->
+        <div class="job-search-card p-6 flex flex-col justify-between h-auto min-h-64">
+            <div>
+                <div class="flex items-start justify-between flex-wrap gap-3">
+                    <div class="flex gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">V</div>
+                        <div>
+                            <h3 class="font-extrabold text-slate-950 dark:text-white text-base">AI Product Engineer</h3>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">Vercel • Hybrid / Bangalore</p>
+                        </div>
+                    </div>
+                    <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 px-2.5 py-1 rounded-full font-bold self-start sm:self-auto">92% AI Match</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-3">
+                    Develop next-gen model client SDK integration wrappers. Co-ordinate deployment telemetry stats.
+                </p>
+            </div>
+            
+            <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-850">
+                <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹25 - 35 LPA</span>
+                <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 3-6 Years</span>
+                <span class="bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">Hybrid</span>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="triggerEasyApply('Vercel', 'AI Product Engineer', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                <button onclick="toggleSaveJob(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark text-base"></i></button>
+                <button onclick="shareJob('AI Engineer at Vercel')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share text-base"></i></button>
+            </div>
+        </div>
+
+        <!-- Job Card 4 -->
+        <div class="job-search-card p-6 flex flex-col justify-between h-auto min-h-64">
+            <div>
+                <div class="flex items-start justify-between flex-wrap gap-3">
+                    <div class="flex gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black flex-shrink-0">N</div>
+                        <div>
+                            <h3 class="font-extrabold text-slate-950 dark:text-white text-base">Full Stack Engineer</h3>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">Notion • Remote / India</p>
+                        </div>
+                    </div>
+                    <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 px-2.5 py-1 rounded-full font-bold self-start sm:self-auto">90% AI Match</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-3">
+                    Build rich editor blocks and offline sync pipelines. Enhance Postgres indexes for block metadata structures.
+                </p>
+            </div>
+            
+            <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-850">
+                <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹20 - 28 LPA</span>
+                <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 3-6 Years</span>
+                <span class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-bold">Remote</span>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="triggerEasyApply('Notion', 'Full Stack Engineer', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                <button onclick="toggleSaveJob(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark text-base"></i></button>
+                <button onclick="shareJob('Full Stack Developer at Notion')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share text-base"></i></button>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- EASY APPLY MODAL -->
+<div id="easy-apply-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col justify-between p-6">
+        <div class="flex justify-between items-center border-b pb-3 mb-4">
+            <h3 class="font-extrabold text-base">Easy Apply to <span id="modal-company-name"></span></h3>
+            <button onclick="closeEasyApplyModal()" class="text-slate-400 hover:text-slate-650"><i class="bi bi-x-lg"></i></button>
+        </div>
+        
+        <div class="space-y-4">
+            <p class="text-xs text-slate-500">
+                TalentVault will automatically share your verified resume profile and matching metrics with the hiring manager.
+            </p>
+            
+            <div class="p-4 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-3">
+                    <i class="bi bi-file-earmark-pdf-fill text-2xl text-primary"></i>
+                    <div>
+                        <h4 class="font-extrabold text-xs">rajeev_resume_django_lead.pdf</h4>
+                        <span class="text-[10px] text-slate-450 font-bold">182 KB • AI Match Active</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="space-y-2">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wide">Cover note / Pitch (Optional)</label>
+                <textarea id="apply-pitch" class="w-full h-20 p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none" placeholder="Explain why you are a perfect fit..."></textarea>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeEasyApplyModal()" class="h-10 px-4 border border-slate-200 text-xs font-bold rounded-xl">Cancel</button>
+            <button onclick="submitEasyApply()" class="h-10 px-5 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl">Submit Application</button>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts for location autocomplete and simulations -->
+<script>
+    let activeApplyButton = null;
+    let activeCompany = '';
+    let activeRole = '';
+
+    function triggerEasyApply(company, role, btn) {
+        activeApplyButton = btn;
+        activeCompany = company;
+        activeRole = role;
+
+        document.getElementById('modal-company-name').innerText = company;
+        document.getElementById('easy-apply-modal').classList.remove('hidden');
+        document.getElementById('easy-apply-modal').classList.add('flex');
+    }
+
+    function closeEasyApplyModal() {
+        document.getElementById('easy-apply-modal').classList.add('hidden');
+        document.getElementById('easy-apply-modal').classList.remove('flex');
+        document.getElementById('apply-pitch').value = '';
+    }
+
+    function submitEasyApply() {
+        closeEasyApplyModal();
+        
+        if (activeApplyButton) {
+            activeApplyButton.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Processing...`;
+            activeApplyButton.disabled = true;
+
+            setTimeout(() => {
+                activeApplyButton.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
+                activeApplyButton.className = "flex-1 h-10 bg-brandGreen text-white font-bold text-xs rounded-xl";
+                
+                // Toast notification
+                const toast = document.createElement('div');
+                toast.className = "fixed bottom-5 right-5 bg-brandGreen text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 transform translate-y-10 opacity-0 transition-all duration-500 z-50 font-bold text-sm";
+                toast.innerHTML = `<i class="bi bi-check-circle-fill"></i> Successfully applied to ${activeRole} at ${activeCompany}!`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 50);
+                setTimeout(() => {
+                    toast.classList.add('translate-y-10', 'opacity-0');
+                    setTimeout(() => toast.remove(), 500);
+                }, 3000);
+
+            }, 1200);
+        }
+    }
+
+    function toggleSaveJob(btn) {
+        const icon = btn.querySelector('i');
+        if (icon.classList.contains('bi-bookmark')) {
+            icon.className = "bi bi-bookmark-fill text-primary";
+            showToast("Job added to Saved list");
+        } else {
+            icon.className = "bi bi-bookmark";
+            showToast("Job removed from Saved list");
+        }
+    }
+
+    function shareJob(title) {
+        navigator.clipboard.writeText(window.location.href);
+        showToast(`Sharing link to "${title}" copied to clipboard!`);
+    }
+
+    function toggleFilterBadge(key, val) {
+        // Mock filter toggle
+        showToast(`Job filters updated: ${key} = ${val}`);
+    }
+
+    function resetFilters() {
+        window.location.href = "{% url 'frontend:jobs' %}";
+    }
+
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 transform translate-y-10 opacity-0 transition-all duration-500 z-50 font-bold text-sm";
+        toast.innerHTML = `<i class="bi bi-info-circle-fill text-primary"></i> ${message}`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 50);
+        setTimeout(() => {
+            toast.classList.add('translate-y-10', 'opacity-0');
+            setTimeout(() => toast.remove(), 500);
+        }, 3000);
+    }
+
+    // --- PHASE 1 LOCATION AUTOCOMPLETE INTEGRATION ---
+    (function() {
+        const input = document.getElementById('id_job_location');
+        const dropdown = document.getElementById('location-dropdown');
+        const spinner = document.getElementById('location-spinner');
+        
+        let debounceTimer = null;
+        let currentFocusIndex = -1;
+        let suggestions = [];
+
+        const localSuggestions = [
+            "Bangalore, Karnataka, India",
+            "Pune, Maharashtra, India",
+            "Mumbai, Maharashtra, India",
+            "Delhi, National Capital Territory of Delhi, India",
+            "Chennai, Tamil Nadu, India",
+            "Hyderabad, Telangana, India",
+            "Kolkata, West Bengal, India",
+            "Noida, Uttar Pradesh, India",
+            "Greater Noida, Uttar Pradesh, India",
+            "Gurgaon, Haryana, India",
+            "Ahmedabad, Gujarat, India",
+            "Surat, Gujarat, India",
+            "Nagpur, Maharashtra, India",
+            "Jaipur, Rajasthan, India",
+            "Lucknow, Uttar Pradesh, India",
+            "Patna, Bihar, India",
+            "Gaya, Bihar, India",
+            "Muzaffarpur, Bihar, India",
+            "Darbhanga, Bihar, India",
+            "Ara, Bihar, India",
+            "Bettiah, Bihar, India",
+            "Chapra, Bihar, India",
+            "Pimpri, Maharashtra, India",
+            "Pimpri Chinchwad, Maharashtra, India"
+        ];
+
+        input.addEventListener('input', function() {
+            const query = this.value.trim();
+            clearTimeout(debounceTimer);
+            currentFocusIndex = -1;
+            
+            if (query.length === 0) {
+                hideDropdown();
+                return;
+            }
+
+            const instantMatches = localSuggestions.filter(loc => 
+                loc.toLowerCase().includes(query.toLowerCase())
+            );
+            if (instantMatches.length > 0) {
+                suggestions = instantMatches;
+                renderDropdown(query);
+            }
+
+            debounceTimer = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 300);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            const items = dropdown.getElementsByTagName('div');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                currentFocusIndex = (currentFocusIndex + 1) % items.length;
+                setActiveItem(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                currentFocusIndex = (currentFocusIndex - 1 + items.length) % items.length;
+                setActiveItem(items);
+            } else if (e.key === 'Enter') {
+                if (currentFocusIndex > -1) {
+                    e.preventDefault();
+                    items[currentFocusIndex].click();
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
+        });
+
+        function fetchSuggestions(query) {
+            spinner.classList.remove('hidden');
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&addressdetails=1&limit=8`;
+            
+            fetch(url, { headers: { 'Accept-Language': 'en' } })
+            .then(res => res.json())
+            .then(data => {
+                spinner.classList.add('hidden');
+                const fetchedLocs = data.map(item => item.display_name);
+                const combined = [...suggestions, ...fetchedLocs];
+                suggestions = [...new Set(combined)].slice(0, 8);
+                
+                if (suggestions.length > 0) {
+                    renderDropdown(query);
+                } else {
+                    hideDropdown();
+                }
+            })
+            .catch(err => {
+                console.error("OSM fetch error: ", err);
+                spinner.classList.add('hidden');
+            });
+        }
+
+        function renderDropdown(query) {
+            dropdown.innerHTML = '';
+            dropdown.classList.remove('hidden');
+
+            suggestions.forEach((loc, idx) => {
+                const row = document.createElement('div');
+                row.className = "px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer transition-all duration-150 border-b border-slate-100 last:border-b-0 flex items-center gap-2";
+                
+                const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+                const highlighted = loc.replace(regex, `<span class="text-primary font-bold">$1</span>`);
+                
+                row.innerHTML = `<i class="bi bi-geo-alt-fill text-slate-400"></i> <span>${highlighted}</span>`;
+                row.addEventListener('click', function() {
+                    input.value = loc;
+                    hideDropdown();
+                });
+                dropdown.appendChild(row);
+            });
+        }
+
+        function setActiveItem(items) {
+            Array.from(items).forEach(item => item.classList.remove('bg-slate-100'));
+            if (currentFocusIndex > -1 && currentFocusIndex < items.length) {
+                const item = items[currentFocusIndex];
+                item.classList.add('bg-slate-100');
+                item.scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function hideDropdown() {
+            dropdown.classList.add('hidden');
+            dropdown.innerHTML = '';
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+    })();
+</script>
+{% endblock %}
