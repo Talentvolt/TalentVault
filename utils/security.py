@@ -8,11 +8,9 @@ import struct
 import logging
 import zipfile
 import mimetypes
-import fitz
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
-from oletools.olevba import VBA_Parser
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +145,7 @@ def detect_password_protection(file_bytes, ext):
     """
     if ext == 'pdf':
         try:
+            import fitz
             doc = fitz.open(stream=file_bytes, filetype="pdf")
             return bool(doc.is_encrypted)
         except Exception:
@@ -180,6 +179,7 @@ def scan_office_security(file_bytes, filename, ext):
     
     # 1. VBA Macro Check using oletools.olevba
     try:
+        from oletools.olevba import VBA_Parser
         parser = VBA_Parser(filename=filename, data=file_bytes)
         if parser.detect_vba_macros():
             raise SecurityValidationError("Office macro detected.", code="MACRO_DETECTED")
@@ -209,6 +209,7 @@ def scan_pdf_security(file_bytes):
     Reject PDFs containing JavaScript, embedded executables, launch actions, suspicious annotations, or embedded files.
     """
     try:
+        import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         
         # Embedded files check

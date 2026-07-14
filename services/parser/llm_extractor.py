@@ -7,7 +7,6 @@ from datetime import datetime
 from django.db import transaction
 from django.conf import settings
 from pydantic import BaseModel, Field
-from openai import OpenAI
 
 from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, Education, Project, Certification
 
@@ -156,7 +155,8 @@ class LLMExtractor:
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set.")
             
-        client = OpenAI(api_key=self.api_key)
+        from services.singletons import AIService
+        client = AIService().get_openai_client()
         
         completion = client.beta.chat.completions.parse(
             model=self.model,

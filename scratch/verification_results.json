@@ -1,0 +1,86 @@
+{
+  "startup_ram": 145.68359375,
+  "spacy_loaded_startup": false,
+  "paddle_loaded_startup": false,
+  "easyocr_loaded_startup": false,
+  "nlp_singleton_ok": true,
+  "ocr_singleton_ok": true,
+  "ai_singleton_ok": true,
+  "ram_before_first": 145.68359375,
+  "ram_after_first": 162.45703125,
+  "first_parse_time": 13.133430242538452,
+  "spacy_loaded_after": false,
+  "paddle_loaded_after": false,
+  "second_parse_time": 38.403605222702026,
+  "peak_ram": 269.015625,
+  "avg_ram": 254.75725446428572,
+  "final_ram": 269.015625,
+  "format_results": [
+    {
+      "format": "image PDF (scanned)",
+      "file": "scratch/scanned_pdf.pdf",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "scanned PDF",
+      "file": "scratch/scanned_pdf.pdf",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "DOCX",
+      "file": "media/resumes/original/original_zip_resume.docx",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "DOC",
+      "file": "media/resumes/original/TUSHAR__RESUME___2026_1.doc",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "image only (PNG)",
+      "file": "media/uploads/screenshot_resume.png",
+      "status": "READ_ERROR",
+      "extracted_name": "None"
+    },
+    {
+      "format": "multi-page PDF",
+      "file": "scratch/rajeev_kumar_resume.pdf",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "password protected PDF",
+      "file": "scratch/password_protected.pdf",
+      "status": "SECURITY_FAILED",
+      "extracted_name": "None"
+    },
+    {
+      "format": "corrupted PDF",
+      "file": "scratch/corrupted_resume.pdf",
+      "status": "SECURITY_FAILED",
+      "extracted_name": "None"
+    },
+    {
+      "format": "resume with tables",
+      "file": "scratch/rajeev_kumar_resume.pdf",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "resume with icons",
+      "file": "scratch/harneet_resume.pdf",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    },
+    {
+      "format": "resume with two columns",
+      "file": "scratch/shreya_chavda_resume.pdf",
+      "status": "SUCCESS",
+      "extracted_name": "Benchmark Candidate"
+    }
+  ]
+}

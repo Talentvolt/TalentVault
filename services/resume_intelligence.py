@@ -17,41 +17,20 @@ from apps.candidates.models import (
 
 import importlib.util
 
-PADDLE_AVAILABLE = False
-if importlib.util.find_spec("paddleocr") is not None:
-    try:
-        from paddleocr import PaddleOCR
-        # Try to import paddle module as well to verify installation
-        import paddle
-        PADDLE_AVAILABLE = True
-    except Exception:
-        PADDLE_AVAILABLE = False
-
-EASY_AVAILABLE = False
-if importlib.util.find_spec("easyocr") is not None:
-    try:
-        import easyocr
-        EASY_AVAILABLE = True
-    except Exception:
-        EASY_AVAILABLE = False
-
-TESSERACT_AVAILABLE = False
-if importlib.util.find_spec("pytesseract") is not None:
-    try:
-        import pytesseract
-        pytesseract.get_tesseract_version()
-        TESSERACT_AVAILABLE = True
-    except Exception:
-        TESSERACT_AVAILABLE = False
-
-SPACY_AVAILABLE = False
-if importlib.util.find_spec("spacy") is not None:
-    try:
-        import spacy
-        spacy.load("en_core_web_sm")
-        SPACY_AVAILABLE = True
-    except Exception:
-        SPACY_AVAILABLE = False
+def __getattr__(name):
+    if name == 'PADDLE_AVAILABLE':
+        from services.singletons import OCRService
+        return OCRService().is_paddle_available()
+    elif name == 'EASY_AVAILABLE':
+        from services.singletons import OCRService
+        return OCRService().is_easy_available()
+    elif name == 'TESSERACT_AVAILABLE':
+        from services.singletons import OCRService
+        return OCRService().is_tesseract_available()
+    elif name == 'SPACY_AVAILABLE':
+        from services.singletons import NLPService
+        return NLPService().is_spacy_available()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def escape_plain_text(text: str) -> str:
@@ -1008,16 +987,17 @@ class ResumeIntelligenceService:
 
         # Extract NER (spaCy)
         spacy_persons = []
-        if SPACY_AVAILABLE:
+        from services.singletons import NLPService
+        if NLPService().is_spacy_available():
             try:
-                import spacy
-                nlp = spacy.load("en_core_web_sm")
-                doc = nlp("\n".join(header_lines))
-                for ent in doc.ents:
-                    if ent.label_ == "PERSON":
-                        ent_text = " ".join(ent.text.strip().split())
-                        if is_valid_name_candidate(ent_text):
-                            spacy_persons.append(ent_text)
+                nlp = NLPService().get_nlp()
+                if nlp:
+                    doc = nlp("\n".join(header_lines))
+                    for ent in doc.ents:
+                        if ent.label_ == "PERSON":
+                            ent_text = " ".join(ent.text.strip().split())
+                            if is_valid_name_candidate(ent_text):
+                                spacy_persons.append(ent_text)
             except Exception as e:
                 print(f"spaCy PERSON extraction failed: {e}")
 
@@ -1142,7 +1122,8 @@ class ResumeIntelligenceService:
         from PIL import Image
 
         # 1. Orientation Correction (using Tesseract OSD if available)
-        if TESSERACT_AVAILABLE:
+        from services.singletons import OCRService
+        if OCRService().is_tesseract_available():
             try:
                 import pytesseract
                 osd = pytesseract.image_to_osd(img)
@@ -1490,27 +1471,28 @@ class ResumeIntelligenceService:
 
         for idx, img in enumerate(preprocessed_images):
             page_text, engine_success, used_engine_name, page_confidence = "", False, "", 0.0
-            if PADDLE_AVAILABLE:
+            from services.singletons import OCRService
+            if OCRService().is_paddle_available():
                 try:
-                    from paddleocr import PaddleOCR
-                    ocr = PaddleOCR(use_textline_orientation=True, lang='en')
-                    res = ocr.ocr(np.array(img.convert('RGB')), cls=True)
-                    if res and res[0]:
-                        lines, confs = [line[1][0] for line in res[0]], [line[1][1] * 100 for line in res[0]]
-                        page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
-                        used_engine_name, engine_success = "PaddleOCR", True
+                    ocr = OCRService().get_paddle_ocr()
+                    if ocr:
+                        res = ocr.ocr(np.array(img.convert('RGB')), cls=True)
+                        if res and res[0]:
+                            lines, confs = [line[1][0] for line in res[0]], [line[1][1] * 100 for line in res[0]]
+                            page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
+                            used_engine_name, engine_success = "PaddleOCR", True
                 except Exception as e: logger.error(f"PaddleOCR failed: {e}")
-            if not engine_success and EASY_AVAILABLE:
+            if not engine_success and OCRService().is_easy_available():
                 try:
-                    import easyocr
-                    reader = easyocr.Reader(['en'])
-                    res = reader.readtext(np.array(img.convert('RGB')))
-                    if res:
-                        lines, confs = [r[1] for r in res], [r[2] * 100 for r in res]
-                        page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
-                        used_engine_name, engine_success = "EasyOCR", True
+                    reader = OCRService().get_easyocr_reader()
+                    if reader:
+                        res = reader.readtext(np.array(img.convert('RGB')))
+                        if res:
+                            lines, confs = [r[1] for r in res], [r[2] * 100 for r in res]
+                            page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
+                            used_engine_name, engine_success = "EasyOCR", True
                 except Exception as e: logger.error(f"EasyOCR failed: {e}")
-            if not engine_success and TESSERACT_AVAILABLE:
+            if not engine_success and OCRService().is_tesseract_available():
                 try:
                     import pytesseract
                     text = pytesseract.image_to_string(img)
