@@ -372,7 +372,7 @@ def test_process_resume_name_priority_list(mock_parser, mock_ocr):
 def test_new_name_extraction_pipeline(mock_parser, mock_ocr):
     # Setup base mocks
     mock_ocr.return_value = {
-        "text": "Laxmi Sudharshan\nlaxmi@example.com",
+        "text": "Python Developer\nlaxmi@example.com",
         "engine": "pdfplumber",
         "confidence": 98.0,
         "resume_type": "EDITABLE_PDF",

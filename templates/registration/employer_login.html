@@ -38,45 +38,81 @@
 
         /* Left Branding Panel */
         .brand-panel {
-            flex: 1.2;
-            background: linear-gradient(135deg, #0a1128 0%, #101f42 50%, #020715 100%);
+            flex: 1.25;
+            background: linear-gradient(135deg, #090d16 0%, #0f1626 50%, #050811 100%);
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 4rem;
+            padding: 3.5rem 4rem;
             color: #ffffff;
             overflow: hidden;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* Animated Background Gradients for Left Panel */
+        /* Large radial light effect & smooth blurred gradient circles */
         .brand-panel::before {
             content: '';
             position: absolute;
-            top: -20%;
-            left: -20%;
-            width: 80%;
-            height: 80%;
-            background: radial-gradient(circle, rgba(124, 58, 237, 0.2) 0%, transparent 70%);
+            top: -10%;
+            left: -10%;
+            width: 70%;
+            height: 70%;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.18) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 70%);
             border-radius: 50%;
+            filter: blur(40px);
             animation: floatGlow 15s infinite alternate ease-in-out;
+            pointer-events: none;
+            z-index: 1;
         }
 
         .brand-panel::after {
             content: '';
             position: absolute;
-            bottom: -10%;
-            right: -10%;
-            width: 70%;
-            height: 70%;
-            background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, transparent 60%);
+            bottom: -5%;
+            right: -5%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.03) 50%, transparent 75%);
             border-radius: 50%;
+            filter: blur(50px);
             animation: floatGlow 12s infinite alternate-reverse ease-in-out;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Ambient light ray */
+        .ambient-light-ray {
+            position: absolute;
+            top: 25%;
+            right: -20%;
+            width: 80%;
+            height: 30%;
+            background: linear-gradient(45deg, rgba(167, 139, 250, 0.04) 0%, rgba(139, 92, 246, 0) 100%);
+            transform: rotate(-15deg);
+            filter: blur(30px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Abstract Flowing Mesh/Grid Pattern */
+        .mesh-grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: radial-gradient(circle at 40% 40%, black, transparent 80%);
+            -webkit-mask-image: radial-gradient(circle at 40% 40%, black, transparent 80%);
+            opacity: 0.8;
+            pointer-events: none;
+            z-index: 1;
         }
 
         @keyframes floatGlow {
             0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(40px, 40px) scale(1.08); }
+            100% { transform: translate(30px, 20px) scale(1.05); }
         }
 
         .brand-header {
@@ -85,26 +121,223 @@
 
         .brand-content {
             z-index: 2;
-            max-width: 520px;
-            margin-top: -2rem;
+            max-width: 580px;
+            margin-top: 1rem;
+            margin-bottom: 2rem;
         }
 
         .brand-tagline {
-            font-size: 3.2rem;
+            font-size: 3rem;
             font-weight: 800;
             line-height: 1.15;
             letter-spacing: -1.5px;
-            margin-bottom: 1.5rem;
-            background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
         .brand-desc {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             line-height: 1.6;
             color: #94a3b8;
             font-weight: 400;
+            margin-bottom: 2.25rem;
+        }
+
+        /* Feature Cards Grid (2x2) */
+        .feature-cards-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
+        /* Glassmorphic Feature Card */
+        .feature-glass-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.25rem;
+            display: flex;
+            gap: 1rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .feature-glass-card:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(167, 139, 250, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Minimal Outline Icon */
+        .feature-icon-wrapper {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: rgba(167, 139, 250, 0.08);
+            border: 1px solid rgba(167, 139, 250, 0.15);
+            color: #a78bfa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .feature-glass-card:hover .feature-icon-wrapper {
+            background: #a78bfa;
+            color: #0c101d;
+            box-shadow: 0 0 12px rgba(167, 139, 250, 0.4);
+        }
+
+        .feature-card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .feature-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 0;
+        }
+
+        .feature-desc {
+            font-size: 0.85rem;
+            line-height: 1.45;
+            color: #94a3b8;
+            margin: 0;
+        }
+
+        /* Bottom Premium Glass Analytics Widget */
+        .analytics-widget-glass {
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            margin-top: auto;
+            max-width: 580px;
+            box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.4);
+        }
+
+        .analytics-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            padding-bottom: 0.75rem;
+        }
+
+        .analytics-widget-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin: 0;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .analytics-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #a78bfa;
+            background: rgba(167, 139, 250, 0.1);
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            padding: 0.25rem 0.6rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #a78bfa;
+            box-shadow: 0 0 8px #a78bfa;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .chart-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .trend-svg {
+            width: 100%;
+            height: 48px;
+            overflow: visible;
+        }
+
+        .circle-svg {
+            width: 55px;
+            height: 55px;
+            transform: rotate(-90deg);
+        }
+
+        .circle-text {
+            transform: rotate(90deg);
+            transform-origin: center;
+        }
+
+        .analytics-stats {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        .stat-value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1;
+        }
+
+        .stat-name {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .stat-divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .brand-footer {
@@ -257,17 +490,110 @@
     <div class="split-layout">
         <!-- Left Branding Panel -->
         <div class="brand-panel">
+            <div class="mesh-grid-overlay"></div>
+            <div class="ambient-light-ray"></div>
+
             <div class="brand-header mb-4">
                 <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 45px; width: auto; object-fit: contain;">
             </div>
             
             <div class="brand-content">
-                <h1 class="brand-tagline">Manage &<br>Administer.</h1>
-                <p class="brand-desc">AI-powered recruitment administration. Manage, configure, and maintain the TalentVault platform from one intelligent control panel.</p>
+                <h1 class="brand-tagline">Recruit Smarter.<br>Scale Faster.</h1>
+                <p class="brand-desc">An enterprise-grade hiring platform designed to help recruitment teams source, evaluate and hire exceptional talent with speed, accuracy and confidence.</p>
+                
+                <div class="feature-cards-grid">
+                    <!-- Card 1 -->
+                    <div class="feature-glass-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-person-check"></i>
+                        </div>
+                        <div class="feature-card-content">
+                            <h4 class="feature-title">AI Candidate Matching</h4>
+                            <p class="feature-desc">Find qualified talent instantly using intelligent AI matching.</p>
+                        </div>
+                    </div>
+                    <!-- Card 2 -->
+                    <div class="feature-glass-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-file-earmark-text"></i>
+                        </div>
+                        <div class="feature-card-content">
+                            <h4 class="feature-title">Resume Intelligence</h4>
+                            <p class="feature-desc">Automatically analyze resumes and extract meaningful insights.</p>
+                        </div>
+                    </div>
+                    <!-- Card 3 -->
+                    <div class="feature-glass-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-funnel"></i>
+                        </div>
+                        <div class="feature-card-content">
+                            <h4 class="feature-title">Smart Hiring Pipeline</h4>
+                            <p class="feature-desc">Track every candidate from application to hiring in one workflow.</p>
+                        </div>
+                    </div>
+                    <!-- Card 4 -->
+                    <div class="feature-glass-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <div class="feature-card-content">
+                            <h4 class="feature-title">Enterprise Security</h4>
+                            <p class="feature-desc">Enterprise-grade security, permissions and compliance.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Premium Glass Analytics Widget -->
+            <div class="analytics-widget-glass">
+                <div class="analytics-header">
+                    <span class="analytics-badge"><span class="pulse-dot"></span> Live Analytics</span>
+                    <h4 class="analytics-widget-title">Hiring Insights</h4>
+                </div>
+                <div class="analytics-grid">
+                    <div class="analytics-chart-container">
+                        <div class="chart-label">Hiring Trend (Monthly)</div>
+                        <svg class="trend-svg" viewBox="0 0 100 40">
+                            <defs>
+                                <linearGradient id="trend-grad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(167, 139, 250, 0.4)"/>
+                                    <stop offset="100%" stop-color="rgba(167, 139, 250, 0)"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M 0,35 Q 20,20 40,25 T 80,10 T 100,5" fill="none" stroke="#a78bfa" stroke-width="2"/>
+                            <path d="M 0,35 Q 20,20 40,25 T 80,10 T 100,5 L 100,40 L 0,40 Z" fill="url(#trend-grad)"/>
+                        </svg>
+                    </div>
+                    <div class="analytics-circle-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div class="chart-label" style="align-self: flex-start;">Pipeline</div>
+                        <svg class="circle-svg" viewBox="0 0 36 36">
+                            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
+                            <path class="circle" stroke-dasharray="75, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round"/>
+                            <text x="18" y="20.35" class="circle-text" text-anchor="middle" fill="#ffffff" font-size="7" font-weight="bold">75%</text>
+                        </svg>
+                    </div>
+                </div>
+                <div class="analytics-stats">
+                    <div class="stat-item">
+                        <span class="stat-value">14 Days</span>
+                        <span class="stat-name">Time to Hire</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value">12.5k</span>
+                        <span class="stat-name">Processed</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value">98.4%</span>
+                        <span class="stat-name">Success Rate</span>
+                    </div>
+                </div>
             </div>
             
-            <div class="brand-footer">
-                &copy; 2026 TalentVault. All rights reserved. Built for system administrators.
+            <div class="brand-footer mt-4">
+                &copy; 2026 TalentVault. All rights reserved. Built for recruitment teams.
             </div>
         </div>
 
@@ -276,19 +602,15 @@
             <div class="auth-container">
                 <div class="glass-card">
                     <div class="text-center mb-4">
-                        <h3 class="fw-bold">Welcome Admin</h3>
-                        <p class="text-secondary small">Securely access your TalentVault Admin Workspace.</p>
+                        <h3 class="fw-bold">Welcome Recruiter</h3>
+                        <p class="text-secondary small">Securely access your TalentVault Recruiter Workspace.</p>
                     </div>
 
                     {% if form.errors or form.non_field_errors %}
                     <div class="alert-error">
                         <i class="bi bi-exclamation-circle-fill"></i>
                         <span>
-                            {% if form.non_field_errors %}
-                                {{ form.non_field_errors.0 }}
-                            {% else %}
-                                Invalid email or password.
-                            {% endif %}
+                            This workspace is reserved for Administrators.
                         </span>
                     </div>
                     {% endif %}
@@ -296,12 +618,12 @@
                     <form method="post" action="{% url 'employer_login' %}">
                         {% csrf_token %}
                         
-                        <!-- Admin Email -->
+                        <!-- Official Email -->
                         <div class="mb-3">
-                            <label for="id_email" class="form-label">Admin Email</label>
+                            <label for="id_email" class="form-label">Official Email</label>
                             <div class="input-group-custom">
                                 <input type="email" name="email" id="id_email" required 
-                                       class="form-control-custom" placeholder="admin@talentvault.ai" 
+                                       class="form-control-custom" placeholder="official@company.com" 
                                        value="{{ form.email.value|default:'' }}">
                             </div>
                         </div>
@@ -328,7 +650,7 @@
                                     Remember Me
                                 </label>
                             </div>
-                            <a href="#" class="forgot-link">Forgot Password?</a>
+                            <a href="#" class="forgot-link" style="color: var(--primary); text-decoration: none; font-size: 0.85rem; font-weight: 600;">Forgot Password?</a>
                         </div>
 
                         <!-- Sign In Button -->
@@ -341,7 +663,7 @@
                             Looking for jobs? <a href="{% url 'candidate_login' %}" class="text-primary text-decoration-none fw-semibold">Go to Candidate Login</a>
                         </p>
                         <p class="small text-muted mb-0">
-                            Don't have an account? <a href="#" class="text-primary text-decoration-none fw-semibold">Register as Admin</a>
+                            Don't have an account? <a href="{% url 'employer_signup' %}" class="text-primary text-decoration-none fw-semibold">Register as Employer</a>
                         </p>
                     </div>
                 </div>

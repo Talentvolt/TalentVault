@@ -54,6 +54,8 @@ def sanitize_recursive(data, path=""):
     elif isinstance(data, str):
         return sanitize_text(data, path)
     elif data is None:
+        if path and any(k in path for k in ["current_ctc", "expected_ctc", "date_of_birth", "gender"]):
+            return None
         return ""
     elif isinstance(data, (bool, int, float)):
         return data
@@ -292,6 +294,78 @@ def parse_education_date_to_string(date_val) -> str:
     return ""
 
 
+def normalize_skills(skills_list):
+    if not skills_list:
+        return []
+    normalized = []
+    seen = set()
+    normalization_map = {
+        'python': 'Python',
+        'django': 'Django',
+        'react': 'React',
+        'javascript': 'JavaScript',
+        'node': 'Node.js',
+        'node.js': 'Node.js',
+        'aws': 'AWS',
+        'docker': 'Docker',
+        'kubernetes': 'Kubernetes',
+        'sql': 'SQL',
+        'mysql': 'MySQL',
+        'postgresql': 'PostgreSQL',
+        'mongodb': 'MongoDB',
+        'html': 'HTML',
+        'css': 'CSS',
+        'git': 'Git',
+        'java': 'Java',
+        'php': 'PHP',
+        'typescript': 'TypeScript',
+        'c++': 'C++',
+        'c#': 'C#',
+        'ruby': 'Ruby',
+        'rails': 'Ruby on Rails',
+        'flutter': 'Flutter',
+        'android': 'Android',
+        'ios': 'iOS'
+    }
+    for s in skills_list:
+        if not s or not isinstance(s, str):
+            continue
+        s_clean = s.strip()
+        if not s_clean:
+            continue
+        s_lower = s_clean.lower()
+        normalized_name = normalization_map.get(s_lower, s_clean.title())
+        if normalized_name.lower() not in seen:
+            normalized.append(normalized_name)
+            seen.add(normalized_name.lower())
+    return normalized
+
+
+def parse_experience_years(text_val):
+    if not text_val:
+        return 0.0
+    text_val = str(text_val).lower().strip()
+    years = 0.0
+    months = 0.0
+    
+    years_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:yr|year|yrs|years)', text_val)
+    if years_match:
+        years = float(years_match.group(1))
+        
+    months_match = re.search(r'(\d+)\s*(?:month|months|mth|mths)', text_val)
+    if months_match:
+        months = float(months_match.group(1))
+        
+    if years > 0 or months > 0:
+        return round(years + (months / 12.0), 2)
+        
+    digit_match = re.search(r'^(\d+(?:\.\d+)?)$', text_val)
+    if digit_match:
+        return round(float(digit_match.group(1)), 2)
+        
+    return 0.0
+
+
 def convert_llm_data_to_standard_format(llm_data):
     f = _flatten_field
     
@@ -347,10 +421,10 @@ def convert_llm_data_to_standard_format(llm_data):
                 "end_date": parse_education_date_to_string(e_year)
             })
 
-    # 3. Skills
+    # 3. Skills (normalized and merged)
     tech_skills = f(llm_data.get("technical_skills")) or []
     soft_skills = f(llm_data.get("soft_skills")) or []
-    skills = [s.strip() for s in (tech_skills + soft_skills) if s and s.strip()]
+    skills = normalize_skills(tech_skills + soft_skills)
 
     # 4. Projects
     projects = []
@@ -395,6 +469,34 @@ def convert_llm_data_to_standard_format(llm_data):
     raw_portfolio = f(llm_data.get("portfolio")) or ""
     portfolio_clean = raw_portfolio.strip()[:200]
 
+    # Clean and parse CTCs, Notice Period, DOB, Gender
+    def clean_ctc(val):
+        if not val:
+            return None
+        val_str = str(val).lower()
+        matches = re.findall(r'[\d\.]+', val_str)
+        if not matches:
+            return None
+        num = float(matches[0])
+        if 'lpa' in val_str or 'lakh' in val_str or num < 100.0:
+            return num * 100000
+        return num
+
+    def clean_notice_period(val):
+        if not val:
+            return 30
+        val_str = str(val).lower()
+        matches = re.findall(r'\d+', val_str)
+        if not matches:
+            return 30
+        return int(matches[0])
+
+    current_ctc_val = clean_ctc(f(llm_data.get("current_ctc")))
+    expected_ctc_val = clean_ctc(f(llm_data.get("expected_ctc")))
+    notice_period_val = clean_notice_period(f(llm_data.get("notice_period")))
+    dob_val = f(llm_data.get("date_of_birth")) or f(llm_data.get("dob"))
+    gender_val = f(llm_data.get("gender"))
+
     personal_info = {
         "name": name_clean,
         "email": email_clean,
@@ -406,7 +508,12 @@ def convert_llm_data_to_standard_format(llm_data):
         "portfolio_url": portfolio_clean,
         "current_company": (experiences[0]["company"] if experiences else "")[:255],
         "current_designation": (experiences[0]["designation"] if experiences else "Professional")[:255],
-        "total_experience": total_exp
+        "total_experience": total_exp,
+        "current_ctc": current_ctc_val,
+        "expected_ctc": expected_ctc_val,
+        "notice_period": notice_period_val,
+        "date_of_birth": dob_val,
+        "gender": gender_val
     }
 
     return {
@@ -419,6 +526,11 @@ def convert_llm_data_to_standard_format(llm_data):
         "certifications": certifications,
         "achievements": f(llm_data.get("achievements")) or [],
         "languages": f(llm_data.get("languages")) or [],
+        "current_ctc": current_ctc_val,
+        "expected_ctc": expected_ctc_val,
+        "notice_period": notice_period_val,
+        "date_of_birth": dob_val,
+        "gender": gender_val,
         "metadata": {
             "parsed_by": "OpenAIResumeParser",
             "parsed_at": datetime.now().isoformat()
@@ -499,6 +611,11 @@ class FastResumeSchema(BaseModel):
     interests: List[str] = Field(default_factory=list)
     strengths: List[str] = Field(default_factory=list)
     references: List[str] = Field(default_factory=list)
+    expected_ctc: Optional[str] = Field(None, description="Expected CTC / salary")
+    current_ctc: Optional[str] = Field(None, description="Current CTC / salary")
+    notice_period: Optional[str] = Field(None, description="Notice period in days or months")
+    date_of_birth: Optional[str] = Field(None, description="Date of birth")
+    gender: Optional[str] = Field(None, description="Gender")
 
 class OpenAIResumeParser:
     @staticmethod
@@ -877,27 +994,10 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 
                 logger.info(f"[NAME] OpenAI Name: {openai_name or 'None'}")
                 print(f"[NAME] OpenAI Name: {openai_name or 'None'}")
-
                 if openai_name:
-                    logger.info(f"[NAME] Final Name: {openai_name}")
-                    print(f"[NAME] Final Name: {openai_name}")
                     return openai_name
 
-                # 2. Resume Heading Name
-                heading_name = None
-                largest_heading = ocr_result.get("largest_bold_name")
-                if is_acceptable_name(largest_heading):
-                    heading_name = largest_heading.strip().title()
-                
-                logger.info(f"[NAME] Resume Heading: {heading_name or 'None'}")
-                print(f"[NAME] Resume Heading: {heading_name or 'None'}")
-
-                if heading_name:
-                    logger.info(f"[NAME] Final Name: {heading_name}")
-                    print(f"[NAME] Final Name: {heading_name}")
-                    return heading_name
-
-                # 3. spaCy Name
+                # 2. spaCy / NER Name
                 spacy_name = None
                 try:
                     import spacy
@@ -917,13 +1017,52 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 
                 logger.info(f"[NAME] spaCy Name: {spacy_name or 'None'}")
                 print(f"[NAME] spaCy Name: {spacy_name or 'None'}")
-
                 if spacy_name:
-                    logger.info(f"[NAME] Final Name: {spacy_name}")
-                    print(f"[NAME] Final Name: {spacy_name}")
                     return spacy_name
 
-                # 4. Email Fallback
+                # 3. Resume Heading Name
+                heading_name = None
+                largest_heading = ocr_result.get("largest_bold_name")
+                if is_acceptable_name(largest_heading):
+                    heading_name = largest_heading.strip().title()
+                
+                logger.info(f"[NAME] Resume Heading: {heading_name or 'None'}")
+                print(f"[NAME] Resume Heading: {heading_name or 'None'}")
+                if heading_name:
+                    return heading_name
+
+                # 4. Largest Font OCR Name
+                largest_font_name = None
+                try:
+                    # Collect lines from page 1 data if available
+                    import fitz
+                    doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    if len(doc) > 0:
+                        first_page = doc[0]
+                        blocks_dict = first_page.get_text("dict")
+                        spans_info = []
+                        for b in blocks_dict.get("blocks", []):
+                            if b.get("type") == 0:  # text block
+                                for line in b.get("lines", []):
+                                    spans = line.get("spans", [])
+                                    if spans:
+                                        line_text = "".join([s.get("text", "") for s in spans]).strip()
+                                        line_text = " ".join(line_text.split())
+                                        if line_text and is_acceptable_name(line_text):
+                                            max_size = max(s.get("size", 0.0) for s in spans)
+                                            spans_info.append((line_text, max_size))
+                        if spans_info:
+                            spans_info.sort(key=lambda x: x[1], reverse=True)
+                            largest_font_name = spans_info[0][0].strip().title()
+                except Exception as e:
+                    logger.warning(f"Largest font OCR extraction failed: {e}")
+                
+                logger.info(f"[NAME] Largest Font OCR Name: {largest_font_name or 'None'}")
+                print(f"[NAME] Largest Font OCR Name: {largest_font_name or 'None'}")
+                if largest_font_name:
+                    return largest_font_name
+
+                # 5. Email Fallback
                 email_name = None
                 if email and '@' in email:
                     username = email.split('@')[0]
@@ -947,9 +1086,7 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                                     break
                                     
                         lowered_prefix_removed = prefix_removed.lower()
-                        if lowered_prefix_removed in ("unknown", "candidate", "admin", "recruit", "hr", "jobs", "careers", "info", "support", "contact", "office", "staff", "hello", "team", "sales", "marketing", "work", "example") or lowered_prefix_removed.startswith("unknown_"):
-                            email_name = None
-                        else:
+                        if lowered_prefix_removed not in ("unknown", "candidate", "admin", "recruit", "hr", "jobs", "careers", "info", "support", "contact", "office", "staff", "hello", "team", "sales", "marketing", "work", "example") and not lowered_prefix_removed.startswith("unknown_"):
                             parts = re.split(r'[\._\-]', prefix_removed)
                             segmented_parts = []
                             segments = {
@@ -975,14 +1112,9 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
 
                 logger.info(f"[NAME] Email Fallback: {email_name or 'None'}")
                 print(f"[NAME] Email Fallback: {email_name or 'None'}")
-
                 if email_name:
-                    logger.info(f"[NAME] Final Name: {email_name}")
-                    print(f"[NAME] Final Name: {email_name}")
                     return email_name
 
-                logger.info(f"[NAME] Final Name: Unknown Candidate")
-                print(f"[NAME] Final Name: Unknown Candidate")
                 return "Unknown Candidate"
 
             candidate_name = get_priority_name()[:255]
@@ -991,13 +1123,40 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 info['name'] = candidate_name
             profile.summary = parsed_data.get('summary', '')
             profile.location = (info.get('location') or "Unknown")[:100]
-            profile.current_salary = parsed_data.get('current_ctc')
-            profile.expected_salary = parsed_data.get('expected_ctc')
+            # Parse salary safely
+            curr_sal = parsed_data.get('current_ctc')
+            if curr_sal is not None and str(curr_sal).strip() not in ("", "None", "null"):
+                try:
+                    profile.current_salary = Decimal(str(curr_sal))
+                except Exception:
+                    profile.current_salary = None
+            else:
+                profile.current_salary = None
+
+            exp_sal = parsed_data.get('expected_ctc')
+            if exp_sal is not None and str(exp_sal).strip() not in ("", "None", "null"):
+                try:
+                    profile.expected_salary = Decimal(str(exp_sal))
+                except Exception:
+                    profile.expected_salary = None
+            else:
+                profile.expected_salary = None
+
             profile.notice_period = parsed_data.get('notice_period', 30)
-            profile.total_experience = info.get('total_experience', 0.0)
+            
+            total_exp_val = info.get('total_experience', 0.0)
+            if total_exp_val is not None and str(total_exp_val).strip() not in ("", "None", "null"):
+                try:
+                    profile.total_experience = Decimal(str(total_exp_val))
+                except Exception:
+                    profile.total_experience = Decimal("0.0")
+            else:
+                profile.total_experience = Decimal("0.0")
             
             profile.current_company = (info.get('current_company') or "")[:255]
             profile.current_designation = (info.get('current_designation') or "Professional")[:255]
+            profile.linkedin_url = (info.get('linkedin_url') or "")[:200] or None
+            profile.portfolio_url = (info.get('portfolio_url') or "")[:200] or None
 
             profile.parsed_json = parsed_data
             profile.ocr_engine = ocr_result.get("engine", "None")

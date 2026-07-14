@@ -597,18 +597,42 @@ class CandidateSignupView(View):
 class EmployerLoginView(View):
     template_name = 'registration/employer_login.html'
 
+    def get(self, request, *args, **kwargs):
+        form = EmployerLoginForm()
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request, *args, **kwargs):
+        form = EmployerLoginForm(request.POST)
+        return render(request, self.template_name, {'form': form})
+
+
+class EmployerSignupView(View):
+    template_name = 'registration/employer_signup.html'
+
+    def get(self, request, *args, **kwargs):
+        form = EmployerSignupForm()
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request, *args, **kwargs):
+        form = EmployerSignupForm(request.POST)
+        return render(request, self.template_name, {'form': form})
+
+
+class AdminLoginView(View):
+    template_name = 'registration/admin_login.html'
+
     @method_decorator(never_cache)
     @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             return redirect_role_dashboard(request.user)
-        form = EmployerLoginForm()
+        form = LoginForm()
         return render(request, self.template_name, {'form': form})
 
     @method_decorator(never_cache)
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
-        form = EmployerLoginForm(request.POST)
+        form = LoginForm(request.POST)
         if form.is_valid():
             email = form.cleaned_data.get('email')
             password = form.cleaned_data.get('password')
@@ -628,121 +652,6 @@ class EmployerLoginView(View):
                         form.add_error(None, "This account is disabled.")
                 else:
                     form.add_error(None, "This workspace is reserved for Recruiters/Employers.")
-            else:
-                form.add_error(None, "Invalid email or password.")
-        
-        return render(request, self.template_name, {'form': form})
-
-
-class EmployerSignupView(CreateView):
-    model = User
-    form_class = EmployerSignupForm
-    template_name = 'registration/employer_signup.html'
-    success_url = reverse_lazy('frontend:dashboard')
-
-    def get(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            logout(request)
-        return super().get(request, *args, **kwargs)
-
-    def form_valid(self, form):
-        user = form.save(commit=False)
-        user.set_password(form.cleaned_data['password'])
-        user.role = User.Role.RECRUITER
-        user.is_active = True
-        user.is_verified = True
-        user.save()
-        
-        # Create and associate Company
-        from apps.companies.models import Company, CompanyMember
-        from django.utils.text import slugify
-        import uuid
-        
-        org_name = form.cleaned_data['org_name']
-        hiring_type = form.cleaned_data['hiring_type']
-        website = form.cleaned_data.get('website')
-        company_size = form.cleaned_data.get('company_size')
-        industry = form.cleaned_data.get('industry') or "Hiring"
-        
-        if hiring_type == 'independent':
-            company_name = f"Independent Recruiter - {user.email}"
-        else:
-            company_name = org_name
-            
-        slug = slugify(company_name)
-        if not slug:
-            slug = str(uuid.uuid4())[:8]
-            
-        # Handle unique slug collision
-        base_slug = slug
-        counter = 1
-        while Company.objects.filter(slug=slug).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-            
-        try:
-            company, created = Company.objects.get_or_create(
-                name=company_name,
-                defaults={
-                    'slug': slug,
-                    'website': website,
-                    'industry': industry,
-                    'employee_count': company_size,
-                    'description': f"Organization account for {company_name}",
-                    'location': 'Remote'
-                }
-            )
-            
-            CompanyMember.objects.get_or_create(
-                company=company,
-                user=user,
-                defaults={
-                    'designation': 'Independent Recruiter' if hiring_type == 'independent' else 'Recruiter',
-                    'role': CompanyMember.MemberRole.ADMIN
-                }
-            )
-        except Exception as company_err:
-            print(f"Error creating company in employer signup: {company_err}")
-            
-        from django.contrib import messages
-        messages.success(self.request, "Employer account created successfully! Please log in.")
-        return redirect('employer_login')
-
-
-class AdminLoginView(View):
-    template_name = 'registration/admin_login.html'
-
-    @method_decorator(never_cache)
-    @method_decorator(csrf_protect)
-    def get(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            return redirect('frontend:admin_dashboard')
-        form = LoginForm()
-        return render(request, self.template_name, {'form': form})
-
-    @method_decorator(never_cache)
-    @method_decorator(csrf_protect)
-    def post(self, request, *args, **kwargs):
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            email = form.cleaned_data.get('email')
-            password = form.cleaned_data.get('password')
-            remember_me = form.cleaned_data.get('remember_me')
-
-            user = authenticate(request, username=email, password=password)
-            if user is not None:
-                if user.role == User.Role.SUPER_ADMIN:
-                    if user.is_active:
-                        login(request, user)
-                        if remember_me:
-                            request.session.set_expiry(1209600)  # 2 weeks
-                        else:
-                            request.session.set_expiry(0)
-                        return redirect('frontend:admin_dashboard')
-                    else:
-                        form.add_error(None, "This account is disabled.")
-                else:
-                    form.add_error(None, "Access restricted to authorized administrators only.")
             else:
                 form.add_error(None, "Invalid email or password.")
         

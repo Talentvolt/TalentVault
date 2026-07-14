@@ -17,11 +17,41 @@ from apps.candidates.models import (
 
 import importlib.util
 
-# Optional heavy imports handled gracefully using lazy checks to prevent startup crashes
-PADDLE_AVAILABLE = importlib.util.find_spec("paddleocr") is not None
-EASY_AVAILABLE = importlib.util.find_spec("easyocr") is not None
-TESSERACT_AVAILABLE = importlib.util.find_spec("pytesseract") is not None
-SPACY_AVAILABLE = importlib.util.find_spec("spacy") is not None
+PADDLE_AVAILABLE = False
+if importlib.util.find_spec("paddleocr") is not None:
+    try:
+        from paddleocr import PaddleOCR
+        # Try to import paddle module as well to verify installation
+        import paddle
+        PADDLE_AVAILABLE = True
+    except Exception:
+        PADDLE_AVAILABLE = False
+
+EASY_AVAILABLE = False
+if importlib.util.find_spec("easyocr") is not None:
+    try:
+        import easyocr
+        EASY_AVAILABLE = True
+    except Exception:
+        EASY_AVAILABLE = False
+
+TESSERACT_AVAILABLE = False
+if importlib.util.find_spec("pytesseract") is not None:
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        TESSERACT_AVAILABLE = True
+    except Exception:
+        TESSERACT_AVAILABLE = False
+
+SPACY_AVAILABLE = False
+if importlib.util.find_spec("spacy") is not None:
+    try:
+        import spacy
+        spacy.load("en_core_web_sm")
+        SPACY_AVAILABLE = True
+    except Exception:
+        SPACY_AVAILABLE = False
 
 
 def escape_plain_text(text: str) -> str:
@@ -1069,20 +1099,166 @@ class ResumeIntelligenceService:
             return 'RTF'
         elif ext in ['txt']:
             return 'TXT'
+        elif ext in ['zip']:
+            return 'ZIP'
         elif ext in ['png', 'jpg', 'jpeg', 'tiff', 'bmp']:
             return 'IMAGE'
         return 'UNKNOWN'
 
     @staticmethod
+    def merge_extracted_texts(text1: str, text2: str, text3: str) -> str:
+        text1 = text1 or ""
+        text2 = text2 or ""
+        text3 = text3 or ""
+        
+        base_text = text1
+        if len(text2) > len(base_text):
+            base_text = text2
+        if len(text3) > len(base_text):
+            base_text = text3
+            
+        other_texts = [t for t in [text1, text2, text3] if t != base_text]
+        merged_lines = base_text.split('\n')
+        base_normalized = {re.sub(r'\s+', '', line).lower() for line in merged_lines if line.strip()}
+        
+        for other in other_texts:
+            if not other:
+                continue
+            for line in other.split('\n'):
+                line_strip = line.strip()
+                if not line_strip:
+                    continue
+                line_norm = re.sub(r'\s+', '', line_strip).lower()
+                if line_norm not in base_normalized:
+                    merged_lines.append(line_strip)
+                    base_normalized.add(line_norm)
+                    
+        return "\n".join(merged_lines)
+
+    @staticmethod
+    def preprocess_image_for_ocr(img):
+        import cv2
+        import numpy as np
+        from PIL import Image
+
+        # 1. Orientation Correction (using Tesseract OSD if available)
+        if TESSERACT_AVAILABLE:
+            try:
+                import pytesseract
+                osd = pytesseract.image_to_osd(img)
+                rotation = re.search(r'Rotate: (\d+)', osd)
+                if rotation:
+                    angle = int(rotation.group(1))
+                    if angle == 90:
+                        img = img.rotate(-90, expand=True)
+                    elif angle == 180:
+                        img = img.rotate(180, expand=True)
+                    elif angle == 270:
+                        img = img.rotate(90, expand=True)
+            except Exception:
+                pass
+
+        # 2. Convert to OpenCV format (numpy array)
+        img_np = np.array(img.convert('RGB'))
+        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+        # 3. Deskew
+        try:
+            coords = np.column_stack(np.where(gray < 255))
+            if len(coords) > 0:
+                angle = cv2.minAreaRect(coords)[-1]
+                if angle < -45:
+                    angle = -(90 + angle)
+                else:
+                    angle = -angle
+                if abs(angle) < 15:
+                    (h, w) = gray.shape[:2]
+                    center = (w // 2, h // 2)
+                    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                    gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+        except Exception:
+            pass
+
+        # 4. Resize if width is small (scale up for better OCR)
+        (h, w) = gray.shape[:2]
+        if w < 1500:
+            scale = 1.5
+            gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+
+        # 5. Denoise
+        try:
+            gray = cv2.fastNlMeansDenoising(gray, h=10)
+        except Exception:
+            pass
+
+        # 6. Sharpen
+        try:
+            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+            gray = cv2.filter2D(gray, -1, kernel)
+        except Exception:
+            pass
+
+        # 7. Adaptive Threshold
+        try:
+            gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        except Exception:
+            pass
+
+        return Image.fromarray(gray)
+
+    @staticmethod
     def run_ocr_pipeline(file_bytes: bytes, filename: str) -> dict:
         """
         Runs OCR with fallback logic: PaddleOCR -> EasyOCR -> Tesseract.
-        If confidence < 90%, retries with the next engine in the pipeline.
         """
+        import io
+        import os
+        import re
+        import logging
+        import numpy as np
+        from PIL import Image
+
+        logger = logging.getLogger(__name__)
         resume_type = ResumeIntelligenceService.detect_resume_type(filename)
         extracted_text = ""
         used_engine = "None (Direct Text Extraction)"
         confidence = 100.0
+        largest_bold_name = None
+
+        if resume_type == 'ZIP':
+            import zipfile
+            try:
+                with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+                    eligible_files = []
+                    for name in z.namelist():
+                        if name.startswith('__MACOSX/') or name.endswith('/') or name.split('/')[-1].startswith('.'):
+                            continue
+                        sub_ext = name.split('.')[-1].lower() if '.' in name else ''
+                        if sub_ext in ['pdf', 'docx', 'doc', 'rtf', 'txt', 'png', 'jpg', 'jpeg']:
+                            eligible_files.append(name)
+                    
+                    if eligible_files:
+                        def sort_priority(n):
+                            ext = n.split('.')[-1].lower()
+                            if ext == 'pdf': return 0
+                            if ext == 'docx': return 1
+                            if ext == 'doc': return 2
+                            if ext == 'rtf': return 3
+                            if ext == 'txt': return 4
+                            return 5
+                        eligible_files.sort(key=sort_priority)
+                        first_file = eligible_files[0]
+                        sub_bytes = z.read(first_file)
+                        return ResumeIntelligenceService.run_ocr_pipeline(sub_bytes, first_file)
+            except Exception as e:
+                logger.error(f"ZIP extraction/parsing failed: {e}", exc_info=True)
+            return {
+                "text": "Empty or unparseable ZIP file content",
+                "engine": "zipfile-error",
+                "confidence": 0.0,
+                "resume_type": "UNKNOWN",
+                "largest_bold_name": None
+            }
 
         if resume_type == 'TXT':
             try:
@@ -1115,7 +1291,6 @@ class ResumeIntelligenceService:
         if resume_type == 'DOC':
             import tempfile
             from utils.preview import convert_doc_to_pdf
-            largest_bold_name = None
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     doc_path = os.path.join(tmpdir, "temp.doc")
@@ -1126,7 +1301,6 @@ class ResumeIntelligenceService:
                     if os.path.exists(pdf_path):
                         with open(pdf_path, "rb") as tmp_pdf:
                             pdf_bytes = tmp_pdf.read()
-                        # Run extraction on the generated PDF
                         return ResumeIntelligenceService.run_ocr_pipeline(pdf_bytes, "temp.pdf")
             except Exception as e:
                 logger.error(f"DOC to PDF text extraction failed: {e}", exc_info=True)
@@ -1140,23 +1314,17 @@ class ResumeIntelligenceService:
             }
 
         if resume_type == 'DOCX':
-            # Direct python-docx parsing
             import docx
-            largest_bold_name = None
             try:
                 doc = docx.Document(io.BytesIO(file_bytes))
                 extracted_text = "\n".join([p.text for p in doc.paragraphs])
-                
-                # Check top paragraphs for bold or heading style
                 for p in doc.paragraphs[:15]:
                     cleaned_p = p.text.strip()
                     if not cleaned_p:
                         continue
-                    # Check if paragraph has bold runs
                     is_bold = any(run.bold for run in p.runs)
                     is_heading = p.style.name.startswith("Heading") or p.style.name == "Title"
                     if (is_bold or is_heading) and ResumeIntelligenceService.is_valid_name(cleaned_p):
-                        # Ensure it's not an ignored heading
                         normalized = re.sub(r'[^a-z0-9]', '', cleaned_p.lower()).strip()
                         if normalized not in {
                             'workexperience', 'experience', 'curriculumvitae', 'resume', 'cv',
@@ -1170,7 +1338,6 @@ class ResumeIntelligenceService:
                             break
             except Exception as e:
                 extracted_text = f"DOCX Parse Error: {str(e)}"
-                largest_bold_name = None
             return {
                 "text": extracted_text,
                 "engine": "python-docx",
@@ -1180,333 +1347,130 @@ class ResumeIntelligenceService:
             }
 
         if resume_type == 'PDF':
-            # Extract largest bold valid name span on page 1
-            # First try direct text extraction via PyMuPDF (fitz) with layout-aware column reconstruction
+            text_pymupdf = ""
             try:
                 import fitz
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
-                
-                largest_font_size = 0
-                name_block_x_center = 0
-                w = 595.0 # Default fallback page width
-                
-                # 1. Collect all lines on all pages
                 pages_data = []
                 for page_idx, page in enumerate(doc):
                     page_rect = page.rect
                     page_w = page_rect.width
-                    spans_info = []
                     blocks_dict = page.get_text("dict")
                     page_lines = []
                     
                     for b in blocks_dict.get("blocks", []):
-                        if b.get("type") == 0:  # text block
+                        if b.get("type") == 0:
                             for line in b.get("lines", []):
                                 spans = line.get("spans", [])
-                                if not spans:
-                                    continue
-                                line_text = "".join([s.get("text", "") for s in spans]).strip()
-                                line_text = " ".join(line_text.split())
+                                if not spans: continue
+                                line_text = " ".join("".join([s.get("text", "") for s in spans]).split())
                                 if line_text:
                                     max_size = max(s.get("size", 0.0) for s in spans)
                                     is_bold = any("bold" in s.get("font", "").lower() or "black" in s.get("font", "").lower() or (s.get("flags", 0) & 16) for s in spans)
                                     x0, y0, x1, y1 = line.get("bbox", (0,0,0,0))
-                                    page_lines.append({
-                                        "text": line_text,
-                                        "x0": x0,
-                                        "y0": y0,
-                                        "x1": x1,
-                                        "y1": y1,
-                                        "is_bold": is_bold,
-                                        "font_size": max_size
-                                    })
-                                    # For page 1 candidate name
-                                    if page_idx == 0:
-                                        min_x0 = min(s.get("bbox", (0,0,0,0))[0] for s in spans)
-                                        max_x1 = max(s.get("bbox", (0,0,0,0))[2] for s in spans)
-                                        center_x = (min_x0 + max_x1) / 2
-                                        spans_info.append((line_text, max_size, is_bold, center_x))
+                                    page_lines.append({"text": line_text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "is_bold": is_bold, "font_size": max_size})
                     pages_data.append((page_w, page_lines))
 
-                # Filter and rank to find candidate name on Page 1
-                largest_bold_name = None
-                if pages_data and len(pages_data) > 0:
-                    page_w = pages_data[0][0]
-                    # Filter spans_info
-                    valid_spans = []
-                    for text_val, size, is_bold, center_x in spans_info:
-                        cleaned = " ".join(text_val.split())
-                        if ResumeIntelligenceService.is_valid_name(cleaned):
-                            normalized = re.sub(r'[^a-z0-9]', '', cleaned.lower()).strip()
-                            if normalized not in {
-                                'workexperience', 'experience', 'curriculumvitae', 'resume', 'cv',
-                                'biodata', 'profile', 'careerobjective', 'objective', 'summary',
-                                'education', 'skills', 'projects', 'certifications', 'languages',
-                                'personaldetails', 'languagesknown', 'corecompetencies', 'technicalskills',
-                                'employmenthistory', 'workhistory', 'professionalexperience', 'aboutme',
-                                'academicbackground', 'qualification', 'qualifications', 'educationhistory'
-                            }:
-                                valid_spans.append((cleaned, size, is_bold, center_x))
-                    if valid_spans:
-                        valid_spans.sort(key=lambda x: x[1] + (5.0 if x[2] else 0.0), reverse=True)
-                        largest_bold_name = valid_spans[0][0]
-                        name_block_x_center = valid_spans[0][3]
-                    else:
-                        name_block_x_center = page_w / 2
-                else:
-                    name_block_x_center = w / 2
-
-                # 2. Determine best split point for columns on each page and classify lines
                 classified_pages = []
                 total_left_len = 0
                 total_right_len = 0
                 work_heading_col = None
+                work_heading_patterns = [r'^work\s+experience$', r'^experience$', r'^employment\s+history$', r'^work\s+history$', r'^professional\s+experience$', r'^professional\s+history$', r'^employment$', r'^career\s+history$', r'^experience\s+details$', r'^work\s+record$', r'^professional\s+background$', r'^experience\s+history$']
                 
-                work_heading_patterns = [
-                    r'^work\s+experience$', r'^experience$', r'^employment\s+history$', r'^work\s+history$',
-                    r'^professional\s+experience$', r'^professional\s+history$', r'^employment$', r'^career\s+history$',
-                    r'^experience\s+timeline$'
-                ]
-                
-                for page_w, page_lines in pages_data:
-                    if not page_lines:
-                        classified_pages.append((False, {}, []))
-                        continue
-                    
-                    # Detect best split point x on this page
-                    best_x = None
-                    min_cross = 9999
-                    start_x = int(page_w * 0.25)
-                    end_x = int(page_w * 0.75)
-                    for x in range(start_x, end_x, 10):
-                        left_count = 0
-                        right_count = 0
-                        cross_count = 0
-                        for line in page_lines:
-                            x0, x1 = line["x0"], line["x1"]
-                            if x1 <= x:
-                                left_count += 1
-                            elif x0 >= x:
-                                right_count += 1
-                            else:
-                                cross_count += 1
-                        
-                        if left_count > 0 and right_count > 0:
-                            if cross_count < min_cross:
-                                min_cross = cross_count
-                                best_x = x
-                            elif cross_count == min_cross:
-                                if best_x is None or abs(x - page_w/2) < abs(best_x - page_w/2):
-                                    best_x = x
-                                    
-                    has_columns = best_x is not None and min_cross <= max(2, len(page_lines) * 0.25)
-                    
-                    if not has_columns:
-                        classified_pages.append((False, {}, page_lines))
-                    else:
-                        left_col = []
-                        right_col = []
-                        full_col = []
+                for page_idx, (page_w, page_lines) in enumerate(pages_data):
+                    left_lines, right_lines = [], []
+                    split_candidates = np.arange(page_w * 0.35, page_w * 0.65, 5.0)
+                    best_x, min_overlap = page_w / 2, float('inf')
+                    for cx in split_candidates:
+                        overlap_count = sum(1 for l in page_lines if l["x0"] < cx < l["x1"] and (l["x1"] - l["x0"]) < page_w * 0.5)
+                        if overlap_count < min_overlap:
+                            min_overlap, best_x = overlap_count, cx
+                    has_columns = (len(page_lines) > 5) and (min_overlap < len(page_lines) * 0.22)
+                    if has_columns:
                         for l in page_lines:
-                            x0, y0, x1, y1 = l["x0"], l["y0"], l["x1"], l["y1"]
-                            center_x = (x0 + x1) / 2
-                            width = x1 - x0
-                            is_crossing = x0 < best_x < x1
-                            
-                            # If it's a full-width line crossing the split point
-                            if is_crossing and (width > page_w * 0.65 or (x0 < page_w * 0.35 and x1 > page_w * 0.65)):
-                                full_col.append(l)
-                            elif center_x <= best_x:
-                                left_col.append(l)
-                                total_left_len += len(l["text"])
-                                # Check if this is a WORK experience heading
-                                text_clean = re.sub(r'^[\s\d\.\-\*•●■#]*', '', l["text"]).strip().lower()
-                                text_clean = re.sub(r'[:\-\s]*$', '', text_clean).strip()
-                                if any(re.match(pat, text_clean) for pat in work_heading_patterns):
-                                    work_heading_col = "LEFT"
-                            else:
-                                right_col.append(l)
-                                total_right_len += len(l["text"])
-                                # Check if this is a WORK experience heading
-                                text_clean = re.sub(r'^[\s\d\.\-\*•●■#]*', '', l["text"]).strip().lower()
-                                text_clean = re.sub(r'[:\-\s]*$', '', text_clean).strip()
-                                if any(re.match(pat, text_clean) for pat in work_heading_patterns):
-                                    work_heading_col = "RIGHT"
-                                    
-                        classified_pages.append((True, {
-                            "LEFT": left_col,
-                            "RIGHT": right_col,
-                            "FULL": full_col,
-                            "best_x": best_x,
-                            "left_boundary": min((l["x0"] for l in page_lines), default=0)
-                        }, page_lines))
+                            if ((l["x0"] + l["x1"]) / 2) <= best_x: left_lines.append(l)
+                            else: right_lines.append(l)
+                        for l in page_lines:
+                            lt = l["text"].lower()
+                            if any(re.match(p, lt) for p in work_heading_patterns):
+                                work_heading_col = "LEFT" if ((l["x0"] + l["x1"]) / 2) <= best_x else "RIGHT"
+                    classified_pages.append((has_columns, {"best_x": best_x, "left_boundary": page_w * 0.12}, page_lines))
+                    if has_columns:
+                        total_left_len += sum(len(l["text"]) for l in left_lines)
+                        total_right_len += sum(len(l["text"]) for l in right_lines)
 
-                # Decide right_column_first globally
-                if work_heading_col == "LEFT":
-                    right_column_first = False
-                elif work_heading_col == "RIGHT":
-                    right_column_first = True
-                else:
-                    # Fallback to total text length
-                    right_column_first = total_right_len >= total_left_len
-
-                # 3. Reconstruct primary and secondary layout streams across the entire document
-                primary_stream = []
-                secondary_stream = []
+                right_column_first = (work_heading_col == "RIGHT") or (work_heading_col is None and total_right_len > total_left_len * 1.5)
+                primary_stream, secondary_stream = [], []
 
                 for page_idx, (page_w, page_lines) in enumerate(pages_data):
                     has_columns, page_info, raw_lines = classified_pages[page_idx]
-                    
-                    if not page_lines:
-                        continue
-                        
+                    if not page_lines: continue
                     if not has_columns:
-                        # Single column page: format all lines sorted by y0 and add to primary
-                        lines_sorted = sorted(page_lines, key=lambda l: (l["y0"], l["x0"]))
-                        formatted_lines = []
-                        base_x0 = min((l["x0"] for l in page_lines), default=0)
-                        for l in lines_sorted:
-                            text = l["text"]
-                            if l["is_bold"]:
-                                text = f"**{text}**"
-                            indent = max(0, int((l["x0"] - base_x0) / 8))
-                            if indent > 1:
-                                text = " " * (indent * 2) + text
-                            formatted_lines.append(text)
-                        primary_stream.append("\n".join(formatted_lines))
+                        lines = sorted(page_lines, key=lambda l: (l["y0"], l["x0"]))
+                        formatted = [f"**{l['text']}**" if l["is_bold"] else l["text"] for l in lines]
+                        primary_stream.append("\n".join(formatted))
                     else:
-                        # Page with columns: segment vertically
-                        best_x = page_info["best_x"]
-                        left_boundary = page_info["left_boundary"]
+                        best_x, left_boundary = page_info["best_x"], page_info["left_boundary"]
+                        sorted_lines = sorted(page_lines, key=lambda l: (l["y0"], l["x0"]))
+                        classified, segments = [], []
+                        for l in sorted_lines:
+                            col = "FULL" if (l["x0"] < best_x < l["x1"] and (l["x1"] - l["x0"]) > page_w * 0.6) else ("LEFT" if ((l["x0"] + l["x1"]) / 2) <= best_x else "RIGHT")
+                            classified.append((col, l))
                         
-                        lines_sorted = sorted(page_lines, key=lambda l: (l["y0"], l["x0"]))
-                        classified_lines = []
-                        for l in lines_sorted:
-                            x0, y0, x1, y1 = l["x0"], l["y0"], l["x1"], l["y1"]
-                            center_x = (x0 + x1) / 2
-                            width = x1 - x0
-                            is_crossing = x0 < best_x < x1
-                            
-                            if is_crossing and (width > page_w * 0.65 or (x0 < page_w * 0.35 and x1 > page_w * 0.65)):
-                                col = "FULL"
-                            elif center_x <= best_x:
-                                col = "LEFT"
-                            else:
-                                col = "RIGHT"
-                            classified_lines.append((col, l))
-                            
-                        segments = []
-                        curr_seg_type = None
-                        curr_seg_lines = []
-                        
-                        for col, l in classified_lines:
+                        curr_type, curr_lines = None, []
+                        for col, l in classified:
                             seg_type = "FULL" if col == "FULL" else "COLUMNS"
-                            if seg_type == curr_seg_type:
-                                curr_seg_lines.append((col, l))
+                            if seg_type == curr_type: curr_lines.append((col, l))
                             else:
-                                if curr_seg_lines:
-                                    segments.append((curr_seg_type, curr_seg_lines))
-                                curr_seg_type = seg_type
-                                curr_seg_lines = [(col, l)]
-                        if curr_seg_lines:
-                            segments.append((curr_seg_type, curr_seg_lines))
-                            
-                        page_primary_parts = []
-                        page_secondary_parts = []
-                        
+                                if curr_lines: segments.append((curr_type, curr_lines))
+                                curr_type, curr_lines = seg_type, [(col, l)]
+                        if curr_lines: segments.append((curr_type, curr_lines))
+
+                        p_parts, s_parts = [], []
                         for seg_type, seg_lines in segments:
                             if seg_type == "FULL":
-                                formatted = []
-                                for col, l in seg_lines:
-                                    text = l["text"]
-                                    if l["is_bold"]:
-                                        text = f"**{text}**"
-                                    indent = max(0, int((l["x0"] - left_boundary) / 8))
-                                    if indent > 1:
-                                        text = " " * (indent * 2) + text
-                                    formatted.append(text)
-                                if formatted:
-                                    page_primary_parts.append("\n".join(formatted))
+                                p_parts.append("\n".join([f"**{l[1]['text']}**" if l[1]["is_bold"] else l[1]["text"] for l in seg_lines]))
                             else:
-                                left_col_lines = [l for col, l in seg_lines if col == "LEFT"]
-                                right_col_lines = [l for col, l in seg_lines if col == "RIGHT"]
-                                
-                                def format_lines(lines_list, base_x0):
-                                    formatted = []
-                                    for l in lines_list:
-                                        text = l["text"]
-                                        if l["is_bold"]:
-                                            text = f"**{text}**"
-                                        indent = max(0, int((l["x0"] - base_x0) / 8))
-                                        if indent > 1:
-                                            text = " " * (indent * 2) + text
-                                        formatted.append(text)
-                                    return "\n".join(formatted)
-                                
-                                left_col_x0 = min((l["x0"] for l in left_col_lines), default=left_boundary)
-                                right_col_x0 = min((l["x0"] for l in right_col_lines), default=best_x)
-                                
-                                left_txt = format_lines(left_col_lines, left_col_x0)
-                                right_txt = format_lines(right_col_lines, right_col_x0)
-                                
+                                left_col_lines = [l[1] for l in seg_lines if l[0] == "LEFT"]
+                                right_col_lines = [l[1] for l in seg_lines if l[0] == "RIGHT"]
+                                def fmt(lines): return "\n".join([f"**{l['text']}**" if l["is_bold"] else l["text"] for l in lines])
+                                l_txt, r_txt = fmt(left_col_lines), fmt(right_col_lines)
                                 if right_column_first:
-                                    if right_txt:
-                                        page_primary_parts.append(right_txt)
-                                    if left_txt:
-                                        page_secondary_parts.append(left_txt)
+                                    if r_txt: p_parts.append(r_txt)
+                                    if l_txt: s_parts.append(l_txt)
                                 else:
-                                    if left_txt:
-                                        page_primary_parts.append(left_txt)
-                                    if right_txt:
-                                        page_secondary_parts.append(right_txt)
-                                        
-                        if page_primary_parts:
-                            primary_stream.append("\n".join(page_primary_parts))
-                        if page_secondary_parts:
-                            secondary_stream.append("\n".join(page_secondary_parts))
-
-                extracted_text = "\n\n".join(primary_stream)
-                if secondary_stream:
-                    extracted_text += "\n\n" + "\n\n".join(secondary_stream)
-                extracted_text += "\n"
+                                    if l_txt: p_parts.append(l_txt)
+                                    if r_txt: s_parts.append(r_txt)
+                        if p_parts: primary_stream.append("\n".join(p_parts))
+                        if s_parts: secondary_stream.append("\n".join(s_parts))
+                text_pymupdf = "\n\n".join(primary_stream) + ("\n\n" + "\n\n".join(secondary_stream) if secondary_stream else "") + "\n"
             except Exception as e:
-                print(f"PyMuPDF direct extraction failed: {e}")
+                logger.error(f"PyMuPDF direct extraction failed: {e}")
 
-            if len(extracted_text.strip()) > 100:
-                return {
-                    "text": extracted_text,
-                    "engine": "pymupdf",
-                    "confidence": 99.0,
-                    "resume_type": "EDITABLE_PDF",
-                    "largest_bold_name": largest_bold_name
-                }
-
-            # Fallback to pdfplumber
-            extracted_text = ""
+            text_pdfplumber = ""
             try:
+                import pdfplumber
                 with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                     for page in pdf.pages:
                         page_text = page.extract_text()
-                        if page_text:
-                            extracted_text += page_text + "\n"
-            except Exception as e:
-                print(f"pdfplumber failed: {e}")
+                        if page_text: text_pdfplumber += page_text + "\n"
+            except Exception as e: logger.error(f"pdfplumber extraction failed: {e}")
 
-            if len(extracted_text.strip()) > 100:
-                return {
-                    "text": extracted_text,
-                    "engine": "pdfplumber",
-                    "confidence": 98.0,
-                    "resume_type": "EDITABLE_PDF",
-                    "largest_bold_name": largest_bold_name
-                }
+            text_pdfminer = ""
+            try:
+                from pdfminer.high_level import extract_text as pdfminer_extract_text
+                text_pdfminer = pdfminer_extract_text(io.BytesIO(file_bytes))
+            except Exception as e: logger.error(f"pdfminer.six extraction failed: {e}")
+
+            if len(text_pymupdf.strip()) > 100:
+                merged_text = text_pymupdf
             else:
-                # Scanned or non-editable PDF, must render pages to images and run OCR
-                resume_type = 'IMAGE'
-                used_engine = "Scanned PDF (OCR Required)"
+                merged_text = ResumeIntelligenceService.merge_extracted_texts(text_pdfplumber, text_pdfminer, "")
+            if len(merged_text.strip()) > 100:
+                return {"text": merged_text, "engine": "pymupdf+pdfplumber+pdfminer", "confidence": 99.0, "resume_type": "EDITABLE_PDF", "largest_bold_name": largest_bold_name}
+            else:
+                resume_type, used_engine = 'IMAGE', "Scanned PDF (OCR Required)"
 
-        # Run Image/Scanned OCR pipeline
-        from PIL import Image
         image_list = []
         try:
             if resume_type == 'PDF' or filename.lower().endswith('.pdf'):
@@ -1514,132 +1478,56 @@ class ResumeIntelligenceService:
                 pdf = pypdfium2.PdfDocument(file_bytes)
                 for i in range(len(pdf)):
                     page = pdf[i]
-                    bitmap = page.render(scale=2) # 150 DPI render
-                    pil_img = bitmap.to_pil()
-                    image_list.append(pil_img)
-            else:
-                # Regular image file
-                pil_img = Image.open(io.BytesIO(file_bytes))
-                image_list.append(pil_img)
+                    bitmap = page.render(scale=2)
+                    image_list.append(bitmap.to_pil())
+            else: image_list.append(Image.open(io.BytesIO(file_bytes)))
         except Exception as e:
-            print(f"Image rendering/loading failed: {e}")
-            return {
-                "text": extracted_text or "Could not open document.",
-                "engine": "Error / Fallback Text",
-                "confidence": 50.0,
-                "resume_type": "CORRUPTED"
-            }
+            logger.error(f"Image rendering/loading failed: {e}")
+            return {"text": extracted_text or "Could not open document.", "engine": "Error / Fallback Text", "confidence": 50.0, "resume_type": "CORRUPTED", "largest_bold_name": None}
 
-        # OCR Engine pipeline execution loop
-        engines_to_try = ['paddleocr', 'easyocr', 'tesseract']
+        preprocessed_images = [ResumeIntelligenceService.preprocess_image_for_ocr(img) for img in image_list]
         ocr_results = {"text": "", "engine": "", "confidence": 0.0}
 
-        for img in image_list:
-            engine_success = False
-
-            # 1. PaddleOCR
+        for idx, img in enumerate(preprocessed_images):
+            page_text, engine_success, used_engine_name, page_confidence = "", False, "", 0.0
             if PADDLE_AVAILABLE:
-                print("[ENGINE_SELECTED] PaddleOCR")
                 try:
                     from paddleocr import PaddleOCR
                     ocr = PaddleOCR(use_textline_orientation=True, lang='en')
-                    print("[ENGINE_INITIALIZED] PaddleOCR: True")
-                    text_lines = []
-                    img_confidences = []
-                    # Convert PIL to numpy array
-                    import numpy as np
-                    img_np = np.array(img)
-                    result = ocr.ocr(img_np, cls=True)
-                    if result and result[0]:
-                        for line in result[0]:
-                            text_lines.append(line[1][0])
-                            img_confidences.append(line[1][1] * 100)
-                    
-                    avg_conf = sum(img_confidences) / len(img_confidences) if img_confidences else 0
-                    if avg_conf >= 90.0:
-                        ocr_results["text"] += "\n".join(text_lines) + "\n"
-                        ocr_results["engine"] = "PaddleOCR"
-                        ocr_results["confidence"] = avg_conf
-                        engine_success = True
-                except Exception as e:
-                    print("[ENGINE_INITIALIZED] PaddleOCR: False")
-                    print(f"[ENGINE_EXCEPTION] PaddleOCR: {str(e)}")
-
-            # 2. EasyOCR (Fallback)
+                    res = ocr.ocr(np.array(img.convert('RGB')), cls=True)
+                    if res and res[0]:
+                        lines, confs = [line[1][0] for line in res[0]], [line[1][1] * 100 for line in res[0]]
+                        page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
+                        used_engine_name, engine_success = "PaddleOCR", True
+                except Exception as e: logger.error(f"PaddleOCR failed: {e}")
             if not engine_success and EASY_AVAILABLE:
-                print("[ENGINE_SELECTED] EasyOCR")
                 try:
+                    import easyocr
                     reader = easyocr.Reader(['en'])
-                    print("[ENGINE_INITIALIZED] EasyOCR: True")
-                    text_lines = []
-                    img_confidences = []
-                    import numpy as np
-                    img_np = np.array(img)
-                    result = reader.readtext(img_np)
-                    for res in result:
-                        text_lines.append(res[1])
-                        img_confidences.append(res[2] * 100)
-
-                    avg_conf = sum(img_confidences) / len(img_confidences) if img_confidences else 0
-                    if avg_conf >= 90.0 or not ocr_results["engine"]:
-                        ocr_results["text"] += "\n".join(text_lines) + "\n"
-                        ocr_results["engine"] = "EasyOCR"
-                        ocr_results["confidence"] = avg_conf
-                        engine_success = True
-                except Exception as e:
-                    print("[ENGINE_INITIALIZED] EasyOCR: False")
-                    print(f"[ENGINE_EXCEPTION] EasyOCR: {str(e)}")
-
-            # 3. Tesseract (Final Fallback)
-            if not engine_success:
-                print("[ENGINE_SELECTED] Tesseract")
+                    res = reader.readtext(np.array(img.convert('RGB')))
+                    if res:
+                        lines, confs = [r[1] for r in res], [r[2] * 100 for r in res]
+                        page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
+                        used_engine_name, engine_success = "EasyOCR", True
+                except Exception as e: logger.error(f"EasyOCR failed: {e}")
+            if not engine_success and TESSERACT_AVAILABLE:
                 try:
-                    # Pure PIL tesseract call
                     import pytesseract
-                    # If Tesseract is not fully configured, handle gracefully
                     text = pytesseract.image_to_string(img)
-                    print("[ENGINE_INITIALIZED] Tesseract: True")
                     if text.strip():
-                        ocr_results["text"] += text + "\n"
-                        ocr_results["engine"] = "Tesseract"
-                        ocr_results["confidence"] = 92.5
-                        engine_success = True
-                    else:
-                        raise ValueError("Empty text returned by Tesseract")
-                except Exception as e:
-                    print("[ENGINE_INITIALIZED] Tesseract: False")
-                    print(f"[ENGINE_EXCEPTION] Tesseract: {str(e)}")
+                        page_text, page_confidence, used_engine_name = text, 92.5, "Tesseract"
+                except Exception as e: logger.error(f"Tesseract failed: {e}")
+            if page_text:
+                ocr_results["text"] += page_text + "\n\n"
+                ocr_results["engine"] = used_engine_name
+                ocr_results["confidence"] = max(ocr_results["confidence"], page_confidence)
 
-        result_dict = {
-            "text": ocr_results["text"].strip(),
-            "engine": ocr_results["engine"] or "None",
-            "confidence": ocr_results["confidence"] or 0.0,
-            "resume_type": "SCANNED_IMAGE" if resume_type == 'IMAGE' else "SCANNED_PDF"
-        }
-
-        # Logging requirements
-        ext = filename.split('.')[-1].lower()
-        is_img_file = ext in ['png', 'jpg', 'jpeg', 'tiff', 'bmp']
-        if is_img_file or result_dict["resume_type"] == "SCANNED_IMAGE":
-            import logging
-            logger = logging.getLogger(__name__)
-            
-            # Extract first 20 lines of the text
+        result_dict = {"text": ocr_results["text"].strip(), "engine": ocr_results["engine"] or "None", "confidence": ocr_results["confidence"] or 0.0, "resume_type": "SCANNED_IMAGE" if resume_type == 'IMAGE' else "SCANNED_PDF", "largest_bold_name": None}
+        if filename.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'tiff', 'bmp'] or result_dict["resume_type"] == "SCANNED_IMAGE":
             text_lines = result_dict['text'].split('\n')
             first_20_lines = "\n".join(text_lines[:20])
-            
-            print(f"[OCR_CONFIDENCE] {result_dict['confidence']}")
-            print(f"[FIRST_20_LINES]:\n{first_20_lines}")
-            
-            log_msg = (
-                f"\n[IMAGE DETECTED] Processing file: {filename}\n"
-                f"[OCR ENGINE USED] {result_dict['engine']}\n"
-                f"[OCR CONFIDENCE] {result_dict['confidence']}\n"
-                f"[TEXT LENGTH] {len(result_dict['text'])}\n"
-                f"[FIRST 20 LINES OF EXTRACTED TEXT]:\n{first_20_lines}\n"
-            )
-            logger.info(log_msg)
-
+            print(f"[OCR_CONFIDENCE] {result_dict['confidence']}\n[FIRST_20_LINES]:\n{first_20_lines}")
+            logger.info(f"\n[IMAGE DETECTED] Processing file: {filename}\n[OCR ENGINE USED] {result_dict['engine']}\n[OCR CONFIDENCE] {result_dict['confidence']}\n[TEXT LENGTH] {len(result_dict['text'])}\n[FIRST 20 LINES OF EXTRACTED TEXT]:\n{first_20_lines}\n")
         return result_dict
 
     @staticmethod
