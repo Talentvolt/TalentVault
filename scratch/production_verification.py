@@ -56,9 +56,9 @@ def main():
     
     # Pre-generate dynamic test files
     os.makedirs("scratch", exist_ok=True)
-    scanned_pdf_path = "scratch/scanned_pdf.pdf"
-    pw_pdf_path = "scratch/password_protected.pdf"
-    corrupted_pdf_path = "scratch/corrupted_resume.pdf"
+    scanned_pdf_path = f"scratch/scanned_pdf_{os.getpid()}.pdf"
+    pw_pdf_path = f"scratch/password_protected_{os.getpid()}.pdf"
+    corrupted_pdf_path = f"scratch/corrupted_resume_{os.getpid()}.pdf"
     
     create_scanned_pdf(scanned_pdf_path, "static/img/logo.png")
     create_password_protected_pdf(pw_pdf_path)
@@ -175,12 +175,28 @@ def main():
     # Check 3: Measure RAM after uploading 20 resumes
     print("\n--- Check 3: Measuring RAM after uploading 20 resumes ---")
     resumes_to_cycle = [
+        # 10 digital resumes
         "scratch/rajeev_kumar_resume.pdf",
         "scratch/rohan_kumar_resume.pdf",
         "scratch/harneet_resume.pdf",
         "scratch/shreya_chavda_resume.pdf",
         "scratch/vikke_gupta_Naukri_HARNEETSINGHCHHABRA16y_0m.pdf",
-        "scratch/vikke_gupta_Naukri_VikkeGupta16y_0m.pdf"
+        "scratch/vikke_gupta_Naukri_VikkeGupta16y_0m.pdf",
+        "scratch/rajeev_kumar_resume.pdf",
+        "scratch/rohan_kumar_resume.pdf",
+        "scratch/harneet_resume.pdf",
+        "scratch/shreya_chavda_resume.pdf",
+        # 10 scanned resumes
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path,
+        scanned_pdf_path
     ]
     
     ram_history = [ram_after_first]
@@ -222,6 +238,7 @@ def main():
         ]
     }
 
+    parse_statuses = []
     from unittest.mock import patch
     with patch('apps.candidates.utils.OpenAIResumeParser.parse', return_value=mock_llm_data):
         for i in range(1, 21):
@@ -231,22 +248,34 @@ def main():
                 p, s = process_resume_file(f, f"run_{i}_{os.path.basename(file_path)}", user=test_user)
             elapsed = time.time() - t_start
             parse_times.append(elapsed)
+            parse_statuses.append(s)
             current_ram = get_memory_usage()
             ram_history.append(current_ram)
-            print(f"Upload #{i}: parsed {os.path.basename(file_path)} in {elapsed:.2f}s. RAM: {current_ram:.2f} MB")
+            print(f"Upload #{i}: parsed {os.path.basename(file_path)} in {elapsed:.2f}s (Status: {s}). RAM: {current_ram:.2f} MB")
 
         peak_ram = max(ram_history)
         avg_ram = sum(ram_history) / len(ram_history)
         final_ram = ram_history[-1]
         
+        avg_time = sum(parse_times) / len(parse_times)
+        max_time = max(parse_times)
+        successes = sum(1 for status in parse_statuses if "SUCCESS" in status or "PARTIAL_SUCCESS" in status)
+        success_rate = (successes / len(parse_statuses)) * 100.0
+
         print(f"\n[SUMMARY 20 RESUMES]")
         print(f"Peak RAM: {peak_ram:.2f} MB")
         print(f"Average RAM: {avg_ram:.2f} MB")
         print(f"Final RAM after 20 parses: {final_ram:.2f} MB")
+        print(f"Average Parsing Time: {avg_time:.2f}s")
+        print(f"Max Parsing Time: {max_time:.2f}s")
+        print(f"Success Rate: {success_rate:.1f}%")
         
         results['peak_ram'] = peak_ram
         results['avg_ram'] = avg_ram
         results['final_ram'] = final_ram
+        results['avg_parsing_time'] = avg_time
+        results['max_parsing_time'] = max_time
+        results['success_rate'] = success_rate
 
         # Check 8: Test parsing with diverse formats
         print("\n--- Check 8: Testing parsing on diverse formats ---")

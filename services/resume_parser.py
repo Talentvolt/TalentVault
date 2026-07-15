@@ -1,8 +1,8 @@
 from pathlib import Path
+import fitz
 
 
 def extract_pdf_text(file_path):
-    import fitz
     """
     Extract all text from PDF. Supports local path, Path, or file-like object/stream.
     """

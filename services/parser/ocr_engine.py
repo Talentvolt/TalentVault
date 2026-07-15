@@ -13,11 +13,18 @@ class OCREngine:
     """
 
     def __init__(self):
-        pass
+        self._paddle_ocr = None
 
     def _get_paddle_ocr(self):
-        from services.singletons import OCRService
-        return OCRService().get_paddle_ocr()
+        if self._paddle_ocr is None:
+            try:
+                from paddleocr import PaddleOCR
+                # Initialize PaddleOCR (downloads models if not present)
+                self._paddle_ocr = PaddleOCR(lang='en')
+            except Exception as e:
+                logger.warning(f"Failed to initialize PaddleOCR: {str(e)}. Will fallback to Tesseract.")
+                self._paddle_ocr = False
+        return self._paddle_ocr
 
     def perform_ocr(self, image_bytes: bytes) -> dict:
         """
