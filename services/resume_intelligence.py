@@ -1,6 +1,8 @@
 import re
 import os
 import io
+import hashlib
+import numpy as np
 import math
 import json
 import logging
@@ -18,14 +20,21 @@ from apps.candidates.models import (
 import importlib.util
 
 PADDLE_AVAILABLE = False
+GLOBAL_PADDLE_OCR = None
+_OCR_CACHE = {}
+
 if importlib.util.find_spec("paddleocr") is not None:
     try:
         from paddleocr import PaddleOCR
         # Try to import paddle module as well to verify installation
         import paddle
         PADDLE_AVAILABLE = True
-    except Exception:
+        GLOBAL_PADDLE_OCR = PaddleOCR(use_textline_orientation=True, lang='en')
+        logger.info("Loaded global PaddleOCR instance at startup successfully.")
+    except Exception as e:
+        logger.error(f"Failed to load global PaddleOCR at startup: {e}")
         PADDLE_AVAILABLE = False
+
 
 EASY_AVAILABLE = False
 if importlib.util.find_spec("easyocr") is not None:
@@ -1448,25 +1457,29 @@ class ResumeIntelligenceService:
             except Exception as e:
                 logger.error(f"PyMuPDF direct extraction failed: {e}")
 
-            text_pdfplumber = ""
-            try:
-                import pdfplumber
-                with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                    for page in pdf.pages:
-                        page_text = page.extract_text()
-                        if page_text: text_pdfplumber += page_text + "\n"
-            except Exception as e: logger.error(f"pdfplumber extraction failed: {e}")
-
-            text_pdfminer = ""
-            try:
-                from pdfminer.high_level import extract_text as pdfminer_extract_text
-                text_pdfminer = pdfminer_extract_text(io.BytesIO(file_bytes))
-            except Exception as e: logger.error(f"pdfminer.six extraction failed: {e}")
-
+            # Optimization 1: Conditional PDF text extraction fallbacks
             if len(text_pymupdf.strip()) > 100:
                 merged_text = text_pymupdf
             else:
-                merged_text = ResumeIntelligenceService.merge_extracted_texts(text_pdfplumber, text_pdfminer, "")
+                text_pdfplumber = ""
+                try:
+                    import pdfplumber
+                    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                        for page in pdf.pages:
+                            page_text = page.extract_text()
+                            if page_text: text_pdfplumber += page_text + "\n"
+                except Exception as e: logger.error(f"pdfplumber extraction failed: {e}")
+
+                if len(text_pdfplumber.strip()) > 100:
+                    merged_text = ResumeIntelligenceService.merge_extracted_texts(text_pdfplumber, "", "")
+                else:
+                    text_pdfminer = ""
+                    try:
+                        from pdfminer.high_level import extract_text as pdfminer_extract_text
+                        text_pdfminer = pdfminer_extract_text(io.BytesIO(file_bytes))
+                    except Exception as e: logger.error(f"pdfminer.six extraction failed: {e}")
+                    merged_text = ResumeIntelligenceService.merge_extracted_texts(text_pdfplumber, text_pdfminer, "")
+
             if len(merged_text.strip()) > 100:
                 return {"text": merged_text, "engine": "pymupdf+pdfplumber+pdfminer", "confidence": 99.0, "resume_type": "EDITABLE_PDF", "largest_bold_name": largest_bold_name}
             else:
@@ -1476,54 +1489,182 @@ class ResumeIntelligenceService:
         try:
             if resume_type == 'PDF' or filename.lower().endswith('.pdf'):
                 import pypdfium2
+                import fitz
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
                 pdf = pypdfium2.PdfDocument(file_bytes)
                 for i in range(len(pdf)):
-                    page = pdf[i]
-                    bitmap = page.render(scale=2)
-                    image_list.append(bitmap.to_pil())
-            else: image_list.append(Image.open(io.BytesIO(file_bytes)))
+                    fitz_page = doc[i]
+                    total_text_len = len(fitz_page.get_text().strip())
+                    
+                    # Skip OCR if the page already has selectable text
+                    if total_text_len >= 15:
+                        image_list.append((i, "text", fitz_page.get_text()))
+                    else:
+                        # Skip OCR if there are no images on the page
+                        has_images = len(fitz_page.get_images()) > 0
+                        if has_images:
+                            page = pdf[i]
+                            bitmap = page.render(scale=2)
+                            image_list.append((i, "image", bitmap.to_pil()))
+                        else:
+                            image_list.append((i, "blank", ""))
+            else:
+                image_list.append((0, "image", Image.open(io.BytesIO(file_bytes))))
         except Exception as e:
             logger.error(f"Image rendering/loading failed: {e}")
             return {"text": extracted_text or "Could not open document.", "engine": "Error / Fallback Text", "confidence": 50.0, "resume_type": "CORRUPTED", "largest_bold_name": None}
 
-        preprocessed_images = [ResumeIntelligenceService.preprocess_image_for_ocr(img) for img in image_list]
-        ocr_results = {"text": "", "engine": "", "confidence": 0.0}
+        # Local helper for image compression
+        def compress_image_for_ocr(img, max_size=1500):
+            try:
+                w, h = img.size
+                if not isinstance(w, (int, float)) or not isinstance(h, (int, float)):
+                    return img
+            except Exception:
+                return img
+            if max(w, h) > max_size:
+                ratio = max_size / float(max(w, h))
+                new_size = (int(w * ratio), int(h * ratio))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+            return img
 
-        for idx, img in enumerate(preprocessed_images):
+        # Local helper to run OCR on a single page
+        def process_single_page_ocr(p_idx, img):
+            # Duplicate OCR check (page-level cache)
+            raw_bytes = img.tobytes()
+            img_hash = hashlib.sha256(raw_bytes).hexdigest()
+            if img_hash in _OCR_CACHE:
+                cached = _OCR_CACHE[img_hash]
+                return p_idx, cached["text"], cached["engine"], cached["confidence"]
+
+            img_compressed = compress_image_for_ocr(img)
+            img_preproc = ResumeIntelligenceService.preprocess_image_for_ocr(img_compressed)
+            
             page_text, engine_success, used_engine_name, page_confidence = "", False, "", 0.0
+            
+            # Try PaddleOCR (up to 2 attempts)
             if PADDLE_AVAILABLE:
-                try:
-                    from paddleocr import PaddleOCR
-                    ocr = PaddleOCR(use_textline_orientation=True, lang='en')
-                    res = ocr.ocr(np.array(img.convert('RGB')), cls=True)
-                    if res and res[0]:
-                        lines, confs = [line[1][0] for line in res[0]], [line[1][1] * 100 for line in res[0]]
-                        page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
-                        used_engine_name, engine_success = "PaddleOCR", True
-                except Exception as e: logger.error(f"PaddleOCR failed: {e}")
+                for attempt in range(2):
+                    try:
+                        ocr = GLOBAL_PADDLE_OCR
+                        if ocr is None:
+                            from paddleocr import PaddleOCR
+                            GLOBAL_PADDLE_OCR = PaddleOCR(use_textline_orientation=True, lang='en')
+                            ocr = GLOBAL_PADDLE_OCR
+                        res = ocr.ocr(np.array(img_preproc.convert('RGB')), cls=True)
+                        if res and res[0]:
+                            lines, confs = [line[1][0] for line in res[0]], [line[1][1] * 100 for line in res[0]]
+                            page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
+                            used_engine_name, engine_success = "PaddleOCR", True
+                            break
+                    except Exception as e:
+                        logger.error(f"PaddleOCR failed on page {p_idx} (attempt {attempt+1}): {e}")
+            
+            # Try EasyOCR (up to 2 attempts)
             if not engine_success and EASY_AVAILABLE:
-                try:
-                    import easyocr
-                    reader = easyocr.Reader(['en'])
-                    res = reader.readtext(np.array(img.convert('RGB')))
-                    if res:
-                        lines, confs = [r[1] for r in res], [r[2] * 100 for r in res]
-                        page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
-                        used_engine_name, engine_success = "EasyOCR", True
-                except Exception as e: logger.error(f"EasyOCR failed: {e}")
+                for attempt in range(2):
+                    try:
+                        import easyocr
+                        reader = easyocr.Reader(['en'])
+                        res = reader.readtext(np.array(img_preproc.convert('RGB')))
+                        if res:
+                            lines, confs = [r[1] for r in res], [r[2] * 100 for r in res]
+                            page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
+                            used_engine_name, engine_success = "EasyOCR", True
+                            break
+                    except Exception as e:
+                        logger.error(f"EasyOCR failed on page {p_idx} (attempt {attempt+1}): {e}")
+            
+            # Try Tesseract (up to 2 attempts)
             if not engine_success and TESSERACT_AVAILABLE:
-                try:
-                    import pytesseract
-                    text = pytesseract.image_to_string(img)
-                    if text.strip():
-                        page_text, page_confidence, used_engine_name = text, 92.5, "Tesseract"
-                except Exception as e: logger.error(f"Tesseract failed: {e}")
-            if page_text:
-                ocr_results["text"] += page_text + "\n\n"
-                ocr_results["engine"] = used_engine_name
-                ocr_results["confidence"] = max(ocr_results["confidence"], page_confidence)
+                for attempt in range(2):
+                    try:
+                        import pytesseract
+                        text = pytesseract.image_to_string(img_preproc)
+                        if text.strip():
+                            page_text, page_confidence, used_engine_name = text, 92.5, "Tesseract"
+                            engine_success = True
+                            break
+                    except Exception as e:
+                        logger.error(f"Tesseract failed on page {p_idx} (attempt {attempt+1}): {e}")
+
+            res_dict = {
+                "text": page_text,
+                "engine": used_engine_name or "None",
+                "confidence": page_confidence
+            }
+            _OCR_CACHE[img_hash] = res_dict
+            return p_idx, page_text, used_engine_name, page_confidence
+
+        # Run page preprocessing and OCR in parallel!
+        import concurrent.futures
+        ocr_results_by_page = {}
+        ocr_tasks = [(idx, img) for idx, page_type, img in image_list if page_type == "image"]
+        
+        if ocr_tasks:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(ocr_tasks))) as executor:
+                futures = {executor.submit(process_single_page_ocr, idx, img): idx for idx, img in ocr_tasks}
+                for future in concurrent.futures.as_completed(futures):
+                    idx = futures[future]
+                    try:
+                        p_idx, page_text, used_engine_name, page_confidence = future.result()
+                        ocr_results_by_page[p_idx] = {
+                            "text": page_text,
+                            "engine": used_engine_name,
+                            "confidence": page_confidence
+                        }
+                    except Exception as e:
+                        logger.error(f"Parallel OCR failed for page {idx}: {e}")
+                        ocr_results_by_page[idx] = {"text": "", "engine": "Failed", "confidence": 0.0}
+
+        # Reassemble page results
+        ocr_results = {"text": "", "engine": "", "confidence": 0.0}
+        for idx, page_type, page_data in image_list:
+            if page_type == "text":
+                ocr_results["text"] += page_data + "\n\n"
+                ocr_results["engine"] = "pymupdf"
+                ocr_results["confidence"] = max(ocr_results["confidence"], 99.0)
+            elif page_type == "image":
+                page_res = ocr_results_by_page.get(idx, {"text": "", "engine": "", "confidence": 0.0})
+                ocr_results["text"] += page_res["text"] + "\n\n"
+                ocr_results["engine"] = page_res["engine"] or ocr_results["engine"]
+                ocr_results["confidence"] = max(ocr_results["confidence"], page_res["confidence"])
 
         result_dict = {"text": ocr_results["text"].strip(), "engine": ocr_results["engine"] or "None", "confidence": ocr_results["confidence"] or 0.0, "resume_type": "SCANNED_IMAGE" if resume_type == 'IMAGE' else "SCANNED_PDF", "largest_bold_name": None}
+        
+        # Fallback if OCR text is empty
+        if not result_dict["text"].strip():
+            logger.warning("OCR returned empty text. Running direct extraction fallback (PyMuPDF, pdfplumber, pdfminer)...")
+            fallback_text = ""
+            try:
+                import fitz
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                for page in doc:
+                    fallback_text += page.get_text() + "\n"
+            except Exception as e:
+                logger.error(f"Fallback PyMuPDF failed: {e}")
+            
+            if not fallback_text.strip():
+                try:
+                    import pdfplumber
+                    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                        for page in pdf.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                fallback_text += page_text + "\n"
+                except Exception as e:
+                    logger.error(f"Fallback pdfplumber failed: {e}")
+            
+            if not fallback_text.strip():
+                try:
+                    from pdfminer.high_level import extract_text as pdfminer_extract_text
+                    fallback_text = pdfminer_extract_text(io.BytesIO(file_bytes))
+                except Exception as e:
+                    logger.error(f"Fallback pdfminer failed: {e}")
+            
+            if fallback_text.strip():
+                result_dict["text"] = fallback_text.strip()
+                result_dict["engine"] = "ocr-failed-fallback-direct"
         if filename.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'tiff', 'bmp'] or result_dict["resume_type"] == "SCANNED_IMAGE":
             text_lines = result_dict['text'].split('\n')
             first_20_lines = "\n".join(text_lines[:20])

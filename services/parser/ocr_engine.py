@@ -1,9 +1,39 @@
 import io
 import re
 import logging
+import hashlib
+import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+_GLOBAL_PADDLE_OCR = None
+_OCR_CACHE = {}
+
+def get_paddle_ocr_instance():
+    global _GLOBAL_PADDLE_OCR
+    if _GLOBAL_PADDLE_OCR is None:
+        try:
+            from paddleocr import PaddleOCR
+            _GLOBAL_PADDLE_OCR = PaddleOCR(lang='en')
+        except Exception as e:
+            logger.warning(f"Failed to initialize PaddleOCR: {str(e)}. Will fallback to Tesseract.")
+            _GLOBAL_PADDLE_OCR = False
+    return _GLOBAL_PADDLE_OCR
+
+def compress_image_for_ocr(img: Image.Image, max_size=1500) -> Image.Image:
+    try:
+        w, h = img.size
+        # Make sure they are numbers
+        if not isinstance(w, (int, float)) or not isinstance(h, (int, float)):
+            return img
+    except Exception:
+        return img
+    if max(w, h) > max_size:
+        ratio = max_size / float(max(w, h))
+        new_size = (int(w * ratio), int(h * ratio))
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
+    return img
 
 class OCREngine:
     """
@@ -13,18 +43,15 @@ class OCREngine:
     """
 
     def __init__(self):
+        # Cache instance level to maintain backwards compatibility, but use global instance
         self._paddle_ocr = None
 
     def _get_paddle_ocr(self):
-        if self._paddle_ocr is None:
-            try:
-                from paddleocr import PaddleOCR
-                # Initialize PaddleOCR (downloads models if not present)
-                self._paddle_ocr = PaddleOCR(lang='en')
-            except Exception as e:
-                logger.warning(f"Failed to initialize PaddleOCR: {str(e)}. Will fallback to Tesseract.")
-                self._paddle_ocr = False
-        return self._paddle_ocr
+        if self._paddle_ocr is False:
+            return False
+        if self._paddle_ocr is not None:
+            return self._paddle_ocr
+        return get_paddle_ocr_instance()
 
     def perform_ocr(self, image_bytes: bytes) -> dict:
         """
@@ -40,14 +67,35 @@ class OCREngine:
                 "engine": str  # "paddleocr" or "tesseract"
             }
         """
+        # Duplicate OCR prevention check
+        img_hash = hashlib.sha256(image_bytes).hexdigest()
+        if img_hash in _OCR_CACHE:
+            logger.info("Reusing cached page-level OCR result.")
+            return _OCR_CACHE[img_hash]
+
+        result_dict = self._perform_ocr_uncached(image_bytes)
+        _OCR_CACHE[img_hash] = result_dict
+        return result_dict
+
+    def _perform_ocr_uncached(self, image_bytes: bytes) -> dict:
+        # Load and compress the image
+        try:
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            image = compress_image_for_ocr(image)
+        except Exception as e:
+            logger.error(f"Image load/compression failed: {e}")
+            return {
+                "text": "",
+                "confidence": 0.0,
+                "words": [],
+                "engine": "failed"
+            }
+
         # Try PaddleOCR first
         paddle_ocr_inst = self._get_paddle_ocr()
         if paddle_ocr_inst:
             try:
-                # Convert image bytes to format acceptable by PaddleOCR (numpy array or file path)
-                # We can write to a temp file or convert PIL image to numpy array
                 import numpy as np
-                image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
                 img_np = np.array(image)
                 
                 # Perform OCR
@@ -91,7 +139,6 @@ class OCREngine:
         # Fallback to Tesseract OCR
         try:
             import pytesseract
-            image = Image.open(io.BytesIO(image_bytes))
             
             # Use image_to_data to get structured layout & word level confidence
             data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
@@ -146,3 +193,4 @@ class OCREngine:
                 "words": [],
                 "engine": "failed"
             }
+

@@ -20,6 +20,37 @@ logger = logging.getLogger(__name__)
 
 CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]')
 
+# Pre-compiled regular expressions for candidate name/info validation
+NAME_CLEAN_RE = re.compile(r'^\+?\d[\d\s-]{8,}$')
+DIGITS_ONLY_RE = re.compile(r'[^\d+]')
+DIGITS_DIGIT_RE = re.compile(r'^\+?\d+$')
+EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+\.\w+')
+URL_RE = re.compile(r'(https?://\S+|www\.\S+)', re.I)
+STRIP_NON_ALPHA_RE = re.compile(r'[^a-z\s]')
+
+_GLOBAL_SPACY_NLP = None
+
+import threading
+_thread_local_timings = threading.local()
+
+def get_spacy_nlp():
+    global _GLOBAL_SPACY_NLP
+    if _GLOBAL_SPACY_NLP is None:
+        try:
+            import spacy
+            _GLOBAL_SPACY_NLP = spacy.load("en_core_web_sm")
+        except Exception as e:
+            logger.warning(f"Failed to load spaCy model: {e}")
+            _GLOBAL_SPACY_NLP = False
+    return _GLOBAL_SPACY_NLP
+
+def clean_extracted_text(text: str) -> str:
+    if not text:
+        return ""
+    # Strip null bytes and non-printable control characters, preserving normal whitespace
+    return "".join(c for c in text if c.isprintable() or c in "\n\r\t").strip()
+
+
 def sanitize_text(value, path="", print_on_nul=True):
     if value is None:
         return ""
@@ -655,14 +686,21 @@ class OpenAIResumeParser:
             ],
             response_format=FastResumeSchema
         )
-        logger.info(f"[TIMING] OpenAI API call took: {time.time() - t0:.4f}s")
-        print(f"[TIMING] OpenAI API call took: {time.time() - t0:.4f}s")
+        openai_duration = time.time() - t0
+        logger.info(f"[TIMING] OpenAI API call took: {openai_duration:.4f}s")
+        print(f"[TIMING] OpenAI API call took: {openai_duration:.4f}s")
         
         t_val = time.time()
         llm_raw_data = completion.choices[0].message.parsed.model_dump()
         result = convert_llm_data_to_standard_format(llm_raw_data)
-        logger.info(f"[TIMING] JSON validation & conversion took: {time.time() - t_val:.4f}s")
-        print(f"[TIMING] JSON validation & conversion took: {time.time() - t_val:.4f}s")
+        validation_duration = time.time() - t_val
+        logger.info(f"[TIMING] JSON validation & conversion took: {validation_duration:.4f}s")
+        print(f"[TIMING] JSON validation & conversion took: {validation_duration:.4f}s")
+        
+        if hasattr(_thread_local_timings, "timings"):
+            _thread_local_timings.timings["openai"] = openai_duration
+            _thread_local_timings.timings["validation"] = validation_duration
+            
         return result
 
 def copy_storage_file(source_field, target_path):
@@ -739,77 +777,121 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
 
     from services.resume_intelligence import ResumeIntelligenceService
     
-    # 1. OCR Engine Execution / Text Extraction
-    t_ocr_start = time.time()
-    try:
-        logger.info(f"[PARSER OCR RUNNING] Running OCR pipeline for: {filename}")
-        if progress_callback:
-            progress_callback("reading_pdf")
-            progress_callback("extracting_text")
-        ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
-        text = ocr_result["text"]
-        logger.info(f"[PARSER OCR SUCCESS] Engine: {ocr_result['engine']}, Confidence: {ocr_result['confidence']}%")
-    except Exception as e:
-        logger.error(f"[PARSER OCR FAILURE] Failed during OCR pipeline on {filename}: {str(e)}", exc_info=True)
-        return None, "OCR_FAILED"
-    t_ocr = time.time() - t_ocr_start
-    logger.info(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
-    print(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
+    sha256 = security_data.get('sha256') if security_data else hashlib.sha256(file_bytes).hexdigest()
+    existing_profile = CandidateProfile.objects.filter(sha256=sha256).first()
     
-    # 2. Run OpenAI parser and profile photo extraction in parallel!
-    t_parallel_start = time.time()
-    import concurrent.futures
+    cached_duplicate = False
+    t_ocr = 0.0
+    t_openai = 0.0
+    t_validation = 0.0
     
-    parsed_data = None
-    photo_bytes = None
-    photo_ext = None
+    if existing_profile and existing_profile.raw_resume_text and not overwrite:
+        logger.info(f"[PARSER DEDUPLICATION] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
+        print(f"[PARSER DEDUPLICATION] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
+        text = existing_profile.raw_resume_text
+        parsed_data = existing_profile.parsed_json
+        ocr_result = {
+            "text": text,
+            "engine": existing_profile.ocr_engine,
+            "confidence": float(existing_profile.ocr_confidence),
+            "resume_type": existing_profile.resume_type,
+            "largest_bold_name": existing_profile.full_name
+        }
+        cached_duplicate = True
     
-    def run_openai_parser():
+    if not cached_duplicate:
+        # 1. OCR Engine Execution / Text Extraction
+        t_ocr_start = time.time()
         try:
-            logger.info(f"[PARSER LLM RUNNING] Attempting OpenAI parsing for: {filename}")
+            logger.info(f"[PARSER OCR RUNNING] Running OCR pipeline for: {filename}")
             if progress_callback:
-                progress_callback("ai_parsing")
-            return OpenAIResumeParser.parse(text)
+                progress_callback("reading_pdf")
+                progress_callback("extracting_text")
+            ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
+            text = ocr_result["text"]
+            logger.info(f"[PARSER OCR SUCCESS] Engine: {ocr_result['engine']}, Confidence: {ocr_result['confidence']}%")
         except Exception as e:
-            logger.error(f"[PARSER LLM FAILURE] OpenAI parsing failed, falling back to NLP parser: {str(e)}", exc_info=True)
-            return None
+            logger.error(f"[PARSER OCR FAILURE] Failed during OCR pipeline on {filename}: {str(e)}", exc_info=True)
+            return None, "OCR_FAILED"
+        t_ocr = time.time() - t_ocr_start
+        logger.info(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
+        print(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
+        
+        # 2. Run OpenAI parser and profile photo extraction in parallel!
+        t_parallel_start = time.time()
+        import concurrent.futures
+        
+        parsed_data = None
+        photo_bytes = None
+        photo_ext = None
+        openai_duration = 0.0
+        validation_duration = 0.0
+        
+        def run_openai_parser():
+            nonlocal openai_duration, validation_duration
+            try:
+                logger.info(f"[PARSER LLM RUNNING] Attempting OpenAI parsing for: {filename}")
+                if progress_callback:
+                    progress_callback("ai_parsing")
+                clean_text = clean_extracted_text(text)
+                _thread_local_timings.timings = {"openai": 0.0, "validation": 0.0}
+                res = OpenAIResumeParser.parse(clean_text)
+                openai_duration = _thread_local_timings.timings.get("openai", 0.0)
+                validation_duration = _thread_local_timings.timings.get("validation", 0.0)
+                return res
+            except Exception as e:
+                logger.error(f"[PARSER LLM FAILURE] OpenAI parsing failed, falling back to NLP parser: {str(e)}", exc_info=True)
+                return None
 
-    def run_photo_extraction():
+        def run_photo_extraction():
+            try:
+                return extract_profile_photo(file_bytes, filename)
+            except Exception as e:
+                logger.error(f"[PARSER PHOTO FAILURE] Photo extraction failed: {str(e)}", exc_info=True)
+                return None, None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_openai = executor.submit(run_openai_parser)
+            future_photo = executor.submit(run_photo_extraction)
+            
+            parsed_data = future_openai.result()
+            photo_bytes, photo_ext = future_photo.result()
+            
+        t_parallel = time.time() - t_parallel_start
+        logger.info(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
+        print(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
+        
+        t_openai = openai_duration
+        t_validation = validation_duration
+
+        if parsed_data is None:
+            try:
+                logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
+                t_val_start = time.time()
+                parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
+                t_validation += time.time() - t_val_start
+                logger.info("[PARSER NLP SUCCESS] parse_resume_nlp completed")
+            except Exception as e:
+                logger.error(f"[PARSER NLP FAILURE] parse_resume_nlp raised an exception: {str(e)}", exc_info=True)
+
+        # ai_improve step (only if NLP succeeded; still guarded individually)
+        if parsed_data is not None:
+            try:
+                t_improve_start = time.time()
+                parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
+                info = parsed_data['personal_info']
+                t_validation += time.time() - t_improve_start
+                logger.info(f"[TIMING] AI improve took: {time.time() - t_improve_start:.4f}s")
+            except Exception as e:
+                logger.error(f"[PARSER AI_IMPROVE FAILURE] ai_improve_resume_data raised: {str(e)}", exc_info=True)
+                info = parsed_data.get('personal_info', {})
+    else:
+        # If it was duplicate, we still need to run photo extraction
         try:
-            return extract_profile_photo(file_bytes, filename)
+            photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
         except Exception as e:
             logger.error(f"[PARSER PHOTO FAILURE] Photo extraction failed: {str(e)}", exc_info=True)
-            return None, None
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        future_openai = executor.submit(run_openai_parser)
-        future_photo = executor.submit(run_photo_extraction)
-        
-        parsed_data = future_openai.result()
-        photo_bytes, photo_ext = future_photo.result()
-        
-    t_parallel = time.time() - t_parallel_start
-    logger.info(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
-    print(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
-
-    if parsed_data is None:
-        try:
-            logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
-            parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
-            logger.info("[PARSER NLP SUCCESS] parse_resume_nlp completed")
-        except Exception as e:
-            logger.error(f"[PARSER NLP FAILURE] parse_resume_nlp raised an exception: {str(e)}", exc_info=True)
-
-    # ai_improve step (only if NLP succeeded; still guarded individually)
-    if parsed_data is not None:
-        try:
-            t_improve_start = time.time()
-            parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
-            info = parsed_data['personal_info']
-            logger.info(f"[TIMING] AI improve took: {time.time() - t_improve_start:.4f}s")
-        except Exception as e:
-            logger.error(f"[PARSER AI_IMPROVE FAILURE] ai_improve_resume_data raised: {str(e)}", exc_info=True)
-            info = parsed_data.get('personal_info', {})
+            photo_bytes, photo_ext = None, None
 
     # Fallback: build a minimal parsed_data from raw OCR text so upload still succeeds
     if parsed_data is None:
@@ -945,13 +1027,12 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                     if name_str.lower() in ("unknown candidate", "unknown", "placeholder", "candidate", "null", "none"):
                         return False
                     
-                    import re
                     name_clean = " ".join(name_str.strip().split())
                     if not name_clean:
                         return False
                     if name_clean.isdigit():
                         return False
-                    if re.match(r'^\+?\d[\d\s-]{8,}$', name_clean):
+                    if NAME_CLEAN_RE.match(name_clean):
                         return False
                     if '@' in name_clean:
                         return False
@@ -960,19 +1041,19 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                     if 'linkedin' in name_clean.lower() or 'github' in name_clean.lower():
                         return False
                         
-                    digits_only = re.sub(r'[^\d+]', '', name_clean)
-                    if len(digits_only) >= 8 and digits_only.replace('+', '').isdigit():
+                    digits_only = DIGITS_ONLY_RE.sub('', name_clean)
+                    if len(digits_only) >= 8 and DIGITS_DIGIT_RE.match(digits_only.replace('+', '')):
                         return False
                         
-                    if re.search(r'[\w\.-]+@[\w\.-]+\.\w+', name_clean):
+                    if EMAIL_RE.search(name_clean):
                         return False
-                    if re.search(r'(https?://\S+|www\.\S+)', name_clean, re.I):
+                    if URL_RE.search(name_clean):
                         return False
                         
                     if not any(char.isalpha() for char in name_clean):
                         return False
                         
-                    norm = re.sub(r'[^a-z\s]', '', name_clean.lower()).strip()
+                    norm = STRIP_NON_ALPHA_RE.sub('', name_clean.lower()).strip()
                     norm = " ".join(norm.split())
                     
                     SECTION_TITLES = {
@@ -1043,18 +1124,18 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 # 2. spaCy / NER Name
                 spacy_name = None
                 try:
-                    import spacy
-                    nlp = spacy.load("en_core_web_sm")
-                    page_1 = text.split('\x0c')[0] if '\x0c' in text else text
-                    lines = [line.strip() for line in page_1.split('\n') if line.strip()]
-                    search_text = "\n".join(lines[:15])
-                    doc = nlp(search_text)
-                    for ent in doc.ents:
-                        if ent.label_ == "PERSON":
-                            ent_text = " ".join(ent.text.strip().split())
-                            if is_acceptable_name(ent_text):
-                                spacy_name = ent_text.title()
-                                break
+                    nlp = get_spacy_nlp()
+                    if nlp:
+                        page_1 = text.split('\x0c')[0] if '\x0c' in text else text
+                        lines = [line.strip() for line in page_1.split('\n') if line.strip()]
+                        search_text = "\n".join(lines[:15])
+                        doc = nlp(search_text)
+                        for ent in doc.ents:
+                            if ent.label_ == "PERSON":
+                                ent_text = " ".join(ent.text.strip().split())
+                                if is_acceptable_name(ent_text):
+                                    spacy_name = ent_text.title()
+                                    break
                 except Exception as e:
                     logger.warning(f"spaCy PERSON extraction failed: {e}")
                 
@@ -1370,7 +1451,13 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             
             t_total = time.time() - t_process_start
             logger.info(f"[TIMING] process_resume_file TOTAL duration: {t_total:.4f}s")
-            print(f"[TIMING] process_resume_file TOTAL duration: {t_total:.4f}s")
+            
+            # Print exact timing stages as requested
+            print(f"OCR: {t_ocr:.2f}s")
+            print(f"OpenAI: {t_openai:.2f}s")
+            print(f"Validation: {t_validation:.2f}s")
+            print(f"Database: {t_db:.2f}s")
+            print(f"Total: {t_total:.2f}s")
             
             if progress_callback:
                 progress_callback("completed", profile)

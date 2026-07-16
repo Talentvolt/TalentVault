@@ -62,6 +62,11 @@ class PDFParser:
         total_ocr_conf = 0.0
         ocr_page_count = 0
 
+        import concurrent.futures
+
+        # Phase 1: Native metadata extraction & determine scanned/images status
+        ocr_tasks = []
+        
         for page_idx, page in enumerate(doc):
             page_width = page.rect.width
             page_height = page.rect.height
@@ -112,17 +117,58 @@ class PDFParser:
             )
 
             is_scanned = total_text_len < 15
+            has_images = len(extracted_images) > 0 or len(page.get_images()) > 0
+
+            # If it's scanned and contains images, prepare OCR task
+            if is_scanned and has_images:
+                try:
+                    pix = page.get_pixmap(dpi=150)
+                    png_bytes = pix.tobytes("png")
+                    ocr_tasks.append((page_idx, png_bytes))
+                except Exception as e:
+                    logger.error(f"Failed to render page {page_idx} for OCR: {e}")
+
+            pages_data.append({
+                "page_index": page_idx,
+                "width": page_width,
+                "height": page_height,
+                "blocks": [], # Filled below
+                "tables": extracted_tables,
+                "images": extracted_images,
+                "is_scanned": is_scanned,
+                "has_images": has_images,
+                "blocks_dict_blocks": blocks,
+                "ocr_confidence": None
+            })
+
+        # Phase 2: Run OCR tasks in parallel
+        ocr_results = {}
+        if ocr_tasks:
+            def run_single_ocr(p_idx, png_bytes):
+                try:
+                    return p_idx, self.ocr_engine.perform_ocr(png_bytes)
+                except Exception as e:
+                    logger.error(f"Parallel OCR failed for page {p_idx}: {e}")
+                    return p_idx, None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(ocr_tasks))) as executor:
+                futures = [executor.submit(run_single_ocr, p_idx, png_bytes) for p_idx, png_bytes in ocr_tasks]
+                for future in concurrent.futures.as_completed(futures):
+                    p_idx, res = future.result()
+                    if res:
+                        ocr_results[p_idx] = res
+
+        # Phase 3: Post-process pages (OCR grouping or digital blocks extraction)
+        for page_data in pages_data:
+            page_idx = page_data["page_index"]
+            is_scanned = page_data["is_scanned"]
+            has_images = page_data["has_images"]
             extracted_blocks = []
             page_ocr_conf = None
 
             if is_scanned:
-                # Page is scanned, render to image and run OCR
-                logger.info(f"Page {page_idx} is scanned (text length {total_text_len}). Running OCR...")
-                try:
-                    pix = page.get_pixmap(dpi=150)
-                    png_bytes = pix.tobytes("png")
-                    
-                    ocr_res = self.ocr_engine.perform_ocr(png_bytes)
+                if has_images and page_idx in ocr_results:
+                    ocr_res = ocr_results[page_idx]
                     page_ocr_conf = ocr_res.get("confidence", 0.0)
                     total_ocr_conf += page_ocr_conf
                     ocr_page_count += 1
@@ -190,10 +236,12 @@ class PDFParser:
                                 "is_bold": False,
                                 "is_italic": False
                             })
-                except Exception as e:
-                    logger.error(f"OCR failed for page {page_idx}: {str(e)}", exc_info=True)
+                else:
+                    logger.info(f"Page {page_idx} is scanned but has no images. Skipping OCR.")
             else:
                 # Page is digital, extract text blocks natively
+                blocks = page_data["blocks_dict_blocks"]
+                extracted_tables = page_data["tables"]
                 for b in blocks:
                     if b.get("type") == 0:  # Text block
                         for line in b.get("lines", []):
@@ -239,15 +287,9 @@ class PDFParser:
                                 "is_italic": is_italic
                             })
 
-            pages_data.append({
-                "page_index": page_idx,
-                "width": page_width,
-                "height": page_height,
-                "blocks": extracted_blocks,
-                "tables": extracted_tables,
-                "images": extracted_images,
-                "is_scanned": is_scanned
-            })
+            page_data["blocks"] = extracted_blocks
+            page_data.pop("blocks_dict_blocks", None)
+            page_data.pop("has_images", None)
 
         avg_ocr_conf = total_ocr_conf / ocr_page_count if ocr_page_count > 0 else None
         return {
