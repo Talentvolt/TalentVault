@@ -8,24 +8,30 @@ annotated-types==0.7.0
 anyio==4.14.0
 asgiref==3.11.1
 attrs==26.1.0
-boto3==1.40.12
 bce-python-sdk==0.9.72
 beautifulsoup4==4.15.0
+blis==1.3.3
+boto3==1.43.42
+botocore==1.43.42
+catalogue==2.0.10
 certifi==2026.6.17
 cffi==2.0.0
 chardet==7.4.3
 charset-normalizer==3.4.7
 click==8.4.1
+cloudpathlib==0.24.0
 cobble==0.1.4
 colorama==0.4.6
 colorclass==2.2.2
 colorlog==6.10.1
+confection==1.3.3
 contourpy==1.3.3
 crc32c==2.8
 crispy-bootstrap5==2026.3
 cryptography==49.0.0
 customtkinter==5.2.2
 cycler==0.12.1
+cymem==2.0.13
 darkdetect==0.8.0
 distro==1.9.0
 dj-database-url==3.1.2
@@ -33,14 +39,15 @@ django-allauth==65.18.0
 django-cors-headers==4.9.0
 django-crispy-forms==2.5
 django-extensions==4.1
-django-storages==1.14.6
 django-filter==24.2
+django-storages==1.14.6
 Django==5.1.15
 djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
 drf-spectacular==0.29.0
 easygui==0.98.3
 easyocr==1.7.2
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
 et_xmlfile==2.0.0
 filelock==3.29.4
 fonttools==4.62.1
@@ -60,6 +67,7 @@ inflection==0.5.1
 iniconfig==2.3.0
 Jinja2==3.1.6
 jiter==0.15.0
+jmespath==1.1.0
 jsonschema-specifications==2025.9.1
 jsonschema==4.26.0
 kiwisolver==1.5.0
@@ -74,6 +82,7 @@ modelscope==1.37.1
 mpmath==1.3.0
 msoffcrypto-tool==6.0.0
 multidict==6.7.1
+murmurhash==1.0.15
 networkx==3.6.1
 ninja==1.13.0
 numpy==2.3.3
@@ -82,10 +91,10 @@ oletools==0.60.2
 openai==2.44.0
 opencv-python-headless==4.13.0.92
 openpyxl==3.1.5
+opt-einsum==3.3.0
 packaging==26.2
-paddlepaddle==3.1.1
 paddleocr==3.7.0
-paddlex==3.7.1
+paddlepaddle==2.6.2; python_version < "3.12"
 pandas==3.0.3
 pcodedmp==1.2.6
 pdfminer.six==20260107
@@ -93,8 +102,10 @@ pdfplumber==0.11.10
 pefile==2024.8.26
 pillow==12.2.0
 pluggy==1.6.0
+preshed==3.0.13
 prettytable==3.17.0
 propcache==0.5.2
+protobuf==7.35.1
 psutil==7.2.2
 psycopg2-binary==2.9.12
 py-cpuinfo==9.0.0
@@ -118,9 +129,9 @@ python-bidi==0.6.10
 python-dateutil==2.9.0.post0
 python-docx==1.2.0
 python-dotenv==1.2.2
-python-magic-bin==0.4.14; sys_platform == 'win32'
-python-magic==0.4.27; sys_platform != 'win32'
-pywin32-ctypes==0.2.3
+python-magic-bin==0.4.14; sys_platform == "win32"
+python-magic==0.4.27; sys_platform != "win32"
+pywin32-ctypes==0.2.3; sys_platform == "win32"
 PyYAML==6.0.2
 qrcode==8.2
 referencing==0.37.0
@@ -129,17 +140,26 @@ requests==2.34.2
 rich==15.0.0
 rpds-py==2026.5.1
 ruamel.yaml==0.19.1
+s3transfer==0.19.0
+safetensors==0.8.0
 scikit-image==0.26.0
-scipy==1.18.0
+scipy==1.15.2; python_version < "3.14"
+scipy==1.18.0; python_version >= "3.14"
 setuptools==81.0.0
 shapely==2.1.2
 shellingham==1.5.4
 six==1.17.0
+smart_open==8.0.0
 sniffio==1.3.1
 soupsieve==2.8.4
+spacy-legacy==3.0.12
+spacy-loggers==1.0.5
+spacy==3.8.13
 sqlparse==0.5.5
+srsly==2.5.3
 striprtf==0.0.32
 sympy==1.14.0
+thinc==8.3.13
 tifffile==2026.6.1
 torch==2.12.1
 torchvision==0.27.1
@@ -152,8 +172,11 @@ tzdata==2026.2
 ujson==5.13.0
 uritemplate==4.2.0
 urllib3==2.7.0
+wasabi==1.1.3
 wcwidth==0.8.1
+weasel==1.0.0
 whitenoise==6.12.0
 win_unicode_console==0.5
+wrapt==2.2.2
 xlsxwriter==3.2.9
 yarl==1.24.2
