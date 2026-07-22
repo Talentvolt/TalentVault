@@ -259,13 +259,7 @@
                             <i class="bi bi-bookmark-heart-fill text-lg"></i> <span class="lg:inline hidden">Saved Jobs</span>
                         </a>
 
-                        <a href="{% url 'frontend:candidate_applications' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_applications' %}active-sidebar-link{% endif %}">
-                            <i class="bi bi-send-fill text-lg"></i> <span class="lg:inline hidden">Applications</span>
-                        </a>
 
-                        <a href="{% url 'frontend:interviews' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'interviews' %}active-sidebar-link{% endif %}">
-                            <i class="bi bi-calendar-event-fill text-lg"></i> <span class="lg:inline hidden">Interviews</span>
-                        </a>
                     </div>
 
                     <!-- Profile & Documents Group -->
@@ -274,6 +268,10 @@
                         
                         <a href="{% url 'frontend:candidate_profile' %}" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150 {% if request.resolver_match.url_name == 'candidate_profile' %}active-sidebar-link{% endif %}">
                             <i class="bi bi-person-badge-fill text-lg"></i> <span class="lg:inline hidden">My Profile</span>
+                        </a>
+
+                        <a href="{% url 'frontend:candidate_profile' %}?edit=true" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150">
+                            <i class="bi bi-person-gear text-lg"></i> <span class="lg:inline hidden">Edit Profile</span>
                         </a>
 
                         <a href="{% url 'frontend:candidate_profile' %}#resume-section" class="sidebar-link flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-950 dark:hover:text-white transition-all duration-150">
@@ -364,12 +362,18 @@
                 </div>
 
                 <div class="flex flex-col gap-2 pt-2">
-                    <a href="{% url 'frontend:candidate_profile' %}" class="w-full h-11 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850">
+                    <a href="{% url 'frontend:candidate_profile' %}" class="w-full h-11 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850 transition-all duration-150">
                         <i class="bi bi-person-gear"></i> Edit Profile
                     </a>
-                    <a href="{% url 'frontend:settings' %}" class="w-full h-11 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850">
+                    <a href="{% url 'frontend:settings' %}" class="w-full h-11 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850 transition-all duration-150">
                         <i class="bi bi-sliders2"></i> Account Settings
                     </a>
+                    <form method="post" action="{% url 'account_logout' %}" id="profile-drawer-logout-form" class="hidden">
+                        {% csrf_token %}
+                    </form>
+                    <button onclick="document.getElementById('profile-drawer-logout-form').submit();" type="button" class="w-full h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 dark:hover:bg-rose-950/20 dark:hover:text-rose-400 dark:hover:border-rose-900 transition-all duration-150 group">
+                        <span class="text-rose-500 group-hover:text-rose-600 dark:group-hover:text-rose-400 me-0.5">🚪</span> <span class="group-hover:text-rose-600 dark:group-hover:text-rose-400">Sign Out</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -477,13 +481,7 @@
                     <i class="bi bi-bookmark-heart-fill text-lg"></i> <span>Saved Jobs</span>
                 </a>
 
-                <a href="{% url 'frontend:candidate_applications' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'candidate_applications' %}active-sidebar-link{% endif %}">
-                    <i class="bi bi-send-fill text-lg"></i> <span>Applications</span>
-                </a>
 
-                <a href="{% url 'frontend:interviews' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'interviews' %}active-sidebar-link{% endif %}">
-                    <i class="bi bi-calendar-event-fill text-lg"></i> <span>Interviews</span>
-                </a>
 
                 <div class="text-[10px] font-black text-slate-400 dark:text-slate-655 uppercase tracking-widest px-3 my-4 block">Settings & Theme</div>
                 
@@ -494,6 +492,10 @@
 
                 <a href="{% url 'frontend:candidate_profile' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-655 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'candidate_profile' %}active-sidebar-link{% endif %}">
                     <i class="bi bi-person-badge-fill text-lg"></i> <span>My Profile</span>
+                </a>
+
+                <a href="{% url 'frontend:candidate_profile' %}?edit=true" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-655 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <i class="bi bi-person-gear text-lg"></i> <span>Edit Profile</span>
                 </a>
 
                 <a href="{% url 'frontend:settings' %}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-base font-semibold text-slate-655 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 {% if request.resolver_match.url_name == 'settings' %}active-sidebar-link{% endif %}">
@@ -597,6 +599,684 @@
             alert('Notifications marked as read!');
             closeAllDrawers();
         }
+
+        // Shared Candidate Portal Job Interaction Scripts
+        let activeApplyButton = null;
+        let activeJobId = '';
+        let activeCompany = '';
+        let activeRole = '';
+        let selectedLocations = [];
+        let selectedSkills = [];
+
+        function renderLocationTags() {
+            const container = document.getElementById('preferred-locations-tags');
+            if (!container) return;
+            container.innerHTML = selectedLocations.map((loc, idx) => `
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary font-semibold text-xs rounded-lg">
+                    ${escapeHtml(loc)}
+                    <button type="button" onclick="removeLocationTag(${idx})" class="hover:text-rose-600 font-bold focus:outline-none me-0.5">&times;</button>
+                </span>
+            `).join('');
+        }
+
+        function addLocationTag(val) {
+            if (!val) return;
+            const clean = val.trim();
+            if (clean && !selectedLocations.some(l => l.toLowerCase() === clean.toLowerCase())) {
+                selectedLocations.push(clean);
+                renderLocationTags();
+                const err = document.getElementById('apply-preferred-location-error');
+                if (err) err.classList.add('hidden');
+            }
+            const input = document.getElementById('apply-preferred-location-input');
+            if (input) input.value = '';
+        }
+
+        function removeLocationTag(idx) {
+            selectedLocations.splice(idx, 1);
+            renderLocationTags();
+        }
+
+        function renderSkillTags() {
+            const container = document.getElementById('skills-tags');
+            if (!container) return;
+            container.innerHTML = selectedSkills.map((sk, idx) => `
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary font-semibold text-xs rounded-lg">
+                    ${escapeHtml(sk)}
+                    <button type="button" onclick="removeSkillTag(${idx})" class="hover:text-rose-600 font-bold focus:outline-none me-0.5">&times;</button>
+                </span>
+            `).join('');
+        }
+
+        function addSkillTag(val) {
+            if (!val) return;
+            const clean = val.trim();
+            if (clean && !selectedSkills.some(s => s.toLowerCase() === clean.toLowerCase())) {
+                selectedSkills.push(clean);
+                renderSkillTags();
+                const err = document.getElementById('apply-skills-error');
+                if (err) err.classList.add('hidden');
+            }
+            const input = document.getElementById('apply-skills-input');
+            if (input) input.value = '';
+        }
+
+        function removeSkillTag(idx) {
+            selectedSkills.splice(idx, 1);
+            renderSkillTags();
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function setupLocationAutocomplete(inputId, dropdownId, onSelect, isMulti = false) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+
+            let localIndex = -1;
+            let currentData = [];
+
+            async function fetchLocations(query) {
+                try {
+                    const res = await fetch(`/locations/search/?q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    currentData = data.results || [];
+                    renderDropdown();
+                } catch (err) {
+                    console.error("Location search fetch error:", err);
+                }
+            }
+
+            function renderDropdown() {
+                if (!currentData || currentData.length === 0) {
+                    dropdown.innerHTML = `<div class="p-3 text-center text-xs text-slate-400">No matching locations found</div>`;
+                    dropdown.classList.remove('hidden');
+                    return;
+                }
+
+                dropdown.innerHTML = currentData.map((item, idx) => `
+                    <div id="${dropdownId}-item-${idx}" data-idx="${idx}" class="location-option px-3.5 py-2.5 hover:bg-primary/10 dark:hover:bg-slate-800 cursor-pointer flex justify-between items-center text-xs border-b border-slate-100 dark:border-slate-800/60 last:border-b-0 ${idx === localIndex ? 'bg-primary/15 dark:bg-slate-800' : ''}">
+                        <div class="flex items-center gap-2">
+                            <i class="bi bi-geo-alt text-primary text-xs"></i>
+                            <div>
+                                <span class="font-bold text-slate-800 dark:text-slate-100">${escapeHtml(item.name)}</span>
+                                ${item.state && item.state !== item.name ? `<span class="text-[11px] text-slate-400 ms-1.5">${escapeHtml(item.state)}</span>` : ''}
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full ${item.tier === 'Tier 1' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : (item.tier === 'Tier 2' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400')}">${escapeHtml(item.tier)}</span>
+                    </div>
+                `).join('');
+
+                dropdown.classList.remove('hidden');
+
+                dropdown.querySelectorAll('.location-option').forEach(el => {
+                    el.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const idx = parseInt(this.getAttribute('data-idx'));
+                        if (currentData[idx]) {
+                            selectItem(currentData[idx]);
+                        }
+                    });
+                });
+            }
+
+            function selectItem(item) {
+                onSelect(item);
+                dropdown.classList.add('hidden');
+                localIndex = -1;
+            }
+
+            input.addEventListener('input', function() {
+                const q = this.value.trim();
+                localIndex = -1;
+                if (q.length > 0) {
+                    fetchLocations(q);
+                } else {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            input.addEventListener('focus', function() {
+                fetchLocations(this.value.trim());
+            });
+
+            input.addEventListener('keydown', function(e) {
+                if (dropdown.classList.contains('hidden')) {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        fetchLocations(this.value.trim());
+                        return;
+                    }
+                }
+
+                const items = dropdown.querySelectorAll('.location-option');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        localIndex = (localIndex + 1) % items.length;
+                        updateHighlight(items);
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        localIndex = (localIndex - 1 + items.length) % items.length;
+                        updateHighlight(items);
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (localIndex >= 0 && currentData[localIndex]) {
+                        selectItem(currentData[localIndex]);
+                    } else if (this.value.trim() && isMulti) {
+                        onSelect({ name: this.value.trim(), city: this.value.trim(), state: '', tier: 'Tier 3' });
+                        dropdown.classList.add('hidden');
+                        this.value = '';
+                    } else if (this.value.trim() && !isMulti) {
+                        onSelect({ name: this.value.trim(), city: this.value.trim(), state: '', tier: 'Tier 3' });
+                        dropdown.classList.add('hidden');
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.add('hidden');
+                    localIndex = -1;
+                }
+            });
+
+            function updateHighlight(items) {
+                items.forEach((item, idx) => {
+                    if (idx === localIndex) {
+                        item.classList.add('bg-primary/15', 'dark:bg-slate-800');
+                        item.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        item.classList.remove('bg-primary/15', 'dark:bg-slate-800');
+                    }
+                });
+            }
+
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupLocationAutocomplete('apply-current-location-input', 'current-location-dropdown', function(item) {
+                document.getElementById('apply-current-location-input').value = item.name;
+                document.getElementById('apply-current-location').value = item.name;
+            }, false);
+
+            setupLocationAutocomplete('apply-preferred-location-input', 'preferred-location-dropdown', function(item) {
+                addLocationTag(item.name);
+            }, true);
+
+            const skillInput = document.getElementById('apply-skills-input');
+            if (skillInput) {
+                skillInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addSkillTag(this.value);
+                    }
+                });
+                skillInput.addEventListener('blur', function() {
+                    if (this.value.trim()) addSkillTag(this.value);
+                });
+            }
+        });
+
+        function triggerEasyApply(jobId, company, role, btn) {
+            activeApplyButton = btn;
+            activeJobId = jobId;
+            activeCompany = company;
+            activeRole = role;
+
+            document.getElementById('modal-company-name').innerText = company;
+            document.getElementById('modal-role-name').innerText = role;
+            
+            {% if request.user.candidate_profile %}
+            document.getElementById('apply-full-name').value = "{{ request.user.candidate_profile.full_name|default:request.user.get_full_name|escapejs }}";
+            document.getElementById('apply-email').value = "{{ request.user.email|escapejs }}";
+            document.getElementById('apply-mobile').value = "{{ request.user.phone_number|default:''|escapejs }}";
+            {% if request.user.candidate_profile.current_salary %}
+            document.getElementById('apply-current-ctc').value = "{{ request.user.candidate_profile.current_salary }}";
+            {% endif %}
+            {% if request.user.candidate_profile.expected_salary %}
+            document.getElementById('apply-expected-ctc').value = "{{ request.user.candidate_profile.expected_salary }}";
+            {% endif %}
+            {% if request.user.candidate_profile.notice_period %}
+            document.getElementById('apply-notice-period').value = "{{ request.user.candidate_profile.notice_period }}";
+            {% endif %}
+            
+            const candLoc = "{{ request.user.candidate_profile.location|default:''|escapejs }}";
+            document.getElementById('apply-current-location').value = candLoc;
+            document.getElementById('apply-current-location-input').value = candLoc;
+
+            // Preferred Locations
+            selectedLocations = [];
+            {% if request.user.candidate_profile.location %}
+            selectedLocations.push("{{ request.user.candidate_profile.location|escapejs }}");
+            {% endif %}
+            renderLocationTags();
+
+            // Key Skills
+            selectedSkills = [];
+            {% for sk in request.user.candidate_profile.skills.all %}
+            selectedSkills.push("{{ sk.skill_name|escapejs }}");
+            {% endfor %}
+            renderSkillTags();
+
+            {% if request.user.candidate_profile.linkedin_url %}
+            document.getElementById('apply-linkedin').value = "{{ request.user.candidate_profile.linkedin_url|escapejs }}";
+            {% endif %}
+            {% if request.user.candidate_profile.portfolio_url %}
+            document.getElementById('apply-portfolio').value = "{{ request.user.candidate_profile.portfolio_url|escapejs }}";
+            {% endif %}
+            {% endif %}
+
+            const modal = document.getElementById('easy-apply-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEasyApplyModal() {
+            const modal = document.getElementById('easy-apply-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function submitEasyApply() {
+            const mobileEl = document.getElementById('apply-mobile');
+            const mobileErrorEl = document.getElementById('apply-mobile-error');
+            const currentLocationEl = document.getElementById('apply-current-location-input');
+            const prefLocErrorEl = document.getElementById('apply-preferred-location-error');
+            const skillErrorEl = document.getElementById('apply-skills-error');
+
+            const pendingLoc = document.getElementById('apply-preferred-location-input')?.value.trim();
+            if (pendingLoc) addLocationTag(pendingLoc);
+
+            const pendingSkill = document.getElementById('apply-skills-input')?.value.trim();
+            if (pendingSkill) addSkillTag(pendingSkill);
+
+            const currentLocVal = currentLocationEl ? currentLocationEl.value.trim() : '';
+            document.getElementById('apply-current-location').value = currentLocVal;
+
+            const formData = {
+                job_id: activeJobId,
+                mobile_number: mobileEl ? mobileEl.value.trim() : '',
+                current_ctc: document.getElementById('apply-current-ctc').value.trim(),
+                expected_ctc: document.getElementById('apply-expected-ctc').value.trim(),
+                notice_period: document.getElementById('apply-notice-period').value.trim(),
+                current_location: currentLocVal,
+                preferred_locations: selectedLocations,
+                key_skills: selectedSkills,
+                date_of_birth: document.getElementById('apply-dob').value.trim(),
+                linkedin_url: document.getElementById('apply-linkedin').value.trim(),
+                portfolio_url: document.getElementById('apply-portfolio').value.trim(),
+                note_to_recruiter: document.getElementById('apply-note').value.trim(),
+                cover_letter: document.getElementById('apply-pitch').value.trim()
+            };
+            
+            let isValid = true;
+            
+            if (!formData.mobile_number || !formData.current_ctc || !formData.expected_ctc || formData.notice_period === "" || !formData.current_location || !formData.date_of_birth) {
+                isValid = false;
+            }
+
+            if (selectedLocations.length === 0) {
+                if (prefLocErrorEl) prefLocErrorEl.classList.remove('hidden');
+                isValid = false;
+            } else {
+                if (prefLocErrorEl) prefLocErrorEl.classList.add('hidden');
+            }
+
+            if (selectedSkills.length === 0) {
+                if (skillErrorEl) skillErrorEl.classList.remove('hidden');
+                isValid = false;
+            } else {
+                if (skillErrorEl) skillErrorEl.classList.add('hidden');
+            }
+
+            if (!isValid) {
+                showToast("Please fill all required fields.");
+                return;
+            }
+
+            // Indian 10-digit mobile number validation
+            const mobileRegex = /^[6-9]\d{9}$/;
+            if (!mobileRegex.test(formData.mobile_number)) {
+                if (mobileErrorEl) mobileErrorEl.classList.remove('hidden');
+                showToast("Please enter a valid 10-digit Indian mobile number.");
+                return;
+            } else {
+                if (mobileErrorEl) mobileErrorEl.classList.add('hidden');
+            }
+
+            const modalSubmitBtn = document.getElementById('easy-apply-submit-btn');
+            const originalModalBtnText = modalSubmitBtn ? modalSubmitBtn.innerHTML : 'Submit Application';
+            if (modalSubmitBtn) {
+                modalSubmitBtn.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Submitting...`;
+                modalSubmitBtn.disabled = true;
+            }
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+
+            fetch('/api/v1/applications/apply/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(async res => {
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (e) {
+                    data = {};
+                }
+
+                if (res.status === 201) {
+                    closeEasyApplyModal();
+                    if (modalSubmitBtn) {
+                        modalSubmitBtn.innerHTML = originalModalBtnText;
+                        modalSubmitBtn.disabled = false;
+                    }
+                    if (activeApplyButton) {
+                        activeApplyButton.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
+                        activeApplyButton.className = "flex-1 h-12 bg-brandGreen text-white font-bold text-sm rounded-xl flex items-center justify-center cursor-not-allowed";
+                        activeApplyButton.disabled = true;
+                    }
+                    showToast("Application submitted successfully.");
+                } else {
+                    if (modalSubmitBtn) {
+                        modalSubmitBtn.innerHTML = originalModalBtnText;
+                        modalSubmitBtn.disabled = false;
+                    }
+                    let errMsg = "Failed to submit application.";
+                    if (data.error) {
+                        errMsg = data.error;
+                    } else if (typeof data === 'object') {
+                        const messages = [];
+                        for (let k in data) {
+                            const val = data[k];
+                            messages.push(Array.isArray(val) ? val.join(', ') : val);
+                        }
+                        if (messages.length > 0) errMsg = messages.join('; ');
+                    }
+                    showToast(errMsg);
+                }
+            })
+            .catch(err => {
+                console.error("Application error: ", err);
+                if (modalSubmitBtn) {
+                    modalSubmitBtn.innerHTML = originalModalBtnText;
+                    modalSubmitBtn.disabled = false;
+                }
+                showToast(err.message || "Failed to submit application.");
+            });
+        }
+
+        function toggleSaveJob(jobId, btn, isRemoveAction = false) {
+            const icon = btn.querySelector('i');
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+            fetch('/jobs/saved/toggle/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    job_id: jobId
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'saved') {
+                    if (icon) {
+                        icon.className = "bi bi-bookmark-fill text-primary text-base";
+                    }
+                    showToast("Job added to Saved list");
+                    
+                    // Increment dashboard counter if it exists
+                    const savedCounter = document.getElementById('count-saved');
+                    if (savedCounter) {
+                        let val = parseInt(savedCounter.innerText) || 0;
+                        savedCounter.innerText = val + 1;
+                    }
+                } else if (data.status === 'removed') {
+                    if (icon) {
+                        icon.className = "bi bi-bookmark text-base";
+                    }
+                    showToast("Job removed from Saved list");
+                    
+                    // Decrement dashboard counter if it exists
+                    const savedCounter = document.getElementById('count-saved');
+                    if (savedCounter) {
+                        let val = parseInt(savedCounter.innerText) || 0;
+                        savedCounter.innerText = Math.max(0, val - 1);
+                    }
+
+                    if (isRemoveAction) {
+                        const card = document.getElementById(`saved-card-${jobId}`);
+                        if (card) {
+                            card.style.opacity = '0';
+                            card.style.transform = 'scale(0.95)';
+                            setTimeout(() => {
+                                card.remove();
+                                const container = document.getElementById('saved-container');
+                                if (container && container.querySelectorAll('.saved-card').length === 0) {
+                                    container.classList.add('hidden');
+                                    document.getElementById('saved-empty-state').classList.remove('hidden');
+                                }
+                            }, 200);
+                        }
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Error saving job:", err);
+                showToast("Failed to save job: " + err.message);
+            });
+        }
+
+        function shareJob(title, shareUrl) {
+            navigator.clipboard.writeText(shareUrl || window.location.href);
+            showToast(`Sharing link to "${title}" copied to clipboard!`);
+        }
+
+        function openGenericModal(title, contentHtml, footerHtml) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerHTML = contentHtml;
+            document.getElementById('modal-footer').innerHTML = footerHtml;
+            const modal = document.getElementById('generic-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeGenericModal() {
+            const modal = document.getElementById('generic-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
     </script>
-</body>
-</html>
+
+    <!-- EASY APPLY MODAL -->
+    <div id="easy-apply-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg shadow-xl overflow-y-auto max-h-[90vh] flex flex-col p-6">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-extrabold text-base">Apply to <span id="modal-company-name"></span> - <span id="modal-role-name"></span></h3>
+                <button onclick="closeEasyApplyModal()" class="text-slate-400 hover:text-slate-650"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- 1. Candidate Name & 2. Email -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Candidate Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="apply-full-name" disabled class="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300" placeholder="Candidate Name">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email <span class="text-rose-500">*</span></label>
+                        <input type="email" id="apply-email" disabled class="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300" placeholder="Email Address">
+                    </div>
+                </div>
+
+                <!-- 3. Mobile Number -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Mobile Number <span class="text-rose-500">*</span></label>
+                    <input type="tel" id="apply-mobile" placeholder="10-digit Mobile Number (e.g. 9876543210)" maxlength="10" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" required>
+                    <span id="apply-mobile-error" class="text-[11px] text-rose-500 hidden mt-0.5 block">Please enter a valid 10-digit Indian mobile number.</span>
+                </div>
+
+                <!-- 4. Current CTC & 5. Expected CTC -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Current CTC <span class="text-rose-500">*</span></label>
+                        <input type="number" step="any" id="apply-current-ctc" placeholder="Current CTC (in LPA)" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Expected CTC <span class="text-rose-500">*</span></label>
+                        <input type="number" step="any" id="apply-expected-ctc" placeholder="Expected CTC (in LPA)" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" required>
+                    </div>
+                </div>
+
+                <!-- 6. Notice Period -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Notice Period <span class="text-rose-500">*</span></label>
+                    <select id="apply-notice-period" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" required>
+                        <option value="">Select Notice Period</option>
+                        <option value="0">Immediate</option>
+                        <option value="15">15 Days</option>
+                        <option value="30">30 Days</option>
+                        <option value="60">60 Days</option>
+                        <option value="90">90 Days</option>
+                    </select>
+                </div>
+
+                <!-- 7. Current Location -->
+                <div class="relative">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Current Location <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <input type="text" id="apply-current-location-input" autocomplete="off" placeholder="Search current city (e.g. Noida Sector 62, New Delhi, Bengaluru)" class="w-full p-3 pr-8 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary text-slate-700 dark:text-slate-300" required>
+                        <i class="bi bi-geo-alt absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                    </div>
+                    <input type="hidden" id="apply-current-location" value="">
+                    <!-- Dropdown Container -->
+                    <div id="current-location-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-60 overflow-y-auto z-50 hidden">
+                    </div>
+                </div>
+
+                <!-- 8. Preferred Location -->
+                <div class="relative">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Preferred Location <span class="text-rose-500">*</span></label>
+                    <div id="preferred-locations-wrapper" class="w-full min-h-[46px] p-2 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-primary">
+                        <div id="preferred-locations-tags" class="flex flex-wrap gap-1.5"></div>
+                        <input type="text" id="apply-preferred-location-input" autocomplete="off" placeholder="Search preferred job location(s)" class="flex-1 min-w-[140px] bg-transparent border-none text-xs focus:outline-none p-1 text-slate-700 dark:text-slate-300">
+                    </div>
+                    <span id="apply-preferred-location-error" class="text-[11px] text-rose-500 hidden mt-0.5 block">Please select at least one preferred location.</span>
+                    <!-- Dropdown Container -->
+                    <div id="preferred-location-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-60 overflow-y-auto z-50 hidden">
+                    </div>
+                    <div class="flex flex-wrap gap-1 mt-1.5 text-[11px] text-slate-500">
+                        <span class="text-slate-400 font-semibold me-1">Popular:</span>
+                        <button type="button" onclick="addLocationTag('Bengaluru')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Bengaluru</button>
+                        <button type="button" onclick="addLocationTag('Mumbai')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Mumbai</button>
+                        <button type="button" onclick="addLocationTag('Delhi NCR')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Delhi NCR</button>
+                        <button type="button" onclick="addLocationTag('Hyderabad')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Hyderabad</button>
+                        <button type="button" onclick="addLocationTag('Pune')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Pune</button>
+                        <button type="button" onclick="addLocationTag('Remote')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Remote</button>
+                    </div>
+                </div>
+
+                <!-- 9. Key Skill Set -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Key Skill Set <span class="text-rose-500">*</span></label>
+                    <div id="skills-wrapper" class="w-full min-h-[46px] p-2 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-primary">
+                        <div id="skills-tags" class="flex flex-wrap gap-1.5"></div>
+                        <input type="text" id="apply-skills-input" placeholder="Example: Python, Django, React, SQL" class="flex-1 min-w-[180px] bg-transparent border-none text-xs focus:outline-none p-1 text-slate-700 dark:text-slate-300">
+                    </div>
+                    <span id="apply-skills-error" class="text-[11px] text-rose-500 hidden mt-0.5 block">Please enter or select at least one key skill.</span>
+                    <div class="flex flex-wrap gap-1 mt-1.5 text-[11px] text-slate-500">
+                        <span class="text-slate-400 font-semibold me-1">Suggested:</span>
+                        <button type="button" onclick="addSkillTag('Python')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Python</button>
+                        <button type="button" onclick="addSkillTag('Django')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Django</button>
+                        <button type="button" onclick="addSkillTag('React')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">React</button>
+                        <button type="button" onclick="addSkillTag('SQL')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">SQL</button>
+                        <button type="button" onclick="addSkillTag('JavaScript')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">JavaScript</button>
+                    </div>
+                </div>
+
+                <!-- 10. Date of Birth -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date of Birth (DOB) <span class="text-rose-500">*</span></label>
+                    <input type="date" id="apply-dob" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" required>
+                </div>
+
+                <!-- 11. LinkedIn URL (Optional) -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">LinkedIn URL <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <input type="url" id="apply-linkedin" placeholder="https://linkedin.com/in/username" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary">
+                </div>
+
+                <!-- 12. Portfolio / GitHub URL (Optional) -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Portfolio / GitHub URL <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <input type="url" id="apply-portfolio" placeholder="https://github.com/username or portfolio link" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary">
+                </div>
+
+                <!-- 13. Note to Recruiter (Optional) -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Note to Recruiter <span class="text-slate-400 font-normal">(Optional)</span></label>
+                        <span id="note-char-count" class="text-[10px] text-slate-400">0/500</span>
+                    </div>
+                    <textarea id="apply-note" maxlength="500" oninput="document.getElementById('note-char-count').innerText = this.value.length + '/500'" class="w-full h-20 p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" placeholder="Write any additional information for the recruiter (optional)."></textarea>
+                </div>
+
+                <!-- 14. Why are you a perfect fit? (Optional) -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Why are you a perfect fit? <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <textarea id="apply-pitch" class="w-full h-20 p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" placeholder="Explain why you are a perfect fit..."></textarea>
+                </div>
+            </div>
+
+            <!-- 15. Submit Application -->
+            {% csrf_token %}
+            <div class="flex justify-end gap-2 mt-6">
+                <button onclick="closeEasyApplyModal()" class="h-10 px-4 border border-slate-200 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-350">Cancel</button>
+                <button id="easy-apply-submit-btn" onclick="submitEasyApply()" class="h-10 px-5 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl">Submit Application</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GENERIC MODAL -->
+    <div id="generic-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg shadow-xl overflow-y-auto max-h-[90vh] flex flex-col p-6">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 id="modal-title" class="font-extrabold text-base">Modal Title</h3>
+                <button onclick="closeGenericModal()" class="text-slate-400 hover:text-slate-650"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div id="modal-content" class="space-y-4">
+                <!-- Content injected here -->
+            </div>
+            <div id="modal-footer" class="flex justify-end gap-2 mt-6">
+                <!-- Footer buttons injected here -->
+            </div>
+        </div>
+    </div>

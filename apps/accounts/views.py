@@ -287,24 +287,22 @@ class CustomLoginView(View):
 
 class CustomLogoutView(View):
     def get(self, request, *args, **kwargs):
-        from django.http import HttpResponseNotAllowed
-        return HttpResponseNotAllowed(['POST'])
+        role = request.user.role if request.user.is_authenticated else None
+        logout(request)
+        if role == User.Role.CANDIDATE:
+            return redirect('candidate_login')
+        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+            return redirect('employer_login')
+        return redirect('candidate_login')
 
     def post(self, request, *args, **kwargs):
-        role = None
-        if request.user.is_authenticated:
-            role = request.user.role
-            
+        role = request.user.role if request.user.is_authenticated else None
         logout(request)
-        
-        if role == User.Role.SUPER_ADMIN:
-            return redirect('admin_login')
-        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
-            return redirect('employer_login')
-        elif role == User.Role.CANDIDATE:
+        if role == User.Role.CANDIDATE:
             return redirect('candidate_login')
-            
-        return redirect('account_login')
+        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+            return redirect('employer_login')
+        return redirect('candidate_login')
 
 class SignupView(CreateView):
     model = User
@@ -508,7 +506,10 @@ class CandidateLoginView(View):
     @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return redirect('frontend:candidate_dashboard')
+            if request.user.role == User.Role.CANDIDATE:
+                return redirect('frontend:candidate_dashboard')
+            else:
+                return redirect('frontend:recruiter_dashboard')
         form = LoginForm()
         return render(request, self.template_name, {'form': form})
 
@@ -532,7 +533,7 @@ class CandidateLoginView(View):
             try:
                 user_check = User.objects.get(email=email)
                 if user_check.role != User.Role.CANDIDATE:
-                    form.add_error(None, "This workspace is reserved for Candidates.")
+                    form.add_error(None, "This workspace is reserved for Candidates. Please use the Recruiter Portal to sign in.")
                     return render(request, self.template_name, {'form': form})
                 if not user_check.is_verified:
                     form.add_error(None, "Please verify your email before logging in.")
@@ -542,15 +543,18 @@ class CandidateLoginView(View):
 
             user = authenticate(request, username=email, password=password)
             if user is not None:
-                if user.is_active:
-                    login(request, user)
-                    if remember_me:
-                        request.session.set_expiry(1209600)  # 2 weeks
+                if user.role == User.Role.CANDIDATE:
+                    if user.is_active:
+                        login(request, user)
+                        if remember_me:
+                            request.session.set_expiry(1209600)  # 2 weeks
+                        else:
+                            request.session.set_expiry(0)
+                        return redirect('frontend:candidate_dashboard')
                     else:
-                        request.session.set_expiry(0)
-                    return redirect('frontend:candidate_dashboard')
+                        form.add_error(None, "This account is disabled.")
                 else:
-                    form.add_error(None, "This account is disabled.")
+                    form.add_error(None, "This workspace is reserved for Candidates.")
             else:
                 form.add_error(None, "Invalid email or password.")
         
@@ -597,12 +601,51 @@ class CandidateSignupView(View):
 class EmployerLoginView(View):
     template_name = 'registration/employer_login.html'
 
+    @method_decorator(never_cache)
+    @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            if request.user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                return redirect('frontend:recruiter_dashboard')
+            else:
+                return redirect('frontend:candidate_dashboard')
         form = EmployerLoginForm()
         return render(request, self.template_name, {'form': form})
 
+    @method_decorator(never_cache)
+    @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
         form = EmployerLoginForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data.get('email')
+            password = form.cleaned_data.get('password')
+            remember_me = form.cleaned_data.get('remember_me')
+
+            try:
+                user_check = User.objects.get(email=email)
+                if user_check.role == User.Role.CANDIDATE:
+                    form.add_error(None, "This workspace is reserved for Recruiters/Employers. Please use the Candidate Portal to sign in.")
+                    return render(request, self.template_name, {'form': form})
+            except User.DoesNotExist:
+                pass
+
+            user = authenticate(request, username=email, password=password)
+            if user is not None:
+                if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                    if user.is_active:
+                        login(request, user)
+                        if remember_me:
+                            request.session.set_expiry(1209600)  # 2 weeks
+                        else:
+                            request.session.set_expiry(0)
+                        return redirect('frontend:recruiter_dashboard')
+                    else:
+                        form.add_error(None, "This account is disabled.")
+                else:
+                    form.add_error(None, "This workspace is reserved for Recruiters/Employers.")
+            else:
+                form.add_error(None, "Invalid email or password.")
+
         return render(request, self.template_name, {'form': form})
 
 
@@ -640,7 +683,7 @@ class AdminLoginView(View):
 
             user = authenticate(request, username=email, password=password)
             if user is not None:
-                if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+                if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
                     if user.is_active:
                         login(request, user)
                         if remember_me:
@@ -860,95 +903,19 @@ class CandidateResetPasswordView(View):
         })
 
 
+from allauth.socialaccount.providers.google.views import (
+    oauth2_login as google_allauth_login,
+    oauth2_callback as google_allauth_callback,
+)
+
 class GoogleLoginRedirectView(View):
     def get(self, request, *args, **kwargs):
-        client_id = getattr(settings, 'GOOGLE_CLIENT_ID', None)
-        if not client_id:
-            # Fallback to auto-created candidate for localhost testing
-            email = "candidate.google@talentvault.ai"
-            user, created = User.objects.get_or_create(
-                email=email,
-                defaults={
-                    'first_name': "Google",
-                    'last_name': "User",
-                    'role': User.Role.CANDIDATE,
-                    'is_verified': True,
-                    'is_active': True,
-                    'profile_picture': "https://ui-avatars.com/api/?name=Google+User&background=4285F4&color=fff"
-                }
-            )
-            if created:
-                from apps.candidates.models import CandidateProfile
-                CandidateProfile.objects.get_or_create(user=user, defaults={'full_name': "Google User", 'location': "Bangalore, India"})
-            login(request, user)
-            return redirect('frontend:candidate_dashboard')
-
-        redirect_uri = request.build_absolute_uri(reverse('google_login_callback'))
-        params = {
-            'client_id': client_id,
-            'redirect_uri': redirect_uri,
-            'response_type': 'code',
-            'scope': 'openid email profile',
-            'state': 'google-oauth-state'
-        }
-        url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-        return redirect(url)
+        return google_allauth_login(request, *args, **kwargs)
 
 
 class GoogleLoginCallbackView(View):
     def get(self, request, *args, **kwargs):
-        code = request.GET.get('code')
-        if not code:
-            return redirect('candidate_login')
-            
-        client_id = getattr(settings, 'GOOGLE_CLIENT_ID', None)
-        client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', None)
-        redirect_uri = request.build_absolute_uri(reverse('google_login_callback'))
-        
-        token_url = "https://oauth2.googleapis.com/token"
-        data = {
-            'code': code,
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'redirect_uri': redirect_uri,
-            'grant_type': 'authorization_code'
-        }
-        r = requests.post(token_url, data=data)
-        if r.status_code != 200:
-            return render(request, 'registration/candidate_login.html', {'error_message': 'Failed to authenticate with Google.', 'form': LoginForm()})
-            
-        tokens = r.json()
-        access_token = tokens.get('access_token')
-        
-        profile_url = "https://www.googleapis.com/oauth2/v3/userinfo"
-        headers = {'Authorization': f'Bearer {access_token}'}
-        profile_r = requests.get(profile_url, headers=headers)
-        if profile_r.status_code != 200:
-            return render(request, 'registration/candidate_login.html', {'error_message': 'Failed to fetch Google profile info.', 'form': LoginForm()})
-            
-        profile = profile_r.json()
-        email = profile.get('email')
-        first_name = profile.get('given_name', '')
-        last_name = profile.get('family_name', '')
-        picture = profile.get('picture')
-        
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={
-                'first_name': first_name,
-                'last_name': last_name,
-                'role': User.Role.CANDIDATE,
-                'is_verified': True,
-                'is_active': True,
-                'profile_picture': picture
-            }
-        )
-        if created:
-            from apps.candidates.models import CandidateProfile
-            CandidateProfile.objects.get_or_create(user=user, defaults={'full_name': f"{first_name} {last_name}".strip(), 'location': "Bangalore, India"})
-            
-        login(request, user)
-        return redirect('frontend:candidate_dashboard')
+        return google_allauth_callback(request, *args, **kwargs)
 
 
 class GitHubLoginRedirectView(View):

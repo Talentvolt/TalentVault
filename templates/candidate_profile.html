@@ -59,6 +59,31 @@
             </div>
 
             <div class="text-center md:text-left w-full md:w-auto mt-4 md:mt-0">
+                {% if edit_mode %}
+                <form method="POST" action="{% url 'frontend:candidate_profile' %}" class="space-y-3 max-w-lg text-left">
+                    {% csrf_token %}
+                    <div class="flex gap-2 flex-wrap">
+                        <input type="text" name="full_name" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm font-bold w-full" value="{{ request.user.candidate_profile.full_name|default:request.user.get_full_name }}" placeholder="Full Name" required>
+                    </div>
+                    <input type="text" name="current_designation" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm w-full" value="{{ request.user.candidate_profile.current_designation|default:'' }}" placeholder="Headline">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                        <input type="text" name="location" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm w-full" value="{{ request.user.candidate_profile.location|default:'' }}" placeholder="Location">
+                        <input type="email" name="email" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-sm text-slate-500 cursor-not-allowed w-full" value="{{ request.user.email }}" readonly title="Email cannot be changed here">
+                        <input type="text" name="phone_number" class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm w-full" value="{{ request.user.phone_number|default:'' }}" placeholder="Phone Number">
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-450 uppercase mb-2">About / Summary</label>
+                        <textarea name="summary" rows="4" class="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="Write a short summary about yourself...">{{ request.user.candidate_profile.summary|default:'' }}</textarea>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="h-10 px-6 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl">Save Changes</button>
+                        <a href="{% url 'frontend:candidate_profile' %}" class="h-10 px-6 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl flex items-center">Cancel</a>
+                    </div>
+                </form>
+                {% else %}
                 <div class="flex items-center justify-center md:justify-start gap-2 flex-wrap">
                     <h2 class="text-2xl font-extrabold text-slate-950 dark:text-white" id="display-full-name">{{ request.user.candidate_profile.full_name|default:request.user.get_full_name }}</h2>
                     <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-0.5 rounded-full font-bold">Pro Candidate</span>
@@ -69,25 +94,19 @@
                     <span><i class="bi bi-envelope text-slate-400"></i> {{ request.user.email }}</span>
                     <span><i class="bi bi-telephone text-slate-400"></i> {{ request.user.phone_number|default:"Not specified" }}</span>
                 </div>
+                {% endif %}
             </div>
         </div>
 
-        <!-- Scores & Actions (swipeable cards on mobile) -->
+        <!-- Profile Status & Actions -->
         <div class="flex gap-4 overflow-x-auto pb-2 w-full md:w-auto scroll-snap-x scrollbar-none px-4 -mx-4 md:px-0 md:mx-0">
             <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-64px)] md:w-36 text-center bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col justify-center">
-                <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Resume Score</span>
-                <span class="text-3xl font-black text-slate-900 dark:text-white block mt-1">89<span class="text-sm font-semibold text-slate-450">/100</span></span>
-                <span class="text-[10px] text-brandGreen font-bold mt-1 md:hidden">⭐ Excellent grade</span>
+                <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Profile Status</span>
+                <span class="text-xl font-black text-brandGreen block mt-1">Active</span>
             </div>
             <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-64px)] md:w-36 text-center bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col justify-center">
-                <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">AI Match Score</span>
-                <span class="text-3xl font-black text-brandGreen block mt-1">94%</span>
-                <span class="text-[10px] text-slate-400 font-bold mt-1 md:hidden">⚡ Matches active opportunities</span>
-            </div>
-            <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-64px)] md:w-36 text-center bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col justify-center md:hidden">
-                <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Profile Views</span>
-                <span class="text-3xl font-black text-primary block mt-1">45</span>
-                <span class="text-[10px] text-brandGreen font-bold mt-1">+14% views this week</span>
+                <span class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Resume File</span>
+                <span class="text-sm font-black text-slate-900 dark:text-white block mt-1">{% if request.user.candidate_profile.has_resume %}Uploaded{% else %}None{% endif %}</span>
             </div>
         </div>
     </div>
@@ -98,59 +117,85 @@
         <!-- LEFT COLUMN: RESUME, PERSONAL INFO, CONTACTS -->
         <div class="space-y-8">
             
-            <!-- RESUME INTELLIGENCE SECTION -->
+            {% if request.user.candidate_profile.summary and not edit_mode %}
+            <div class="profile-card p-6">
+                <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight mb-4">About Me</h3>
+                <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">{{ request.user.candidate_profile.summary }}</p>
+            </div>
+            {% endif %}
+
+            <div class="profile-card p-6" id="skills-section">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Skills</h3>
+                    {% if edit_mode %}
+                    <button onclick="addNewSkill()" class="h-8 px-3 bg-primary hover:bg-accent text-white font-bold text-xs rounded-lg transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add</button>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap gap-2" id="skills-list-container">
+                    {% for skill in request.user.candidate_profile.skills.all %}
+                        <div class="skill-item inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700">
+                            {{ skill.skill_name }} 
+                            {% if edit_mode %}
+                            <button onclick="deleteSkill('{{ skill.id }}', this)" class="text-slate-400 hover:text-rose-500 ml-1"><i class="bi bi-x-lg text-[10px]"></i></button>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <p class="text-xs text-slate-400">No skills listed yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- RESUME SECTION -->
             <div class="profile-card p-6" id="resume-section">
                 <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight mb-4 flex items-center justify-between">
-                    <span>Resume Management</span>
+                    <span>Resume</span>
                     <i class="bi bi-file-earmark-text text-primary text-lg"></i>
                 </h3>
 
                 <!-- Upload details -->
-                <div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center bg-slate-50/[0.3] dark:bg-slate-950/20 w-full">
-                    <i class="bi bi-file-earmark-pdf text-4xl text-primary block mb-2"></i>
-                    {% if request.user.candidate_profile.resume %}
-                        <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{{ request.user.candidate_profile.original_filename|default:"resume.pdf" }}</h4>
-                        <p class="text-[10px] text-slate-400 font-semibold mt-1">Uploaded successfully</p>
+                <div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center bg-slate-50/[0.3] dark:bg-slate-950/20 w-full" id="resume-container">
+                    {% if request.user.candidate_profile.has_resume %}
+                        <div class="flex items-center gap-4 text-left">
+                            <i class="bi bi-file-earmark-pdf text-4xl text-primary"></i>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{{ request.user.candidate_profile.original_filename|default:"resume.pdf" }}</h4>
+                                <div class="text-[10px] text-slate-400 font-semibold mt-0.5 space-x-2">
+                                    <span>{{ request.user.candidate_profile.resume_size_display }}</span>
+                                    <span>•</span>
+                                    <span>{{ request.user.candidate_profile.updated_at|date:"M d, Y" }}</span>
+                                </div>
+                            </div>
+                        </div>
                         
-                        <div class="flex flex-col sm:flex-row items-stretch gap-2.5 mt-4 w-full">
-                            <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="h-11 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all duration-150 flex items-center justify-center gap-1.5 flex-1 text-decoration-none">
-                                <i class="bi bi-download"></i> Download
-                            </a>
-                            <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="h-11 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all duration-150 flex items-center justify-center gap-1.5 flex-1 text-decoration-none">
+                        <div class="flex items-stretch gap-2 mt-4 w-full">
+                            <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
                                 <i class="bi bi-eye"></i> Preview
                             </a>
-                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-11 px-4 bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl transition-all duration-150 flex items-center justify-center gap-1.5 flex-1 shadow-md shadow-primary/20">
+                            <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                            {% if edit_mode %}
+                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-10 px-3 bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
                                 <i class="bi bi-arrow-repeat"></i> Replace
                             </button>
-                            <input type="file" id="hidden-resume-upload-profile" class="hidden" onchange="uploadResumeFile(this)">
+                            <button onclick="deleteResume('{{ request.user.candidate_profile.id }}')" class="h-10 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadResumeFile(this)">
+                            {% endif %}
                         </div>
                     {% else %}
-                        <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">No Resume Uploaded</h4>
-                        <p class="text-[10px] text-slate-400 font-semibold mt-1">Upload your resume to autofill your profile</p>
+                        <i class="bi bi-file-earmark-pdf text-4xl text-slate-300 block mb-2"></i>
+                        <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{% if request.user.candidate_profile.resume %}Resume not available{% else %}No Resume Uploaded{% endif %}</h4>
                         <div class="mt-4 w-full">
-                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-11 w-full bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl transition-all duration-150 flex items-center justify-center gap-1.5 shadow-md shadow-primary/20">
+                            {% if edit_mode %}
+                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-11 w-full bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-primary/20">
                                 <i class="bi bi-upload"></i> Upload Resume
                             </button>
-                            <input type="file" id="hidden-resume-upload-profile" class="hidden" onchange="uploadResumeFile(this)">
+                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadResumeFile(this)">
+                            {% endif %}
                         </div>
                     {% endif %}
-                </div>
-
-                <!-- ATS Health check -->
-                <div class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-bold text-slate-700 dark:text-slate-350">ATS Suitability Grade</span>
-                        <span class="text-xs bg-brandGreen/10 text-brandGreen dark:bg-brandGreen/20 px-2 py-0.5 rounded-full font-bold">Excellent</span>
-                    </div>
-                    
-                    <!-- AI suggestions list -->
-                    <div class="space-y-3">
-                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Resume Suggestions</div>
-                        <ul class="text-xs font-semibold text-slate-500 space-y-2.5 list-disc pl-4">
-                            <li>Quantify your Stripe accomplishments with metrics (e.g. "+30% latency drop").</li>
-                            <li>Include deployment tools like Docker or AWS EC2 explicitly in your skills list.</li>
-                        </ul>
-                    </div>
                 </div>
             </div>
 
@@ -158,7 +203,9 @@
             <div class="profile-card p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Career Preferences</h3>
+                    {% if edit_mode %}
                     <button onclick="toggleEditPreferences()" class="w-11 h-11 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 text-slate-500 flex items-center justify-center"><i class="bi bi-pencil-square text-lg"></i></button>
+                    {% endif %}
                 </div>
 
                 <div class="space-y-4 text-xs font-semibold text-slate-600 dark:text-slate-400" id="preferences-display">
@@ -253,7 +300,9 @@
             <div class="profile-card p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Professional Experience</h3>
+                    {% if edit_mode %}
                     <button onclick="addNewExperience()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Position</button>
+                    {% endif %}
                 </div>
 
                 <!-- Timeline Entries container -->
@@ -275,7 +324,9 @@
                                         <span class="text-[10px] bg-slate-100 text-slate-650 px-2 py-0.5 rounded-full font-bold">
                                             {{ exp.start_date|date:"Y" }} - {% if exp.is_current %}Present{% else %}{{ exp.end_date|date:"Y" }}{% endif %}
                                         </span>
+                                        {% if edit_mode %}
                                         <button onclick="deleteExperience('{{ exp.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="bi bi-trash"></i></button>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 {% if exp.description %}
@@ -295,7 +346,9 @@
             <div class="profile-card p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Featured Projects</h3>
+                    {% if edit_mode %}
                     <button onclick="addNewProject()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Project</button>
+                    {% endif %}
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="projects-grid-container">
@@ -304,7 +357,9 @@
                             <div>
                                 <div class="flex items-center justify-between">
                                     <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">{{ proj.title }}</h4>
+                                    {% if edit_mode %}
                                     <button onclick="deleteProject('{{ proj.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="bi bi-trash"></i></button>
+                                    {% endif %}
                                 </div>
                                 <p class="text-xs text-slate-500 mt-2 leading-relaxed">
                                     {{ proj.description }}
@@ -329,7 +384,9 @@
             <div class="profile-card p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Education Background</h3>
+                    {% if edit_mode %}
                     <button onclick="addNewEducation()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Education</button>
+                    {% endif %}
                 </div>
 
                 <div class="space-y-6" id="education-list-container">
@@ -344,7 +401,9 @@
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-slate-455 font-bold">{{ edu.start_date|date:"Y" }} - {{ edu.end_date|date:"Y" }}</span>
+                                {% if edit_mode %}
                                 <button onclick="deleteEducation('{{ edu.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="bi bi-trash text-sm"></i></button>
+                                {% endif %}
                             </div>
                         </div>
                     {% empty %}
@@ -450,43 +509,60 @@
 
     // Add experience position
     function addNewExperience() {
-        const title = prompt("Enter designation title:", "Software Engineer");
-        const company = prompt("Enter company name:", "Acme Corp");
-        const startDate = prompt("Enter start date (YYYY-MM-DD):", "2024-01-01");
-        const endDate = prompt("Enter end date (YYYY-MM-DD) or leave empty if current:", "");
-        const isCurrent = endDate ? false : true;
-        const desc = prompt("Enter description:", "Developed key modules.");
-        
-        if (title && company) {
-            fetch("/api/v1/candidates/experience/", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    company_name: company,
-                    designation: title,
-                    start_date: startDate || null,
-                    end_date: endDate || null,
-                    is_current: isCurrent,
-                    description: desc
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => { throw new Error(JSON.stringify(data)); });
-                }
-                return response.json();
-            })
-            .then(data => {
-                showToast("Experience added successfully!");
-                setTimeout(() => { window.location.reload(); }, 800);
-            })
-            .catch(err => {
-                alert("Error adding experience: " + err.message);
-            });
+        const title = "Add Experience";
+        const content = `
+            <input type="text" id="exp-company" placeholder="Company Name" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" required>
+            <input type="text" id="exp-title" placeholder="Designation" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" required>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="exp-current" class="w-4 h-4" onchange="document.getElementById('exp-end').disabled = this.checked">
+                <label for="exp-current" class="text-xs text-slate-500">Currently Working Here</label>
+            </div>
+            <input type="date" id="exp-start" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" required>
+            <input type="date" id="exp-end" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
+            <textarea id="exp-desc" placeholder="Description" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" rows="3"></textarea>
+        `;
+        const footer = `
+            <button onclick="closeGenericModal()" class="h-10 px-4 border border-slate-200 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-350">Cancel</button>
+            <button onclick="submitExperience()" class="h-10 px-5 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl">Save</button>
+        `;
+        openGenericModal(title, content, footer);
+    }
+
+    function submitExperience() {
+        const data = {
+            company_name: document.getElementById('exp-company').value,
+            designation: document.getElementById('exp-title').value,
+            is_current: document.getElementById('exp-current').checked,
+            start_date: document.getElementById('exp-start').value,
+            end_date: document.getElementById('exp-end').value || null,
+            description: document.getElementById('exp-desc').value
+        };
+
+        if (!data.company_name || !data.designation || !data.start_date) {
+            showToast("Please fill required fields (Company, Designation, Start Date).");
+            return;
         }
+
+        fetch("/api/v1/candidates/experience/", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (!response.ok) return response.json().then(data => { throw new Error(JSON.stringify(data)); });
+            return response.json();
+        })
+        .then(data => {
+            closeGenericModal();
+            showToast("Experience added successfully!");
+            setTimeout(() => { window.location.reload(); }, 800);
+        })
+        .catch(err => {
+            showToast("Error adding experience: " + err.message);
+        });
     }
 
     function deleteExperience(id, btn) {
@@ -617,6 +693,55 @@
         });
     }
 
+    function addNewSkill() {
+        const skillName = prompt("Enter skill name (e.g., Python, React):", "");
+        if (skillName) {
+            fetch("/api/v1/candidates/skills/", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    skill_name: skillName,
+                    years_of_experience: 1,
+                    proficiency: 'Intermediate'
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => { throw new Error(JSON.stringify(data)); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showToast("Skill added successfully!");
+                setTimeout(() => { window.location.reload(); }, 800);
+            })
+            .catch(err => {
+                alert("Error adding skill: " + err.message);
+            });
+        }
+    }
+
+    function deleteSkill(id, btn) {
+        if (!confirm("Are you sure you want to delete this skill?")) return;
+        fetch(`/api/v1/candidates/skills/${id}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (response.status === 204) {
+                btn.closest('.skill-item').remove();
+                showToast("Skill deleted successfully!");
+            } else {
+                showToast("Failed to delete skill.");
+            }
+        });
+    }
+
     // Toast notifications utility
     function showToast(message) {
         const toast = document.createElement('div');
@@ -628,6 +753,38 @@
             toast.classList.add('translate-y-10', 'opacity-0');
             setTimeout(() => toast.remove(), 500);
         }, 3000);
+    }
+
+    function deleteResume(profileId) {
+        const title = "Confirm Deletion";
+        const content = `<p class="text-xs text-slate-600 dark:text-slate-400">Are you sure you want to delete your resume? This action cannot be undone.</p>`;
+        const footer = `
+            <button onclick="closeGenericModal()" class="h-10 px-4 border border-slate-200 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-350">Cancel</button>
+            <button onclick="confirmDeleteResume('${profileId}')" class="h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl">Delete</button>
+        `;
+        openGenericModal(title, content, footer);
+    }
+
+    function confirmDeleteResume(profileId) {
+        fetch("{% url 'frontend:candidate_resume_delete_ajax' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeGenericModal();
+                showToast("Resume deleted successfully!");
+                setTimeout(() => { window.location.reload(); }, 800);
+            } else {
+                showToast("Failed to delete resume: " + data.message);
+            }
+        })
+        .catch(err => {
+            showToast("Error deleting resume: " + err.message);
+        });
     }
 
     // PDF Preview
@@ -645,7 +802,7 @@
         if (input.files.length === 0) return;
         const file = input.files[0];
         
-        showToast("Uploading and parsing resume via AI Match... Please wait.");
+        showToast("Uploading resume... Please wait.");
         
         const formData = new FormData();
         formData.append('resume', file);
@@ -666,13 +823,13 @@
             return response.json();
         })
         .then(data => {
-            showToast("Resume parsed successfully! Reloading profile...");
+            showToast("Resume uploaded successfully! Reloading profile...");
             setTimeout(() => {
                 window.location.reload();
-            }, 1000);
+            }, 800);
         })
         .catch(err => {
-            alert("Error parsing resume: " + err.message);
+            alert("Error uploading resume: " + err.message);
         });
     }
 </script>

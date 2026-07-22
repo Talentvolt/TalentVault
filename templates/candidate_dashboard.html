@@ -89,8 +89,8 @@
                 <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-lg"><i class="bi bi-send-fill"></i></div>
             </div>
             <div>
-                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white" id="count-applications">18</h3>
-                <span class="text-xs text-brandGreen font-bold flex items-center gap-1 mt-1"><i class="bi bi-arrow-up-short"></i> +2 this week</span>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white" id="count-applications">{{ applications_count }}</h3>
+                <span class="text-xs text-brandGreen font-bold flex items-center gap-1 mt-1"><i class="bi bi-arrow-up-short"></i> Active applications</span>
             </div>
         </div>
 
@@ -101,7 +101,7 @@
                 <div class="w-10 h-10 rounded-xl bg-brandBlue/10 text-brandBlue flex items-center justify-center text-lg"><i class="bi bi-bookmark-heart-fill"></i></div>
             </div>
             <div>
-                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white" id="count-saved">12</h3>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white" id="count-saved">{{ saved_jobs_count }}</h3>
                 <span class="text-xs text-slate-400 font-bold mt-1 block">Quick access items</span>
             </div>
         </div>
@@ -113,8 +113,8 @@
                 <div class="w-10 h-10 rounded-xl bg-brandGreen/10 text-brandGreen flex items-center justify-center text-lg"><i class="bi bi-calendar-check-fill"></i></div>
             </div>
             <div>
-                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white">4</h3>
-                <span class="text-xs text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1 mt-1"><i class="bi bi-clock-history"></i> Next: Tomorrow</span>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white">{{ interviews_count }}</h3>
+                <span class="text-xs text-slate-450 font-bold mt-1 block">Scheduled sessions</span>
             </div>
         </div>
 
@@ -125,8 +125,8 @@
                 <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg"><i class="bi bi-eye-fill"></i></div>
             </div>
             <div>
-                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white">45</h3>
-                <span class="text-xs text-brandGreen font-bold flex items-center gap-1 mt-1"><i class="bi bi-arrow-up-short"></i> +14% growth</span>
+                <h3 class="text-3xl font-extrabold text-slate-950 dark:text-white">{{ recruiter_views_count }}</h3>
+                <span class="text-xs text-slate-450 font-bold mt-1 block">Views this month</span>
             </div>
         </div>
 
@@ -151,74 +151,55 @@
                 <!-- Carousel Slider container -->
                 <div id="job-carousel" class="flex gap-6 overflow-x-auto scroll-snap-x py-2 px-1">
                     
-                    <!-- Job Item 1 -->
+                    {% for rec in recommended_jobs %}
                     <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
                         <div class="flex items-start justify-between">
                             <div class="flex gap-3">
-                                <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black">S</div>
+                                <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black">
+                                    {{ rec.job.company.name|slice:":1"|upper }}
+                                </div>
                                 <div>
-                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">Backend Engineer (Django)</h4>
-                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Stripe • Remote / Bangalore</p>
+                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">
+                                        <a href="{% url 'frontend:public_job_share' rec.job.id %}" class="hover:text-primary transition-colors duration-150">
+                                            {{ rec.job.title }}
+                                        </a>
+                                    </h4>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">{{ rec.job.company.name }} • {{ rec.job.location }}</p>
                                 </div>
                             </div>
-                            <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-1 rounded-full font-bold">96% Match</span>
+                            <span class="text-xs {{ rec.badge_class }} px-2.5 py-1 rounded-full font-bold">{{ rec.match_score }}% Match</span>
                         </div>
                         <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
-                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹18 - 25 LPA</span>
-                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 2-5 Yrs</span>
+                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹{{ rec.job.salary_range_lpa }}</span>
+                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> {{ rec.job.min_experience }} - {{ rec.job.max_experience }} Yrs</span>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="handleDashboardJobApply('Stripe', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                            <button onclick="handleDashboardJobSave(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark"></i></button>
-                            <button onclick="handleDashboardJobShare('Backend Engineer at Stripe')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share"></i></button>
+                            {% if rec.job.id in applied_job_ids %}
+                                <button disabled class="flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center cursor-not-allowed">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Applied
+                                </button>
+                            {% else %}
+                                <button onclick="triggerEasyApply('{{ rec.job.id }}', '{{ rec.job.company.name|escapejs }}', '{{ rec.job.title|escapejs }}', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                            {% endif %}
+                            
+                            <button onclick="toggleSaveJob('{{ rec.job.id }}', this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+                                {% if rec.job.id in saved_job_ids %}
+                                    <i class="bi bi-bookmark-fill text-primary"></i>
+                                {% else %}
+                                    <i class="bi bi-bookmark text-base"></i>
+                                {% endif %}
+                            </button>
+                            
+                            <button onclick="shareJob('{{ rec.job.title|escapejs }} at {{ rec.job.company.name|escapejs }}', '{{ rec.job.share_url|escapejs }}')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <i class="bi bi-share"></i>
+                            </button>
                         </div>
                     </div>
-
-                    <!-- Job Item 2 -->
-                    <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
-                        <div class="flex items-start justify-between">
-                            <div class="flex gap-3">
-                                <div class="w-12 h-12 rounded-2xl bg-slate-950 text-white flex items-center justify-center text-xl font-black">L</div>
-                                <div>
-                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">Senior Frontend Dev (React)</h4>
-                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Linear • Remote / India</p>
-                                </div>
-                            </div>
-                            <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-1 rounded-full font-bold">94% Match</span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
-                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹22 - 30 LPA</span>
-                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 4-7 Yrs</span>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="handleDashboardJobApply('Linear', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                            <button onclick="handleDashboardJobSave(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark"></i></button>
-                            <button onclick="handleDashboardJobShare('Frontend Lead at Linear')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share"></i></button>
-                        </div>
+                    {% empty %}
+                    <div class="text-center py-8 w-full">
+                        <p class="text-sm text-slate-500 font-bold">No AI matches found. Try updating your profile skills.</p>
                     </div>
-
-                    <!-- Job Item 3 -->
-                    <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
-                        <div class="flex items-start justify-between">
-                            <div class="flex gap-3">
-                                <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black">V</div>
-                                <div>
-                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">AI Product Engineer</h4>
-                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Vercel • Hybrid / Bangalore</p>
-                                </div>
-                            </div>
-                            <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 px-2.5 py-1 rounded-full font-bold">92% Match</span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
-                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹25 - 35 LPA</span>
-                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> 3-6 Yrs</span>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="handleDashboardJobApply('Vercel', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                            <button onclick="handleDashboardJobSave(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark"></i></button>
-                            <button onclick="handleDashboardJobShare('AI Engineer at Vercel')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-share"></i></button>
-                        </div>
-                    </div>
+                    {% endfor %}
 
                 </div>
             </div>
@@ -240,29 +221,16 @@
                 
                 <div class="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 space-y-8">
                     
-                    <!-- Activity 1 -->
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-brandGreen border-4 border-white dark:border-slate-900 ring-2 ring-brandGreen/20"></span>
-                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Interview Scheduled</div>
-                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">Stripe recruiter scheduled Technical Round 1</h4>
-                        <p class="text-xs text-slate-500 mt-1">Scheduled for July 14, 2026, 10:00 AM. Join details sent to email.</p>
-                    </div>
-
-                    <!-- Activity 2 -->
+                    {% for activity in recent_activity %}
                     <div class="relative">
                         <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-primary border-4 border-white dark:border-slate-900 ring-2 ring-primary/20"></span>
-                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Applied</div>
-                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">Applied to Senior Developer at Vercel</h4>
-                        <p class="text-xs text-slate-500 mt-1">Application was reviewed by AI matching parser.</p>
+                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">{{ activity.notification_type|title }}</div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">{{ activity.title }}</h4>
+                        <p class="text-xs text-slate-500 mt-1">{{ activity.message }} - {{ activity.created_at|date:"M d, Y" }}</p>
                     </div>
-
-                    <!-- Activity 3 -->
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-brandBlue border-4 border-white dark:border-slate-900 ring-2 ring-brandBlue/20"></span>
-                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Viewed</div>
-                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">Stripe Hiring Manager viewed your resume</h4>
-                        <p class="text-xs text-slate-500 mt-1">Resume was accessed through verified sharing pipeline.</p>
-                    </div>
+                    {% empty %}
+                    <p class="text-sm text-slate-500 font-bold">No recent activity.</p>
+                    {% endfor %}
 
                 </div>
             </div>
@@ -307,7 +275,7 @@
                     </div>
                     <div class="flex items-center gap-2.5 text-slate-450">
                         <i class="bi bi-circle text-slate-300 text-sm"></i>
-                        <span>Connect verified GitHub portfolio</span>
+                        <span>Update your portfolio URL</span>
                     </div>
                 </div>
             </div>
@@ -316,29 +284,35 @@
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
                 <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-4">Upcoming Interviews</h3>
                 
-                <div class="p-4 bg-primary/[0.03] dark:bg-slate-950 border border-primary/10 dark:border-slate-800 rounded-2xl flex flex-col justify-between">
+                {% for interview in upcoming_interviews %}
+                <div class="p-4 bg-primary/[0.03] dark:bg-slate-950 border border-primary/10 dark:border-slate-800 rounded-2xl flex flex-col justify-between mb-4">
                     <div class="flex items-start justify-between">
                         <div>
-                            <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">Django Dev Tech Round 1</h4>
-                            <p class="text-xs text-slate-500 font-semibold mt-0.5">Google LLC • 45 Mins</p>
+                            <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">{{ interview.round|default:"Interview" }}</h4>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">{{ interview.application.job.company.name }} • 45 Mins</p>
                         </div>
-                        <div class="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-700 flex items-center justify-center font-black text-xs">G</div>
+                        <div class="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-700 flex items-center justify-center font-black text-xs">{{ interview.application.job.company.name|slice:":1"|upper }}</div>
                     </div>
                     
                     <div class="flex items-center gap-2 my-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
                         <i class="bi bi-clock text-primary"></i>
-                        <span>Tomorrow at 10:00 AM (IST)</span>
+                        <span>{{ interview.start_time|date:"M d, Y, h:i A" }}</span>
                     </div>
 
                     <div class="flex gap-2">
-                        <a href="https://meet.google.com" target="_blank" class="flex-1 h-12 bg-brandGreen hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all duration-150">
-                            <i class="bi bi-camera-video-fill text-sm"></i> Join Meet
+                        {% if interview.meeting_link %}
+                        <a href="{{ interview.meeting_link }}" target="_blank" class="flex-1 h-12 bg-brandGreen hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all duration-150">
+                            <i class="bi bi-camera-video-fill text-sm"></i> Join
                         </a>
+                        {% endif %}
                         <button onclick="simulateReschedule()" class="h-12 px-4 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-655 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center justify-center">
                             Reschedule
                         </button>
                     </div>
                 </div>
+                {% empty %}
+                <p class="text-sm text-slate-500 font-bold">No upcoming interviews.</p>
+                {% endfor %}
             </div>
 
             <!-- SKILL ANALYTICS / ADD AND REMOVE -->
@@ -481,13 +455,11 @@
         c.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' });
     }
 
-    // Apply simulation
-    function handleDashboardJobApply(company, btn) {
-        if (btn.disabled) return;
-        
-        btn.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Applying...`;
+    // Quick apply simulation
+    function handleDashboardApply(btn, company) {
+        btn.innerHTML = `<span class="inline-block animate-spin font-bold me-1">↻</span> Submitting...`;
         btn.disabled = true;
-
+        
         setTimeout(() => {
             btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
             btn.className = "flex-1 h-10 bg-brandGreen text-white font-bold text-xs rounded-xl";
@@ -497,7 +469,7 @@
             let val = parseInt(appCounter.innerText) || 0;
             appCounter.innerText = val + 1;
 
-            alert(`Application successfully submitted to ${company}! Your resume profile was parsed and matched.`);
+            alert(`Application successfully submitted to ${company}!`);
         }, 1200);
     }
 
@@ -568,7 +540,7 @@
         const file = input.files[0];
         
         // Show loading alert or toast
-        alert("Uploading and parsing resume via AI Match... Click OK to start extraction.");
+        alert("Uploading resume... Click OK to proceed.");
         
         const formData = new FormData();
         formData.append('resume', file);
@@ -589,11 +561,11 @@
             return response.json();
         })
         .then(data => {
-            alert("Resume parsed successfully! Re-routing to your updated profile...");
+            alert("Resume uploaded successfully! Re-routing to your profile...");
             window.location.href = "{% url 'frontend:candidate_profile' %}";
         })
         .catch(err => {
-            alert("Error parsing resume: " + err.message);
+            alert("Error uploading resume: " + err.message);
         });
     }
 </script>

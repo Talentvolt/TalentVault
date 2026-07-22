@@ -606,11 +606,15 @@
                         <p class="text-secondary small">Securely access your TalentVault Recruiter Workspace.</p>
                     </div>
 
-                    {% if form.errors or form.non_field_errors %}
+                    {% if form.non_field_errors or form.errors %}
                     <div class="alert-error">
                         <i class="bi bi-exclamation-circle-fill"></i>
                         <span>
-                            This workspace is reserved for Administrators.
+                            {% if form.non_field_errors %}
+                                {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                            {% else %}
+                                {% for field, errors in form.errors.items %}{% for error in errors %}{{ error }} {% endfor %}{% endfor %}
+                            {% endif %}
                         </span>
                     </div>
                     {% endif %}

@@ -32,6 +32,8 @@ router.register(r'candidates/certifications', CertificationViewSet, basename='ca
 router.register(r'applications', ApplicationViewSet, basename='application')
 router.register(r'interviews', InterviewViewSet, basename='interview')
 
+from allauth.socialaccount.providers.google.views import oauth2_login as google_allauth_login, oauth2_callback as google_allauth_callback
+
 from apps.accounts.views import (
     CustomLoginView, 
     CustomLogoutView, 
@@ -48,17 +50,15 @@ from apps.accounts.views import (
     CandidateOTPVerificationView,
     CandidateResetPasswordView,
     GoogleLoginRedirectView,
-    GoogleLoginCallbackView,
-    GitHubLoginRedirectView,
-    GitHubLoginCallbackView,
-    LinkedInLoginRedirectView,
-    LinkedInLoginCallbackView
+    GoogleLoginCallbackView
 )
 
 urlpatterns = [
     # Frontend Dashboard UI
     path('', include('apps.core.urls', namespace='frontend')),
-    path("clients/", include(("apps.clients.urls", "clients"), namespace="clients")),
+    path('clients/', include('apps.clients.urls', namespace='clients')),
+    path('accounts/logout/', CustomLogoutView.as_view(), name='account_logout'),
+    path("accounts/", include("allauth.urls")),
     
     # Candidate Auth & Selects
     path('accounts/login/', CandidateLoginView.as_view(), name='account_login'),
@@ -72,12 +72,9 @@ urlpatterns = [
     path('accounts/reset-password/', CandidateResetPasswordView.as_view(), name='candidate_reset_password'),
     
     # OAuth Routes
-    path('accounts/login/google/', GoogleLoginRedirectView.as_view(), name='google_login'),
-    path('accounts/login/google/callback/', GoogleLoginCallbackView.as_view(), name='google_login_callback'),
-    path('accounts/login/github/', GitHubLoginRedirectView.as_view(), name='github_login'),
-    path('accounts/login/github/callback/', GitHubLoginCallbackView.as_view(), name='github_login_callback'),
-    path('accounts/login/linkedin/', LinkedInLoginRedirectView.as_view(), name='linkedin_login'),
-    path('accounts/login/linkedin/callback/', LinkedInLoginCallbackView.as_view(), name='linkedin_login_callback'),
+    path('accounts/login/google/', google_allauth_login, name='google_login'),
+    path('accounts/login/google/callback/', google_allauth_callback, name='google_callback'),
+    path('accounts/login/google/callback/alias/', google_allauth_callback, name='google_login_callback'),
     
     # Employer Auth
     path('accounts/login/employer/', EmployerLoginView.as_view(), name='employer_login'),
@@ -85,8 +82,6 @@ urlpatterns = [
     
     # Admin Auth
     path('accounts/login/admin/', AdminLoginView.as_view(), name='admin_login'),
-    
-    path('accounts/logout/', CustomLogoutView.as_view(), name='account_logout'),
 
     path('admin/', admin.site.urls),
     

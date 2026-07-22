@@ -48,14 +48,36 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        job_id = serializer.validated_data['job_id']
-        cover_letter = serializer.validated_data.get('cover_letter', '')
-        candidate_id = request.user.candidate_profile.id
+        candidate = getattr(request.user, 'candidate_profile', None)
+        if not candidate:
+            return Response({"error": "Candidate profile not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not candidate.resume or not candidate.resume.name:
+            return Response({"error": "Please upload your resume in your Profile before applying."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            application = ApplicationService.apply_for_job(job_id, candidate_id, cover_letter)
+            # Pass all validated data to the service
+            application = ApplicationService.apply_for_job(
+                job_id=serializer.validated_data['job_id'],
+                candidate_id=candidate.id,
+                mobile_number=serializer.validated_data['mobile_number'],
+                current_ctc=serializer.validated_data['current_ctc'],
+                expected_ctc=serializer.validated_data['expected_ctc'],
+                notice_period=serializer.validated_data['notice_period'],
+                current_location=serializer.validated_data['current_location'],
+                preferred_locations=serializer.validated_data['preferred_locations'],
+                key_skills=serializer.validated_data['key_skills'],
+                date_of_birth=serializer.validated_data['date_of_birth'],
+                linkedin_url=serializer.validated_data.get('linkedin_url'),
+                portfolio_url=serializer.validated_data.get('portfolio_url'),
+                note_to_recruiter=serializer.validated_data.get('note_to_recruiter'),
+                cover_letter=serializer.validated_data.get('cover_letter', '')
+            )
             return Response(ApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
         except Exception as e:
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"[JOB_APPLICATION_ERROR] Application submission failed: {str(e)}\n{traceback.format_exc()}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], serializer_class=ApplicationTransitionSerializer)

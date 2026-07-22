@@ -61,6 +61,38 @@ class CandidateProfile(BaseAppModel):
             return False
 
     @property
+    def has_resume(self):
+        try:
+            return bool(self.resume and self.resume.name and self.resume.storage.exists(self.resume.name))
+        except Exception:
+            return False
+
+    @property
+    def resume_exists(self):
+        return self.has_resume
+
+    @property
+    def resume_size_display(self):
+        try:
+            if self.has_resume:
+                size = self.resume.size
+                if size < 1024 * 1024:
+                    return f"{round(size / 1024, 1)} KB"
+                return f"{round(size / (1024 * 1024), 1)} MB"
+        except Exception:
+            pass
+        return "Resume not available"
+
+    @property
+    def resume_file_url(self):
+        try:
+            if self.has_resume:
+                return self.resume.url
+        except Exception:
+            pass
+        return "#"
+
+    @property
     def current_salary_lpa(self):
         return format_salary_lpa(self.current_salary)
 
@@ -231,14 +263,26 @@ class Certification(BaseAppModel):
     issuing_organization = models.CharField(max_length=255, blank=True, null=True)
     issue_date = models.DateField(null=True, blank=True)
 
+class SavedJob(BaseAppModel):
+    """
+    Candidate Saved Jobs model.
+    """
+    candidate = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='saved_jobs')
+    job = models.ForeignKey('jobs.Job', on_delete=models.CASCADE, related_name='saved_by_candidates')
+
     class Meta:
-        verbose_name = _('certification')
-        verbose_name_plural = _('certifications')
+        unique_together = ('candidate', 'job')
+        verbose_name = _('saved job')
+        verbose_name_plural = _('saved jobs')
+
+    def __str__(self):
+        return f"{self.candidate.user.email} saved {self.job.title}"
 
 
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
+@receiver(pre_save, sender=SavedJob)
 @receiver(pre_save, sender=CandidateProfile)
 @receiver(pre_save, sender=Experience)
 @receiver(pre_save, sender=Education)

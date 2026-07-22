@@ -668,10 +668,7 @@
                         <a class="nav-link nav-link-custom" href="{% url 'frontend:candidate_search' %}">Companies</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link nav-link-custom" href="#">Career Resources</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom" href="{% url 'frontend:resume_parser' %}">Services</a>
+                        <a class="nav-link nav-link-custom" href="{% url 'frontend:candidate_career_resources' %}">Career Resources</a>
                     </li>
                 </ul>
             </div>
@@ -699,9 +696,12 @@
                                 <i class="bi bi-search"></i>
                                 <input type="text" name="search" placeholder="Search jobs, companies, skills or technologies...">
                             </div>
-                            <div class="search-field d-none d-sm-flex">
+                            <div class="search-field d-none d-sm-flex" style="position: relative;">
                                 <i class="bi bi-geo-alt"></i>
-                                <input type="text" name="location" placeholder="Preferred Location">
+                                <input type="text" id="id_landing_location" name="location" autocomplete="off" placeholder="Preferred Location">
+                                <!-- Autocomplete Dropdown -->
+                                <div id="landing-location-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; max-height: 200px; overflow-y: auto;">
+                                </div>
                             </div>
                             <button type="submit" class="btn btn-purple"><span class="d-none d-sm-inline">Find Jobs</span><i class="bi bi-search d-sm-none"></i></button>
                         </div>
@@ -1174,7 +1174,7 @@
                 <div class="col-sm-6 col-md-4 col-lg-2 offset-lg-1">
                     <h6 class="text-white fw-bold mb-4">Product</h6>
                     <a href="{% url 'frontend:jobs' %}" class="footer-link">Jobs Search</a>
-                    <a href="{% url 'frontend:resume_parser' %}" class="footer-link">Resume Parser</a>
+                    <a href="{% url 'frontend:candidate_career_resources' %}" class="footer-link">Career Resources</a>
                     <a href="{% url 'frontend:ats_pipeline' %}" class="footer-link">ATS Pipeline</a>
                     <a href="{% url 'frontend:analytics' %}" class="footer-link">Analytics Dashboard</a>
                 </div>
@@ -1217,6 +1217,70 @@
                 navbar.classList.remove('scrolled');
             }
         });
+
+        // Location Autocomplete from database
+        const locationInput = document.getElementById('id_landing_location');
+        const dropdown = document.getElementById('landing-location-dropdown');
+        let debounceTimer;
+
+        if (locationInput && dropdown) {
+            locationInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                clearTimeout(debounceTimer);
+                if (query.length < 2) {
+                    dropdown.style.display = 'none';
+                    return;
+                }
+                debounceTimer = setTimeout(() => {
+                    fetch(`/location-search/?q=${encodeURIComponent(query)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            dropdown.innerHTML = '';
+                            if (data.results && data.results.length > 0) {
+                                data.results.forEach(item => {
+                                    const row = document.createElement('div');
+                                    row.className = 'autocomplete-item';
+                                    row.style.padding = '10px 15px';
+                                    row.style.cursor = 'pointer';
+                                    row.style.borderBottom = '1px solid #f0f0f0';
+                                    row.style.fontSize = '13px';
+                                    row.style.color = '#333';
+                                    row.style.display = 'flex';
+                                    row.style.alignItems = 'center';
+                                    row.style.gap = '8px';
+                                    row.innerHTML = `<i class="bi bi-geo-alt-fill text-secondary"></i><span>${item.text}</span>`;
+                                    
+                                    row.addEventListener('mouseover', () => {
+                                        row.style.backgroundColor = '#f3f4f6';
+                                    });
+                                    row.style.backgroundColor = '#ffffff';
+                                    row.addEventListener('mouseout', () => {
+                                        row.style.backgroundColor = '#ffffff';
+                                    });
+
+                                    row.addEventListener('click', () => {
+                                        locationInput.value = item.text;
+                                        dropdown.style.display = 'none';
+                                    });
+                                    dropdown.appendChild(row);
+                                });
+                                dropdown.style.display = 'block';
+                            } else {
+                                dropdown.style.display = 'none';
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Error fetching locations:', err);
+                        });
+                }, 250);
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!locationInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+        }
     </script>
 </body>
 </html>

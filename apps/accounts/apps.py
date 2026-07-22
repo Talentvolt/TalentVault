@@ -50,9 +50,70 @@ def create_default_recruiter(sender, **kwargs):
         print(f"Error in create_default_recruiter: {err}")
         traceback.print_exc()
 
+def setup_google_social_app(sender, **kwargs):
+    from django.db import connection
+    import os
+    try:
+        tables = connection.introspection.table_names()
+        if 'django_site' in tables and 'socialaccount_socialapp' in tables:
+            from django.contrib.sites.models import Site
+            from allauth.socialaccount.models import SocialApp
+            from django.conf import settings
+
+            site, _ = Site.objects.get_or_create(
+                id=settings.SITE_ID,
+                defaults={'domain': 'talent-vault.in', 'name': 'TalentVault'}
+            )
+            if site.domain != 'talent-vault.in':
+                site.domain = 'talent-vault.in'
+                site.name = 'TalentVault'
+                site.save()
+
+            client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '') or os.environ.get('GOOGLE_CLIENT_ID', '')
+            client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', '') or os.environ.get('GOOGLE_CLIENT_SECRET', '')
+
+            if client_id:
+                app, _ = SocialApp.objects.get_or_create(
+                    provider='google',
+                    defaults={
+                        'name': 'Google OAuth',
+                        'client_id': client_id,
+                        'secret': client_secret,
+                    }
+                )
+                if app.client_id != client_id or app.secret != client_secret:
+                    app.client_id = client_id
+                    app.secret = client_secret
+                    app.save()
+                if site not in app.sites.all():
+                    app.sites.add(site)
+    except Exception as e:
+        import traceback
+        print(f"Error in setup_google_social_app: {e}")
+        traceback.print_exc()
+
 class AccountsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.accounts'
 
     def ready(self):
         post_migrate.connect(create_default_recruiter, sender=self)
+        post_migrate.connect(setup_google_social_app, sender=self)
+        
+        # Enforce prompt=select_account, access_type=offline, include_granted_scopes=true on GoogleProvider
+        try:
+            from allauth.socialaccount.providers.google.provider import GoogleProvider
+            _orig_get_auth_params = GoogleProvider.get_auth_params_from_request
+            
+            def custom_get_auth_params_from_request(self, request, action):
+                ret = _orig_get_auth_params(self, request, action)
+                ret['prompt'] = 'select_account'
+                ret['access_type'] = 'offline'
+                ret['include_granted_scopes'] = 'true'
+                return ret
+
+            GoogleProvider.get_auth_params_from_request = custom_get_auth_params_from_request
+        except Exception as err:
+            print(f"Error patching GoogleProvider: {err}")
+
+

@@ -524,23 +524,23 @@
     </div>
 </div>
 {% else %}
-<!-- Filter Panel -->
+<!-- Filter & Sort Panel -->
 <div class="premium-filter-card mb-4 fade-in-card">
     <form method="GET" id="job-candidates-filter-form">
         <div class="row g-3">
             <!-- Search field -->
             <div class="col-md-3">
-                <label class="form-label">Search Candidate</label>
+                <label class="form-label font-bold text-xs text-slate-700">Search Candidate</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" name="q" class="form-control border-start-0" placeholder="Name, designation, company..." value="{{ q }}">
+                    <input type="text" name="q" class="form-control border-start-0 text-xs" placeholder="Name, designation, email..." value="{{ q }}">
                 </div>
             </div>
             
             <!-- Experience Filter -->
             <div class="col-md-2">
-                <label class="form-label">Experience</label>
-                <select name="experience" class="form-select" onchange="this.form.submit()">
+                <label class="form-label font-bold text-xs text-slate-700">Experience</label>
+                <select name="experience" class="form-select text-xs" onchange="this.form.submit()">
                     <option value="">All Experience</option>
                     <option value="fresher" {% if selected_experience == 'fresher' %}selected{% endif %}>Fresher (0 Years)</option>
                     <option value="1-3" {% if selected_experience == '1-3' %}selected{% endif %}>1 - 3 Years</option>
@@ -549,23 +549,22 @@
                     <option value="10+" {% if selected_experience == '10+' %}selected{% endif %}>10+ Years</option>
                 </select>
             </div>
-            
-            <!-- Location Filter -->
+
+            <!-- Status Filter -->
             <div class="col-md-2">
-                <label class="form-label">Location</label>
-                <input type="text" name="location" class="form-control" placeholder="City or country..." value="{{ selected_location }}" onchange="this.form.submit()">
+                <label class="form-label font-bold text-xs text-slate-700">Application Stage</label>
+                <select name="status" class="form-select text-xs" onchange="this.form.submit()">
+                    <option value="">All Stages</option>
+                    {% for value, label in stage_choices %}
+                        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
             </div>
-            
-            <!-- Education Filter -->
-            <div class="col-md-2">
-                <label class="form-label">Education</label>
-                <input type="text" name="education" class="form-control" placeholder="Degree, field..." value="{{ selected_education }}" onchange="this.form.submit()">
-            </div>
-            
+
             <!-- ATS Score Filter -->
             <div class="col-md-2">
-                <label class="form-label">ATS Match Score</label>
-                <select name="ats_score" class="form-select" onchange="this.form.submit()">
+                <label class="form-label font-bold text-xs text-slate-700">ATS Match Score</label>
+                <select name="ats_score" class="form-select text-xs" onchange="this.form.submit()">
                     <option value="">All Scores</option>
                     <option value="90+" {% if selected_ats_score == '90+' %}selected{% endif %}>Excellent (90%+)</option>
                     <option value="75-90" {% if selected_ats_score == '75-90' %}selected{% endif %}>Good (75%-90%)</option>
@@ -574,140 +573,210 @@
                 </select>
             </div>
             
-            <!-- Status Filter -->
-            <div class="col-md-2">
-                <label class="form-label">Application Stage</label>
-                <select name="status" class="form-select" onchange="this.form.submit()">
-                    <option value="">All Stages</option>
-                    {% for value, label in stage_choices %}
-                        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
+            <!-- Sort By Filter -->
+            <div class="col-md-3">
+                <label class="form-label font-bold text-xs text-slate-700">Sort Applicants</label>
+                <select name="sort_by" class="form-select text-xs fw-bold text-primary" onchange="this.form.submit()">
+                    <option value="newest" {% if selected_sort_by == 'newest' %}selected{% endif %}>📅 Newest First</option>
+                    <option value="highest_ats" {% if selected_sort_by == 'highest_ats' or selected_sort_by == 'ats' %}selected{% endif %}>🎯 Highest ATS Score</option>
+                    <option value="highest_experience" {% if selected_sort_by == 'highest_experience' or selected_sort_by == 'experience' %}selected{% endif %}>💼 Highest Experience</option>
+                    <option value="highest_match" {% if selected_sort_by == 'highest_match' or selected_sort_by == 'match' %}selected{% endif %}>✨ Highest Match</option>
                 </select>
             </div>
         </div>
         
-        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top border-light-subtle">
-            <a href="{% url 'frontend:job_candidates' job.id %}" class="btn btn-outline-secondary px-4 py-2 fw-semibold" style="border-radius: 10px; font-size: 13px; height: 40px;">Reset Filters</a>
-            <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold" style="border-radius: 10px; font-size: 13px; background-color: #2563EB; border-color: #2563EB; height: 40px;">Search Candidates</button>
+        <div class="d-flex justify-content-end gap-2 mt-3 pt-3 border-top border-light-subtle">
+            <a href="{% url 'frontend:job_candidates' job.id %}" class="btn btn-outline-secondary px-3 py-1.5 fw-semibold" style="border-radius: 8px; font-size: 12px;">Reset Filters</a>
+            <button type="submit" class="btn btn-primary px-4 py-1.5 fw-semibold" style="border-radius: 8px; font-size: 12px; background-color: #2563EB; border-color: #2563EB;">Apply Filters</button>
         </div>
     </form>
 </div>
 
-<!-- Candidate Cards List -->
+<!-- Modern ATS Candidate Cards List -->
 <div class="candidate-cards-list">
     {% for app in object_list %}
-    <div class="candidate-card fade-in-card" data-card-id="{{ app.candidate.id }}">
-        <div class="candidate-card-body">
-            <!-- Left Column: Candidate profile info -->
-            <div class="card-section-candidate">
-                {% if app.candidate.has_profile_photo %}
-                    <img src="{{ app.candidate.profile_photo.url }}" class="candidate-avatar" alt="Photo">
-                {% else %}
-                    <div class="candidate-avatar-placeholder">
-                        {{ app.candidate.full_name|slice:":1"|upper|default:"?" }}
-                    </div>
-                {% endif %}
-                <div class="candidate-text-block">
-                    <h5 class="candidate-name">
-                        <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}">
-                            {{ app.candidate.full_name|default:app.candidate.user.email }}
-                        </a>
-                    </h5>
-                    <a href="mailto:{{ app.candidate.user.email }}" class="candidate-email">
-                        {{ app.candidate.user.email }}
-                    </a>
-                </div>
-            </div>
-
-            <!-- Company -->
-            <div class="card-section-company">
-                <div class="designation-text" title="{{ app.candidate.current_designation|default:'Professional' }}">
-                    {{ app.candidate.current_designation|default:"Professional" }}
-                </div>
-                <div class="company-text" title="{{ app.candidate.current_company|default:'Not specified' }}">
-                    {{ app.candidate.current_company|default:"Not specified" }}
-                </div>
-            </div>
-
-            <!-- Experience Badge -->
-            <div class="card-section-experience">
-                <span class="experience-badge">
-                    <span class="experience-dot">●</span> {{ app.candidate.total_experience|floatformat:1 }} Years
-                </span>
-            </div>
-
-            <!-- Location -->
-            <div class="card-section-location">
-                <i class="bi bi-geo-alt location-icon"></i>
-                <span class="location-text" title="{{ app.candidate.location|default:'Remote' }}">{{ app.candidate.location|default:"Remote" }}</span>
-            </div>
-
-            <!-- Education -->
-            <div class="card-section-education">
-                {% with edu=app.candidate.educations.first %}
-                    {% if edu %}
-                        <span class="education-badge" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}">
-                            🎓 {{ edu.degree }}
-                        </span>
+    <div class="candidate-card fade-in-card p-4 mb-3 border rounded-3 bg-white shadow-sm" data-card-id="{{ app.candidate.id }}">
+        <div class="row align-items-center g-3">
+            
+            <!-- LEFT SECTION: Photo, Name, Email, Mobile, Applied Date, Status Badge -->
+            <div class="col-lg-3 col-md-4 border-end-lg pe-3">
+                <div class="d-flex align-items-start gap-3">
+                    {% if app.candidate.has_profile_photo %}
+                        <img src="{{ app.candidate.profile_photo.url }}" class="candidate-avatar rounded-circle flex-shrink-0" width="48" height="48" alt="Photo" style="object-fit: cover;">
                     {% else %}
-                        <span class="text-muted fst-italic" style="font-size: 13px;">Not specified</span>
+                        <div class="candidate-avatar-placeholder rounded-circle flex-shrink-0 bg-primary-subtle text-primary font-black flex items-center justify-center" style="width: 48px; height: 48px; font-size: 18px;">
+                            {{ app.candidate.full_name|slice:":1"|upper|default:"?" }}
+                        </div>
                     {% endif %}
-                {% endwith %}
-            </div>
-
-            <!-- ATS Score Circle -->
-            <div class="card-section-ats">
-                <div class="ats-circle-wrapper">
-                    <svg width="40" height="40" style="transform: rotate(-90deg);">
-                        <circle cx="20" cy="20" r="15" fill="transparent" stroke="#F1F5F9" stroke-width="3"></circle>
-                        <circle cx="20" cy="20" r="15" fill="transparent" 
-                                stroke="{% if app.match_score >= 75 %}#16A34A{% elif app.match_score >= 60 %}#F97316{% else %}#EF4444{% endif %}" 
-                                stroke-width="3" 
-                                stroke-dasharray="94.24" 
-                                style="stroke-dashoffset: calc(94.24 - (94.24 * {{ app.match_score|default:0|floatformat:0 }}) / 100); transition: stroke-dashoffset 0.3s ease; stroke-linecap: round;"
-                        ></circle>
-                    </svg>
-                    <span class="ats-percentage">{{ app.match_score|default:0|floatformat:0 }}%</span>
+                    <div class="candidate-text-block min-w-0">
+                        <h6 class="candidate-name mb-1 font-bold text-slate-900 truncate">
+                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}" class="text-decoration-none text-dark hover:text-primary">
+                                {{ app.candidate.full_name|default:app.candidate.user.email }}
+                            </a>
+                        </h6>
+                        <div class="d-flex flex-column gap-0.5 text-xs text-slate-500">
+                            <a href="mailto:{{ app.candidate.user.email }}" class="text-decoration-none text-secondary truncate">
+                                <i class="bi bi-envelope text-slate-400 me-1"></i>{{ app.candidate.user.email }}
+                            </a>
+                            <a href="tel:{{ app.mobile_number|default:app.candidate.user.phone_number }}" class="text-decoration-none text-secondary truncate">
+                                <i class="bi bi-telephone text-slate-400 me-1"></i>{{ app.mobile_number|default:app.candidate.user.phone_number|default:"N/A" }}
+                            </a>
+                            <span class="text-slate-400 text-[11px] font-medium mt-1">Applied: {{ app.created_at|date:"M d, Y" }}</span>
+                        </div>
+                        
+                        <!-- Status Badge -->
+                        <div class="mt-2">
+                            {% if app.candidate_status_display == 'Applied' %}
+                                <span class="badge bg-blue-100 text-blue-700 font-bold px-2.5 py-1 rounded-full text-[11px]">Applied</span>
+                            {% elif app.candidate_status_display == 'Under Review' %}
+                                <span class="badge bg-warning-subtle text-warning-emphasis font-bold px-2.5 py-1 rounded-full text-[11px]">Under Review</span>
+                            {% elif app.candidate_status_display == 'Shortlisted' %}
+                                <span class="badge bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-full text-[11px]">Shortlisted</span>
+                            {% elif app.candidate_status_display == 'Interview Scheduled' %}
+                                <span class="badge bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded-full text-[11px]">Interview Scheduled</span>
+                            {% elif app.candidate_status_display == 'Selected' %}
+                                <span class="badge bg-success-subtle text-success font-bold px-2.5 py-1 rounded-full text-[11px]">Selected</span>
+                            {% elif app.candidate_status_display == 'Rejected' %}
+                                <span class="badge bg-danger-subtle text-danger font-bold px-2.5 py-1 rounded-full text-[11px]">Rejected</span>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Right Actions Section -->
-            <div class="card-section-actions">
-                <!-- View Profile -->
-                <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}" class="act-btn btn-view-profile">
-                    View Profile
-                </a>
-                
-                <!-- Move to Pipeline / In Pipeline -->
-                {% if app.in_pipeline %}
-                    <span class="pipeline-badge">
-                        🟢 In Pipeline
-                    </span>
-                {% else %}
-                    <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="m-0 p-0 pipeline-move-form" data-candidate-id="{{ app.candidate.id }}">
-                        {% csrf_token %}
-                        <input type="hidden" name="job_id" value="{{ job.id }}">
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <button type="submit" class="act-btn btn-pipeline-fill">
-                            Move to Pipeline
-                        </button>
-                    </form>
-                {% endif %}
-                
-                <!-- Three-dot portal dropdown trigger -->
-                <button class="act-btn btn-more custom-dropdown-trigger" 
-                        data-candidate-id="{{ app.candidate.id }}"
-                        data-in-pipeline="{% if app.in_pipeline %}true{% else %}false{% endif %}"
-                        data-remove-url="{% url 'frontend:remove_from_pipeline' app.candidate.id %}"
-                        data-interview-url="{% url 'frontend:interviews' %}?candidate_id={{ app.candidate.id }}&job_id={{ job.id }}"
-                        data-reject-url="{% url 'frontend:candidate_reject' app.candidate.id %}"
-                        data-is-rejected="{% if app.stage == 'SYSTEM_REJECTED' %}true{% else %}false{% endif %}"
-                        data-delete-url="{% url 'frontend:candidate_delete' app.candidate.id %}"
-                        data-can-delete="{% if request.user.role == 'SUPER_ADMIN' or request.user.role == 'COMPANY_ADMIN' %}true{% else %}false{% endif %}"
-                        type="button">
-                    ⋮
-                </button>
+            <!-- MIDDLE SECTION: CTC, Notice, Locations, Key Skills, ATS Match Score -->
+            <div class="col-lg-6 col-md-5 px-lg-3">
+                <div class="row g-2 text-xs">
+                    <!-- Current CTC -->
+                    <div class="col-6 col-sm-4">
+                        <span class="text-slate-400 uppercase font-bold text-[10px] d-block">Current CTC</span>
+                        <span class="font-extrabold text-slate-900 text-xs">{{ app.formatted_current_ctc }}</span>
+                    </div>
+
+                    <!-- Expected CTC -->
+                    <div class="col-6 col-sm-4">
+                        <span class="text-slate-400 uppercase font-bold text-[10px] d-block">Expected CTC</span>
+                        <span class="font-extrabold text-primary text-xs">{{ app.formatted_expected_ctc }}</span>
+                    </div>
+
+                    <!-- Notice Period -->
+                    <div class="col-6 col-sm-4">
+                        <span class="text-slate-400 uppercase font-bold text-[10px] d-block">Notice Period</span>
+                        <span class="font-bold text-slate-800 text-xs">{% if app.notice_period != None %}{{ app.notice_period }} Days{% elif app.candidate.notice_period != None %}{{ app.candidate.notice_period }} Days{% else %}N/A{% endif %}</span>
+                    </div>
+
+                    <!-- Current Location -->
+                    <div class="col-6 col-sm-6">
+                        <span class="text-slate-400 uppercase font-bold text-[10px] d-block">Current Location</span>
+                        <span class="font-bold text-slate-800 text-xs truncate d-block"><i class="bi bi-geo-alt text-primary me-1"></i>{{ app.current_location|default:app.candidate.location|default:"Remote" }}</span>
+                    </div>
+
+                    <!-- Preferred Location -->
+                    <div class="col-12 col-sm-6">
+                        <span class="text-slate-400 uppercase font-bold text-[10px] d-block">Preferred Location</span>
+                        <span class="font-bold text-slate-800 text-xs truncate d-block"><i class="bi bi-pin-map text-indigo-500 me-1"></i>{% if app.preferred_locations %}{{ app.preferred_locations|join:", " }}{% else %}{{ app.preferred_location|default:"Any" }}{% endif %}</span>
+                    </div>
+
+                    <!-- Skills & ATS Match Score -->
+                    <div class="col-12 mt-2">
+                        <div class="d-flex align-items-center justify-between mb-1">
+                            <span class="text-slate-400 uppercase font-bold text-[10px]">Key Skills</span>
+                            <div class="d-flex align-items-center gap-1.5">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">ATS Score</span>
+                                <span class="badge {% if app.match_score >= 75 %}bg-success{% elif app.match_score >= 60 %}bg-warning text-dark{% else %}bg-danger{% endif %} text-white font-extrabold px-2 py-0.5 rounded-full text-[11px]">{{ app.match_score|default:0|floatformat:0 }}%</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-1">
+                            {% with skills=app.skills_list %}
+                                {% for sk in skills|slice:":5" %}
+                                    <span class="badge bg-light text-dark border font-semibold px-2 py-1 text-[11px] rounded-2">{{ sk }}</span>
+                                {% empty %}
+                                    <span class="text-muted fst-italic text-[11px]">No skills listed</span>
+                                {% endfor %}
+                                {% if skills|length > 5 %}
+                                    <span class="badge bg-primary-subtle text-primary font-bold px-2 py-1 text-[11px] rounded-2">+{{ skills|length|add:"-5" }} more</span>
+                                {% endif %}
+                            {% endwith %}
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <!-- RIGHT SECTION: Primary Buttons, Secondary Buttons & More (...) -->
+            <div class="col-lg-3 col-md-3 border-start-lg ps-3">
+                <div class="d-flex flex-column gap-2">
+                    <!-- Primary Buttons -->
+                    <div class="d-grid gap-1.5">
+                        <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ job.id }}" class="btn btn-sm btn-outline-primary fw-bold py-1.5" style="border-radius: 8px; font-size: 12px;">
+                            <i class="bi bi-person me-1"></i>View Profile
+                        </a>
+
+                        {% if app.resume %}
+                            <a href="{{ app.resume.url }}" download class="btn btn-sm btn-outline-secondary fw-bold py-1.5" style="border-radius: 8px; font-size: 12px;">
+                                <i class="bi bi-download me-1"></i>Download Resume
+                            </a>
+                        {% elif app.candidate.resume %}
+                            <a href="{{ app.candidate.resume.url }}" download class="btn btn-sm btn-outline-secondary fw-bold py-1.5" style="border-radius: 8px; font-size: 12px;">
+                                <i class="bi bi-download me-1"></i>Download Resume
+                            </a>
+                        {% endif %}
+
+                        {% if app.in_pipeline %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle py-2 rounded-2 font-bold text-center" style="font-size: 11px;">
+                                🟢 Shortlisted
+                            </span>
+                        {% else %}
+                            <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="m-0 p-0 pipeline-move-form" data-candidate-id="{{ app.candidate.id }}">
+                                {% csrf_token %}
+                                <input type="hidden" name="job_id" value="{{ job.id }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-sm btn-success text-white fw-bold w-100 py-1.5" style="border-radius: 8px; font-size: 12px;">
+                                    <i class="bi bi-check-lg me-1"></i>Shortlist
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        <a href="{% url 'frontend:interviews' %}?candidate_id={{ app.candidate.id }}&job_id={{ job.id }}" class="btn btn-sm btn-primary text-white fw-bold py-1.5" style="border-radius: 8px; font-size: 12px; background-color: #4F46E5; border-color: #4F46E5;">
+                            <i class="bi bi-calendar-event me-1"></i>Schedule Interview
+                        </a>
+                    </div>
+
+                    <!-- Secondary Buttons -->
+                    <div class="d-flex align-items-center gap-1 mt-1">
+                        <a href="mailto:{{ app.candidate.user.email }}?subject=Regarding your application for {{ job.title|urlencode }}" class="btn btn-sm btn-outline-info fw-bold flex-fill py-1" style="border-radius: 6px; font-size: 11px;">
+                            <i class="bi bi-envelope me-1"></i>Send Email
+                        </a>
+
+                        {% if app.candidate_status_display == 'Rejected' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle py-1 px-2 rounded-1 font-bold" style="font-size: 11px;">❌ Rejected</span>
+                        {% else %}
+                            <form method="POST" action="{% url 'frontend:candidate_reject' app.candidate.id %}" class="m-0 p-0 flex-fill" onsubmit="return confirm('Are you sure you want to reject this candidate?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="job_id" value="{{ job.id }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger fw-bold w-100 py-1" style="border-radius: 6px; font-size: 11px;">
+                                    <i class="bi bi-x-circle me-1"></i>Reject
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        <button class="act-btn btn-more custom-dropdown-trigger" 
+                                data-candidate-id="{{ app.candidate.id }}"
+                                data-in-pipeline="{% if app.in_pipeline %}true{% else %}false{% endif %}"
+                                data-remove-url="{% url 'frontend:remove_from_pipeline' app.candidate.id %}"
+                                data-interview-url="{% url 'frontend:interviews' %}?candidate_id={{ app.candidate.id }}&job_id={{ job.id }}"
+                                data-reject-url="{% url 'frontend:candidate_reject' app.candidate.id %}"
+                                data-is-rejected="{% if app.candidate_status_display == 'Rejected' %}true{% else %}false{% endif %}"
+                                data-delete-url="{% url 'frontend:candidate_delete' app.candidate.id %}"
+                                data-can-delete="{% if request.user.role == 'SUPER_ADMIN' or request.user.role == 'COMPANY_ADMIN' %}true{% else %}false{% endif %}"
+                                type="button" style="padding: 2px 8px;">
+                            ⋮
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
     {% empty %}

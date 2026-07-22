@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     
     # Third Party
    'rest_framework',
@@ -60,6 +61,12 @@ INSTALLED_APPS = [
    'crispy_forms',
    'crispy_bootstrap5',
    'storages',
+   
+   # django-allauth
+   'allauth',
+   'allauth.account',
+   'allauth.socialaccount',
+   'allauth.socialaccount.providers.google',
     
     # Local Apps
     'apps.core',
@@ -86,6 +93,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'config.middleware.RoleAccessMiddleware',
@@ -230,7 +238,47 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
 ]
+
+SITE_ID = 1
+
+# django-allauth configurations
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_ADAPTER = 'apps.accounts.adapters.CandidateSocialAccountAdapter'
+
+# Handle GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET with defensive cleaning
+_google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+if _google_client_id.startswith("GOOGLE_CLIENT_ID="):
+    _google_client_id = _google_client_id.replace("GOOGLE_CLIENT_ID=", "", 1)
+
+_google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+if _google_client_secret.startswith("GOOGLE_CLIENT_SECRET="):
+    _google_client_secret = _google_client_secret.replace("GOOGLE_CLIENT_SECRET=", "", 1)
+
+GOOGLE_CLIENT_ID = _google_client_id
+GOOGLE_CLIENT_SECRET = _google_client_secret
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
+        ],
+        "AUTH_PARAMS": {
+            "access_type": "offline",
+            "prompt": "select_account",
+            "include_granted_scopes": "true",
+        }
+    }
+}
 
 # ClamAV and Document Processing Security settings
 CLAMAV_HOST = os.environ.get('CLAMAV_HOST', '127.0.0.1')

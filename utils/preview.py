@@ -189,7 +189,10 @@ def generate_resume_preview_response(candidate):
         file_size_kb = 0.0
         
     mime_type = candidate.mime_type or f"application/{ext}"
-    download_url = candidate.resume.url
+    try:
+        download_url = candidate.resume.url if candidate.resume else "#"
+    except Exception:
+        download_url = "#"
     extracted_text = candidate.raw_resume_text or "No extracted text available."
 
     def get_fallback_html():

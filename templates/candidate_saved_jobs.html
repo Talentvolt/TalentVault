@@ -29,67 +29,53 @@
     </div>
 
     <!-- Saved List Container -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="saved-container">
-               <!-- Saved Item 1 -->
-        <div class="saved-card p-6 flex flex-col justify-between h-auto min-h-56 transition-all duration-200">
+    <div class="{% if not saved_jobs %}hidden{% endif %} grid grid-cols-1 md:grid-cols-2 gap-6" id="saved-container">
+        {% for item in saved_jobs %}
+        <div class="saved-card p-6 flex flex-col justify-between h-auto min-h-56 transition-all duration-200" id="saved-card-{{ item.job.id }}">
             <div>
                 <div class="flex items-start justify-between flex-wrap gap-2">
                     <div class="flex gap-3">
-                        <div class="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg font-black flex-shrink-0">S</div>
+                        <div class="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg font-black flex-shrink-0">
+                            {{ item.job.company.name|slice:":1"|upper }}
+                        </div>
                         <div>
-                            <h3 class="font-extrabold text-slate-950 dark:text-white text-sm">Backend Engineer (Django)</h3>
-                            <p class="text-xs text-slate-450 font-semibold mt-0.5">Stripe Technologies • Bangalore</p>
+                            <h3 class="font-extrabold text-slate-950 dark:text-white text-sm">
+                                <a href="{% url 'frontend:public_job_share' item.job.id %}" class="hover:text-primary transition-colors duration-150">
+                                    {{ item.job.title }}
+                                </a>
+                            </h3>
+                            <p class="text-xs text-slate-450 font-semibold mt-0.5">{{ item.job.company.name }} • {{ item.job.location }}</p>
                         </div>
                     </div>
-                    <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 px-2 py-0.5 rounded-full font-bold">96% Match</span>
+                    {% if item.match_score %}
+                    <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 px-2 py-0.5 rounded-full font-bold">{{ item.match_score }}% Match</span>
+                    {% endif %}
                 </div>
             </div>
             
             <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-800">
-                <span><i class="bi bi-cash me-1"></i> ₹18 - 25 LPA</span>
-                <span><i class="bi bi-geo-alt"></i> Remote</span>
+                <span><i class="bi bi-cash me-1"></i> ₹{{ item.job.salary_range_lpa }}</span>
+                <span><i class="bi bi-briefcase me-1"></i> {{ item.job.min_experience }} - {{ item.job.max_experience }} Yrs</span>
             </div>
 
             <div class="flex gap-2">
-                <button onclick="applyFromSaved('Stripe', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                <button onclick="removeSavedItem(this)" class="h-12 px-4 border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+                {% if item.job.id in applied_job_ids %}
+                    <button disabled class="flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center">
+                        <i class="bi bi-check-circle-fill me-1"></i> Applied
+                    </button>
+                {% else %}
+                    <button onclick="triggerEasyApply('{{ item.job.id }}', '{{ item.job.company.name|escapejs }}', '{{ item.job.title|escapejs }}', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                {% endif %}
+                <button onclick="toggleSaveJob('{{ item.job.id }}', this, true)" class="h-12 px-4 border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
                     <i class="bi bi-trash text-sm"></i> Remove
                 </button>
             </div>
         </div>
-
-        <!-- Saved Item 2 -->
-        <div class="saved-card p-6 flex flex-col justify-between h-auto min-h-56 transition-all duration-200">
-            <div>
-                <div class="flex items-start justify-between flex-wrap gap-2">
-                    <div class="flex gap-3">
-                        <div class="w-11 h-11 rounded-xl bg-slate-950 text-white flex items-center justify-center text-lg font-black flex-shrink-0">L</div>
-                        <div>
-                            <h3 class="font-extrabold text-slate-950 dark:text-white text-sm">Senior Frontend Dev (React)</h3>
-                            <p class="text-xs text-slate-450 font-semibold mt-0.5">Linear Systems • Remote</p>
-                        </div>
-                    </div>
-                    <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 px-2 py-0.5 rounded-full font-bold">94% Match</span>
-                </div>
-            </div>
-            
-            <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-800">
-                <span><i class="bi bi-cash me-1"></i> ₹22 - 30 LPA</span>
-                <span><i class="bi bi-geo-alt"></i> Remote</span>
-            </div>
-
-            <div class="flex gap-2">
-                <button onclick="applyFromSaved('Linear', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                <button onclick="removeSavedItem(this)" class="h-12 px-4 border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
-                    <i class="bi bi-trash text-sm"></i> Remove
-                </button>
-            </div>
-        </div>    </div>
-
+        {% endfor %}
     </div>
 
-    <!-- Empty State (Hidden) -->
-    <div id="saved-empty-state" class="hidden text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8">
+    <!-- Empty State -->
+    <div id="saved-empty-state" class="{% if saved_jobs %}hidden{% endif %} text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8">
         <div class="w-16 h-16 bg-slate-50 dark:bg-slate-850 rounded-full flex items-center justify-center mx-auto text-2xl mb-4 text-slate-400">
             <i class="bi bi-bookmark-x"></i>
         </div>
@@ -100,46 +86,5 @@
 
 </div>
 
-<script>
-    function removeSavedItem(btn) {
-        const card = btn.closest('.saved-card');
-        card.style.opacity = '0';
-        card.style.transform = 'scale(0.95)';
-        
-        setTimeout(() => {
-            card.remove();
-            
-            const container = document.getElementById('saved-container');
-            if (container.children.length === 0) {
-                container.classList.add('hidden');
-                document.getElementById('saved-empty-state').classList.remove('hidden');
-            }
-            
-            showToast("Job removed from saved list.");
-        }, 200);
-    }
 
-    function applyFromSaved(company, btn) {
-        btn.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Applying...`;
-        btn.disabled = true;
-
-        setTimeout(() => {
-            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
-            btn.className = "flex-1 h-10 bg-brandGreen text-white font-bold text-xs rounded-xl";
-            showToast(`Successfully applied to ${company}!`);
-        }, 1000);
-    }
-
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 transform translate-y-10 opacity-0 transition-all duration-500 z-50 font-bold text-sm";
-        toast.innerHTML = `<i class="bi bi-info-circle-fill text-primary"></i> ${message}`;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 50);
-        setTimeout(() => {
-            toast.classList.add('translate-y-10', 'opacity-0');
-            setTimeout(() => toast.remove(), 500);
-        }, 3000);
-    }
-</script>
 {% endblock %}

@@ -328,3 +328,29 @@ class CandidateMatchingService:
             else:
                 candidate.ats_score = CandidateMatchingService.calculate_ats_score(candidate, None)
             candidate.save()
+
+    @staticmethod
+    def get_recommended_jobs(candidate, limit=5):
+        from apps.jobs.models import Job
+        jobs = Job.objects.filter(status='ACTIVE')
+        
+        recommended = []
+        for job in jobs:
+            analysis = CandidateMatchingService.calculate_job_ats_score(candidate, job)
+            score = analysis['total_score']
+            
+            # Find missing skills
+            job_skills = {s.strip().lower() for s in job.skills.values_list('skill_name', flat=True) if s.strip()}
+            candidate_skills = {s.strip().lower() for s in candidate.skills.values_list('skill_name', flat=True) if s.strip()}
+            missing_skills = [s for s in job.skills.values_list('skill_name', flat=True) if s.strip().lower() not in candidate_skills]
+            
+            recommended.append({
+                'job': job,
+                'match_score': score,
+                'match_label': analysis['match_label'],
+                'badge_class': analysis['badge_class'],
+                'missing_skills': missing_skills
+            })
+            
+        recommended.sort(key=lambda x: x['match_score'], reverse=True)
+        return recommended[:limit]

@@ -30,19 +30,23 @@ from services.candidate_matching_service import CandidateMatchingService
 
 from apps.core.models import Location
 
-class LocationSearchView(LoginRequiredMixin, View):
+from services.location_service import LocationService
+
+class LocationSearchView(View):
     def get(self, request, *args, **kwargs):
         q = request.GET.get('q', '')
-        locations = Location.objects.filter(
-            Q(name__icontains=q) | Q(state__icontains=q)
-        ).distinct()[:20]
+        matches = LocationService.search_locations(q, limit=40)
         
         results = []
-        for loc in locations:
-            text = f"{loc.name}"
-            if loc.state:
-                text += f", {loc.state}"
-            results.append({'id': text, 'text': text})
+        for item in matches:
+            results.append({
+                'id': item['name'],
+                'name': item['name'],
+                'city': item['city'],
+                'state': item['state'],
+                'tier': item['tier'],
+                'text': f"{item['name']}{', ' + item['state'] if item['state'] and item['state'] != item['name'] else ''} ({item['tier']})"
+            })
             
         return JsonResponse({'results': results})
 
@@ -60,6 +64,14 @@ class DashboardView(TemplateView):
 
 class LandingPageView(TemplateView):
     template_name = 'landing.html'
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            if request.user.role == User.Role.CANDIDATE:
+                return redirect('frontend:candidate_dashboard')
+            elif request.user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                return redirect('frontend:recruiter_dashboard')
+        return super().get(request, *args, **kwargs)
 
 
 class EmployerLandingView(TemplateView):
@@ -90,9 +102,38 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Add candidate specific data
-        context['applications_count'] = Application.objects.filter(candidate__user=self.request.user).count()
-        context['interviews_count'] = Interview.objects.filter(application__candidate__user=self.request.user).count()
+        user = self.request.user
+        candidate_profile = getattr(user, 'candidate_profile', None)
+        
+        if candidate_profile:
+            context['applications_count'] = Application.objects.filter(candidate=candidate_profile).count()
+            from apps.candidates.models import SavedJob
+            context['saved_jobs_count'] = SavedJob.objects.filter(candidate=candidate_profile).count()
+            context['interviews_count'] = Interview.objects.filter(application__candidate=candidate_profile).count()
+            
+            context['recent_activity'] = Notification.objects.filter(recipient=user).order_by('-created_at')[:5]
+            context['upcoming_interviews'] = Interview.objects.filter(
+                application__candidate=candidate_profile, 
+                start_time__gte=timezone.now()
+            ).select_related('application__job').order_by('start_time')[:3]
+            
+            from services.candidate_matching_service import CandidateMatchingService
+            recommended = CandidateMatchingService.get_recommended_jobs(candidate_profile, limit=5)
+            context['recommended_jobs'] = recommended
+            
+            context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
+            context['saved_job_ids'] = list(candidate_profile.saved_jobs.values_list('job_id', flat=True))
+        else:
+            context['applications_count'] = 0
+            context['saved_jobs_count'] = 0
+            context['interviews_count'] = 0
+            context['recent_activity'] = []
+            context['upcoming_interviews'] = []
+            context['recommended_jobs'] = []
+            context['applied_job_ids'] = []
+            context['saved_job_ids'] = []
+            
+        context['recruiter_views_count'] = 0
         return context
 
 class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
@@ -279,19 +320,84 @@ class JobsView(LoginRequiredMixin, ListView):
         if self.request.user.role == 'CANDIDATE':
             queryset = Job.objects.filter(status='ACTIVE')
             
-            # Search
+            # 1. Search by Keyword (title, description)
             q = self.request.GET.get('q', '')
             if q:
-                queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(skills_required__icontains=q))
+                queryset = queryset.filter(
+                    Q(title__icontains=q) |
+                    Q(description__icontains=q)
+                )
+            
+            # 2. Search by Company
+            company = self.request.GET.get('company', '')
+            if company:
+                queryset = queryset.filter(company__name__icontains=company)
                 
-            # Filters
-            location = self.request.GET.get('location', '')
-            if location:
-                queryset = queryset.filter(location__icontains=location)
+            # 3. Search by Skills
+            skills = self.request.GET.get('skills', '')
+            if skills:
+                queryset = queryset.filter(skills__skill_name__icontains=skills)
                 
+            # 4. Search by City
+            city = self.request.GET.get('city', '')
+            if city:
+                queryset = queryset.filter(location__icontains=city)
+                
+            # 5. Search by State
+            state = self.request.GET.get('state', '')
+            if state:
+                queryset = queryset.filter(location__icontains=state)
+                
+            # 6. Search by Preferred Location (Dropdown)
+            preferred_location = self.request.GET.get('preferred_location', '')
+            if preferred_location:
+                queryset = queryset.filter(location__icontains=preferred_location)
+                
+            # 7. Experience Filter
+            experience = self.request.GET.get('experience', '')
+            if experience:
+                try:
+                    exp_val = int(experience)
+                    queryset = queryset.filter(min_experience__lte=exp_val)
+                except ValueError:
+                    pass
+                    
+            # 8. Salary Filter
+            salary = self.request.GET.get('salary', '')
+            if salary:
+                try:
+                    salary_clean = salary.upper().replace('LPA', '').strip()
+                    sal_val = float(salary_clean) * 100000
+                    queryset = queryset.filter(Q(max_salary__gte=sal_val) | Q(min_salary__gte=sal_val))
+                except ValueError:
+                    pass
+                    
+            # 9. Job Type Filter
             job_type = self.request.GET.get('job_type', '')
             if job_type:
                 queryset = queryset.filter(job_type=job_type)
+                
+            # 10. Remote / Hybrid / Onsite Filter
+            work_mode = self.request.GET.get('work_mode', '')
+            if work_mode:
+                queryset = queryset.filter(work_mode=work_mode)
+
+            queryset = queryset.distinct()
+                
+            # 11. Sorting
+            sort_by = self.request.GET.get('sort_by', 'newest')
+            if sort_by == 'relevance' and q:
+                from django.db.models import Case, When, Value, IntegerField
+                queryset = queryset.annotate(
+                    relevance=Case(
+                        When(title__icontains=q, then=Value(3)),
+                        When(description__icontains=q, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    )
+                ).order_by('-relevance', '-created_at')
+            else:
+                queryset = queryset.order_by('-created_at')
                 
             return queryset
         else:
@@ -332,37 +438,64 @@ class JobsView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['active_count'] = Job.objects.filter(status='ACTIVE').count()
-        context['draft_count'] = Job.objects.filter(status='DRAFT').count()
-        context['on_hold_count'] = Job.objects.filter(status='ON_HOLD').count()
-        context['closed_count'] = Job.objects.filter(status='CLOSED').count()
         
-        # Preserve search, filter and sort inputs in template
-        context['q'] = self.request.GET.get('q', '')
-        context['selected_status'] = self.request.GET.get('status', '')
-        context['selected_job_type'] = self.request.GET.get('job_type', '')
-        context['selected_sort'] = self.request.GET.get('sort_by', '-created_at')
-        
-        from apps.clients.models import Client
-        context['clients'] = Client.objects.filter(status='ACTIVE')
-        context['selected_client'] = self.request.GET.get('client', '')
-        
-        context['job_types'] = [
-            ('FULL_TIME', 'Full Time'),
-            ('PART_TIME', 'Part Time'),
-            ('CONTRACT', 'Contract'),
-            ('FREELANCE', 'Freelance'),
-            ('ON_SITE', 'On Site'),
-            ('HYBRID', 'Hybrid'),
-            ('WORK_FROM_HOME', 'Work From Home'),
-        ]
-        context['statuses'] = Job.JobStatus.choices
-
         # Pre-generate absolute share URLs using request.build_absolute_uri()
-        for job in context.get('jobs', []):
+        jobs_list = context.get('jobs', [])
+        for job in jobs_list:
             job.share_url = self.request.build_absolute_uri(
                 reverse('frontend:public_job_share', kwargs={'pk': job.pk})
             )
+            
+        if self.request.user.role == 'CANDIDATE':
+            candidate_profile = getattr(self.request.user, 'candidate_profile', None)
+            if candidate_profile:
+                context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
+                context['saved_job_ids'] = list(candidate_profile.saved_jobs.values_list('job_id', flat=True))
+            else:
+                context['applied_job_ids'] = []
+                context['saved_job_ids'] = []
+                
+            context['q'] = self.request.GET.get('q', '')
+            context['company'] = self.request.GET.get('company', '')
+            context['skills'] = self.request.GET.get('skills', '')
+            context['city'] = self.request.GET.get('city', '')
+            context['state'] = self.request.GET.get('state', '')
+            context['preferred_location'] = self.request.GET.get('preferred_location', '')
+            context['experience'] = self.request.GET.get('experience', '')
+            context['salary'] = self.request.GET.get('salary', '')
+            context['selected_job_type'] = self.request.GET.get('job_type', '')
+            context['selected_work_mode'] = self.request.GET.get('work_mode', '')
+            context['selected_sort'] = self.request.GET.get('sort_by', 'newest')
+            
+            context['unique_locations'] = sorted(list(set(
+                Job.objects.filter(status='ACTIVE').exclude(location=None).exclude(location='').values_list('location', flat=True)
+            )))
+        else:
+            context['active_count'] = Job.objects.filter(status='ACTIVE').count()
+            context['draft_count'] = Job.objects.filter(status='DRAFT').count()
+            context['on_hold_count'] = Job.objects.filter(status='ON_HOLD').count()
+            context['closed_count'] = Job.objects.filter(status='CLOSED').count()
+            
+            # Preserve search, filter and sort inputs in template
+            context['q'] = self.request.GET.get('q', '')
+            context['selected_status'] = self.request.GET.get('status', '')
+            context['selected_job_type'] = self.request.GET.get('job_type', '')
+            context['selected_sort'] = self.request.GET.get('sort_by', '-created_at')
+            
+            from apps.clients.models import Client
+            context['clients'] = Client.objects.filter(status='ACTIVE')
+            context['selected_client'] = self.request.GET.get('client', '')
+            
+            context['job_types'] = [
+                ('FULL_TIME', 'Full Time'),
+                ('PART_TIME', 'Part Time'),
+                ('CONTRACT', 'Contract'),
+                ('FREELANCE', 'Freelance'),
+                ('ON_SITE', 'On Site'),
+                ('HYBRID', 'Hybrid'),
+                ('WORK_FROM_HOME', 'Work From Home'),
+            ]
+            context['statuses'] = Job.JobStatus.choices
         
         return context
 
@@ -675,7 +808,18 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
         if status:
             queryset = queryset.filter(stage=status)
             
-        return queryset.order_by('-match_score', '-created_at')
+        # Sorting
+        sort_by = self.request.GET.get('sort_by', 'newest').strip()
+        if sort_by == 'highest_ats' or sort_by == 'ats':
+            queryset = queryset.order_by('-match_score', '-created_at')
+        elif sort_by == 'highest_experience' or sort_by == 'experience':
+            queryset = queryset.order_by('-candidate__total_experience', '-created_at')
+        elif sort_by == 'highest_match' or sort_by == 'match':
+            queryset = queryset.order_by('-match_score', '-created_at')
+        else: # newest
+            queryset = queryset.order_by('-created_at')
+
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -688,6 +832,7 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
         # Capture filter inputs for form persistent state
         context['q'] = self.request.GET.get('q', '')
         context['selected_experience'] = self.request.GET.get('experience', '')
+        context['selected_sort_by'] = self.request.GET.get('sort_by', 'newest')
         context['selected_location'] = self.request.GET.get('location', '')
         context['selected_education'] = self.request.GET.get('education', '')
         context['selected_ats_score'] = self.request.GET.get('ats_score', '')
@@ -2841,6 +2986,42 @@ from apps.core.permissions import CandidateRequiredMixin
 
 class CandidateProfileView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_profile.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['edit_mode'] = self.request.GET.get('edit') == 'true'
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        profile = getattr(user, 'candidate_profile', None)
+        
+        if profile:
+            # Update user details
+            full_name = request.POST.get('full_name', '').strip()
+            if full_name:
+                parts = full_name.split(' ', 1)
+                user.first_name = parts[0]
+                user.last_name = parts[1] if len(parts) > 1 else ''
+            
+            # Email is kept read-only by default, but if allowed:
+            # email = request.POST.get('email', '').strip()
+            # if email: user.email = email
+            
+            phone = request.POST.get('phone_number', '').strip()
+            if phone:
+                user.phone_number = phone
+                
+            user.save()
+            
+            # Update profile details
+            profile.full_name = full_name
+            profile.current_designation = request.POST.get('current_designation', '').strip()
+            profile.location = request.POST.get('location', '').strip()
+            profile.summary = request.POST.get('summary', '').strip()
+            profile.save()
+            
+        return redirect('frontend:candidate_profile')
 
 
 class CandidateResumeUploadView(CandidateRequiredMixin, View):
@@ -2850,19 +3031,32 @@ class CandidateResumeUploadView(CandidateRequiredMixin, View):
         
         uploaded_file = request.FILES['resume']
         try:
-            results = handle_resume_upload(uploaded_file, overwrite=True, user=request.user)
-            if results['errors'] > 0:
-                return JsonResponse({'success': False, 'message': results['error_reasons'][0]}, status=400)
-            
             profile = request.user.candidate_profile
-            from services.candidate_matching_service import CandidateMatchingService
-            CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
+            profile.resume = uploaded_file
+            profile.original_filename = uploaded_file.name
+            profile.save()
             
             return JsonResponse({
                 'success': True, 
-                'message': 'Resume uploaded and parsed successfully!',
+                'message': 'Resume uploaded successfully!',
                 'filename': profile.original_filename or uploaded_file.name
             })
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+class CandidateResumeDeleteView(CandidateRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        try:
+            profile = request.user.candidate_profile
+            if profile.resume:
+                try:
+                    profile.resume.delete(save=False)
+                except Exception:
+                    pass
+                profile.resume = None
+                profile.original_filename = None
+                profile.save()
+            return JsonResponse({'success': True, 'message': 'Resume deleted successfully.'})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
@@ -2872,8 +3066,165 @@ class CandidateCareerResourcesView(CandidateRequiredMixin, TemplateView):
 class CandidateSavedJobsView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_saved_jobs.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        candidate_profile = getattr(user, 'candidate_profile', None)
+        if candidate_profile:
+            saved_items = list(candidate_profile.saved_jobs.select_related('job', 'job__company').all())
+            from services.candidate_matching_service import CandidateMatchingService
+            for item in saved_items:
+                analysis = CandidateMatchingService.calculate_job_ats_score(candidate_profile, item.job)
+                item.match_score = analysis['total_score']
+            context['saved_jobs'] = saved_items
+            context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
+        else:
+            context['saved_jobs'] = []
+            context['applied_job_ids'] = []
+        return context
+
 class CandidateRecommendedJobsView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_recommended_jobs.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        candidate_profile = getattr(user, 'candidate_profile', None)
+        if candidate_profile:
+            from services.candidate_matching_service import CandidateMatchingService
+            recommended = CandidateMatchingService.get_recommended_jobs(candidate_profile, limit=10)
+            context['recommended_jobs'] = recommended
+            
+            # Aggregate all unique missing skills across these recommended jobs
+            missing_skills_list = []
+            seen_skills = set()
+            for rec in recommended:
+                for skill in rec['missing_skills']:
+                    skill_lower = skill.lower()
+                    if skill_lower not in seen_skills:
+                        seen_skills.add(skill_lower)
+                        missing_skills_list.append({
+                            'name': skill,
+                            'job_title': rec['job'].title,
+                            'company_name': rec['job'].company.name,
+                            'job_id': rec['job'].id
+                        })
+            context['missing_skills'] = missing_skills_list[:5] # top 5 missing skills
+            
+            # Retrieve applied/saved job ids to toggle buttons
+            context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
+            context['saved_job_ids'] = list(candidate_profile.saved_jobs.values_list('job_id', flat=True))
+        else:
+            context['recommended_jobs'] = []
+            context['missing_skills'] = []
+            context['applied_job_ids'] = []
+            context['saved_job_ids'] = []
+        return context
+
 class CandidateApplicationsView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_applications.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        profile = getattr(self.request.user, 'candidate_profile', None)
+        if profile:
+            context['applications'] = profile.job_applications.select_related('job', 'job__company').order_by('-created_at')
+        else:
+            context['applications'] = []
+        return context
+
+class JobApplyView(CandidateRequiredMixin, View):
+    def get(self, request, job_id, *args, **kwargs):
+        from apps.jobs.models import Job
+        from apps.applications.models import Application
+        from django.contrib import messages
+        
+        job = get_object_or_404(Job, id=job_id)
+        if Application.objects.filter(job=job, candidate=request.user.candidate_profile).exists():
+            messages.warning(request, "You have already applied for this job.")
+            return redirect('frontend:candidate_applications')
+            
+        context = {
+            'job': job,
+            'profile': request.user.candidate_profile
+        }
+        return render(request, 'candidate_apply.html', context)
+        
+    def post(self, request, job_id, *args, **kwargs):
+        from apps.jobs.models import Job
+        from services.application_service import ApplicationService
+        from django.contrib import messages
+        
+        job = get_object_or_404(Job, id=job_id)
+        profile = request.user.candidate_profile
+        
+        try:
+            cover_letter = request.POST.get('cover_letter', '')
+            current_company = request.POST.get('current_company', '')
+            current_designation = request.POST.get('current_designation', '')
+            total_experience = request.POST.get('total_experience') or None
+            relevant_experience = request.POST.get('relevant_experience') or None
+            current_ctc = request.POST.get('current_ctc') or None
+            expected_ctc = request.POST.get('expected_ctc') or None
+            notice_period = request.POST.get('notice_period') or None
+            is_immediate_joiner = request.POST.get('is_immediate_joiner') == 'on'
+            preferred_location = request.POST.get('preferred_location', '')
+            preferred_work_mode = request.POST.get('preferred_work_mode', '')
+            available_joining_date = request.POST.get('available_joining_date') or None
+            
+            screening_answers = {}
+            for i, q in enumerate(job.screening_questions):
+                q_id = f"question_{i}"
+                screening_answers[q.get('question')] = request.POST.get(q_id, '')
+                
+            ApplicationService.apply_for_job(
+                job_id=str(job.id),
+                candidate_id=str(profile.id),
+                cover_letter=cover_letter,
+                current_company=current_company,
+                current_designation=current_designation,
+                total_experience=total_experience,
+                relevant_experience=relevant_experience,
+                current_ctc=current_ctc,
+                expected_ctc=expected_ctc,
+                notice_period=notice_period,
+                is_immediate_joiner=is_immediate_joiner,
+                preferred_location=preferred_location,
+                preferred_work_mode=preferred_work_mode,
+                available_joining_date=available_joining_date,
+                screening_answers=screening_answers
+            )
+            messages.success(request, f"Successfully applied for {job.title} at {job.company.name}")
+            return redirect('frontend:candidate_applications')
+        except Exception as e:
+            messages.error(request, str(e))
+            return redirect('frontend:job_apply', job_id=job.id)
+
+
+class ToggleSaveJobView(CandidateRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        import json
+        try:
+            data = json.loads(request.body)
+            job_id = data.get('job_id')
+        except Exception:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            
+        if not job_id:
+            return JsonResponse({'error': 'Missing job_id'}, status=400)
+            
+        candidate_profile = getattr(request.user, 'candidate_profile', None)
+        if not candidate_profile:
+            return JsonResponse({'error': 'Candidate profile not found'}, status=400)
+            
+        from apps.candidates.models import SavedJob
+        saved_job = SavedJob.objects.filter(candidate=candidate_profile, job_id=job_id)
+        
+        if saved_job.exists():
+            saved_job.delete()
+            return JsonResponse({'status': 'removed'})
+        else:
+            from apps.jobs.models import Job
+            job = get_object_or_404(Job, id=job_id)
+            SavedJob.objects.create(candidate=candidate_profile, job=job)
+            return JsonResponse({'status': 'saved'})

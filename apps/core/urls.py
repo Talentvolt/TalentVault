@@ -51,7 +51,10 @@ from .views import (
     CandidateRecommendedJobsView,
     CandidateApplicationsView,
     EmployerLandingView,
-    CandidateResumeUploadView
+    CandidateResumeUploadView,
+    CandidateResumeDeleteView,
+    ToggleSaveJobView,
+    JobApplyView
 )
 
 app_name = 'frontend'
@@ -63,8 +66,10 @@ urlpatterns = [
     path('dashboard/candidate/', CandidateDashboardView.as_view(), name='candidate_dashboard'),
     path('profile/', CandidateProfileView.as_view(), name='candidate_profile'),
     path('profile/resume/upload/', CandidateResumeUploadView.as_view(), name='candidate_resume_upload_ajax'),
+    path('profile/resume/delete/', CandidateResumeDeleteView.as_view(), name='candidate_resume_delete_ajax'),
     path('career-resources/', CandidateCareerResourcesView.as_view(), name='candidate_career_resources'),
     path('jobs/saved/', CandidateSavedJobsView.as_view(), name='candidate_saved_jobs'),
+    path('jobs/saved/toggle/', ToggleSaveJobView.as_view(), name='toggle_saved_job'),
     path('jobs/recommended/', CandidateRecommendedJobsView.as_view(), name='candidate_recommended_jobs'),
     path('applications/', CandidateApplicationsView.as_view(), name='candidate_applications'),
     path('dashboard/recruiter/', RecruiterDashboardView.as_view(), name='recruiter_dashboard'),
@@ -78,6 +83,7 @@ urlpatterns = [
     path('jobs/<uuid:pk>/delete/', JobDeleteView.as_view(), name='job_delete'),
     path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
     path('jobs/share/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share'),
+    path('jobs/<uuid:job_id>/apply/', JobApplyView.as_view(), name='job_apply'),
     path('location-search/', LocationSearchView.as_view(), name='location_search'),
     
     path('candidates/', CandidateSearchView.as_view(), name='candidate_search'),

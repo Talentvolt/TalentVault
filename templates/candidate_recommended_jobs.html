@@ -29,75 +29,73 @@
         </div>
         <div>
             <h2 class="text-xl font-extrabold text-slate-950 dark:text-white tracking-tight">AI Agent Matches</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Verified listings matched dynamically against your parsed experience. Update your skills to unlock more recommendations.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Verified listings matched dynamically against your profile experience. Update your skills to unlock more recommendations.</p>
         </div>
     </div>
 
     <!-- Recommendations Grid -->
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        
-        <!-- Job Recommendations List (Left Column) -->
+               <!-- Job Recommendations List (Left Column) -->
         <div class="xl:col-span-2 space-y-6">
-                       <!-- Job Match 1 -->
+            {% for rec in recommended_jobs %}
             <div class="recommended-card p-6 flex flex-col justify-between h-auto min-h-64 border-l-4 border-l-primary">
                 <div>
                     <div class="flex items-start justify-between flex-wrap gap-2">
                         <div class="flex gap-3">
-                            <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">S</div>
+                            <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">
+                                {{ rec.job.company.name|slice:":1"|upper }}
+                            </div>
                             <div>
-                                <h3 class="font-extrabold text-slate-950 dark:text-white text-base">Backend Engineer (Django)</h3>
-                                <p class="text-xs text-slate-550 font-semibold mt-0.5">Stripe Technologies • Bangalore</p>
+                                <h3 class="font-extrabold text-slate-950 dark:text-white text-base">
+                                    <a href="{% url 'frontend:public_job_share' rec.job.id %}" class="hover:text-primary transition-colors duration-150">
+                                        {{ rec.job.title }}
+                                    </a>
+                                </h3>
+                                <p class="text-xs text-slate-550 font-semibold mt-0.5">{{ rec.job.company.name }} • {{ rec.job.location }}</p>
                             </div>
                         </div>
-                        <span class="text-xs bg-brandGreen/10 text-brandGreen dark:bg-brandGreen/20 px-2.5 py-1 rounded-full font-bold" id="stripe-match-pct">96% Suitability</span>
+                        <span class="text-xs {{ rec.badge_class }} px-2.5 py-1 rounded-full font-bold">{{ rec.match_score }}% Match</span>
                     </div>
                     <p class="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-3">
-                        Own integration modules. Write high-performance PostgreSQL query plans and structure distributed celery task loops.
+                        {{ rec.job.description|striptags }}
                     </p>
                 </div>
                 
                 <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-800">
-                    <span><i class="bi bi-cash"></i> ₹18 - 25 LPA</span>
-                    <span><i class="bi bi-briefcase"></i> 2-5 Yrs</span>
-                    <span class="text-primary font-bold text-xs" id="stripe-gap-text"><i class="bi bi-check-circle-fill text-brandGreen"></i> No Skill Gaps</span>
+                    <span><i class="bi bi-cash"></i> ₹{{ rec.job.salary_range_lpa }}</span>
+                    <span><i class="bi bi-briefcase"></i> {{ rec.job.min_experience }} - {{ rec.job.max_experience }} Yrs</span>
+                    <span class="text-primary font-bold text-xs">
+                        {% if rec.missing_skills %}
+                            <i class="bi bi-exclamation-triangle text-amber-500"></i> Missing: {{ rec.missing_skills|slice:":2"|join:", " }}{% if rec.missing_skills|length > 2 %}...{% endif %}
+                        {% else %}
+                            <i class="bi bi-check-circle-fill text-brandGreen"></i> No Skill Gaps
+                        {% endif %}
+                    </span>
                 </div>
 
                 <div class="flex gap-2">
-                    <button onclick="applyFromRecommended('Stripe', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                    <button onclick="toggleSaveRecommended(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark text-base"></i></button>
+                    {% if rec.job.id in applied_job_ids %}
+                        <button disabled class="flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center cursor-not-allowed">
+                            <i class="bi bi-check-circle-fill me-1"></i> Applied
+                        </button>
+                    {% else %}
+                        <button onclick="triggerEasyApply('{{ rec.job.id }}', '{{ rec.job.company.name|escapejs }}', '{{ rec.job.title|escapejs }}', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                    {% endif %}
+                    <button onclick="toggleSaveJob('{{ rec.job.id }}', this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+                        {% if rec.job.id in saved_job_ids %}
+                            <i class="bi bi-bookmark-fill text-primary"></i>
+                        {% else %}
+                            <i class="bi bi-bookmark text-base"></i>
+                        {% endif %}
+                    </button>
                 </div>
             </div>
-
-            <!-- Job Match 2 -->
-            <div class="recommended-card p-6 flex flex-col justify-between h-auto min-h-64 border-l-4 border-l-primary" id="vercel-rec-card">
-                <div>
-                    <div class="flex items-start justify-between flex-wrap gap-2">
-                        <div class="flex gap-3">
-                            <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">V</div>
-                            <div>
-                                <h3 class="font-extrabold text-slate-950 dark:text-white text-base">AI Product Engineer</h3>
-                                <p class="text-xs text-slate-550 font-semibold mt-0.5">Vercel • Bangalore</p>
-                            </div>
-                        </div>
-                        <span class="text-xs bg-primary/10 text-primary dark:bg-primary/20 px-2.5 py-1 rounded-full font-bold" id="vercel-match-pct">88% Suitability</span>
-                    </div>
-                    <p class="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-3">
-                        Develop customer facing integration interfaces. Structure low latency serverless telemetry setups.
-                    </p>
-                </div>
-                
-                <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4 pt-2 border-t border-slate-50 dark:border-slate-800">
-                    <span><i class="bi bi-cash"></i> ₹25 - 35 LPA</span>
-                    <span><i class="bi bi-briefcase"></i> 3-6 Yrs</span>
-                    <span class="text-amber-500 font-bold text-xs" id="vercel-gap-text"><i class="bi bi-exclamation-triangle"></i> Missing: Docker</span>
-                </div>
-
-                <div class="flex gap-2">
-                    <button onclick="applyFromRecommended('Vercel', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
-                    <button onclick="toggleSaveRecommended(this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><i class="bi bi-bookmark text-base"></i></button>
-                </div>
+            {% empty %}
+            <div class="text-center py-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8">
+                <i class="bi bi-cpu text-4xl text-slate-300 block mb-3"></i>
+                <p class="text-sm font-bold text-slate-500">No matching job recommendations found.</p>
             </div>
-
+            {% endfor %}
         </div>
 
         <!-- Skill Gap Analysis Panel (Right Column) -->
@@ -108,87 +106,68 @@
                     Our AI matched your profile against active listings and found gaps. Click a skill to mock add it to your profile and watch match scores improve instantly!
                 </p>
 
-                <div class="space-y-4">
-                    
-                    <!-- Skill Gap 1 -->
-                    <div class="p-4 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800 flex justify-between items-center gap-2" id="gap-docker-item">
+                <div class="space-y-4" id="skill-gaps-container">
+                    {% for skill in missing_skills %}
+                    <div class="p-4 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800 flex justify-between items-center gap-2" id="gap-{{ skill.name|slugify }}-item">
                         <div class="flex-1">
-                            <h4 class="text-xs font-bold text-slate-900 dark:text-white">Docker</h4>
-                            <p class="text-[10px] text-slate-550 mt-0.5">Required by: Vercel AI Engineer</p>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-white">{{ skill.name }}</h4>
+                            <p class="text-[10px] text-slate-555 mt-0.5">Required by: {{ skill.company_name }}</p>
                         </div>
-                        <button onclick="fillSkillGap('Docker', 'vercel', this)" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0">Add Skill</button>
+                        <button onclick="addSkillFromClick('{{ skill.name|escapejs }}', this)" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0">Add Skill</button>
                     </div>
-
-                    <!-- Skill Gap 2 -->
-                    <div class="p-4 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800 flex justify-between items-center gap-2" id="gap-redis-item">
-                        <div class="flex-1">
-                            <h4 class="text-xs font-bold text-slate-900 dark:text-white">Redis</h4>
-                            <p class="text-[10px] text-slate-550 mt-0.5">Required by: Stripe Backend Lead</p>
-                        </div>
-                        <button onclick="fillSkillGap('Redis', 'stripe', this)" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0">Add Skill</button>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-check-circle text-2xl text-brandGreen block mb-2"></i>
+                        <p class="text-xs text-slate-500 font-bold">No skill gaps identified!</p>
                     </div>
-
+                    {% endfor %}
                 </div>
             </div>
-        </div>
+        </div>    </div>
 
     </div>
 
 </div>
 
 <script>
-    function applyFromRecommended(company, btn) {
-        btn.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Applying...`;
+    function addSkillFromClick(skillName, btn) {
         btn.disabled = true;
-
-        setTimeout(() => {
-            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
-            btn.className = "flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center";
-            showToast(`Successfully applied to ${company}! Your matching metrics are shared.`);
-        }, 1000);
-    }
-
-    function toggleSaveRecommended(btn) {
-        const icon = btn.querySelector('i');
-        if (icon.classList.contains('bi-bookmark')) {
-            icon.className = "bi bi-bookmark-fill text-primary text-base";
-            showToast("Added to saved list.");
-        } else {
-            icon.className = "bi bi-bookmark text-base";
-            showToast("Removed from saved list.");
-        }
-    }
-
-    // Interactive Skill Gap Match Update
-    function fillSkillGap(skill, targetCode, btn) {
-        btn.disabled = true;
-        btn.innerHTML = `<i class="bi bi-check text-base"></i> Added`;
-        btn.className = "h-11 px-4 bg-brandGreen text-white font-bold text-xs rounded-xl cursor-not-allowed flex items-center justify-center flex-shrink-0";
+        btn.innerHTML = `<i class="bi bi-hourglass-split animate-spin me-1"></i> Adding...`;
         
-        // Remove item from sidebar panel
-        setTimeout(() => {
-            btn.closest('.p-4').style.opacity = '0.5';
-        }, 500);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 
-        if (targetCode === 'vercel') {
-            document.getElementById('vercel-match-pct').innerText = "97% Suitability";
-            document.getElementById('vercel-match-pct').className = "text-xs bg-brandGreen/10 text-brandGreen dark:bg-brandGreen/20 px-2.5 py-1 rounded-full font-bold";
-            document.getElementById('vercel-gap-text').innerHTML = `<i class="bi bi-check-circle-fill text-brandGreen"></i> No Skill Gaps`;
-        }
-
-        showToast(`Added ${skill} to profile! Suitability matches updated.`);
-    }
-
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 transform translate-y-10 opacity-0 transition-all duration-500 z-50 font-bold text-sm";
-        toast.innerHTML = `<i class="bi bi-info-circle-fill text-primary"></i> ${message}`;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 50);
-        setTimeout(() => {
-            toast.classList.add('translate-y-10', 'opacity-0');
-            setTimeout(() => toast.remove(), 500);
-        }, 3000);
+        fetch('/api/v1/candidates/skills/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                skill_name: skillName,
+                years_of_experience: 1.0,
+                proficiency: 'INTERMEDIATE'
+            })
+        })
+        .then(res => {
+            if (res.ok) {
+                btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Added`;
+                btn.className = "h-11 px-4 bg-brandGreen text-white font-bold text-xs rounded-xl cursor-not-allowed flex items-center justify-center flex-shrink-0";
+                showToast(`Successfully added ${skillName} to your profile! Recalculating matches...`);
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                return res.json().then(data => {
+                    throw new Error(data.detail || JSON.stringify(data));
+                });
+            }
+        })
+        .catch(err => {
+            console.error("Error adding skill:", err);
+            btn.disabled = false;
+            btn.innerHTML = "Add Skill";
+            showToast("Failed to add skill. " + err.message);
+        });
     }
 </script>
 {% endblock %}

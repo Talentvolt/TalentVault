@@ -349,8 +349,8 @@
                 <a href="{% url 'frontend:candidate_detail' candidate.id %}" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" title="View Profile">
                     <i class="bi bi-eye"></i> View Profile
                 </a>
-                {% if candidate.resume %}
-                    <a href="{{ candidate.resume.url }}" target="_blank" class="btn btn-xs btn-outline-secondary d-flex align-items-center gap-1" title="Download Resume">
+                {% if candidate.has_resume %}
+                    <a href="{{ candidate.resume_file_url }}" target="_blank" class="btn btn-xs btn-outline-secondary d-flex align-items-center gap-1" title="Download Resume">
                         <i class="bi bi-download"></i> Resume
                     </a>
                 {% endif %}

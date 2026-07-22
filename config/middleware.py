@@ -4,20 +4,22 @@ from apps.accounts.models import User
 class RoleAccessMiddleware:
     """
     Middleware to ensure users only access dashboards permitted for their role.
+    Also adds no-cache headers to protected pages so back button after logout forces re-authentication.
     """
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.user.is_authenticated:
-            path = request.path
-            role = request.user.role
-            
-            # Bypass static, media and API
-            if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/')):
+        path = request.path
+
+        # Bypass static, media and API
+        if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/')):
+            if request.user.is_authenticated:
+                role = request.user.role
+                
                 # Restrict Candidate Access
                 if role == User.Role.CANDIDATE:
-                    forbidden_prefixes = [
+                    candidate_forbidden_prefixes = [
                         '/dashboard/recruiter/',
                         '/dashboard/admin/',
                         '/pipeline/',
@@ -27,38 +29,35 @@ class RoleAccessMiddleware:
                         '/email-campaigns/',
                         '/export/',
                         '/jobs/new/',
-                        '/clients/'
+                        '/clients/',
+                        '/employers/'
                     ]
-                    is_forbidden = any(path.startswith(prefix) for prefix in forbidden_prefixes)
+                    is_forbidden = any(path.startswith(prefix) for prefix in candidate_forbidden_prefixes)
                     if not is_forbidden and path.startswith('/jobs/'):
                         is_forbidden = any(suffix in path for suffix in ['/edit/', '/delete/', '/candidates/'])
                         
                     if is_forbidden:
                         return redirect('frontend:candidate_dashboard')
                 
-                # Restrict Recruiter Access
-                elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
-                    forbidden_prefixes = [
+                # Restrict Recruiter / Admin Access
+                elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                    recruiter_forbidden_prefixes = [
                         '/dashboard/candidate/',
-                        '/dashboard/admin/',
                         '/profile/',
                         '/career-resources/',
                         '/jobs/saved/',
                         '/jobs/recommended/',
                         '/applications/'
                     ]
-                    if any(path.startswith(prefix) for prefix in forbidden_prefixes):
+                    if any(path.startswith(prefix) for prefix in recruiter_forbidden_prefixes):
                         return redirect('frontend:recruiter_dashboard')
-                
-                # Restrict Admin Access (Admin can access admin only)
-                elif role == User.Role.SUPER_ADMIN:
-                    allowed_prefixes = [
-                        '/dashboard/admin/',
-                        '/admin/',
-                        '/accounts/logout/',
-                    ]
-                    if path != '/' and not any(path.startswith(prefix) for prefix in allowed_prefixes):
-                        return redirect('frontend:admin_dashboard')
                     
         response = self.get_response(request)
+
+        # Add no-cache headers to authenticated HTML pages so browser Back button after logout forces re-authentication
+        if request.user.is_authenticated and not (path.startswith('/static/') or path.startswith('/media/')):
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+
         return response

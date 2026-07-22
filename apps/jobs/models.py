@@ -59,6 +59,8 @@ class Job(BaseAppModel):
     closed_at = models.DateTimeField(null=True, blank=True)
     closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='closed_jobs')
 
+    screening_questions = models.JSONField(default=list, blank=True)
+
     @property
     def min_salary_lpa(self):
         return format_salary_lpa(self.min_salary)
