@@ -3,11 +3,11 @@
 
 {% block mobile_page_title %}Dashboard{% endblock %}
 
-{% block title %}Candidate Dashboard | TalentVault AI{% endblock %}
+{% block title %}Candidate Dashboard | TalentVault{% endblock %}
 
 {% block extra_css %}
 <style>
-    /* Gradient borders on cards */
+    /* Gradient borders & glassmorphism cards */
     .gradient-border-card {
         position: relative;
         background: rgb(255, 255, 255);
@@ -30,18 +30,20 @@
     .radial-progress-circle {
         transform: rotate(-90deg);
         transform-origin: 50% 50%;
+        transition: stroke-dashoffset 0.6s ease;
     }
 
-    /* Horizontal scroll snap */
-    .scroll-snap-x {
-        scroll-snap-type: x mandatory;
-        scrollbar-width: none; /* Firefox */
+    /* Glassmorphism modal backdrop */
+    .glass-wizard-overlay {
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
     }
-    .scroll-snap-x::-webkit-scrollbar {
-        display: none; /* Safari / Chrome */
-    }
-    .scroll-snap-item {
-        scroll-snap-align: start;
+
+    /* Drag and drop active state */
+    .dragzone-active {
+        border-color: #8b5cf6 !important;
+        background-color: rgba(139, 92, 246, 0.08) !important;
     }
 </style>
 <!-- Load Chart.js for analytics -->
@@ -51,6 +53,28 @@
 {% block content %}
 <div class="space-y-8 pb-12">
     
+    <!-- TOP BANNER: Complete Profile Alert (If Completion < 80%) -->
+    {% if profile_completion_percentage < 80 %}
+    <div id="incomplete-profile-banner" class="bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-800 text-white p-5 md:p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-5 relative overflow-hidden">
+        <div class="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+        
+        <div class="flex items-center gap-4 z-10">
+            <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/20">
+                🚀
+            </div>
+            <div>
+                <span class="text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5 bg-white/20 text-purple-100 rounded-full">Action Required</span>
+                <h4 class="font-extrabold text-base md:text-lg text-white mt-1">Complete your profile to unlock better job recommendations</h4>
+                <p class="text-xs text-purple-100 mt-0.5">Candidates with complete profiles get 5x more recruiter views and higher interview call rates.</p>
+            </div>
+        </div>
+        
+        <button onclick="openOnboardingWizard(1)" class="px-6 py-3 bg-white text-purple-700 hover:bg-purple-50 font-extrabold text-xs rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2 shrink-0 hover:scale-105 active:scale-95 z-10">
+            <i class="bi bi-magic text-purple-600"></i> Complete Setup Now
+        </button>
+    </div>
+    {% endif %}
+
     <!-- TOP HEADER -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 md:p-8 rounded-3xl shadow-sm">
         <div>
@@ -64,18 +88,17 @@
 
         <!-- Quick Actions -->
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-            <button onclick="document.getElementById('hidden-resume-upload').click()" class="h-12 px-5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2">
-                <i class="bi bi-file-earmark-arrow-up-fill text-primary"></i> Upload Resume
+            <button onclick="openOnboardingWizard(2)" class="h-12 px-5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2 border border-purple-200 dark:border-purple-800">
+                <i class="bi bi-file-earmark-arrow-up-fill text-purple-600"></i> {% if has_resume %}Replace Resume{% else %}Upload Resume{% endif %}
             </button>
-            <input type="file" id="hidden-resume-upload" class="hidden" onchange="uploadResumeFile(this)">
 
             <a href="{% url 'frontend:jobs' %}" class="h-12 px-5 bg-primary hover:bg-accent text-white font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:translate-y-[-1px]">
                 <i class="bi bi-search"></i> Find Jobs
             </a>
             
-            <a href="{% url 'frontend:candidate_profile' %}" class="h-12 px-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2">
-                <i class="bi bi-pencil-square"></i> Update Profile
-            </a>
+            <button onclick="openOnboardingWizard(1)" class="h-12 px-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl transition-all duration-150 flex items-center justify-center gap-2">
+                <i class="bi bi-sliders"></i> Complete Setup Wizard
+            </button>
         </div>
     </div>
 
@@ -148,136 +171,109 @@
                     </div>
                 </div>
 
-                <!-- Carousel Slider container -->
-                <div id="job-carousel" class="flex gap-6 overflow-x-auto scroll-snap-x py-2 px-1">
-                    
+                <div id="recommended-carousel" class="flex gap-4 overflow-x-auto scroll-snap-x pb-4">
                     {% for rec in recommended_jobs %}
-                    <div class="scroll-snap-item flex-shrink-0 w-[calc(100vw-48px)] sm:w-[384px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col justify-between h-56 hover:shadow-lg transition-shadow duration-200">
-                        <div class="flex items-start justify-between">
-                            <div class="flex gap-3">
-                                <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black">
+                    <div class="scroll-snap-item min-w-[280px] sm:min-w-[320px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-sm hover:border-primary/40 transition-all">
+                        <div>
+                            <div class="flex items-start justify-between">
+                                <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border dark:border-slate-700 flex items-center justify-center font-black text-sm text-slate-700 dark:text-slate-300">
                                     {{ rec.job.company.name|slice:":1"|upper }}
                                 </div>
-                                <div>
-                                    <h4 class="font-extrabold text-slate-900 dark:text-white text-base">
-                                        <a href="{% url 'frontend:public_job_share' rec.job.id %}" class="hover:text-primary transition-colors duration-150">
-                                            {{ rec.job.title }}
-                                        </a>
-                                    </h4>
-                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">{{ rec.job.company.name }} • {{ rec.job.location }}</p>
-                                </div>
+                                <span class="px-2.5 py-1 bg-brandGreen/10 text-brandGreen font-bold text-xs rounded-full">{{ rec.total_score }}% Match</span>
                             </div>
-                            <span class="text-xs {{ rec.badge_class }} px-2.5 py-1 rounded-full font-bold">{{ rec.match_score }}% Match</span>
+                            <h4 class="font-extrabold text-slate-900 dark:text-white text-base mt-3 line-clamp-1">{{ rec.job.title }}</h4>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">{{ rec.job.company.name }} • {{ rec.job.location }}</p>
                         </div>
-                        <div class="flex items-center justify-between text-xs text-slate-500 font-semibold my-4">
-                            <span><i class="bi bi-cash me-1 text-slate-400"></i> ₹{{ rec.job.salary_range_lpa }}</span>
-                            <span><i class="bi bi-briefcase me-1 text-slate-400"></i> {{ rec.job.min_experience }} - {{ rec.job.max_experience }} Yrs</span>
-                        </div>
-                        <div class="flex gap-2">
+                        
+                        <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                             {% if rec.job.id in applied_job_ids %}
-                                <button disabled class="flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center cursor-not-allowed">
-                                    <i class="bi bi-check-circle-fill me-1"></i> Applied
-                                </button>
+                            <button disabled class="flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center cursor-not-allowed"><i class="bi bi-check-circle-fill me-1"></i> Applied</button>
                             {% else %}
-                                <button onclick="triggerEasyApply('{{ rec.job.id }}', '{{ rec.job.company.name|escapejs }}', '{{ rec.job.title|escapejs }}', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                            <button onclick="triggerEasyApply('{{ rec.job.id }}', '{{ rec.job.company.name|escapejs }}', '{{ rec.job.title|escapejs }}', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
                             {% endif %}
-                            
-                            <button onclick="toggleSaveJob('{{ rec.job.id }}', this)" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                {% if rec.job.id in saved_job_ids %}
-                                    <i class="bi bi-bookmark-fill text-primary"></i>
-                                {% else %}
-                                    <i class="bi bi-bookmark text-base"></i>
-                                {% endif %}
-                            </button>
-                            
-                            <button onclick="shareJob('{{ rec.job.title|escapejs }} at {{ rec.job.company.name|escapejs }}', '{{ rec.job.share_url|escapejs }}')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                <i class="bi bi-share"></i>
+                            <button onclick="toggleSaveJob('{{ rec.job.id }}', this)" class="w-12 h-12 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <i class="bi {% if rec.job.id in saved_job_ids %}bi-bookmark-fill text-primary{% else %}bi-bookmark{% endif %} text-base"></i>
                             </button>
                         </div>
                     </div>
                     {% empty %}
-                    <div class="text-center py-8 w-full">
-                        <p class="text-sm text-slate-500 font-bold">No AI matches found. Try updating your profile skills.</p>
+                    <div class="w-full p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                        <p class="text-xs text-slate-400 font-semibold">No recommended jobs found. Complete your skills in profile setup to get instant matches!</p>
                     </div>
                     {% endfor %}
-
                 </div>
             </div>
 
-            <!-- APPLICATION ANALYTICS CHART -->
+            <!-- RECENT NOTIFICATIONS / ACTIVITY -->
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-                <h3 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-6">Application Analytics</h3>
-                <div class="h-64">
-                    <canvas id="dashboard-analytics-chart"></canvas>
-                </div>
-            </div>
-
-            <!-- RECENT ACTIVITY TIMELINE -->
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-                <div class="flex items-center justify-between mb-6">
-                    <h3 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Recent Activity</h3>
-                    <button class="text-xs text-primary font-bold hover:underline">View All</button>
-                </div>
-                
-                <div class="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 space-y-8">
-                    
+                <h3 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-4">Recent Activity</h3>
+                <div class="space-y-4">
                     {% for activity in recent_activity %}
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-primary border-4 border-white dark:border-slate-900 ring-2 ring-primary/20"></span>
-                        <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">{{ activity.notification_type|title }}</div>
-                        <h4 class="text-sm font-bold text-slate-900 dark:text-white mt-1">{{ activity.title }}</h4>
-                        <p class="text-xs text-slate-500 mt-1">{{ activity.message }} - {{ activity.created_at|date:"M d, Y" }}</p>
+                    <div class="flex items-start gap-4 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-2xl transition-all">
+                        <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-base shrink-0 mt-0.5"><i class="bi bi-bell-fill"></i></div>
+                        <div>
+                            <p class="text-xs font-bold text-slate-900 dark:text-white">{{ activity.message }}</p>
+                            <span class="text-[10px] text-slate-400 font-medium">{{ activity.created_at|timesince }} ago</span>
+                        </div>
                     </div>
                     {% empty %}
-                    <p class="text-sm text-slate-500 font-bold">No recent activity.</p>
+                    <p class="text-xs text-slate-400 text-center py-4 font-semibold">No recent activity logs.</p>
                     {% endfor %}
-
                 </div>
             </div>
 
         </div>
 
-        <!-- Right 1 Column: Profile Completion, Upcoming, Skills, AI Recommendations -->
+        <!-- Right 1 Column: Profile Completion Card & Upcoming Interviews -->
         <div class="space-y-8">
             
-            <!-- PROFILE COMPLETION RADIAL PROGRESS -->
+            <!-- PROFILE COMPLETION CARD -->
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm text-center">
-                <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-4 text-left">Profile Progress</h3>
+                <div class="flex items-center justify-between mb-4 text-left">
+                    <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">Profile Progress</h3>
+                    <button onclick="openOnboardingWizard(1)" class="text-xs text-purple-600 dark:text-purple-400 font-bold hover:underline">
+                        Edit Wizard
+                    </button>
+                </div>
                 
                 <div class="inline-flex items-center justify-center relative mb-6">
                     <svg class="w-32 h-32">
                         <circle class="text-slate-100 dark:text-slate-800" stroke-width="8" stroke="currentColor" fill="transparent" r="50" cx="64" cy="64"/>
-                        <circle class="text-primary radial-progress-circle" stroke-width="8" stroke-dasharray="314.15" stroke-dashoffset="78.53" stroke-linecap="round" stroke="currentColor" fill="transparent" r="50" cx="64" cy="64"/>
+                        <circle id="radial-progress-bar" class="text-purple-600 radial-progress-circle" stroke-width="8" stroke-dasharray="314.15" stroke-dashoffset="150" stroke-linecap="round" stroke="currentColor" fill="transparent" r="50" cx="64" cy="64"/>
                     </svg>
                     <div class="absolute text-center">
-                        <span class="text-2xl font-black text-slate-900 dark:text-white block">75%</span>
+                        <span id="dashboard-pct-text" class="text-2xl font-black text-slate-900 dark:text-white block">{{ profile_completion_percentage }}%</span>
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">complete</span>
                     </div>
                 </div>
 
-                <!-- Checklist -->
+                <!-- Interactive Checklist -->
                 <div class="space-y-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <div class="flex items-center gap-2.5 text-slate-900 dark:text-white">
-                        <i class="bi bi-check-circle-fill text-brandGreen text-sm"></i>
+                    <div class="flex items-center gap-2.5 {% if has_resume %}text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                        <i class="bi {% if has_resume %}bi-check-circle-fill text-brandGreen{% else %}bi-circle text-slate-300{% endif %} text-sm"></i>
                         <span>Upload original resume PDF</span>
                     </div>
-                    <div class="flex items-center gap-2.5 text-slate-900 dark:text-white">
-                        <i class="bi bi-check-circle-fill text-brandGreen text-sm"></i>
-                        <span>Add professional experience details</span>
+                    <div class="flex items-center gap-2.5 {% if candidate_profile and candidate_profile.skills.exists %}text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                        <i class="bi {% if candidate_profile and candidate_profile.skills.exists %}bi-check-circle-fill text-brandGreen{% else %}bi-circle text-slate-300{% endif %} text-sm"></i>
+                        <span>Add key professional skills</span>
                     </div>
-                    <div class="flex items-center gap-2.5 text-slate-900 dark:text-white">
-                        <i class="bi bi-check-circle-fill text-brandGreen text-sm"></i>
-                        <span>Complete primary skill chips</span>
+                    <div class="flex items-center gap-2.5 {% if candidate_profile and candidate_profile.educations.exists %}text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                        <i class="bi {% if candidate_profile and candidate_profile.educations.exists %}bi-check-circle-fill text-brandGreen{% else %}bi-circle text-slate-300{% endif %} text-sm"></i>
+                        <span>Add education details</span>
                     </div>
-                    <div class="flex items-center gap-2.5 text-slate-400 line-through">
-                        <i class="bi bi-circle text-slate-300 text-sm"></i>
-                        <span>Add profile display photo</span>
+                    <div class="flex items-center gap-2.5 {% if candidate_profile and candidate_profile.experiences.exists or candidate_profile and candidate_profile.total_experience > 0 %}text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                        <i class="bi {% if candidate_profile and candidate_profile.experiences.exists or candidate_profile and candidate_profile.total_experience > 0 %}bi-check-circle-fill text-brandGreen{% else %}bi-circle text-slate-300{% endif %} text-sm"></i>
+                        <span>Add work experience</span>
                     </div>
-                    <div class="flex items-center gap-2.5 text-slate-450">
-                        <i class="bi bi-circle text-slate-300 text-sm"></i>
-                        <span>Update your portfolio URL</span>
+                    <div class="flex items-center gap-2.5 {% if candidate_profile and candidate_profile.summary %}text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                        <i class="bi {% if candidate_profile and candidate_profile.summary %}bi-check-circle-fill text-brandGreen{% else %}bi-circle text-slate-300{% endif %} text-sm"></i>
+                        <span>Add professional summary</span>
                     </div>
                 </div>
+
+                <button onclick="openOnboardingWizard(1)" class="w-full mt-6 py-3 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-extrabold text-xs rounded-xl border border-purple-200 dark:border-purple-800 transition-all">
+                    Complete Setup Flow
+                </button>
             </div>
 
             <!-- UPCOMING INTERVIEWS -->
@@ -298,81 +294,10 @@
                         <i class="bi bi-clock text-primary"></i>
                         <span>{{ interview.start_time|date:"M d, Y, h:i A" }}</span>
                     </div>
-
-                    <div class="flex gap-2">
-                        {% if interview.meeting_link %}
-                        <a href="{{ interview.meeting_link }}" target="_blank" class="flex-1 h-12 bg-brandGreen hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all duration-150">
-                            <i class="bi bi-camera-video-fill text-sm"></i> Join
-                        </a>
-                        {% endif %}
-                        <button onclick="simulateReschedule()" class="h-12 px-4 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-655 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center justify-center">
-                            Reschedule
-                        </button>
-                    </div>
                 </div>
                 {% empty %}
-                <p class="text-sm text-slate-500 font-bold">No upcoming interviews.</p>
+                <p class="text-xs text-slate-400 text-center py-4 font-semibold">No upcoming interviews scheduled.</p>
                 {% endfor %}
-            </div>
-
-            <!-- SKILL ANALYTICS / ADD AND REMOVE -->
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-                <h3 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-3">Skill Analytics</h3>
-                
-                <!-- Skill input -->
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="new-skill-input" class="flex-1 h-12 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 text-xs font-semibold focus:outline-none focus:border-primary" placeholder="Add custom skill...">
-                    <button onclick="addCustomSkillDashboard()" class="w-12 h-12 bg-primary hover:bg-accent text-white flex items-center justify-center rounded-xl text-lg font-black">+</button>
-                </div>
-
-                <!-- Chips container -->
-                <div class="flex flex-wrap gap-1.5" id="skill-chips-container">
-                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold">
-                        Python <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
-                    </span>
-                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold">
-                        Django <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
-                    </span>
-                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold">
-                        React <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
-                    </span>
-                    <span class="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-xl text-xs font-bold">
-                        Git <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>
-                    </span>
-                </div>
-
-                <!-- AI Suggestions chips -->
-                <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <div class="text-[10px] font-black text-slate-400 dark:text-slate-650 uppercase tracking-widest mb-2.5">AI Recommended (Click to add)</div>
-                    <div class="flex flex-wrap gap-1.5">
-                        <button onclick="addSkillFromClick('Docker')" class="px-2.5 py-1.5 border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-semibold">+ Docker</button>
-                        <button onclick="addSkillFromClick('PostgreSQL')" class="px-2.5 py-1.5 border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-semibold">+ PostgreSQL</button>
-                        <button onclick="addSkillFromClick('Redis')" class="px-2.5 py-1.5 border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-semibold">+ Redis</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- AI HIGHLIGHTS & SUGGESTIONS -->
-            <div class="bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/10 p-6 rounded-3xl">
-                <div class="flex items-center gap-2 text-primary">
-                    <i class="bi bi-cpu text-lg"></i>
-                    <h3 class="font-extrabold text-slate-900 dark:text-white tracking-tight">AI Resume Enhancer</h3>
-                </div>
-                
-                <ul class="mt-4 space-y-3 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <li class="flex items-start gap-2">
-                        <span class="text-brandGreen text-sm"><i class="bi bi-check-circle-fill"></i></span>
-                        <span>Django experiences look very solid and clear.</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-amber-500 text-sm"><i class="bi bi-exclamation-triangle-fill"></i></span>
-                        <span>Add Docker / Deployment details to match Stripe requirements (increases match to 99%).</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-primary text-sm"><i class="bi bi-lightbulb-fill"></i></span>
-                        <span>Complete the "Google Cloud" certificate in your education section.</span>
-                    </li>
-                </ul>
             </div>
 
         </div>
@@ -381,192 +306,622 @@
 
 </div>
 
-<!-- SCRIPT TO RUN INTERACTIVES AND ANALYTICS -->
+<!-- ========================================================= -->
+<!-- PREMIUM STEP-BY-STEP ONBOARDING WIZARD MODAL -->
+<!-- ========================================================= -->
+<div id="onboarding-wizard-modal" class="fixed inset-0 z-50 hidden glass-wizard-overlay flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl shadow-2xl border border-purple-200 dark:border-slate-800 overflow-hidden flex flex-col my-auto relative">
+        
+        <!-- MODAL HEADER WITH PURPLE GRADIENT & STEPPER -->
+        <div class="bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-800 text-white p-6 relative">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-base font-extrabold shadow-xs">
+                        TV
+                    </div>
+                    <span class="text-xs font-black tracking-wider uppercase text-purple-200">Candidate Onboarding</span>
+                </div>
+                <button type="button" onclick="closeOnboardingWizard()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all">
+                    <i class="bi bi-x-lg text-sm"></i>
+                </button>
+            </div>
+
+            <!-- STEPPER PROGRESS DOTS -->
+            <div class="flex items-center justify-between gap-2 px-2 mt-2">
+                <div onclick="openOnboardingWizard(1)" class="stepper-dot cursor-pointer flex flex-col items-center gap-1 opacity-100" id="step-nav-1">
+                    <div class="w-7 h-7 rounded-full bg-white text-purple-700 font-extrabold text-xs flex items-center justify-center shadow-md">1</div>
+                    <span class="text-[10px] font-bold text-white hidden sm:block">Welcome</span>
+                </div>
+                <div class="h-0.5 flex-1 bg-white/30 rounded-full"></div>
+                <div onclick="openOnboardingWizard(2)" class="stepper-dot cursor-pointer flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-all" id="step-nav-2">
+                    <div class="w-7 h-7 rounded-full bg-white/30 text-white font-extrabold text-xs flex items-center justify-center">2</div>
+                    <span class="text-[10px] font-bold text-purple-100 hidden sm:block">Resume</span>
+                </div>
+                <div class="h-0.5 flex-1 bg-white/30 rounded-full"></div>
+                <div onclick="openOnboardingWizard(3)" class="stepper-dot cursor-pointer flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-all" id="step-nav-3">
+                    <div class="w-7 h-7 rounded-full bg-white/30 text-white font-extrabold text-xs flex items-center justify-center">3</div>
+                    <span class="text-[10px] font-bold text-purple-100 hidden sm:block">Profile</span>
+                </div>
+                <div class="h-0.5 flex-1 bg-white/30 rounded-full"></div>
+                <div onclick="openOnboardingWizard(4)" class="stepper-dot cursor-pointer flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-all" id="step-nav-4">
+                    <div class="w-7 h-7 rounded-full bg-white/30 text-white font-extrabold text-xs flex items-center justify-center">4</div>
+                    <span class="text-[10px] font-bold text-purple-100 hidden sm:block">Summary</span>
+                </div>
+                <div class="h-0.5 flex-1 bg-white/30 rounded-full"></div>
+                <div onclick="openOnboardingWizard(5)" class="stepper-dot cursor-pointer flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-all" id="step-nav-5">
+                    <div class="w-7 h-7 rounded-full bg-white/30 text-white font-extrabold text-xs flex items-center justify-center">5</div>
+                    <span class="text-[10px] font-bold text-purple-100 hidden sm:block">Finish</span>
+                </div>
+            </div>
+
+            <!-- ANIMATED PROGRESS BAR -->
+            <div class="w-full bg-black/20 h-1.5 rounded-full mt-4 overflow-hidden">
+                <div id="wizard-top-progress" class="bg-gradient-to-r from-emerald-400 to-teal-300 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <!-- MODAL BODY STEP PANELS -->
+        <div class="p-6 md:p-8 overflow-y-auto max-h-[65vh]">
+
+            <!-- ========================== STEP 1 — Welcome ========================== -->
+            <div id="wizard-step-1" class="space-y-6">
+                <div class="text-center py-4">
+                    <div class="w-20 h-20 rounded-3xl bg-purple-100 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-300 flex items-center justify-center text-4xl mx-auto mb-4 shadow-inner">
+                        👋
+                    </div>
+                    <h3 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Welcome to TalentVault</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
+                        Complete your profile to get better job matches and increase your chances of getting hired.
+                    </p>
+                </div>
+
+                <div class="bg-purple-50/60 dark:bg-slate-850 p-5 rounded-2xl border border-purple-100 dark:border-slate-800 text-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Initial Setup Progress</span>
+                    <div class="flex items-center gap-3 max-w-xs mx-auto">
+                        <div class="flex-1 bg-slate-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden">
+                            <div class="bg-purple-600 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                        <span class="text-xs font-black text-purple-700 dark:text-purple-300">0%</span>
+                    </div>
+                </div>
+
+                <button type="button" onclick="openOnboardingWizard(2)" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-purple-600/20 transition-all flex items-center justify-center gap-2">
+                    Start Profile Setup <i class="bi bi-arrow-right"></i>
+                </button>
+            </div>
+
+            <!-- ========================== STEP 2 — Upload Resume (Highest Priority) ========================== -->
+            <div id="wizard-step-2" class="space-y-6 hidden">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="px-3 py-1 bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-extrabold text-[11px] rounded-full uppercase tracking-wider">★ Strongly Recommended</span>
+                        <h3 class="text-xl font-black text-slate-900 dark:text-white mt-2">Upload Your Resume</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Recruiters prefer candidates with complete resumes.</p>
+                    </div>
+                </div>
+
+                <!-- DRAG & DROP CARDS -->
+                <div id="wizard-dragzone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" class="border-2 border-dashed border-purple-300 dark:border-purple-800/70 hover:border-purple-500 bg-purple-50/40 dark:bg-purple-950/20 p-8 rounded-3xl text-center transition-all cursor-pointer relative group">
+                    <input type="file" id="wizard-resume-input" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadWizardResumeFile(this)">
+                    
+                    <div id="wizard-resume-empty" class="{% if has_resume %}hidden{% endif %}">
+                        <div class="w-16 h-16 rounded-2xl bg-purple-600/10 text-purple-600 dark:text-purple-300 flex items-center justify-center text-3xl mx-auto mb-3 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-cloud-arrow-up-fill"></i>
+                        </div>
+                        <h4 class="font-extrabold text-sm text-slate-800 dark:text-slate-200">Drag & drop your CV here</h4>
+                        <p class="text-xs text-slate-400 mt-1 mb-4">Supports PDF, DOC, DOCX (Max 5 MB)</p>
+                        <button type="button" onclick="document.getElementById('wizard-resume-input').click()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all">
+                            Browse File
+                        </button>
+                    </div>
+
+                    <div id="wizard-resume-uploaded" class="{% if not has_resume %}hidden{% endif %} flex flex-col items-center">
+                        <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center text-2xl mb-2 shadow-inner">
+                            <i class="bi bi-file-earmark-check-fill"></i>
+                        </div>
+                        <span id="wizard-uploaded-filename" class="font-extrabold text-sm text-slate-900 dark:text-slate-100 block max-w-md truncate">
+                            {% if candidate_profile %}
+                            {{ candidate_profile.original_filename|default:candidate_profile.resume.name|default:"Resume uploaded" }}
+                            {% else %}
+                            Resume uploaded
+                            {% endif %}
+                        </span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 mt-1">
+                            <i class="bi bi-check-circle-fill"></i> Resume ready for recruiter downloads
+                        </span>
+
+                        <div class="flex items-center gap-2 mt-4">
+                            {% if has_resume and request.user.candidate_profile %}
+                            <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl shadow-xs hover:bg-slate-50">
+                                <i class="bi bi-eye-fill"></i> Preview
+                            </a>
+                            <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl shadow-xs hover:bg-slate-50">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                            {% endif %}
+                            <button type="button" onclick="document.getElementById('wizard-resume-input').click()" class="px-3.5 py-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold text-xs rounded-xl shadow-xs hover:bg-purple-100">
+                                <i class="bi bi-arrow-repeat"></i> Replace
+                            </button>
+                            <button type="button" onclick="deleteWizardResume()" class="px-3.5 py-2 bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 font-bold text-xs rounded-xl shadow-xs hover:bg-rose-100">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BENEFITS SECTION -->
+                <div class="bg-slate-50 dark:bg-slate-850 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <h5 class="text-xs font-black uppercase text-slate-400 tracking-wider mb-3">Why upload your resume?</h5>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <div class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-emerald-500"></i> Recruiters can download your CV</div>
+                        <div class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-emerald-500"></i> Faster 1-click job applications</div>
+                        <div class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-emerald-500"></i> Better profile visibility</div>
+                        <div class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-emerald-500"></i> Higher interview call chances</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                    <button type="button" onclick="openOnboardingWizard(1)" class="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white">Back</button>
+                    <button type="button" onclick="openOnboardingWizard(3)" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2">
+                        Next: Complete Profile <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========================== STEP 3 — Complete Profile ========================== -->
+            <div id="wizard-step-3" class="space-y-5 hidden">
+                <div>
+                    <h3 class="text-xl font-black text-slate-900 dark:text-white">Complete Profile Details</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Fill in your professional background to get targeted matches.</p>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- First Name & Last Name -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">First Name <span class="text-rose-500">*</span></label>
+                            <input type="text" id="wz-first-name" value="{{ request.user.first_name|default:'' }}" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium" placeholder="First Name">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Last Name <span class="text-rose-500">*</span></label>
+                            <input type="text" id="wz-last-name" value="{{ request.user.last_name|default:'' }}" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium" placeholder="Last Name">
+                        </div>
+                    </div>
+
+                    <!-- Phone & Location -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number <span class="text-rose-500">*</span></label>
+                            <input type="tel" id="wz-phone" value="{{ request.user.phone_number|default:'' }}" maxlength="10" placeholder="10-digit Indian Mobile" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Location <span class="text-rose-500">*</span></label>
+                            <input type="text" id="wz-location" value="{{ candidate_profile.location|default:'' }}" placeholder="e.g. Bengaluru, Karnataka" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                    </div>
+
+                    <!-- Date of Birth & Preferred Role -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date of Birth <span class="text-rose-500">*</span></label>
+                            <input type="date" id="wz-dob" value="{% if candidate_profile %}{{ candidate_profile.date_of_birth|date:'Y-m-d'|default:'' }}{% endif %}" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Preferred Job Role</label>
+                            <input type="text" id="wz-pref-role" value="{% if candidate_profile %}{{ candidate_profile.preferred_job_role|default:candidate_profile.current_designation|default:'' }}{% endif %}" placeholder="e.g. Senior Fullstack Developer" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                    </div>
+
+                    <!-- Key Skills -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Key Skills <span class="text-rose-500">* (Comma-separated)</span></label>
+                        <input type="text" id="wz-skills" value="{% if candidate_profile %}{% for sk in candidate_profile.skills.all %}{{ sk.skill_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}" placeholder="e.g. Python, Django, React, SQL, AWS" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                    </div>
+
+                    <!-- Company & Total Experience -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Current Company <span class="text-slate-400 font-normal">(Optional)</span></label>
+                            <input type="text" id="wz-current-company" value="{% if candidate_profile %}{{ candidate_profile.current_company|default:'' }}{% endif %}" placeholder="e.g. TalentVault Inc." class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Total Experience (Years)</label>
+                            <input type="number" step="0.5" id="wz-experience-years" value="{% if candidate_profile %}{{ candidate_profile.total_experience|default:'' }}{% endif %}" placeholder="e.g. 3.5" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                    </div>
+
+                    <!-- Current CTC, Expected CTC & Notice Period -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Current CTC (LPA)</label>
+                            <input type="number" step="any" id="wz-current-ctc" value="{% if candidate_profile %}{{ candidate_profile.current_salary|default:'' }}{% endif %}" placeholder="e.g. 12" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Expected CTC (LPA)</label>
+                            <input type="number" step="any" id="wz-expected-ctc" value="{% if candidate_profile %}{{ candidate_profile.expected_salary|default:'' }}{% endif %}" placeholder="e.g. 18" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Notice Period (Days)</label>
+                            <select id="wz-notice-period" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                                <option value="0" {% if candidate_profile and candidate_profile.notice_period == 0 %}selected{% endif %}>Immediate</option>
+                                <option value="15" {% if candidate_profile and candidate_profile.notice_period == 15 %}selected{% endif %}>15 Days</option>
+                                <option value="30" {% if candidate_profile and candidate_profile.notice_period == 30 or not candidate_profile %}selected{% endif %}>30 Days</option>
+                                <option value="60" {% if candidate_profile and candidate_profile.notice_period == 60 %}selected{% endif %}>60 Days</option>
+                                <option value="90" {% if candidate_profile and candidate_period == 90 %}selected{% endif %}>90 Days</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Education -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Degree / Qualification</label>
+                            <input type="text" id="wz-education-degree" value="{% if candidate_profile and candidate_profile.educations.first %}{{ candidate_profile.educations.first.degree }}{% endif %}" placeholder="e.g. B.Tech Computer Science" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">College / Institution</label>
+                            <input type="text" id="wz-education-institution" value="{% if candidate_profile and candidate_profile.educations.first %}{{ candidate_profile.educations.first.institution }}{% endif %}" placeholder="e.g. VTU University" class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-4">
+                    <button type="button" onclick="openOnboardingWizard(2)" class="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white">Back</button>
+                    <button type="button" onclick="saveWizardStep3AndNext()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2">
+                        Next: Professional Summary <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========================== STEP 4 — About Yourself ========================== -->
+            <div id="wizard-step-4" class="space-y-5 hidden">
+                <div>
+                    <h3 class="text-xl font-black text-slate-900 dark:text-white">About Yourself</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Add a professional summary to summarize your domain expertise.</p>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Professional Summary <span class="text-rose-500">*</span></label>
+                        <span id="wz-summary-count" class="text-[11px] font-bold text-slate-400">0/500</span>
+                    </div>
+                    <textarea id="wz-summary" maxlength="500" oninput="document.getElementById('wz-summary-count').innerText = this.value.length + '/500'" class="w-full h-36 p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-medium focus:outline-none focus:border-purple-600" placeholder="Tell recruiters about yourself, your core achievements, technical stack, and career goals..."></textarea>
+                </div>
+
+                <div class="flex items-center justify-between pt-4">
+                    <button type="button" onclick="openOnboardingWizard(3)" class="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white">Back</button>
+                    <button type="button" onclick="saveWizardStep4AndNext()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2">
+                        Next: Profile Completion <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========================== STEP 5 — Profile Completion ========================== -->
+            <div id="wizard-step-5" class="space-y-6 hidden text-center py-2">
+                <div>
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-3xl font-black mx-auto mb-3 shadow-xl shadow-purple-600/30">
+                        <span id="wizard-completion-pct-heading">95%</span>
+                    </div>
+                    <h3 class="text-2xl font-black text-slate-900 dark:text-white">Profile Almost Complete!</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Review your completed profile setup checklist below.</p>
+                </div>
+
+                <!-- CHECKLIST -->
+                <div class="bg-slate-50 dark:bg-slate-850 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 text-left space-y-3 text-xs font-bold">
+                    <div class="flex items-center justify-between text-slate-900 dark:text-slate-100">
+                        <span class="flex items-center gap-2.5"><i class="bi bi-check-circle-fill text-emerald-500 text-base"></i> Resume Uploaded</span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-extrabold">+25%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-900 dark:text-slate-100">
+                        <span class="flex items-center gap-2.5"><i class="bi bi-check-circle-fill text-emerald-500 text-base"></i> Key Skills Added</span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-extrabold">+20%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-900 dark:text-slate-100">
+                        <span class="flex items-center gap-2.5"><i class="bi bi-check-circle-fill text-emerald-500 text-base"></i> Education Added</span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-extrabold">+15%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-900 dark:text-slate-100">
+                        <span class="flex items-center gap-2.5"><i class="bi bi-check-circle-fill text-emerald-500 text-base"></i> Experience Details Added</span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-extrabold">+15%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-900 dark:text-slate-100">
+                        <span class="flex items-center gap-2.5"><i class="bi bi-check-circle-fill text-emerald-500 text-base"></i> Professional Summary Added</span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-extrabold">+15%</span>
+                    </div>
+                </div>
+
+                <button type="button" onclick="finishWizardSetup()" class="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-emerald-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                    <i class="bi bi-check-circle-fill"></i> Finish Setup & Start Applying
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
 <script>
-    // Initialize chart
-    const ctx = document.getElementById('dashboard-analytics-chart').getContext('2d');
-    
-    // Gradient effect for chart
-    const primaryGrad = ctx.createLinearGradient(0, 0, 0, 300);
-    primaryGrad.addColorStop(0, 'rgba(109, 74, 255, 0.4)');
-    primaryGrad.addColorStop(1, 'rgba(109, 74, 255, 0)');
-    
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-            datasets: [
-                {
-                    label: 'Applications sent',
-                    data: [4, 8, 11, 15, 12, 18],
-                    borderColor: '#6D4AFF',
-                    backgroundColor: primaryGrad,
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 3
-                },
-                {
-                    label: 'Interviews scheduled',
-                    data: [1, 2, 3, 5, 2, 4],
-                    borderColor: '#22C55E',
-                    backgroundColor: 'transparent',
-                    tension: 0.4,
-                    borderWidth: 2
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        boxWidth: 12,
-                        font: {
-                            family: 'Plus Jakarta Sans',
-                            weight: '600',
-                            size: 11
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(229, 231, 235, 0.5)'
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
-            }
-        }
-    });
-
-    // Carousel scrolling
+    // Global Carousel scroll helper
     function scrollCarousel(dir) {
-        const c = document.getElementById('job-carousel');
-        const scrollAmount = 320;
-        c.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' });
+        const el = document.getElementById('recommended-carousel');
+        if (el) el.scrollBy({ left: dir * 300, behavior: 'smooth' });
     }
 
-    // Quick apply simulation
-    function handleDashboardApply(btn, company) {
-        btn.innerHTML = `<span class="inline-block animate-spin font-bold me-1">↻</span> Submitting...`;
-        btn.disabled = true;
-        
-        setTimeout(() => {
-            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Applied`;
-            btn.className = "flex-1 h-10 bg-brandGreen text-white font-bold text-xs rounded-xl";
-            
-            // Increment application counters
-            const appCounter = document.getElementById('count-applications');
-            let val = parseInt(appCounter.innerText) || 0;
-            appCounter.innerText = val + 1;
-
-            alert(`Application successfully submitted to ${company}!`);
-        }, 1200);
+    // Dynamic Radial Progress Circle Updater
+    function setRadialProgress(pct) {
+        const bar = document.getElementById('radial-progress-bar');
+        const text = document.getElementById('dashboard-pct-text');
+        if (!bar) return;
+        const radius = 50;
+        const circumference = 2 * Math.PI * radius; // ~314.15
+        const offset = circumference - (pct / 100) * circumference;
+        bar.style.strokeDashoffset = offset;
+        if (text) text.innerText = pct + '%';
     }
 
-    // Save simulation
-    function handleDashboardJobSave(btn) {
-        const icon = btn.querySelector('i');
-        const countSaved = document.getElementById('count-saved');
-        let currentSaved = parseInt(countSaved.innerText) || 0;
+    // Global Wizard State Management
+    let currentWizardStep = 1;
+    let wizardHasResume = {% if has_resume %}true{% else %}false{% endif %};
 
-        if (icon.classList.contains('bi-bookmark')) {
-            icon.className = "bi bi-bookmark-fill text-primary";
-            countSaved.innerText = currentSaved + 1;
-        } else {
-            icon.className = "bi bi-bookmark";
-            countSaved.innerText = Math.max(0, currentSaved - 1);
+    function openOnboardingWizard(stepNum = 1) {
+        currentWizardStep = stepNum;
+        const modal = document.getElementById('onboarding-wizard-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
+        renderWizardStep(stepNum);
     }
 
-    // Share simulation
-    function handleDashboardJobShare(title) {
-        navigator.clipboard.writeText(window.location.href);
-        alert(`Link to "${title}" copied to clipboard! Share it with your colleagues.`);
-    }
-
-    // Reschedule simulation
-    function simulateReschedule() {
-        const newTime = prompt("Enter preferred rescheduling date and time (e.g. Wednesday 2:00 PM):");
-        if (newTime) {
-            alert(`Reschedule request for "${newTime}" submitted to Google recruiter successfully!`);
+    function closeOnboardingWizard() {
+        const modal = document.getElementById('onboarding-wizard-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
+        sessionStorage.setItem('onboarding_dismissed', 'true');
     }
 
-    // Skill analytics add custom
-    function addCustomSkillDashboard() {
-        const input = document.getElementById('new-skill-input');
-        const skill = input.value.trim();
-        if (skill) {
-            addSkillFromClick(skill);
-            input.value = '';
-        }
-    }
-
-    function addSkillFromClick(skillName) {
-        const container = document.getElementById('skill-chips-container');
-        
-        // Prevent duplicate check
-        let exists = false;
-        container.querySelectorAll('span').forEach(span => {
-            if (span.innerText.trim().toLowerCase() === skillName.toLowerCase()) {
-                exists = true;
+    function renderWizardStep(stepNum) {
+        for (let i = 1; i <= 5; i++) {
+            const stepEl = document.getElementById(`wizard-step-${i}`);
+            const navEl = document.getElementById(`step-nav-${i}`);
+            if (stepEl) {
+                if (i === stepNum) stepEl.classList.remove('hidden');
+                else stepEl.classList.add('hidden');
             }
-        });
+            if (navEl) {
+                if (i === stepNum) {
+                    navEl.classList.remove('opacity-50');
+                    navEl.classList.add('opacity-100');
+                    const numBadge = navEl.querySelector('div');
+                    if (numBadge) numBadge.className = 'w-7 h-7 rounded-full bg-white text-purple-700 font-extrabold text-xs flex items-center justify-center shadow-md';
+                } else {
+                    navEl.classList.remove('opacity-100');
+                    navEl.classList.add('opacity-50');
+                    const numBadge = navEl.querySelector('div');
+                    if (numBadge) numBadge.className = 'w-7 h-7 rounded-full bg-white/30 text-white font-extrabold text-xs flex items-center justify-center';
+                }
+            }
+        }
 
-        if (exists) {
-            alert("Skill already listed!");
+        // Top progress bar update
+        const topBar = document.getElementById('wizard-top-progress');
+        if (topBar) {
+            const pctMap = { 1: 5, 2: 30, 3: 65, 4: 85, 5: 100 };
+            topBar.style.width = (pctMap[stepNum] || 0) + '%';
+        }
+    }
+
+    // Drag and Drop Resume Handlers
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dropzone = document.getElementById('wizard-dragzone');
+        if (dropzone) dropzone.classList.add('dragzone-active');
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dropzone = document.getElementById('wizard-dragzone');
+        if (dropzone) dropzone.classList.remove('dragzone-active');
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dropzone = document.getElementById('wizard-dragzone');
+        if (dropzone) dropzone.classList.remove('dragzone-active');
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            uploadFileToBackend(file);
+        }
+    }
+
+    function uploadWizardResumeFile(input) {
+        if (input.files && input.files[0]) {
+            uploadFileToBackend(input.files[0]);
+        }
+    }
+
+    function uploadFileToBackend(file) {
+        if (file.size > 5 * 1024 * 1024) {
+            showToast("File size exceeds 5 MB limit. Please upload a smaller file.");
             return;
         }
 
-        const chip = document.createElement('span');
-        chip.className = "inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-purple-300 rounded-xl text-xs font-bold";
-        chip.innerHTML = `${skillName} <i class="bi bi-x text-sm cursor-pointer hover:text-rose-500" onclick="this.parentNode.remove()"></i>`;
-        container.appendChild(chip);
-    }
-
-    // Real resume file upload
-    function uploadResumeFile(input) {
-        if (input.files.length === 0) return;
-        const file = input.files[0];
-        
-        // Show loading alert or toast
-        alert("Uploading resume... Click OK to proceed.");
-        
         const formData = new FormData();
         formData.append('resume', file);
-        
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
         fetch("{% url 'frontend:candidate_resume_upload_ajax' %}", {
             method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.message || 'Upload failed.');
-                });
-            }
-            return response.json();
-        })
+        .then(res => res.json())
         .then(data => {
-            alert("Resume uploaded successfully! Re-routing to your profile...");
-            window.location.href = "{% url 'frontend:candidate_profile' %}";
+            if (data.success) {
+                wizardHasResume = true;
+                showToast("Resume uploaded successfully!");
+                
+                const uploadedBox = document.getElementById('wizard-resume-uploaded');
+                const emptyBox = document.getElementById('wizard-resume-empty');
+                const fnEl = document.getElementById('wizard-uploaded-filename');
+                
+                if (fnEl) fnEl.innerText = data.filename || file.name;
+                if (emptyBox) emptyBox.classList.add('hidden');
+                if (uploadedBox) uploadedBox.classList.remove('hidden');
+
+                // Auto-advance to Step 3 after success animation
+                setTimeout(() => {
+                    openOnboardingWizard(3);
+                }, 1000);
+            } else {
+                showToast(data.message || "Failed to upload resume.");
+            }
         })
         .catch(err => {
-            alert("Error uploading resume: " + err.message);
+            console.error("Resume upload error:", err);
+            showToast("Error uploading resume: " + err.message);
         });
     }
+
+    function deleteWizardResume() {
+        fetch("{% url 'frontend:candidate_resume_delete_ajax' %}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                wizardHasResume = false;
+                showToast("Resume deleted.");
+                const uploadedBox = document.getElementById('wizard-resume-uploaded');
+                const emptyBox = document.getElementById('wizard-resume-empty');
+                if (emptyBox) emptyBox.classList.remove('hidden');
+                if (uploadedBox) uploadedBox.classList.add('hidden');
+            } else {
+                showToast(data.message || "Failed to delete resume.");
+            }
+        })
+        .catch(err => {
+            showToast("Error deleting resume: " + err.message);
+        });
+    }
+
+    // Save Step 3 Profile Info
+    function saveWizardStep3AndNext() {
+        const firstName = document.getElementById('wz-first-name').value.trim();
+        const lastName = document.getElementById('wz-last-name').value.trim();
+        const phone = document.getElementById('wz-phone').value.trim();
+        const location = document.getElementById('wz-location').value.trim();
+        const dob = document.getElementById('wz-dob').value.trim();
+        const skills = document.getElementById('wz-skills').value.trim();
+
+        if (!firstName || !lastName || !phone || !location || !dob || !skills) {
+            showToast("Please fill all required profile fields marked with (*).");
+            return;
+        }
+
+        const payload = {
+            first_name: firstName,
+            last_name: lastName,
+            phone_number: phone,
+            location: location,
+            date_of_birth: dob,
+            preferred_job_role: document.getElementById('wz-pref-role').value.trim(),
+            skills: skills,
+            current_company: document.getElementById('wz-current-company').value.trim(),
+            total_experience: document.getElementById('wz-experience-years').value.trim(),
+            current_salary: document.getElementById('wz-current-ctc').value.trim(),
+            expected_salary: document.getElementById('wz-expected-ctc').value.trim(),
+            notice_period: document.getElementById('wz-notice-period').value.trim(),
+            education_degree: document.getElementById('wz-education-degree').value.trim(),
+            education_institution: document.getElementById('wz-education-institution').value.trim()
+        };
+
+        submitOnboardingPayload(payload, function() {
+            openOnboardingWizard(4);
+        });
+    }
+
+    // Save Step 4 Summary
+    function saveWizardStep4AndNext() {
+        const summary = document.getElementById('wz-summary').value.trim();
+        if (!summary || summary.length < 10) {
+            showToast("Please enter a professional summary (at least 10 characters).");
+            return;
+        }
+
+        submitOnboardingPayload({ summary: summary }, function(data) {
+            const finalPctEl = document.getElementById('wizard-completion-pct-heading');
+            if (finalPctEl) finalPctEl.innerText = (data.completion_percentage || 95) + '%';
+            openOnboardingWizard(5);
+        });
+    }
+
+    // Submit Onboarding Payload to Backend API
+    function submitOnboardingPayload(payload, callback) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+        fetch("{% url 'frontend:candidate_onboarding_update' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                if (data.completion_percentage !== undefined) {
+                    setRadialProgress(data.completion_percentage);
+                }
+                if (callback) callback(data);
+            } else {
+                showToast(data.message || "Failed to update profile.");
+            }
+        })
+        .catch(err => {
+            console.error("Onboarding update error:", err);
+            showToast("Failed to save profile details.");
+        });
+    }
+
+    // Finish Setup
+    function finishWizardSetup() {
+        closeOnboardingWizard();
+        showToast("Profile setup complete! You are ready to apply to jobs.");
+        setTimeout(() => {
+            window.location.reload();
+        }, 800);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Radial Progress Meter
+        const pct = parseInt("{{ profile_completion_percentage|default:0 }}");
+        setRadialProgress(pct);
+
+        // Pre-fill summary char count
+        const sumEl = document.getElementById('wz-summary');
+        if (sumEl) {
+            sumEl.value = "{% if candidate_profile %}{{ candidate_profile.summary|escapejs }}{% endif %}";
+            document.getElementById('wz-summary-count').innerText = sumEl.value.length + '/500';
+        }
+
+        // Auto-open wizard if profile completion < 80% on first load
+        if (pct < 80 && !sessionStorage.getItem('onboarding_dismissed')) {
+            setTimeout(() => {
+                openOnboardingWizard(1);
+            }, 500);
+        }
+    });
 </script>
 {% endblock %}

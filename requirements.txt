@@ -169,3 +169,5 @@ whitenoise==6.12.0
 wrapt==2.2.2
 xlsxwriter==3.2.9
 yarl==1.24.2
+twilio>=9.10.9
+

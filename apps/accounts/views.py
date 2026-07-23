@@ -22,15 +22,24 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django import forms
-from .models import User
+from .models import User, OTPVerification
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
 from django.urls import reverse
+from django.http import JsonResponse
+from django.contrib import messages
+from django.utils import timezone
+from datetime import timedelta
 import random
 import time
+import logging
+import json
+
+logger = logging.getLogger(__name__)
+
 
 def redirect_role_dashboard(user):
     role = user.role
@@ -63,61 +72,7 @@ def is_rate_limited(request, key, max_attempts=5, period=300):
     request.session[attempts_key] = attempts
     return False, 0
 
-def generate_otp():
-    return str(random.randint(100000, 999999))
 
-def send_verification_email(user, request):
-    otp = generate_otp()
-    request.session['verification_otp'] = otp
-    request.session['verification_email'] = user.email
-    
-    token = default_token_generator.make_token(user)
-    uid = urlsafe_base64_encode(force_bytes(user.pk))
-    verification_url = request.build_absolute_uri(
-        reverse('candidate_verify_email') + f'?uidb64={uid}&token={token}'
-    )
-    
-    subject = "Verify Your TalentVault.ai Account"
-    message = f"Hi {user.first_name},\n\nThank you for registering at TalentVault.ai!\n\nTo verify your email address, please click the secure link below:\n{verification_url}\n\nAlternatively, you can manually enter this 6-digit verification code:\n{otp}\n\nBest regards,\nThe TalentVault Team"
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=True
-    )
-
-def send_welcome_email(user):
-    subject = "Welcome to TalentVault.ai!"
-    message = f"Hi {user.first_name},\n\nWelcome to TalentVault.ai! Your account has been verified, and you can now log in.\n\nComplete your profile to let our AI Match engine connect you with tailored opportunities.\n\nBest regards,\nThe TalentVault Team"
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=True
-    )
-
-def send_password_reset_email(user, request):
-    otp = generate_otp()
-    request.session['reset_otp_code'] = otp
-    request.session['reset_otp_email'] = user.email
-    
-    token = default_token_generator.make_token(user)
-    uid = urlsafe_base64_encode(force_bytes(user.pk))
-    reset_url = request.build_absolute_uri(
-        reverse('candidate_reset_password') + f'?uidb64={uid}&token={token}'
-    )
-    
-    subject = "Reset Your TalentVault.ai Password"
-    message = f"Hi {user.first_name},\n\nWe received a request to reset your password.\n\nClick the link below to create a new password:\n{reset_url}\n\nAlternatively, you can enter the following 6-digit OTP code to verify:\n{otp}\n\nIf you didn't request a password reset, you can safely ignore this email.\n\nBest regards,\nThe TalentVault Team"
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=True
-    )
 
 class LoginForm(forms.Form):
     email = forms.EmailField(widget=forms.EmailInput(attrs={
@@ -354,7 +309,7 @@ class SignupView(CreateView):
                 user=user,
                 defaults={
                     'designation': 'Recruiter' if user.role == User.Role.RECRUITER else 'Staff',
-                    'role': CompanyMember.MemberRole.ADMIN if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN] else CompanyMember.MemberRole.MEMBER
+                    'role': CompanyMember.MemberRole.ADMIN if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN] else CompanyMember.MemberRole.RECRUITER
                 }
             )
         except Exception as company_err:
@@ -516,7 +471,7 @@ class CandidateLoginView(View):
     @method_decorator(never_cache)
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
-        email = request.POST.get('email', '').strip()
+        email = request.POST.get('email', '').strip().lower()
         
         is_limited, time_remaining = is_rate_limited(request, f"login_{email}")
         if is_limited:
@@ -526,20 +481,37 @@ class CandidateLoginView(View):
             
         form = LoginForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data.get('email')
+            email = form.cleaned_data.get('email').strip().lower()
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
-            try:
-                user_check = User.objects.get(email=email)
+            user_check = User.objects.filter(email=email).first()
+            user_found = bool(user_check)
+            u_is_verified = user_check.is_verified if user_check else False
+            u_email_verified = user_check.email_verified if user_check else False
+
+            print(f"\n==================================================")
+            print(f"[LOGIN DEBUG] DURING LOGIN:")
+            print(f"[LOGIN DEBUG] Target Email: '{email}'")
+            print(f"[LOGIN DEBUG] User Found in DB: {user_found}")
+            print(f"[LOGIN DEBUG] user.is_verified: {u_is_verified}")
+            print(f"[LOGIN DEBUG] user.email_verified: {u_email_verified}")
+            print(f"==================================================\n")
+
+            if user_check:
                 if user_check.role != User.Role.CANDIDATE:
                     form.add_error(None, "This workspace is reserved for Candidates. Please use the Recruiter Portal to sign in.")
                     return render(request, self.template_name, {'form': form})
+
+                # Check if OTP was verified for this email
+                if not user_check.is_verified:
+                    if OTPVerification.objects.filter(email=email, verified=True).exists():
+                        complete_user_verification(user_check)
+                        print(f"[LOGIN DEBUG] Fixed unverified user status for '{email}'. user.is_verified set to True!")
+
                 if not user_check.is_verified:
                     form.add_error(None, "Please verify your email before logging in.")
                     return render(request, self.template_name, {'form': form})
-            except User.DoesNotExist:
-                pass
 
             user = authenticate(request, username=email, password=password)
             if user is not None:
@@ -550,6 +522,7 @@ class CandidateLoginView(View):
                             request.session.set_expiry(1209600)  # 2 weeks
                         else:
                             request.session.set_expiry(0)
+                        print(f"[LOGIN DEBUG] LOGIN SUCCESSFUL for '{email}'! Redirecting to candidate dashboard...")
                         return redirect('frontend:candidate_dashboard')
                     else:
                         form.add_error(None, "This account is disabled.")
@@ -573,29 +546,74 @@ class CandidateSignupView(View):
     def post(self, request, *args, **kwargs):
         form = SignupForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.set_password(form.cleaned_data['password'])
-            user.role = User.Role.CANDIDATE
-            user.is_active = False
-            user.is_verified = False
-            user.save()
-            
-            from apps.candidates.models import CandidateProfile
-            profile, _ = CandidateProfile.objects.get_or_create(user=user)
-            profile.full_name = f"{user.first_name} {user.last_name}".strip()
-            if form.cleaned_data.get('location'):
-                profile.location = form.cleaned_data['location']
-            exp_choice = form.cleaned_data.get('experience')
-            if exp_choice == 'fresher':
-                profile.total_experience = 0.0
-            elif exp_choice == 'experienced':
-                profile.total_experience = 1.0
-            profile.save()
-            
-            send_verification_email(user, request)
-            return redirect('candidate_verify_email')
-            
+            email = form.cleaned_data['email'].strip().lower()
+            phone_number = form.cleaned_data['phone_number'].strip()
+
+            user_exists = User.objects.filter(email=email).exists()
+            existing_user = User.objects.filter(email=email).first()
+            existing_verified = existing_user.is_verified if existing_user else False
+
+            print(f"\n==================================================")
+            print(f"[OTP VERIFICATION DEBUG] BEFORE VERIFICATION (SIGNUP):")
+            print(f"[OTP VERIFICATION DEBUG] Target Email: '{email}'")
+            print(f"[OTP VERIFICATION DEBUG] User Exists in DB: {user_exists}")
+            print(f"[OTP VERIFICATION DEBUG] Existing User is_verified: {existing_verified}")
+            print(f"==================================================\n")
+
+            # Clean up expired OTP records
+            OTPVerification.cleanup_expired()
+
+
+            from apps.accounts.services.email_service import generate_otp, send_email_otp
+            otp = generate_otp()
+
+            now = timezone.now()
+            expires_at = now + timedelta(minutes=5)
+
+            # Create or update OTPVerification record by email
+            otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+            if not otp_record:
+                otp_record = OTPVerification(
+                    email=email,
+                    phone=phone_number,
+                    expires_at=expires_at,
+                    attempts=0,
+                    resend_count=0,
+                    verified=False
+                )
+            else:
+                otp_record.email = email
+                otp_record.phone = phone_number
+                otp_record.expires_at = expires_at
+                otp_record.attempts = 0
+                otp_record.verified = False
+
+            otp_record.set_otp(otp)
+            otp_record.save()
+
+            # Send Email OTP via Gmail SMTP Service
+            success, msg = send_email_otp(email, otp, purpose="signup")
+            if not success:
+                form.add_error(None, f"Email Verification Delivery Failure: {msg}. Please check your email address and try again.")
+                return render(request, self.template_name, {'form': form})
+
+            # Store pending candidate registration data in session until OTP verification succeeds
+            request.session['pending_candidate_signup'] = {
+                'first_name': form.cleaned_data['first_name'],
+                'last_name': form.cleaned_data['last_name'],
+                'email': email,
+                'password': form.cleaned_data['password'],
+                'phone_number': phone_number,
+                'location': form.cleaned_data.get('location', ''),
+                'experience': form.cleaned_data.get('experience', ''),
+            }
+            request.session['otp_email'] = email
+
+            messages.info(request, "A 6-digit verification code has been sent to your email address.")
+            return redirect('candidate_verify_otp')
+
         return render(request, self.template_name, {'form': form})
+
 
 
 class EmployerLoginView(View):
@@ -701,10 +719,70 @@ class AdminLoginView(View):
         return render(request, self.template_name, {'form': form})
 
 
-# --- CANDIDATE AUTHENTICATION & OAUTH FLOW VIEWS ---
-import urllib.parse
-import requests
+def complete_user_verification(user, pending_signup=None):
+    """
+    Ensure user.is_verified, user.email_verified, candidate.is_verified, 
+    candidate.email_verified, and allauth EmailAddress are marked True and saved to DB.
+    """
+    user.is_active = True
+    user.is_verified = True
+    user.email_verified = True
 
+    if pending_signup:
+        if pending_signup.get('first_name'):
+            user.first_name = pending_signup['first_name']
+        if pending_signup.get('last_name'):
+            user.last_name = pending_signup['last_name']
+        if pending_signup.get('phone_number'):
+            user.phone_number = pending_signup['phone_number']
+        if pending_signup.get('password'):
+            user.set_password(pending_signup['password'])
+
+    user.save()
+
+    # Create or update CandidateProfile
+    from apps.candidates.models import CandidateProfile
+    profile, _ = CandidateProfile.objects.get_or_create(user=user)
+    if pending_signup:
+        profile.full_name = f"{user.first_name} {user.last_name}".strip()
+        if pending_signup.get('location'):
+            profile.location = pending_signup['location']
+        exp_choice = pending_signup.get('experience')
+        if exp_choice == 'fresher':
+            profile.total_experience = 0.0
+        elif exp_choice == 'experienced':
+            profile.total_experience = 1.0
+    profile.save()
+
+    # Update allauth EmailAddress record if present
+    try:
+        from allauth.account.models import EmailAddress
+        EmailAddress.objects.update_or_create(
+            user=user,
+            email=user.email,
+            defaults={'verified': True, 'primary': True}
+        )
+    except Exception:
+        pass
+
+    c_is_verified = getattr(profile, 'is_verified', None)
+    c_email_verified = getattr(profile, 'email_verified', None)
+
+    print(f"\n==================================================")
+    print(f"[OTP VERIFICATION DEBUG] AFTER VERIFICATION:")
+    print(f"[OTP VERIFICATION DEBUG] Target Email: '{user.email}'")
+    print(f"[OTP VERIFICATION DEBUG] user.is_verified: {user.is_verified}")
+    print(f"[OTP VERIFICATION DEBUG] user.email_verified: {user.email_verified}")
+    print(f"[OTP VERIFICATION DEBUG] candidate.is_verified: {c_is_verified}")
+    print(f"[OTP VERIFICATION DEBUG] candidate.email_verified: {c_email_verified}")
+    print(f"[OTP VERIFICATION DEBUG] Saved to Database: True")
+    print(f"==================================================\n")
+
+    logger.info(f"User {user.email} verified successfully. is_verified=True, email_verified=True.")
+    return user, profile
+
+
+# --- CANDIDATE AUTHENTICATION ---
 class CandidateForgotPasswordView(View):
     template_name = 'registration/forgot_password.html'
 
@@ -712,169 +790,455 @@ class CandidateForgotPasswordView(View):
         return render(request, self.template_name)
 
     def post(self, request, *args, **kwargs):
-        email = request.POST.get('email', '').strip().lower()
-        if not email:
-            return render(request, self.template_name, {'error': 'Email address is required.'})
-            
-        try:
-            user = User.objects.get(email=email, role=User.Role.CANDIDATE)
-            send_password_reset_email(user, request)
+        email_input = request.POST.get('email', '').strip().lower()
+        if not email_input:
+            return render(request, self.template_name, {'error': 'Registered email address is required.'})
+
+        user = User.objects.filter(email=email_input, role=User.Role.CANDIDATE).first()
+        if not user:
             return render(request, self.template_name, {
-                'success': True,
-                'email': email
-            })
-        except User.DoesNotExist:
-            return render(request, self.template_name, {
-                'error': "No candidate account found with this email address."
+                'error': "No candidate account found with this email address.",
+                'email': email_input
             })
 
+        target_email = user.email
 
-class CandidateEmailVerificationView(View):
-    template_name = 'registration/email_verification.html'
+        print(f"\n==================================================")
+        print(f"[OTP VERIFICATION DEBUG] BEFORE VERIFICATION (FORGOT PASSWORD):")
+        print(f"[OTP VERIFICATION DEBUG] Target Email: '{target_email}'")
+        print(f"[OTP VERIFICATION DEBUG] User Exists in DB: True")
+        print(f"[OTP VERIFICATION DEBUG] Existing User is_verified: {user.is_verified}")
+        print(f"==================================================\n")
 
-    def get(self, request, *args, **kwargs):
-        uidb64 = request.GET.get('uidb64')
-        token = request.GET.get('token')
-        
-        if uidb64 and token:
-            try:
-                uid = force_str(urlsafe_base64_decode(uidb64))
-                user = User.objects.get(pk=uid)
-                if default_token_generator.check_token(user, token):
-                    user.is_verified = True
-                    user.is_active = True
-                    user.save()
-                    send_welcome_email(user)
-                    return render(request, self.template_name, {
-                        'success': True,
-                        'message': "Your email has been successfully verified! You can now log in."
-                    })
-                else:
-                    return render(request, self.template_name, {
-                        'success': False,
-                        'message': "The verification link is invalid or has expired."
-                    })
-            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-                return render(request, self.template_name, {
-                    'success': False,
-                    'message': "The verification link is invalid."
-                })
-        
-        return render(request, self.template_name, {
-            'success': None
-        })
+        # Clean up expired OTPs
+        OTPVerification.cleanup_expired()
+
+        from apps.accounts.services.email_service import generate_otp, send_email_otp
+        otp = generate_otp()
+
+        now = timezone.now()
+        expires_at = now + timedelta(minutes=5)
+
+        otp_record = OTPVerification.objects.filter(email=target_email, verified=False).order_by('-created_at').first()
+        if not otp_record:
+            otp_record = OTPVerification(
+                email=target_email,
+                expires_at=expires_at,
+                attempts=0,
+                resend_count=0,
+                verified=False
+            )
+        else:
+            otp_record.expires_at = expires_at
+            otp_record.attempts = 0
+            otp_record.verified = False
+
+        otp_record.set_otp(otp)
+        otp_record.save()
+
+        success, msg = send_email_otp(target_email, otp, purpose="reset_password")
+        if not success:
+            return render(request, self.template_name, {
+                'error': f"Email delivery error: {msg}. Please check your email address and try again.",
+                'email': email_input
+            })
+
+        # Store session flags for OTP Verification & Password Reset
+        request.session['otp_email'] = target_email
+        request.session['reset_password_email'] = target_email
+        request.session['reset_password_user_id'] = str(user.pk)
+
+        messages.info(request, "A 6-digit verification code has been sent to your email address.")
+        return redirect('candidate_verify_otp')
 
 
 class CandidateOTPVerificationView(View):
     template_name = 'registration/otp_verification.html'
 
     def get(self, request, *args, **kwargs):
-        return render(request, self.template_name)
+        email = request.session.get('otp_email', '')
+        pending_signup = request.session.get('pending_candidate_signup')
+        reset_email = request.session.get('reset_password_email')
+
+        if not email and not pending_signup and not reset_email:
+            messages.warning(request, "No active OTP verification session found. Please sign up or request a password reset.")
+            return redirect('candidate_signup')
+
+        from apps.accounts.services.email_service import mask_email
+        masked_email = mask_email(email) if email else ''
+
+        return render(request, self.template_name, {
+            'email': email,
+            'masked_email': masked_email,
+        })
 
     def post(self, request, *args, **kwargs):
         otp_entered = request.POST.get('otp', '').strip()
-        
-        reset_otp = request.session.get('reset_otp_code')
-        reset_email = request.session.get('reset_otp_email')
-        
-        verify_otp = request.session.get('verification_otp')
-        verify_email = request.session.get('verification_email')
-        
-        if reset_otp and otp_entered == reset_otp:
-            request.session['otp_verified_reset_email'] = reset_email
-            request.session.pop('reset_otp_code', None)
+        email = request.session.get('otp_email', '')
+        pending_signup = request.session.get('pending_candidate_signup')
+        reset_email = request.session.get('reset_password_email')
+        reset_user_id = request.session.get('reset_password_user_id')
+
+        if not email:
+            return render(request, self.template_name, {
+                'error': "Verification session expired. Please restart signup or password reset.",
+                'email': email
+            })
+
+        OTPVerification.cleanup_expired()
+        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+
+        if not otp_record:
+            return render(request, self.template_name, {
+                'error': "The OTP code entered has expired or does not exist. Please click Resend OTP.",
+                'email': email
+            })
+
+        if otp_record.is_expired():
+            return render(request, self.template_name, {
+                'error': "The verification code has expired (5 minutes limit). Please click Resend OTP.",
+                'email': email
+            })
+
+        if otp_record.attempts >= 5:
+            return render(request, self.template_name, {
+                'error': "Maximum verification attempts (5) exceeded. Please click Resend OTP for a new code.",
+                'email': email
+            })
+
+        if not otp_record.check_otp(otp_entered):
+            otp_record.attempts += 1
+            otp_record.save()
+            remaining = max(0, 5 - otp_record.attempts)
+            return render(request, self.template_name, {
+                'error': f"Invalid verification code. {remaining} attempt(s) remaining.",
+                'email': email
+            })
+
+        # OTP is verified! Mark verified in OTPVerification model
+        otp_record.verified = True
+        otp_record.save()
+
+        # 1. Forgot Password Reset Flow
+        if reset_email and reset_user_id:
+            request.session['reset_password_otp_verified'] = True
+            request.session.pop('otp_email', None)
+            user = User.objects.filter(pk=reset_user_id).first()
+            if user:
+                complete_user_verification(user)
+            otp_record.delete()
             return redirect('candidate_reset_password')
-            
-        elif verify_otp and otp_entered == verify_otp:
+
+        # 2. Candidate Signup Flow
+        if pending_signup:
             try:
-                user = User.objects.get(email=verify_email)
-                user.is_verified = True
-                user.is_active = True
-                user.save()
-                send_welcome_email(user)
-                
-                request.session.pop('verification_otp', None)
-                request.session.pop('verification_email', None)
-                
-                return render(request, 'registration/email_verification.html', {
-                    'success': True,
-                    'message': "Your email has been successfully verified via OTP! You can now log in."
+                target_email = pending_signup['email'].strip().lower()
+                user = User.objects.filter(email=target_email).first()
+                if not user:
+                    user = User.objects.create_user(
+                        email=target_email,
+                        password=pending_signup['password'],
+                        first_name=pending_signup['first_name'],
+                        last_name=pending_signup['last_name'],
+                        phone_number=pending_signup['phone_number'],
+                        role=User.Role.CANDIDATE,
+                        is_active=True,
+                        is_verified=True
+                    )
+
+                complete_user_verification(user, pending_signup)
+
+                from apps.companies.models import Company, CompanyMember
+                try:
+                    company, _ = Company.objects.get_or_create(
+                        name="TalentVault Technologies",
+                        defaults={
+                            'slug': 'talentvault-technologies',
+                            'industry': 'Software Product',
+                            'description': 'Default organization created during user signup.',
+                            'location': 'Remote'
+                        }
+                    )
+                    CompanyMember.objects.get_or_create(
+                        company=company,
+                        user=user,
+                        defaults={'designation': 'Staff', 'role': CompanyMember.MemberRole.RECRUITER}
+                    )
+                except Exception as company_err:
+                    logger.error(f"Error associating company in signup: {company_err}")
+
+                request.session.pop('pending_candidate_signup', None)
+                request.session.pop('otp_email', None)
+                otp_record.delete()
+
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                messages.success(request, "Email verification successful! Welcome to TalentVault.")
+                return redirect('frontend:candidate_dashboard')
+
+            except Exception as err:
+                logger.error(f"User creation error in candidate OTP verification: {err}")
+                return render(request, self.template_name, {
+                    'error': f"Could not complete registration: {str(err)}.",
+                    'email': email
                 })
-            except User.DoesNotExist:
-                pass
-                
+
         return render(request, self.template_name, {
-            'error': "The OTP code entered is incorrect or expired. Please check your email and try again."
+            'error': "No active signup or password reset session found.",
+            'email': email
         })
+
+
+class SendEmailOTPView(View):
+    def post(self, request, *args, **kwargs):
+        if request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                data = {}
+        else:
+            data = request.POST
+
+        email = data.get('email') or request.session.get('otp_email')
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email address is required.'}, status=400)
+
+        OTPVerification.cleanup_expired()
+        from apps.accounts.services.email_service import generate_otp, send_email_otp
+        otp = generate_otp()
+
+        now = timezone.now()
+        expires_at = now + timedelta(minutes=5)
+
+        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+        if not otp_record:
+            otp_record = OTPVerification(
+                email=email,
+                expires_at=expires_at,
+                attempts=0,
+                resend_count=0,
+                verified=False
+            )
+        else:
+            otp_record.expires_at = expires_at
+            otp_record.attempts = 0
+            otp_record.verified = False
+
+        otp_record.set_otp(otp)
+        otp_record.save()
+
+        success, msg = send_email_otp(email, otp)
+        if success:
+            request.session['otp_email'] = email
+            return JsonResponse({'success': True, 'message': 'Email OTP sent successfully.'})
+        else:
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+
+
+class VerifyEmailOTPView(View):
+    def post(self, request, *args, **kwargs):
+        if request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                data = {}
+        else:
+            data = request.POST
+
+        otp_entered = data.get('otp', '').strip()
+        email = data.get('email') or request.session.get('otp_email')
+
+        if not email or not otp_entered:
+            return JsonResponse({'success': False, 'message': 'Email address and 6-digit OTP are required.'}, status=400)
+
+        OTPVerification.cleanup_expired()
+        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+
+        if not otp_record:
+            return JsonResponse({'success': False, 'message': 'No active OTP verification session found or code expired.'}, status=400)
+
+        if otp_record.is_expired():
+            return JsonResponse({'success': False, 'message': 'The OTP code has expired (5 minutes limit). Please resend.'}, status=400)
+
+        if otp_record.attempts >= 5:
+            return JsonResponse({'success': False, 'message': 'Maximum verification attempts (5) exceeded. Please resend.'}, status=400)
+
+        if not otp_record.check_otp(otp_entered):
+            otp_record.attempts += 1
+            otp_record.save()
+            remaining = max(0, 5 - otp_record.attempts)
+            return JsonResponse({'success': False, 'message': f'Invalid OTP code. {remaining} attempt(s) remaining.'}, status=400)
+
+        otp_record.verified = True
+        otp_record.save()
+
+        reset_email = request.session.get('reset_password_email')
+        reset_user_id = request.session.get('reset_password_user_id')
+        if reset_email and reset_user_id:
+            request.session['reset_password_otp_verified'] = True
+            request.session.pop('otp_email', None)
+            user = User.objects.filter(pk=reset_user_id).first()
+            if user:
+                complete_user_verification(user)
+            otp_record.delete()
+            return JsonResponse({
+                'success': True,
+                'message': 'Email OTP verification successful!',
+                'redirect_url': reverse('candidate_reset_password')
+            })
+
+        pending_signup = request.session.get('pending_candidate_signup')
+        redirect_url = reverse('frontend:candidate_dashboard')
+
+        if pending_signup:
+            try:
+                target_email = pending_signup['email'].strip().lower()
+                user = User.objects.filter(email=target_email).first()
+                if not user:
+                    user = User.objects.create_user(
+                        email=target_email,
+                        password=pending_signup['password'],
+                        first_name=pending_signup['first_name'],
+                        last_name=pending_signup['last_name'],
+                        phone_number=pending_signup['phone_number'],
+                        role=User.Role.CANDIDATE,
+                        is_active=True,
+                        is_verified=True
+                    )
+
+                complete_user_verification(user, pending_signup)
+
+                from apps.companies.models import Company, CompanyMember
+                try:
+                    company, _ = Company.objects.get_or_create(
+                        name="TalentVault Technologies",
+                        defaults={
+                            'slug': 'talentvault-technologies',
+                            'industry': 'Software Product',
+                            'description': 'Default organization created during user signup.',
+                            'location': 'Remote'
+                        }
+                    )
+                    CompanyMember.objects.get_or_create(
+                        company=company,
+                        user=user,
+                        defaults={'designation': 'Staff', 'role': CompanyMember.MemberRole.RECRUITER}
+                    )
+                except Exception as company_err:
+                    logger.error(f"Error associating company in AJAX OTP signup: {company_err}")
+
+                request.session.pop('pending_candidate_signup', None)
+                request.session.pop('otp_email', None)
+                otp_record.delete()
+
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            except Exception as err:
+                logger.error(f"AJAX user creation error: {err}")
+                return JsonResponse({'success': False, 'message': f'Account creation failed: {str(err)}'}, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Email verification successful!',
+            'redirect_url': redirect_url
+        })
+
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Email verification successful!',
+            'redirect_url': redirect_url
+        })
+
+
+class ResendEmailOTPView(View):
+    def post(self, request, *args, **kwargs):
+        if request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                data = {}
+        else:
+            data = request.POST
+
+        email = data.get('email') or request.session.get('otp_email')
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email address is required to resend OTP.'}, status=400)
+
+        OTPVerification.cleanup_expired()
+        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+
+        if otp_record and otp_record.resend_count >= 3:
+            return JsonResponse({
+                'success': False,
+                'message': 'Maximum resend limit (3) reached for this verification session. Please restart session.'
+            }, status=400)
+
+        from apps.accounts.services.email_service import generate_otp, send_email_otp
+        new_otp = generate_otp()
+        now = timezone.now()
+        expires_at = now + timedelta(minutes=5)
+
+        purpose = "reset_password" if request.session.get('reset_password_email') else "signup"
+
+        if not otp_record:
+            otp_record = OTPVerification(
+                email=email,
+                expires_at=expires_at,
+                attempts=0,
+                resend_count=1,
+                verified=False
+            )
+        else:
+            otp_record.expires_at = expires_at
+            otp_record.attempts = 0
+            otp_record.resend_count += 1
+            otp_record.verified = False
+
+        otp_record.set_otp(new_otp)
+        otp_record.save()
+
+        success, msg = send_email_otp(email, new_otp, purpose=purpose)
+        if success:
+            request.session['otp_email'] = email
+            return JsonResponse({
+                'success': True,
+                'message': 'A new email verification code has been sent.',
+                'resend_count': otp_record.resend_count
+            })
+        else:
+            return JsonResponse({'success': False, 'message': msg}, status=400)
 
 
 class CandidateResetPasswordView(View):
     template_name = 'registration/reset_password.html'
 
     def get(self, request, *args, **kwargs):
-        uidb64 = request.GET.get('uidb64')
-        token = request.GET.get('token')
-        
-        if uidb64 and token:
-            try:
-                uid = force_str(urlsafe_base64_decode(uidb64))
-                user = User.objects.get(pk=uid)
-                if default_token_generator.check_token(user, token):
-                    return render(request, self.template_name, {
-                        'uidb64': uidb64,
-                        'token': token,
-                        'valid': True
-                    })
-                else:
-                    return render(request, self.template_name, {
-                        'valid': False,
-                        'error_message': "The password reset link is invalid or has expired."
-                    })
-            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-                return render(request, self.template_name, {
-                    'valid': False,
-                    'error_message': "The password reset link is invalid."
-                })
-                
-        reset_email = request.session.get('otp_verified_reset_email')
-        if reset_email:
-            return render(request, self.template_name, {
-                'valid': True
-            })
-            
-        return redirect('candidate_forgot_password')
+        is_verified = request.session.get('reset_password_otp_verified')
+        user_id = request.session.get('reset_password_user_id')
+
+        if not is_verified or not user_id:
+            messages.error(request, "Please complete Email OTP verification before setting a new password.")
+            return redirect('candidate_forgot_password')
+
+        return render(request, self.template_name, {'valid': True})
 
     def post(self, request, *args, **kwargs):
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
-        
-        uidb64 = request.POST.get('uidb64')
-        token = request.POST.get('token')
-        
-        user = None
-        
-        if uidb64 and token:
-            try:
-                uid = force_str(urlsafe_base64_decode(uidb64))
-                user = User.objects.get(pk=uid)
-                if not default_token_generator.check_token(user, token):
-                    user = None
-            except Exception:
-                pass
-        else:
-            reset_email = request.session.get('otp_verified_reset_email')
-            if reset_email:
-                try:
-                    user = User.objects.get(email=reset_email)
-                except User.DoesNotExist:
-                    pass
-                    
-        if not user:
+        is_verified = request.session.get('reset_password_otp_verified')
+        user_id = request.session.get('reset_password_user_id')
+
+        if not is_verified or not user_id:
+            return redirect('candidate_forgot_password')
+
+        try:
+            user = User.objects.get(pk=user_id, role=User.Role.CANDIDATE)
+        except User.DoesNotExist:
             return render(request, self.template_name, {
                 'valid': False,
-                'error_message': "Invalid authorization. Please request a new password reset link."
+                'error_message': "User account not found for password reset."
             })
-            
+
+        password = request.POST.get('password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+
         if not password or len(password) < 8:
             return render(request, self.template_name, {'valid': True, 'error_message': "Password must be at least 8 characters long."})
         if not any(c.isupper() for c in password):
@@ -885,22 +1249,26 @@ class CandidateResetPasswordView(View):
             return render(request, self.template_name, {'valid': True, 'error_message': "Password must contain at least one number."})
         if not any(c in "!@#$%^&*()-_=+[]{}|;:',.<>?/`~" for c in password):
             return render(request, self.template_name, {'valid': True, 'error_message': "Password must contain at least one special character."})
-            
+
         if password != confirm_password:
             return render(request, self.template_name, {
                 'valid': True,
                 'error_message': "Passwords do not match."
             })
-            
+
         user.set_password(password)
         user.save()
-        
-        request.session.pop('otp_verified_reset_email', None)
-        
+
+        request.session.pop('reset_password_otp_verified', None)
+        request.session.pop('reset_password_user_id', None)
+        request.session.pop('reset_password_email', None)
+
         return render(request, 'registration/candidate_login.html', {
-            'success_message': "Password reset successful! You can now sign in with your new password.",
+            'success_message': "Password updated successfully! Please sign in with your new password.",
             'form': LoginForm()
         })
+
+
 
 
 from allauth.socialaccount.providers.google.views import (
@@ -923,7 +1291,7 @@ class GitHubLoginRedirectView(View):
         client_id = getattr(settings, 'GITHUB_CLIENT_ID', None)
         if not client_id:
             # Fallback to auto-created candidate for localhost testing
-            email = "candidate.github@talentvault.ai"
+            email = "candidate.github@talent-vault.in"
             user, created = User.objects.get_or_create(
                 email=email,
                 defaults={
@@ -1028,7 +1396,7 @@ class LinkedInLoginRedirectView(View):
         client_id = getattr(settings, 'LINKEDIN_CLIENT_ID', None)
         if not client_id:
             # Fallback to auto-created candidate for localhost testing
-            email = "candidate.linkedin@talentvault.ai"
+            email = "candidate.linkedin@talent-vault.in"
             user, created = User.objects.get_or_create(
                 email=email,
                 defaults={

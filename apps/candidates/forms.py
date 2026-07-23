@@ -67,11 +67,6 @@ class ManualCandidateForm(forms.Form):
     primary_skills = forms.CharField(max_length=255, required=False, help_text="Comma-separated primary skills")
     secondary_skills = forms.CharField(max_length=255, required=False, help_text="Comma-separated secondary skills")
     
-    # Links
-    linkedin_url = forms.URLField(required=False, label="LinkedIn URL")
-    github_url = forms.URLField(required=False, label="GitHub URL")
-    portfolio_url = forms.URLField(required=False, label="Portfolio URL")
-    
     # Other
     summary = forms.CharField(widget=forms.Textarea, required=False)
     

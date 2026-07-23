@@ -106,6 +106,10 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
         candidate_profile = getattr(user, 'candidate_profile', None)
         
         if candidate_profile:
+            context['candidate_profile'] = candidate_profile
+            context['profile_completion_percentage'] = candidate_profile.profile_completion_percentage
+            context['has_resume'] = candidate_profile.has_resume
+            context['resume_url'] = candidate_profile.resume_file_url
             context['applications_count'] = Application.objects.filter(candidate=candidate_profile).count()
             from apps.candidates.models import SavedJob
             context['saved_jobs_count'] = SavedJob.objects.filter(candidate=candidate_profile).count()
@@ -124,6 +128,10 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
             context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
             context['saved_job_ids'] = list(candidate_profile.saved_jobs.values_list('job_id', flat=True))
         else:
+            context['candidate_profile'] = None
+            context['profile_completion_percentage'] = 0
+            context['has_resume'] = False
+            context['resume_url'] = '#'
             context['applications_count'] = 0
             context['saved_jobs_count'] = 0
             context['interviews_count'] = 0
@@ -3059,6 +3067,121 @@ class CandidateResumeDeleteView(CandidateRequiredMixin, View):
             return JsonResponse({'success': True, 'message': 'Resume deleted successfully.'})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+class CandidateOnboardingUpdateView(CandidateRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        try:
+            user = request.user
+            profile, _ = CandidateProfile.objects.get_or_create(user=user)
+            
+            if request.content_type == 'application/json':
+                import json
+                try:
+                    data = json.loads(request.body)
+                except Exception:
+                    data = {}
+            else:
+                data = request.POST
+
+            first_name = data.get('first_name', '').strip()
+            last_name = data.get('last_name', '').strip()
+            if first_name: user.first_name = first_name
+            if last_name: user.last_name = last_name
+
+            phone = data.get('phone_number', '').strip()
+            if phone: user.phone_number = phone
+            user.save()
+
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            if full_name: profile.full_name = full_name
+
+            if data.get('location'): profile.location = data.get('location').strip()
+            if data.get('date_of_birth'): profile.date_of_birth = data.get('date_of_birth').strip()
+            if data.get('current_company'): profile.current_company = data.get('current_company').strip()
+            if data.get('current_designation'): profile.current_designation = data.get('current_designation').strip()
+            if data.get('preferred_job_role'): profile.preferred_job_role = data.get('preferred_job_role').strip()
+            if data.get('preferred_location'): profile.preferred_location = data.get('preferred_location').strip()
+
+            if data.get('total_experience') is not None and str(data.get('total_experience')).strip() != '':
+                try: profile.total_experience = float(data.get('total_experience'))
+                except (ValueError, TypeError): pass
+
+            if data.get('expected_salary') is not None and str(data.get('expected_salary')).strip() != '':
+                try: profile.expected_salary = float(data.get('expected_salary'))
+                except (ValueError, TypeError): pass
+
+            if data.get('current_salary') is not None and str(data.get('current_salary')).strip() != '':
+                try: profile.current_salary = float(data.get('current_salary'))
+                except (ValueError, TypeError): pass
+
+            if data.get('notice_period') is not None and str(data.get('notice_period')).strip() != '':
+                try: profile.notice_period = int(data.get('notice_period'))
+                except (ValueError, TypeError): pass
+
+            if data.get('summary') is not None:
+                profile.summary = data.get('summary').strip()
+
+            profile.save()
+
+            # Update Skills
+            skills_data = data.get('skills', [])
+            if isinstance(skills_data, str):
+                skills_data = [s.strip() for s in skills_data.split(',') if s.strip()]
+            if isinstance(skills_data, list) and len(skills_data) > 0:
+                profile.skills.all().delete()
+                for sk_name in skills_data:
+                    sk_clean = str(sk_name).strip()
+                    if sk_clean:
+                        CandidateSkill.objects.create(profile=profile, skill_name=sk_clean)
+
+            # Update Education
+            institution = data.get('education_institution', '').strip()
+            degree = data.get('education_degree', '').strip()
+            if institution or degree:
+                edu = profile.educations.first()
+                if not edu:
+                    Education.objects.create(
+                        profile=profile,
+                        institution=institution or "University",
+                        degree=degree or "Bachelor's Degree",
+                        field_of_study=data.get('education_field', '').strip()
+                    )
+                else:
+                    if institution: edu.institution = institution
+                    if degree: edu.degree = degree
+                    if data.get('education_field'): edu.field_of_study = data.get('education_field').strip()
+                    edu.save()
+
+            # Update Experience
+            exp_company = data.get('experience_company', '').strip()
+            exp_designation = data.get('experience_designation', '').strip()
+            if exp_company or exp_designation:
+                exp = profile.experiences.first()
+                if not exp:
+                    Experience.objects.create(
+                        profile=profile,
+                        company_name=exp_company or "Company",
+                        designation=exp_designation or "Role"
+                    )
+                else:
+                    if exp_company: exp.company_name = exp_company
+                    if exp_designation: exp.designation = exp_designation
+                    exp.save()
+
+            completion_pct = profile.profile_completion_percentage
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Profile details updated successfully!',
+                'completion_percentage': completion_pct,
+                'has_resume': profile.has_resume,
+                'resume_name': profile.original_filename or (profile.resume.name if profile.resume else '')
+            })
+
+        except Exception as err:
+            logger.error(f"Error updating candidate onboarding profile: {err}")
+            return JsonResponse({'success': False, 'message': str(err)}, status=400)
+
 
 class CandidateCareerResourcesView(CandidateRequiredMixin, TemplateView):
     template_name = 'career_resources.html'

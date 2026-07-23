@@ -3,7 +3,7 @@
 
 {% block mobile_page_title %}Profile{% endblock %}
 
-{% block title %}My Profile — TalentVault AI{% endblock %}
+{% block title %}My Profile — TalentVault{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -167,22 +167,20 @@
                             </div>
                         </div>
                         
-                        <div class="flex items-stretch gap-2 mt-4 w-full">
-                            <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 w-full">
+                            <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
                                 <i class="bi bi-eye"></i> Preview
                             </a>
-                            <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
+                            <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
                                 <i class="bi bi-download"></i> Download
                             </a>
-                            {% if edit_mode %}
-                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-10 px-3 bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
+                            <button type="button" onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-10 px-3 bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
                                 <i class="bi bi-arrow-repeat"></i> Replace
                             </button>
-                            <button onclick="deleteResume('{{ request.user.candidate_profile.id }}')" class="h-10 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 flex-1">
+                            <button type="button" onclick="deleteResume('{{ request.user.candidate_profile.id }}')" class="h-10 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
                                 <i class="bi bi-trash"></i> Delete
                             </button>
                             <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadResumeFile(this)">
-                            {% endif %}
                         </div>
                     {% else %}
                         <i class="bi bi-file-earmark-pdf text-4xl text-slate-300 block mb-2"></i>
@@ -769,7 +767,7 @@
         fetch("{% url 'frontend:candidate_resume_delete_ajax' %}", {
             method: 'POST',
             headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
+                'X-CSRFToken': getCsrfToken()
             }
         })
         .then(response => response.json())

@@ -26,12 +26,24 @@ def test_candidate_normal_signup(client):
         'accept_terms': True,
     }
     response = client.post(url, signup_data)
+    assert response.status_code == 302
+    assert response.url == reverse('candidate_verify_otp')
+
+    # Submit OTP code to complete verification and user creation
+    from apps.accounts.models import OTPVerification
+    otp_record = OTPVerification.objects.filter(email=email).first()
+    assert otp_record is not None
+    otp_record.set_otp("123456")
+    otp_record.save()
+
+    verify_resp = client.post(reverse('candidate_verify_otp'), {'otp': '123456'})
+    assert verify_resp.status_code == 302
+
     user = User.objects.filter(email=email).first()
-    if user is None and hasattr(response, 'context') and response.context and 'form' in response.context:
-        print("SIGNUP FORM ERRORS:", response.context['form'].errors)
-    assert response.status_code in [200, 302]
     assert user is not None
     assert user.role == User.Role.CANDIDATE
+    assert user.is_verified is True
+
 
 
 @pytest.mark.django_db

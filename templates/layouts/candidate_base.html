@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Candidate Portal — TalentVault AI{% endblock %}</title>
+    <title>{% block title %}Candidate Portal — TalentVault{% endblock %}</title>
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
     
@@ -153,7 +153,7 @@
                     <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-200">
                         <span class="text-white font-black text-lg">T</span>
                     </div>
-                    <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault<span class="text-primary font-bold">.ai</span></span>
+                    <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault</span>
                 </a>
             </div>
 
@@ -200,7 +200,7 @@
                 <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-md">
                     <span class="text-white font-black text-sm">T</span>
                 </div>
-                <span class="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">TalentVault<span class="text-primary font-bold">.ai</span></span>
+                <span class="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">TalentVault</span>
             </a>
 
             <!-- Center: Current page title -->
@@ -457,7 +457,7 @@
                     <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-md">
                         <span class="text-white font-black text-lg">T</span>
                     </div>
-                    <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault<span class="text-primary font-bold">.ai</span></span>
+                    <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault</span>
                 </div>
                 <button onclick="toggleMenuDrawer()" class="text-slate-400 hover:text-slate-650"><i class="bi bi-x-lg text-xl"></i></button>
             </div>
@@ -865,22 +865,28 @@
             renderSkillTags();
 
             {% if request.user.candidate_profile.linkedin_url %}
-            document.getElementById('apply-linkedin').value = "{{ request.user.candidate_profile.linkedin_url|escapejs }}";
+            const linkedinEl = document.getElementById('apply-linkedin');
+            if (linkedinEl) linkedinEl.value = "{{ request.user.candidate_profile.linkedin_url|escapejs }}";
             {% endif %}
             {% if request.user.candidate_profile.portfolio_url %}
-            document.getElementById('apply-portfolio').value = "{{ request.user.candidate_profile.portfolio_url|escapejs }}";
+            const portfolioEl = document.getElementById('apply-portfolio');
+            if (portfolioEl) portfolioEl.value = "{{ request.user.candidate_profile.portfolio_url|escapejs }}";
             {% endif %}
             {% endif %}
 
             const modal = document.getElementById('easy-apply-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
         }
 
         function closeEasyApplyModal() {
             const modal = document.getElementById('easy-apply-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
         }
 
         function submitEasyApply() {
@@ -897,22 +903,23 @@
             if (pendingSkill) addSkillTag(pendingSkill);
 
             const currentLocVal = currentLocationEl ? currentLocationEl.value.trim() : '';
-            document.getElementById('apply-current-location').value = currentLocVal;
+            const currLocHidden = document.getElementById('apply-current-location');
+            if (currLocHidden) currLocHidden.value = currentLocVal;
 
             const formData = {
                 job_id: activeJobId,
                 mobile_number: mobileEl ? mobileEl.value.trim() : '',
-                current_ctc: document.getElementById('apply-current-ctc').value.trim(),
-                expected_ctc: document.getElementById('apply-expected-ctc').value.trim(),
-                notice_period: document.getElementById('apply-notice-period').value.trim(),
+                current_ctc: document.getElementById('apply-current-ctc')?.value.trim() || '',
+                expected_ctc: document.getElementById('apply-expected-ctc')?.value.trim() || '',
+                notice_period: document.getElementById('apply-notice-period')?.value.trim() || '',
                 current_location: currentLocVal,
                 preferred_locations: selectedLocations,
                 key_skills: selectedSkills,
-                date_of_birth: document.getElementById('apply-dob').value.trim(),
-                linkedin_url: document.getElementById('apply-linkedin').value.trim(),
-                portfolio_url: document.getElementById('apply-portfolio').value.trim(),
-                note_to_recruiter: document.getElementById('apply-note').value.trim(),
-                cover_letter: document.getElementById('apply-pitch').value.trim()
+                date_of_birth: document.getElementById('apply-dob')?.value.trim() || '',
+                linkedin_url: document.getElementById('apply-linkedin')?.value.trim() || '',
+                portfolio_url: document.getElementById('apply-portfolio')?.value.trim() || '',
+                note_to_recruiter: document.getElementById('apply-note')?.value.trim() || '',
+                cover_letter: document.getElementById('apply-pitch')?.value.trim() || ''
             };
             
             let isValid = true;
@@ -957,22 +964,7 @@
                 modalSubmitBtn.disabled = true;
             }
 
-            function getCookie(name) {
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }
-                    }
-                }
-                return cookieValue;
-            }
-
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+            const csrfToken = getCsrfToken();
 
             fetch('/api/v1/applications/apply/', {
                 method: 'POST',
@@ -1028,6 +1020,87 @@
                     modalSubmitBtn.disabled = false;
                 }
                 showToast(err.message || "Failed to submit application.");
+            });
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function getCsrfToken() {
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '{{ csrf_token }}' || '';
+        }
+
+        function handleReplaceResumeInApply(input) {
+            if (!input || !input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            if (file.size > 5 * 1024 * 1024) {
+                showToast("File size exceeds 5 MB limit.");
+                return;
+            }
+            showToast("Replacing resume... Please wait.");
+            const formData = new FormData();
+            formData.append('resume', file);
+
+            fetch("{% url 'frontend:candidate_resume_upload_ajax' %}", {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast("Resume replaced successfully!");
+                    const filenameEl = document.getElementById('apply-attached-filename');
+                    if (filenameEl) filenameEl.innerText = data.filename || file.name;
+                } else {
+                    showToast(data.message || "Failed to replace resume.");
+                }
+            })
+            .catch(err => {
+                showToast("Error replacing resume: " + err.message);
+            });
+        }
+
+        function uploadResumeFile(input) {
+            if (!input || !input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            if (file.size > 5 * 1024 * 1024) {
+                showToast("File size exceeds 5 MB limit.");
+                return;
+            }
+            
+            showToast("Uploading resume... Please wait.");
+            const formData = new FormData();
+            formData.append('resume', file);
+
+            fetch("{% url 'frontend:candidate_resume_upload_ajax' %}", {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast("Resume uploaded successfully!");
+                    setTimeout(() => { window.location.reload(); }, 800);
+                } else {
+                    showToast(data.message || "Failed to upload resume.");
+                }
+            })
+            .catch(err => {
+                showToast("Error uploading resume: " + err.message);
             });
         }
 
@@ -1212,14 +1285,6 @@
                         <input type="text" id="apply-skills-input" placeholder="Example: Python, Django, React, SQL" class="flex-1 min-w-[180px] bg-transparent border-none text-xs focus:outline-none p-1 text-slate-700 dark:text-slate-300">
                     </div>
                     <span id="apply-skills-error" class="text-[11px] text-rose-500 hidden mt-0.5 block">Please enter or select at least one key skill.</span>
-                    <div class="flex flex-wrap gap-1 mt-1.5 text-[11px] text-slate-500">
-                        <span class="text-slate-400 font-semibold me-1">Suggested:</span>
-                        <button type="button" onclick="addSkillTag('Python')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Python</button>
-                        <button type="button" onclick="addSkillTag('Django')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">Django</button>
-                        <button type="button" onclick="addSkillTag('React')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">React</button>
-                        <button type="button" onclick="addSkillTag('SQL')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">SQL</button>
-                        <button type="button" onclick="addSkillTag('JavaScript')" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary rounded-md transition-all">JavaScript</button>
-                    </div>
                 </div>
 
                 <!-- 10. Date of Birth -->
@@ -1239,6 +1304,33 @@
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Portfolio / GitHub URL <span class="text-slate-400 font-normal">(Optional)</span></label>
                     <input type="url" id="apply-portfolio" placeholder="https://github.com/username or portfolio link" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary">
                 </div>
+
+                <!-- Attached Resume Section -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Attached Resume</label>
+                    <div id="apply-resume-container" class="p-3.5 bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800 rounded-2xl flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-sm"><i class="bi bi-file-earmark-pdf-fill"></i></div>
+                            <div>
+                                <span class="text-xs font-bold text-slate-900 dark:text-slate-100 block" id="apply-attached-filename">
+                                    {% if request.user.candidate_profile.has_resume %}
+                                    {{ request.user.candidate_profile.original_filename|default:request.user.candidate_profile.resume.name }}
+                                    {% else %}
+                                    No resume uploaded yet
+                                    {% endif %}
+                                </span>
+                                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
+                                    <i class="bi bi-check-circle-fill"></i> Automatically Attached from Profile
+                                </span>
+                            </div>
+                        </div>
+                        <button type="button" onclick="document.getElementById('easy-apply-replace-file').click()" class="text-xs text-purple-700 dark:text-purple-300 font-bold hover:underline px-3 py-1.5 bg-white dark:bg-slate-850 border border-purple-200 dark:border-purple-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5">
+                            <i class="bi bi-arrow-repeat"></i> Replace Resume
+                        </button>
+                        <input type="file" id="easy-apply-replace-file" class="hidden" accept=".pdf,.doc,.docx" onchange="handleReplaceResumeInApply(this)">
+                    </div>
+                </div>
+
 
                 <!-- 13. Note to Recruiter (Optional) -->
                 <div>

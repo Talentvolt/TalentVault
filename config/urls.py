@@ -46,11 +46,13 @@ from apps.accounts.views import (
     EmployerSignupView,
     AdminLoginView,
     CandidateForgotPasswordView,
-    CandidateEmailVerificationView,
     CandidateOTPVerificationView,
     CandidateResetPasswordView,
     GoogleLoginRedirectView,
-    GoogleLoginCallbackView
+    GoogleLoginCallbackView,
+    SendEmailOTPView,
+    VerifyEmailOTPView,
+    ResendEmailOTPView
 )
 
 urlpatterns = [
@@ -67,9 +69,14 @@ urlpatterns = [
     path('accounts/login/candidate/', CandidateLoginView.as_view(), name='candidate_login'),
     path('accounts/signup/candidate/', CandidateSignupView.as_view(), name='candidate_signup'),
     path('accounts/forgot-password/', CandidateForgotPasswordView.as_view(), name='candidate_forgot_password'),
-    path('accounts/verify-email/', CandidateEmailVerificationView.as_view(), name='candidate_verify_email'),
     path('accounts/verify-otp/', CandidateOTPVerificationView.as_view(), name='candidate_verify_otp'),
+    path('accounts/resend-email-otp/', ResendEmailOTPView.as_view(), name='resend_email_otp_web'),
+    path('accounts/send-email-otp/', SendEmailOTPView.as_view(), name='send_email_otp_web'),
+    path('accounts/verify-email-otp/', VerifyEmailOTPView.as_view(), name='verify_email_otp_web'),
     path('accounts/reset-password/', CandidateResetPasswordView.as_view(), name='candidate_reset_password'),
+
+
+
     
     # OAuth Routes
     path('accounts/login/google/', google_allauth_login, name='google_login'),

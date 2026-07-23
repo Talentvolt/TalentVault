@@ -53,6 +53,7 @@ from .views import (
     EmployerLandingView,
     CandidateResumeUploadView,
     CandidateResumeDeleteView,
+    CandidateOnboardingUpdateView,
     ToggleSaveJobView,
     JobApplyView
 )
@@ -67,6 +68,8 @@ urlpatterns = [
     path('profile/', CandidateProfileView.as_view(), name='candidate_profile'),
     path('profile/resume/upload/', CandidateResumeUploadView.as_view(), name='candidate_resume_upload_ajax'),
     path('profile/resume/delete/', CandidateResumeDeleteView.as_view(), name='candidate_resume_delete_ajax'),
+    path('profile/onboarding/update/', CandidateOnboardingUpdateView.as_view(), name='candidate_onboarding_update'),
+
     path('career-resources/', CandidateCareerResourcesView.as_view(), name='candidate_career_resources'),
     path('jobs/saved/', CandidateSavedJobsView.as_view(), name='candidate_saved_jobs'),
     path('jobs/saved/toggle/', ToggleSaveJobView.as_view(), name='toggle_saved_job'),

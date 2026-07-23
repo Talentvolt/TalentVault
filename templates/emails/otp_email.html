@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your TalentVault Verification Code</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #FAF9FF; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #0F172A;">
+    
+    <!-- Outer Wrapper -->
+    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #FAF9FF; padding: 40px 16px;">
+        <tr>
+            <td align="center">
+                
+                <!-- Main Container Card -->
+                <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 24px; box-shadow: 0 20px 40px -15px rgba(109, 74, 255, 0.08); overflow: hidden;">
+                    
+                    <!-- Top Brand Bar -->
+                    <tr>
+                        <td style="padding: 36px 40px 24px 40px; text-align: center; border-bottom: 1px solid #F1F5F9;">
+                            <table role="presentation" border="0" cellspacing="0" cellpadding="0" align="center">
+                                <tr>
+                                    <td style="vertical-align: middle;">
+                                        <div style="width: 40px; height: 40px; background-color: #6D4AFF; border-radius: 12px; text-align: center; line-height: 40px; color: #FFFFFF; font-weight: 900; font-size: 22px; display: inline-block;">T</div>
+                                    </td>
+                                    <td style="vertical-align: middle; padding-left: 10px;">
+                                        <span style="font-size: 22px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px;">TalentVault</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style="padding: 36px 40px; text-align: center;">
+                            
+                            <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px;">
+                                Verification Code
+                            </h1>
+                            
+                            <p style="margin: 0 0 28px 0; font-size: 15px; line-height: 24px; color: #475569;">
+                                {% if purpose == 'reset_password' %}
+                                We received a request to reset your password for your <strong>TalentVault</strong> account. Use the 6-digit verification code below:
+                                {% else %}
+                                Thank you for registering with <strong>TalentVault</strong>! Please enter the 6-digit verification code below to verify your account:
+                                {% endif %}
+                            </p>
+
+                            <!-- Prominent OTP Code Container -->
+                            <div style="background-color: #F3F0FF; border: 1px dashed #A78BFA; border-radius: 18px; padding: 22px 16px; margin: 0 0 28px 0;">
+                                <span style="font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 800; color: #6D4AFF; letter-spacing: 10px; display: inline-block; padding-left: 10px;">
+                                    {{ otp }}
+                                </span>
+                            </div>
+
+                            <!-- Expiration Banner -->
+                            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 0 0 24px 0;">
+                                <tr>
+                                    <td style="background-color: #FFFBEB; border: 1px solid #FDE68A; border-radius: 14px; padding: 12px 16px; text-align: center;">
+                                        <span style="font-size: 13px; font-weight: 700; color: #B45309;">
+                                            ⏱️ This verification code expires in 5 minutes.
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Spam & Folder Notice Box -->
+                            <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; padding: 14px 18px; text-align: left; margin: 0 0 28px 0;">
+                                <p style="margin: 0; font-size: 13px; line-height: 20px; color: #64748B;">
+                                    💡 <strong>Notice:</strong> If you don't find this email in your Inbox, please check your <strong>Spam</strong> or <strong>Promotions</strong> folder.
+                                </p>
+                            </div>
+
+                            <p style="margin: 0; font-size: 13px; color: #94A3B8; line-height: 20px;">
+                                If you did not request this code, you can safely ignore this email. No changes will be made to your account.
+                            </p>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 24px 40px; background-color: #F8FAFC; border-top: 1px solid #F1F5F9; text-align: center;">
+                            <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #64748B;">
+                                Website: <a href="https://talent-vault.in" style="color: #6D4AFF; text-decoration: none; font-weight: 700;">https://talent-vault.in</a> &nbsp;|&nbsp; Support: <a href="mailto:support@talent-vault.in" style="color: #6D4AFF; text-decoration: none; font-weight: 700;">support@talent-vault.in</a>
+                            </p>
+                            <p style="margin: 0; font-size: 11px; color: #94A3B8;">
+                                &copy; 2026 TalentVault. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

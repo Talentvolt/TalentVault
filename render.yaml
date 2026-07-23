@@ -2,7 +2,7 @@ services:
   - type: web
     name: talentvault
     env: python
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py setup_google_app
     startCommand: gunicorn config.wsgi:application -c gunicorn.conf.py
     envVars:
       - key: DJANGO_SETTINGS_MODULE

@@ -59,6 +59,15 @@ class User(AbstractUser, UUIDModel, TimeStampedModel):
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     is_verified = models.BooleanField(default=False)
 
+    @property
+    def email_verified(self) -> bool:
+        return self.is_verified
+
+    @email_verified.setter
+    def email_verified(self, value: bool):
+        self.is_verified = bool(value)
+
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
@@ -71,3 +80,57 @@ class User(AbstractUser, UUIDModel, TimeStampedModel):
 
     def __str__(self):
         return f"{self.email} ({self.role})"
+
+
+import hashlib
+from django.utils import timezone
+from datetime import timedelta
+
+
+class OTPVerification(UUIDModel, TimeStampedModel):
+    """
+    Model to store and manage Email OTP Verifications securely.
+    OTP codes are hashed using SHA-256 before storing.
+    """
+    email = models.EmailField(max_length=255, db_index=True, default='')
+    phone = models.CharField(max_length=30, db_index=True, blank=True, default='')
+    otp = models.CharField(max_length=128)  # Hashed OTP
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    verified = models.BooleanField(default=False)
+    attempts = models.IntegerField(default=0)
+    resend_count = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name = _('OTP Verification')
+        verbose_name_plural = _('OTP Verifications')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"OTP for {self.email or self.phone} (Verified: {self.verified})"
+
+
+    @classmethod
+    def hash_otp(cls, raw_otp: str) -> str:
+        return hashlib.sha256(raw_otp.strip().encode('utf-8')).hexdigest()
+
+    def set_otp(self, raw_otp: str):
+        self.otp = self.hash_otp(raw_otp)
+
+    def check_otp(self, raw_otp: str) -> bool:
+        return self.otp == self.hash_otp(raw_otp)
+
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    def can_attempt(self) -> bool:
+        return self.attempts < 5 and not self.is_expired() and not self.verified
+
+    def can_resend(self) -> bool:
+        return self.resend_count < 3
+
+    @classmethod
+    def cleanup_expired(cls):
+        """Automatically delete expired OTP records."""
+        cls.objects.filter(expires_at__lt=timezone.now()).delete()
+

@@ -1,0 +1,24 @@
+==================================================
+TalentVault — Verification Code
+==================================================
+
+{% if purpose == 'reset_password' %}
+We received a request to reset your password for your TalentVault account.
+{% else %}
+Thank you for registering with TalentVault!
+{% endif %}
+
+Your 6-digit verification code is:
+
+    {{ otp }}
+
+This verification code expires in 5 minutes.
+
+Notice: If you don't find this email in your Inbox, please check your Spam or Promotions folder.
+
+If you did not request this code, please ignore this email.
+
+--------------------------------------------------
+Website: https://talent-vault.in
+Support: support@talent-vault.in
+© 2026 TalentVault. All rights reserved.

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify OTP Code — TalentVault AI</title>
+    <title>Email OTP Verification — TalentVault</title>
     <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
     
@@ -77,71 +77,87 @@
             <div class="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
                 <span class="text-white font-black text-2xl">T</span>
             </div>
-            <span class="font-extrabold text-2xl tracking-tight text-slate-900">TalentVault<span class="text-primary font-bold">.ai</span></span>
+            <span class="font-extrabold text-2xl tracking-tight text-slate-900">TalentVault</span>
         </div>
 
         <!-- Premium Glass Card -->
         <div class="glass-auth-card rounded-3xl p-8 sm:p-10 text-center">
             
-            <!-- Icon -->
-            <div class="w-16 h-16 bg-primary/10 text-primary rounded-3xl flex items-center justify-center mx-auto text-2xl mb-6">
-                <i class="bi bi-shield-lock-fill"></i>
+            <!-- Email Icon -->
+            <div class="w-16 h-16 bg-primary/10 text-primary rounded-3xl flex items-center justify-center mx-auto text-3xl mb-6 shadow-sm">
+                <i class="bi bi-envelope-at-fill"></i>
             </div>
 
-            <h2 class="text-3xl font-extrabold tracking-tight text-slate-950 mb-2">Two-Factor Authentication</h2>
-            <p class="text-slate-500 text-sm mb-8 max-w-xs mx-auto">
-                We've sent a 6-digit OTP code to your registered email. Enter it below to complete verification.
+            <h2 class="text-3xl font-extrabold tracking-tight text-slate-950 mb-2">Email OTP Verification</h2>
+            <p class="text-slate-500 text-sm mb-6 max-w-xs mx-auto">
+                We've sent a 6-digit verification code to your email address
+                <span class="font-bold text-slate-800 font-mono block mt-1 text-base">{{ masked_email|default:email }}</span>
             </p>
+
+            <!-- Status Alert Messages -->
+            <div id="alert-container" class="mb-4">
+                {% if error %}
+                <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-semibold mb-4">
+                    <i class="bi bi-exclamation-circle me-1"></i> {{ error }}
+                </div>
+                {% endif %}
+                {% if messages %}
+                    {% for message in messages %}
+                    <div class="p-4 bg-purple-50 border border-purple-200 rounded-2xl text-primary text-sm font-semibold mb-4">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
 
             <!-- OTP Input Form -->
             <form method="post" action="{% url 'candidate_verify_otp' %}" id="otp-form" onsubmit="prepareOtpSubmit(event)" class="space-y-6">
                 {% csrf_token %}
                 <input type="hidden" name="otp" id="otp_code_hidden">
-                {% if error %}
-                <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-semibold">
-                    {{ error }}
-                </div>
-                {% endif %}
                 
                 <!-- 6 Digits Container -->
                 <div class="flex justify-between gap-2 max-w-sm mx-auto" id="otp-inputs-container">
-                    <input type="text" maxlength="1" class="otp-input w-12 h-14 text-center text-xl font-bold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
-                    <input type="text" maxlength="1" class="otp-input w-12 h-14 text-center text-xl font-bold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
-                    <input type="text" maxlength="1" class="otp-input w-12 h-14 text-center text-xl font-bold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
-                    <input type="text" maxlength="1" class="otp-input w-12 h-14 text-center text-xl font-bold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
-                    <input type="text" maxlength="1" class="otp-input w-12 h-14 text-center text-xl font-bold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
-                    <input type="text" maxlength="1" class="otp-input w-12 h-14 text-center text-xl font-bold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="otp-input w-12 h-14 text-center text-2xl font-extrabold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required autofocus>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="otp-input w-12 h-14 text-center text-2xl font-extrabold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="otp-input w-12 h-14 text-center text-2xl font-extrabold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="otp-input w-12 h-14 text-center text-2xl font-extrabold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="otp-input w-12 h-14 text-center text-2xl font-extrabold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="otp-input w-12 h-14 text-center text-2xl font-extrabold bg-white border border-slate-200 rounded-xl transition-all duration-200 focus:outline-none" required>
                 </div>
 
                 <!-- Submit Button -->
                 <div class="pt-4">
-                    <button type="submit" class="w-full h-12 rounded-xl bg-primary hover:bg-accent text-white font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2">
-                        Verify Code <i class="bi bi-patch-check"></i>
+                    <button type="submit" id="verify-submit-btn" class="w-full h-12 rounded-xl bg-primary hover:bg-accent text-white font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2">
+                        Verify Code <i class="bi bi-patch-check-fill"></i>
                     </button>
                 </div>
-
             </form>
 
-            <!-- Resend/Help Info -->
-            <div class="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center gap-2">
-                <button id="resend-btn" onclick="triggerResend()" class="text-xs text-primary font-bold hover:underline">
+            <!-- 5-Minute Countdown Timer & Resend Section -->
+            <div class="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center gap-3">
+                <div class="text-xs text-slate-500 font-medium flex items-center gap-1.5" id="timer-display-wrapper">
+                    <i class="bi bi-clock-history text-primary"></i>
+                    Code expires in: <span id="countdown-timer" class="font-bold text-slate-900 font-mono text-sm">05:00</span>
+                </div>
+
+                <button id="resend-btn" onclick="triggerResend()" class="text-xs text-primary font-bold hover:underline transition-all duration-200 disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed" disabled>
                     Didn't receive code? Resend OTP
                 </button>
-                <a href="{% url 'candidate_login' %}" class="text-xs text-slate-400 font-semibold hover:underline">
-                    Back to Sign In
+                
+                <a href="{% url 'candidate_signup' %}" class="text-xs text-slate-400 font-semibold hover:underline mt-1">
+                    ← Back to Sign Up
                 </a>
             </div>
 
         </div>
     </div>
 
-    <!-- OTP Logic script -->
+    <!-- OTP Logic & 5-Minute Timer Script -->
     <script>
         const inputs = document.querySelectorAll('.otp-input');
         
         // Auto-focus move logic
         inputs.forEach((input, index) => {
-            // Keydown detection for backspace
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Backspace') {
                     if (input.value === '') {
@@ -155,7 +171,6 @@
                 }
             });
 
-            // Input detection for auto-forward
             input.addEventListener('input', (e) => {
                 const val = e.target.value;
                 if (val.length === 1 && index < inputs.length - 1) {
@@ -163,7 +178,6 @@
                 }
             });
 
-            // Paste logic
             input.addEventListener('paste', (e) => {
                 e.preventDefault();
                 const pasteData = e.clipboardData.getData('text').trim();
@@ -176,38 +190,93 @@
             });
         });
 
-        // OTP verification form submit prep
         function prepareOtpSubmit(e) {
-            // Build the OTP code
             let otp = '';
             inputs.forEach(inp => otp += inp.value);
             document.getElementById('otp_code_hidden').value = otp;
         }
 
-        let cooldown = 0;
-        let timer = null;
+        // 5 Minutes (300 seconds) Countdown Timer
+        let secondsRemaining = 300;
+        let timerInterval = null;
 
-        function triggerResend() {
-            if (cooldown > 0) return;
-            cooldown = 45;
+        function startTimer() {
+            const timerEl = document.getElementById('countdown-timer');
             const resendBtn = document.getElementById('resend-btn');
+            
             resendBtn.disabled = true;
-            resendBtn.classList.add('opacity-50', 'no-underline', 'cursor-not-allowed');
-
-            alert("A new 6-digit OTP code has been dispatched to your email.");
-
-            timer = setInterval(() => {
-                cooldown--;
-                if (cooldown <= 0) {
-                    clearInterval(timer);
-                    resendBtn.innerText = "Didn't receive code? Resend OTP";
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (secondsRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    timerEl.innerText = "00:00";
+                    timerEl.classList.add('text-red-500');
                     resendBtn.disabled = false;
-                    resendBtn.classList.remove('opacity-50', 'no-underline', 'cursor-not-allowed');
+                    resendBtn.innerText = "Didn't receive code? Resend OTP";
                 } else {
-                    resendBtn.innerText = `Resend available in ${cooldown}s`;
+                    secondsRemaining--;
+                    const mins = Math.floor(secondsRemaining / 60);
+                    const secs = secondsRemaining % 60;
+                    timerEl.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                    resendBtn.innerText = `Resend available in ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
                 }
             }, 1000);
         }
+
+        // Trigger AJAX Resend
+        async function triggerResend() {
+            const resendBtn = document.getElementById('resend-btn');
+            if (resendBtn.disabled) return;
+
+            resendBtn.disabled = true;
+            resendBtn.innerText = "Resending...";
+
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+            try {
+                const response = await fetch("{% url 'resend_email_otp_web' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const data = await response.json();
+                const alertContainer = document.getElementById('alert-container');
+
+                if (data.success) {
+                    alertContainer.innerHTML = `
+                        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-sm font-semibold mb-4">
+                            <i class="bi bi-check-circle me-1"></i> ${data.message}
+                        </div>
+                    `;
+                    // Reset 5-minute countdown timer
+                    secondsRemaining = 300;
+                    document.getElementById('countdown-timer').classList.remove('text-red-500');
+                    startTimer();
+                } else {
+                    alertContainer.innerHTML = `
+                        <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm font-semibold mb-4">
+                            <i class="bi bi-exclamation-circle me-1"></i> ${data.message}
+                        </div>
+                    `;
+                    resendBtn.disabled = false;
+                    resendBtn.innerText = "Didn't receive code? Resend OTP";
+                }
+            } catch (err) {
+                console.error("Resend error:", err);
+                resendBtn.disabled = false;
+                resendBtn.innerText = "Didn't receive code? Resend OTP";
+            }
+        }
+
+        // Initialize countdown on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            startTimer();
+        });
     </script>
 </body>
 </html>

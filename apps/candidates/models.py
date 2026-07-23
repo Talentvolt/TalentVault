@@ -47,6 +47,9 @@ class CandidateProfile(BaseAppModel):
     expected_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     notice_period = models.PositiveIntegerField(default=30, help_text="Notice period in days")
     is_immediate_joiner = models.BooleanField(default=False)
+    date_of_birth = models.DateField(null=True, blank=True)
+    preferred_job_role = models.CharField(max_length=255, blank=True, null=True)
+    preferred_location = models.CharField(max_length=255, blank=True, null=True)
     linkedin_url = models.URLField(blank=True, null=True)
     portfolio_url = models.URLField(blank=True, null=True)
     ats_score = models.PositiveIntegerField(default=0, db_index=True, help_text="Calculated ATS suitability score (0-100)")
@@ -54,7 +57,34 @@ class CandidateProfile(BaseAppModel):
     recruiter_notes = models.TextField(blank=True, default="")
 
     @property
+    def profile_completion_percentage(self) -> int:
+        score = 0
+        if self.has_resume:
+            score += 25
+        if self.skills.exists() or (self.original_skills and len(self.original_skills) > 0) or (self.ai_skills and len(self.ai_skills) > 0):
+            score += 20
+        if self.educations.exists():
+            score += 15
+        if self.experiences.exists() or (self.total_experience and float(self.total_experience) > 0):
+            score += 15
+        if self.summary and len(self.summary.strip()) >= 10:
+            score += 15
+        if self.full_name and self.location:
+            score += 10
+        return min(100, score)
+
+    @property
+    def is_verified(self) -> bool:
+
+        return self.user.is_verified if self.user else False
+
+    @property
+    def email_verified(self) -> bool:
+        return self.user.is_verified if self.user else False
+
+    @property
     def has_profile_photo(self):
+
         try:
             return bool(self.profile_photo and self.profile_photo.name and self.profile_photo.storage.exists(self.profile_photo.name))
         except Exception:

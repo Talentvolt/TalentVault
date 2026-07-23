@@ -33,6 +33,8 @@ class RoleAccessMiddleware:
                         '/employers/'
                     ]
                     is_forbidden = any(path.startswith(prefix) for prefix in candidate_forbidden_prefixes)
+                    if path.endswith('/resume/preview/') or path.endswith('/resume/download/'):
+                        is_forbidden = False
                     if not is_forbidden and path.startswith('/jobs/'):
                         is_forbidden = any(suffix in path for suffix in ['/edit/', '/delete/', '/candidates/'])
                         

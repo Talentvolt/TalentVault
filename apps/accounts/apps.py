@@ -60,33 +60,45 @@ def setup_google_social_app(sender, **kwargs):
             from allauth.socialaccount.models import SocialApp
             from django.conf import settings
 
+            site_id = getattr(settings, 'SITE_ID', 1)
             site, _ = Site.objects.get_or_create(
-                id=settings.SITE_ID,
+                id=site_id,
                 defaults={'domain': 'talent-vault.in', 'name': 'TalentVault'}
             )
-            if site.domain != 'talent-vault.in':
-                site.domain = 'talent-vault.in'
-                site.name = 'TalentVault'
-                site.save()
 
-            client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '') or os.environ.get('GOOGLE_CLIENT_ID', '')
-            client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', '') or os.environ.get('GOOGLE_CLIENT_SECRET', '')
+            client_id = os.environ.get('GOOGLE_CLIENT_ID', '') or getattr(settings, 'GOOGLE_CLIENT_ID', '')
+            if client_id.startswith("GOOGLE_CLIENT_ID="):
+                client_id = client_id.replace("GOOGLE_CLIENT_ID=", "", 1)
 
-            if client_id:
-                app, _ = SocialApp.objects.get_or_create(
-                    provider='google',
-                    defaults={
-                        'name': 'Google OAuth',
-                        'client_id': client_id,
-                        'secret': client_secret,
-                    }
-                )
-                if app.client_id != client_id or app.secret != client_secret:
-                    app.client_id = client_id
-                    app.secret = client_secret
-                    app.save()
-                if site not in app.sites.all():
-                    app.sites.add(site)
+            client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '') or getattr(settings, 'GOOGLE_CLIENT_SECRET', '')
+            if client_secret.startswith("GOOGLE_CLIENT_SECRET="):
+                client_secret = client_secret.replace("GOOGLE_CLIENT_SECRET=", "", 1)
+
+            effective_client_id = client_id if client_id else "placeholder-google-client-id"
+            effective_client_secret = client_secret if client_secret else "placeholder-google-client-secret"
+
+            app, _ = SocialApp.objects.get_or_create(
+                provider='google',
+                defaults={
+                    'name': 'Google',
+                    'client_id': effective_client_id,
+                    'secret': effective_client_secret,
+                }
+            )
+
+            updated = False
+            if client_id and app.client_id != client_id:
+                app.client_id = client_id
+                updated = True
+            if client_secret and app.secret != client_secret:
+                app.secret = client_secret
+                updated = True
+
+            if updated:
+                app.save()
+
+            if site not in app.sites.all():
+                app.sites.add(site)
     except Exception as e:
         import traceback
         print(f"Error in setup_google_social_app: {e}")
@@ -98,7 +110,7 @@ class AccountsConfig(AppConfig):
 
     def ready(self):
         post_migrate.connect(create_default_recruiter, sender=self)
-        post_migrate.connect(setup_google_social_app, sender=self)
+        post_migrate.connect(setup_google_social_app)
         
         # Enforce prompt=select_account, access_type=offline, include_granted_scopes=true on GoogleProvider
         try:
