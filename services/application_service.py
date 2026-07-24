@@ -68,23 +68,10 @@ class ApplicationService:
                 key_skills=skills,
                 date_of_birth=kwargs.get('date_of_birth'),
                 note_to_recruiter=kwargs.get('note_to_recruiter'),
-                linkedin_url=kwargs.get('linkedin_url'),
-                portfolio_url=kwargs.get('portfolio_url'),
                 current_company=candidate.current_company,
                 current_designation=candidate.current_designation,
                 total_experience=candidate.total_experience,
             )
-            
-            # Sync mobile_number, linkedin_url, portfolio_url to profile/user if empty
-            profile_updated = False
-            if kwargs.get('linkedin_url') and not candidate.linkedin_url:
-                candidate.linkedin_url = kwargs.get('linkedin_url')
-                profile_updated = True
-            if kwargs.get('portfolio_url') and not candidate.portfolio_url:
-                candidate.portfolio_url = kwargs.get('portfolio_url')
-                profile_updated = True
-            if profile_updated:
-                candidate.save()
 
             if kwargs.get('mobile_number') and candidate.user and not candidate.user.phone_number:
                 candidate.user.phone_number = kwargs.get('mobile_number')

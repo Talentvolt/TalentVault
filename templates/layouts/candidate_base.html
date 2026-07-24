@@ -863,15 +863,6 @@
             selectedSkills.push("{{ sk.skill_name|escapejs }}");
             {% endfor %}
             renderSkillTags();
-
-            {% if request.user.candidate_profile.linkedin_url %}
-            const linkedinEl = document.getElementById('apply-linkedin');
-            if (linkedinEl) linkedinEl.value = "{{ request.user.candidate_profile.linkedin_url|escapejs }}";
-            {% endif %}
-            {% if request.user.candidate_profile.portfolio_url %}
-            const portfolioEl = document.getElementById('apply-portfolio');
-            if (portfolioEl) portfolioEl.value = "{{ request.user.candidate_profile.portfolio_url|escapejs }}";
-            {% endif %}
             {% endif %}
 
             const modal = document.getElementById('easy-apply-modal');
@@ -916,8 +907,6 @@
                 preferred_locations: selectedLocations,
                 key_skills: selectedSkills,
                 date_of_birth: document.getElementById('apply-dob')?.value.trim() || '',
-                linkedin_url: document.getElementById('apply-linkedin')?.value.trim() || '',
-                portfolio_url: document.getElementById('apply-portfolio')?.value.trim() || '',
                 note_to_recruiter: document.getElementById('apply-note')?.value.trim() || '',
                 cover_letter: document.getElementById('apply-pitch')?.value.trim() || ''
             };
@@ -1282,27 +1271,15 @@
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Key Skill Set <span class="text-rose-500">*</span></label>
                     <div id="skills-wrapper" class="w-full min-h-[46px] p-2 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-wrap items-center gap-1.5 focus-within:border-primary">
                         <div id="skills-tags" class="flex flex-wrap gap-1.5"></div>
-                        <input type="text" id="apply-skills-input" placeholder="Example: Python, Django, React, SQL" class="flex-1 min-w-[180px] bg-transparent border-none text-xs focus:outline-none p-1 text-slate-700 dark:text-slate-300">
+                        <input type="text" id="apply-skills-input" placeholder="Type key skills (e.g. Sales, Accounting, Python) and press Enter" class="flex-1 min-w-[180px] bg-transparent border-none text-xs focus:outline-none p-1 text-slate-700 dark:text-slate-300">
                     </div>
-                    <span id="apply-skills-error" class="text-[11px] text-rose-500 hidden mt-0.5 block">Please enter or select at least one key skill.</span>
+                    <span id="apply-skills-error" class="text-[11px] text-rose-500 hidden mt-0.5 block">Please enter at least one key skill.</span>
                 </div>
 
                 <!-- 10. Date of Birth -->
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date of Birth (DOB) <span class="text-rose-500">*</span></label>
                     <input type="date" id="apply-dob" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary" required>
-                </div>
-
-                <!-- 11. LinkedIn URL (Optional) -->
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">LinkedIn URL <span class="text-slate-400 font-normal">(Optional)</span></label>
-                    <input type="url" id="apply-linkedin" placeholder="https://linkedin.com/in/username" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary">
-                </div>
-
-                <!-- 12. Portfolio / GitHub URL (Optional) -->
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Portfolio / GitHub URL <span class="text-slate-400 font-normal">(Optional)</span></label>
-                    <input type="url" id="apply-portfolio" placeholder="https://github.com/username or portfolio link" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-primary">
                 </div>
 
                 <!-- Attached Resume Section -->
@@ -1372,3 +1349,7 @@
             </div>
         </div>
     </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -309,7 +309,7 @@
 <!-- ========================================================= -->
 <!-- PREMIUM STEP-BY-STEP ONBOARDING WIZARD MODAL -->
 <!-- ========================================================= -->
-<div id="onboarding-wizard-modal" class="fixed inset-0 z-50 hidden glass-wizard-overlay flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+<div id="onboarding-wizard-modal" class="fixed inset-0 z-50 hidden glass-wizard-overlay items-center justify-center p-4 sm:p-6 overflow-y-auto">
     <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl shadow-2xl border border-purple-200 dark:border-slate-800 overflow-hidden flex flex-col my-auto relative">
         
         <!-- MODAL HEADER WITH PURPLE GRADIENT & STEPPER -->
@@ -913,7 +913,8 @@
         const sumEl = document.getElementById('wz-summary');
         if (sumEl) {
             sumEl.value = "{% if candidate_profile %}{{ candidate_profile.summary|escapejs }}{% endif %}";
-            document.getElementById('wz-summary-count').innerText = sumEl.value.length + '/500';
+            const countEl = document.getElementById('wz-summary-count');
+            if (countEl) countEl.innerText = sumEl.value.length + '/500';
         }
 
         // Auto-open wizard if profile completion < 80% on first load

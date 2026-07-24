@@ -113,8 +113,6 @@ def test_apply_job_success():
         'preferred_locations': ['Bangalore', 'Remote'],
         'key_skills': ['Python', 'Django', 'React'],
         'date_of_birth': '1994-11-25',
-        'linkedin_url': 'https://linkedin.com/in/testuser',
-        'portfolio_url': 'https://github.com/testuser',
         'note_to_recruiter': 'Excited about this opportunity!',
         'cover_letter': 'I have 5 years experience in React and Django.'
     }
@@ -286,8 +284,6 @@ def test_recruiter_can_see_submitted_applicant_with_all_saved_fields():
         'preferred_locations': ['Gurugram', 'Noida'],
         'key_skills': ['Go', 'Kubernetes', 'Docker'],
         'date_of_birth': '1992-04-10',
-        'linkedin_url': 'linkedin.com/in/savedcandidate',
-        'portfolio_url': 'github.com/savedcandidate',
         'note_to_recruiter': 'Great fit for staff role.',
         'cover_letter': 'Built scalable microservices.'
     }
@@ -307,8 +303,6 @@ def test_recruiter_can_see_submitted_applicant_with_all_saved_fields():
     assert app.preferred_locations == ['Gurugram', 'Noida']
     assert app.key_skills == ['Go', 'Kubernetes', 'Docker']
     assert str(app.date_of_birth) == '1992-04-10'
-    assert app.linkedin_url == 'https://linkedin.com/in/savedcandidate'
-    assert app.portfolio_url == 'https://github.com/savedcandidate'
     assert app.note_to_recruiter == 'Great fit for staff role.'
     assert app.cover_letter == 'Built scalable microservices.'
 

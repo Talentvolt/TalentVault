@@ -68,8 +68,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 preferred_locations=serializer.validated_data['preferred_locations'],
                 key_skills=serializer.validated_data['key_skills'],
                 date_of_birth=serializer.validated_data['date_of_birth'],
-                linkedin_url=serializer.validated_data.get('linkedin_url'),
-                portfolio_url=serializer.validated_data.get('portfolio_url'),
                 note_to_recruiter=serializer.validated_data.get('note_to_recruiter'),
                 cover_letter=serializer.validated_data.get('cover_letter', '')
             )

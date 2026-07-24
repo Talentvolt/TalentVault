@@ -35,23 +35,8 @@ class ApplicationApplySerializer(serializers.Serializer):
     preferred_locations = serializers.JSONField(required=True)
     key_skills = serializers.JSONField(required=True)
     date_of_birth = serializers.DateField(required=True)
-    linkedin_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
-    portfolio_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     note_to_recruiter = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=500)
     cover_letter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-
-    def to_internal_value(self, data):
-        data = data.copy()
-        for field in ['linkedin_url', 'portfolio_url']:
-            val = data.get(field)
-            if isinstance(val, str) and val.strip():
-                v = val.strip()
-                if not v.startswith(('http://', 'https://')):
-                    v = f"https://{v}"
-                data[field] = v
-            elif val == '':
-                data[field] = None
-        return super().to_internal_value(data)
 
     def validate_mobile_number(self, value):
         import re
