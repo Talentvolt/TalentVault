@@ -194,6 +194,24 @@ class Application(BaseAppModel):
         return stage_colors.get(self.stage, '#cbd5e1')
 
     @property
+    def normalized_linkedin_url(self):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(self.linkedin_url)
+
+    @property
+    def normalized_portfolio_url(self):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(self.portfolio_url)
+
+    def save(self, *args, **kwargs):
+        from utils.url_helpers import normalize_external_url
+        if self.linkedin_url:
+            self.linkedin_url = normalize_external_url(self.linkedin_url)
+        if self.portfolio_url:
+            self.portfolio_url = normalize_external_url(self.portfolio_url)
+        super().save(*args, **kwargs)
+
+    @property
     def ats_analysis(self):
         from services.candidate_matching_service import CandidateMatchingService
         return CandidateMatchingService.calculate_job_ats_score(self.candidate, self.job)

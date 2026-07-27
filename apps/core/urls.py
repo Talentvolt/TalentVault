@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     DashboardView,
     RoleRedirectView,
+    ShortcutRouteView,
     LandingPageView,
     CandidateDashboardView,
     RecruiterDashboardView,
@@ -22,6 +23,7 @@ from .views import (
     SaveCandidateNotesView,
     PublicCandidateProfileView,
     PublicJobShareView,
+    PublicJobApplyView,
     ATSPipelineView,
     UpdateApplicationStageView,
     UpdateApplicationStageDirectView,
@@ -62,6 +64,9 @@ app_name = 'frontend'
 
 urlpatterns = [
     path('', LandingPageView.as_view(), name='dashboard'),
+    path('admin/', ShortcutRouteView.as_view(), {'target': 'admin'}, name='admin_shortcut'),
+    path('candidate/', ShortcutRouteView.as_view(), {'target': 'candidate'}, name='candidate_shortcut'),
+    path('recruiter/', ShortcutRouteView.as_view(), {'target': 'recruiter'}, name='recruiter_shortcut'),
     path('accounts/login-redirect/', RoleRedirectView.as_view(), name='login_redirect'),
     path('employers/', EmployerLandingView.as_view(), name='employer_landing'),
     path('dashboard/candidate/', CandidateDashboardView.as_view(), name='candidate_dashboard'),
@@ -86,6 +91,7 @@ urlpatterns = [
     path('jobs/<uuid:pk>/delete/', JobDeleteView.as_view(), name='job_delete'),
     path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
     path('jobs/share/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share'),
+    path('jobs/share/<uuid:job_id>/apply/', PublicJobApplyView.as_view(), name='public_job_apply'),
     path('jobs/<uuid:job_id>/apply/', JobApplyView.as_view(), name='job_apply'),
     path('location-search/', LocationSearchView.as_view(), name='location_search'),
     

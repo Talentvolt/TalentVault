@@ -118,10 +118,9 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
-
 # Database configuration
 import dj_database_url
+import sys
 
 DATABASES = {
     'default': {
@@ -137,6 +136,29 @@ DATABASES = {
 db_from_env = dj_database_url.config(conn_max_age=600)
 if db_from_env:
     DATABASES['default'] = db_from_env
+
+# Fallback to SQLite if running tests and PostgreSQL is not accessible
+if 'test' in sys.argv or 'pytest' in sys.modules or os.environ.get('USE_SQLITE') == '1':
+    try:
+        import psycopg2
+        conn = psycopg2.connect(
+            dbname=DATABASES['default'].get('NAME', 'talentvault_db'),
+            user=DATABASES['default'].get('USER', 'postgres'),
+            password=DATABASES['default'].get('PASSWORD', 'password'),
+            host=DATABASES['default'].get('HOST', 'localhost'),
+            port=DATABASES['default'].get('PORT', '5432'),
+            connect_timeout=1
+        )
+        conn.close()
+    except Exception:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+
+
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -200,7 +222,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'account_login'
 LOGIN_REDIRECT_URL = 'frontend:login_redirect'
-LOGOUT_REDIRECT_URL = 'frontend:dashboard'
+LOGOUT_REDIRECT_URL = '/'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

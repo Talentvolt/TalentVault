@@ -23,7 +23,9 @@
     <!-- Premium Loading Screen -->
     <div id="loading-screen" class="loading-overlay">
         <div class="loading-content">
-            <img src="{% static 'img/logo.png' %}" alt="TalentVault Logo" class="mb-4" style="height: 60px; width: auto; object-fit: contain; display: block; margin-left: auto; margin-right: auto; filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.4)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));">
+            <a href="/" style="display: block;">
+                <img src="{% static 'img/logo.png' %}" alt="TalentVault Logo" class="mb-4" style="height: 60px; width: auto; object-fit: contain; display: block; margin-left: auto; margin-right: auto; filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.4)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));">
+            </a>
             <p class="tagline-large">Connecting Great Talent<br>with Great Companies</p>
             <div class="spinner-custom"></div>
         </div>
@@ -32,7 +34,9 @@
     <!-- Sidebar -->
     <aside class="sidebar">
         <div class="sidebar-header d-flex align-items-center gap-2">
-            <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 24px; width: auto; object-fit: contain;">
+            <a href="/" class="d-flex align-items-center text-decoration-none">
+                <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 24px; width: auto; object-fit: contain;">
+            </a>
         </div>
         <nav class="sidebar-nav">
             {% if request.user.role == "CANDIDATE" %}

@@ -187,9 +187,9 @@
                         
                         <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                             {% if rec.job.id in applied_job_ids %}
-                            <button disabled class="flex-1 h-12 bg-brandGreen text-white font-bold text-xs rounded-xl flex items-center justify-center cursor-not-allowed"><i class="bi bi-check-circle-fill me-1"></i> Applied</button>
+                            <a href="{% url 'frontend:public_job_share' rec.job.id %}" class="flex-1 h-12 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1 hover:bg-slate-200"><i class="bi bi-check-circle-fill text-brandGreen me-1"></i> Applied — View Details</a>
                             {% else %}
-                            <button onclick="triggerEasyApply('{{ rec.job.id }}', '{{ rec.job.company.name|escapejs }}', '{{ rec.job.title|escapejs }}', this)" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center">Easy Apply</button>
+                            <a href="{% url 'frontend:public_job_share' rec.job.id %}" class="flex-1 h-12 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1"><i class="bi bi-eye me-1"></i> View Details</a>
                             {% endif %}
                             <button onclick="toggleSaveJob('{{ rec.job.id }}', this)" class="w-12 h-12 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800">
                                 <i class="bi {% if rec.job.id in saved_job_ids %}bi-bookmark-fill text-primary{% else %}bi-bookmark{% endif %} text-base"></i>
@@ -402,14 +402,14 @@
 
                 <!-- DRAG & DROP CARDS -->
                 <div id="wizard-dragzone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" class="border-2 border-dashed border-purple-300 dark:border-purple-800/70 hover:border-purple-500 bg-purple-50/40 dark:bg-purple-950/20 p-8 rounded-3xl text-center transition-all cursor-pointer relative group">
-                    <input type="file" id="wizard-resume-input" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadWizardResumeFile(this)">
+                    <input type="file" id="wizard-resume-input" class="hidden" accept=".pdf,application/pdf" onchange="uploadWizardResumeFile(this)">
                     
                     <div id="wizard-resume-empty" class="{% if has_resume %}hidden{% endif %}">
                         <div class="w-16 h-16 rounded-2xl bg-purple-600/10 text-purple-600 dark:text-purple-300 flex items-center justify-center text-3xl mx-auto mb-3 group-hover:scale-110 transition-transform">
                             <i class="bi bi-cloud-arrow-up-fill"></i>
                         </div>
                         <h4 class="font-extrabold text-sm text-slate-800 dark:text-slate-200">Drag & drop your CV here</h4>
-                        <p class="text-xs text-slate-400 mt-1 mb-4">Supports PDF, DOC, DOCX (Max 5 MB)</p>
+                        <p class="text-xs text-slate-400 mt-1 mb-4">Allowed Format: PDF (Max 10 MB)</p>
                         <button type="button" onclick="document.getElementById('wizard-resume-input').click()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all">
                             Browse File
                         </button>

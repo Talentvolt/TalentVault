@@ -149,7 +149,7 @@
                 </button>
 
                 <!-- Brand Logo -->
-                <a href="{% url 'frontend:candidate_dashboard' %}" class="flex items-center gap-2 group">
+                <a href="/" class="flex items-center gap-2 group">
                     <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-200">
                         <span class="text-white font-black text-lg">T</span>
                     </div>
@@ -196,7 +196,7 @@
         <!-- MOBILE TOP STICKY NAVBAR -->
         <header class="flex md:hidden sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 w-full h-16 items-center justify-between px-4">
             <!-- Left: TalentVault logo -->
-            <a href="{% url 'frontend:candidate_dashboard' %}" class="flex items-center gap-2 group">
+            <a href="/" class="flex items-center gap-2 group">
                 <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-md">
                     <span class="text-white font-black text-sm">T</span>
                 </div>
@@ -453,12 +453,12 @@
     <div id="menu-drawer" class="fixed inset-y-0 right-0 w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 transform translate-x-full transition-transform duration-300 flex flex-col justify-between">
         <div class="flex-1 overflow-y-auto p-6">
             <div class="flex items-center justify-between border-b pb-4 mb-6">
-                <div class="flex items-center gap-2">
+                <a href="/" class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-md">
                         <span class="text-white font-black text-lg">T</span>
                     </div>
                     <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">TalentVault</span>
-                </div>
+                </a>
                 <button onclick="toggleMenuDrawer()" class="text-slate-400 hover:text-slate-650"><i class="bi bi-x-lg text-xl"></i></button>
             </div>
             
@@ -596,7 +596,9 @@
         function markAllNotificationsRead() {
             const pings = document.querySelectorAll('#notifications-drawer .bg-primary');
             pings.forEach(ping => ping.remove());
-            alert('Notifications marked as read!');
+            if (typeof showToast === 'function') {
+                showToast('Notifications marked as read!');
+            }
             closeAllDrawers();
         }
 
@@ -1304,7 +1306,7 @@
                         <button type="button" onclick="document.getElementById('easy-apply-replace-file').click()" class="text-xs text-purple-700 dark:text-purple-300 font-bold hover:underline px-3 py-1.5 bg-white dark:bg-slate-850 border border-purple-200 dark:border-purple-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5">
                             <i class="bi bi-arrow-repeat"></i> Replace Resume
                         </button>
-                        <input type="file" id="easy-apply-replace-file" class="hidden" accept=".pdf,.doc,.docx" onchange="handleReplaceResumeInApply(this)">
+                        <input type="file" id="easy-apply-replace-file" class="hidden" accept=".pdf,application/pdf" onchange="handleReplaceResumeInApply(this)">
                     </div>
                 </div>
 

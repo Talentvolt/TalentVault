@@ -3,18 +3,38 @@ from apps.accounts.models import User
 
 class RoleAccessMiddleware:
     """
-    Middleware to ensure users only access dashboards permitted for their role.
-    Also adds no-cache headers to protected pages so back button after logout forces re-authentication.
+    Middleware to ensure users only access dashboards permitted for their role,
+    and unauthenticated users attempting to access protected pages (or refreshing
+    /admin/, /candidate/, /recruiter/, /dashboard/...) are automatically redirected to /.
+    Also adds no-cache headers to responses so back button after logout forces re-authentication.
     """
     def __init__(self, get_response):
         self.get_response = get_response
+
+    def _add_no_cache_headers(self, response):
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     def __call__(self, request):
         path = request.path
 
         # Bypass static, media and API
         if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/')):
-            if request.user.is_authenticated:
+            if not request.user.is_authenticated:
+                # Public paths allowed without login
+                public_exact_paths = {'/', '/employers/', '/employers'}
+                public_prefixes = (
+                    '/accounts/',
+                    '/jobs/share/',
+                    '/share/candidate/',
+                )
+                is_public = path in public_exact_paths or any(path.startswith(prefix) for prefix in public_prefixes) or '/public-apply/' in path
+                if not is_public:
+                    res = redirect('/')
+                    return self._add_no_cache_headers(res)
+            else:
                 role = request.user.role
                 
                 # Restrict Candidate Access
@@ -39,7 +59,8 @@ class RoleAccessMiddleware:
                         is_forbidden = any(suffix in path for suffix in ['/edit/', '/delete/', '/candidates/'])
                         
                     if is_forbidden:
-                        return redirect('frontend:candidate_dashboard')
+                        res = redirect('frontend:candidate_dashboard')
+                        return self._add_no_cache_headers(res)
                 
                 # Restrict Recruiter / Admin Access
                 elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
@@ -52,14 +73,13 @@ class RoleAccessMiddleware:
                         '/applications/'
                     ]
                     if any(path.startswith(prefix) for prefix in recruiter_forbidden_prefixes):
-                        return redirect('frontend:recruiter_dashboard')
+                        res = redirect('frontend:recruiter_dashboard')
+                        return self._add_no_cache_headers(res)
                     
         response = self.get_response(request)
 
-        # Add no-cache headers to authenticated HTML pages so browser Back button after logout forces re-authentication
-        if request.user.is_authenticated and not (path.startswith('/static/') or path.startswith('/media/')):
-            response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
-            response['Pragma'] = 'no-cache'
-            response['Expires'] = '0'
+        # Add no-cache headers to non-static/media pages so browser Back button after logout forces re-authentication
+        if not (path.startswith('/static/') or path.startswith('/media/')):
+            self._add_no_cache_headers(response)
 
         return response

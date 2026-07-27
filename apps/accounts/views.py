@@ -242,22 +242,22 @@ class CustomLoginView(View):
 
 class CustomLogoutView(View):
     def get(self, request, *args, **kwargs):
-        role = request.user.role if request.user.is_authenticated else None
-        logout(request)
-        if role == User.Role.CANDIDATE:
-            return redirect('candidate_login')
-        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
-            return redirect('employer_login')
-        return redirect('candidate_login')
+        return self._do_logout(request)
 
     def post(self, request, *args, **kwargs):
-        role = request.user.role if request.user.is_authenticated else None
-        logout(request)
-        if role == User.Role.CANDIDATE:
-            return redirect('candidate_login')
-        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
-            return redirect('employer_login')
-        return redirect('candidate_login')
+        return self._do_logout(request)
+
+    def _do_logout(self, request):
+        if request.user.is_authenticated:
+            logout(request)
+        request.session.flush()
+        response = redirect('/')
+        response.delete_cookie('sessionid')
+        response.delete_cookie('csrftoken')
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
 class SignupView(CreateView):
     model = User

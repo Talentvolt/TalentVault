@@ -134,7 +134,44 @@ class OCREngine:
                         "engine": "paddleocr"
                     }
             except Exception as e:
-                logger.error(f"PaddleOCR execution failed: {str(e)}. Falling back to Tesseract.", exc_info=True)
+                logger.error(f"PaddleOCR execution failed: {str(e)}. Falling back to EasyOCR.", exc_info=True)
+
+        # Fallback to EasyOCR
+        try:
+            import easyocr
+            reader = easyocr.Reader(['en'], gpu=False)
+            import numpy as np
+            img_np = np.array(image)
+            res = reader.readtext(img_np)
+            if res:
+                words = []
+                lines = []
+                total_conf = 0.0
+                count = 0
+                for item in res:
+                    bbox, text, conf = item
+                    conf_percent = float(conf) * 100.0
+                    x0 = min(pt[0] for pt in bbox)
+                    y0 = min(pt[1] for pt in bbox)
+                    x1 = max(pt[0] for pt in bbox)
+                    y1 = max(pt[1] for pt in bbox)
+                    words.append({
+                        "text": text,
+                        "bbox": [x0, y0, x1, y1],
+                        "confidence": conf_percent
+                    })
+                    lines.append(text)
+                    total_conf += conf_percent
+                    count += 1
+                avg_confidence = total_conf / count if count > 0 else 0.0
+                return {
+                    "text": "\n".join(lines),
+                    "confidence": avg_confidence,
+                    "words": words,
+                    "engine": "easyocr"
+                }
+        except Exception as e:
+            logger.error(f"EasyOCR execution failed: {str(e)}. Falling back to Tesseract.", exc_info=True)
 
         # Fallback to Tesseract OCR
         try:

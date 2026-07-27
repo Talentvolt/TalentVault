@@ -114,9 +114,9 @@ def test_logout_redirects():
     # Candidate logout
     client.force_login(cand_user)
     res_c = client.get('/accounts/logout/', follow=True)
-    assert res_c.redirect_chain[-1][0] == '/accounts/login/candidate/'
+    assert res_c.redirect_chain[-1][0] == '/'
 
     # Recruiter logout
     client.force_login(rec_user)
     res_r = client.get('/accounts/logout/', follow=True)
-    assert res_r.redirect_chain[-1][0] == '/accounts/login/employer/'
+    assert res_r.redirect_chain[-1][0] == '/'

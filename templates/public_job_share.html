@@ -159,7 +159,7 @@
     <!-- Navbar -->
     <nav class="navbar navbar-light bg-white mb-5">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="#">
+            <a class="navbar-brand d-flex align-items-center" href="/">
                 <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 36px; width: auto; object-fit: contain;">
             </a>
             <span class="text-muted small fw-semibold">Public Job Posting</span>
@@ -171,7 +171,7 @@
         <div class="row g-4">
             <!-- Job Details Column -->
             <div class="col-lg-8">
-                <div class="job-card">
+                <div class="job-card" id="job-description-section">
                     <!-- Header -->
                     <div class="job-header">
                         <div class="d-flex align-items-center gap-2 mb-3">
@@ -218,17 +218,97 @@
                         <!-- Description -->
                         <div>
                             <h5 class="fw-bold mb-3">Job Description</h5>
+
+                            {% if job.jd_file or jd_file or job_description_file %}
+                            <!-- Uploaded JD File -->
+                            <div class="card p-3 border-0 bg-light rounded-3 mb-4 shadow-sm">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fs-4">📄</span>
+                                        <div>
+                                            <div class="fw-bold text-dark mb-0">{{ jd_file_name|default:job.jd_file.name }}</div>
+                                            <small class="text-secondary">Uploaded Job Description File</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="collapse" data-bs-target="#jd_file_preview_collapse" aria-expanded="true" aria-controls="jd_file_preview_collapse">
+                                            <i class="bi bi-eye me-1"></i> Preview
+                                        </button>
+                                        <a href="{{ job.jd_file.url }}" download target="_blank" class="btn btn-sm btn-primary fw-semibold">
+                                            <i class="bi bi-download me-1"></i> Download
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- Preview Area -->
+                                <div class="collapse show mt-3" id="jd_file_preview_collapse">
+                                    {% if is_pdf or job.jd_file.name|lower|slice:"-4:" == ".pdf" %}
+                                        <!-- PDF Embedded Viewer -->
+                                        <div class="ratio ratio-16x9 rounded overflow-hidden border shadow-sm" style="min-height: 550px;">
+                                            <iframe src="{{ job.jd_file.url }}" title="JD Preview" width="100%" height="100%" style="border: none;"></iframe>
+                                        </div>
+                                    {% elif is_docx or jd_docx_html %}
+                                        <!-- DOCX Converted Preview -->
+                                        {% if jd_docx_html %}
+                                            <div class="p-4 bg-white rounded border text-secondary jd-docx-preview" style="line-height: 1.7; max-height: 600px; overflow-y: auto;">
+                                                {{ jd_docx_html|safe }}
+                                            </div>
+                                        {% else %}
+                                            <div class="p-3 bg-white rounded border text-center text-secondary">
+                                                <p class="mb-2 small">DOCX preview available via download.</p>
+                                                <a href="{{ job.jd_file.url }}" download class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-download me-1"></i> Download {{ jd_file_name|default:"File" }}
+                                                </a>
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="ratio ratio-16x9 rounded overflow-hidden border" style="min-height: 500px;">
+                                            <iframe src="{{ job.jd_file.url }}" width="100%" height="100%" style="border: none;"></iframe>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if job.description %}
+                            <!-- Manual Description -->
                             <div class="jd-content text-secondary" style="line-height: 1.7;">
                                 {{ job.description|safe }}
                             </div>
+                            {% elif not job.jd_file and not jd_file and not job_description_file %}
+                            <!-- Fallback text -->
+                            <div class="text-secondary fst-italic">
+                                No job description details provided.
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Share Job Column -->
+            <!-- Sidebar: Apply & Share Column -->
             <div class="col-lg-4">
                 <div class="card p-4 border-0 shadow-sm rounded-4 sticky-top" style="top: 2rem;">
+                    <!-- Apply Now Sidebar Section -->
+                    <div class="mb-4 pb-4 border-bottom">
+                        <h5 class="fw-bold text-dark mb-3" style="font-family: 'Outfit', sans-serif;">
+                            <i class="bi bi-send-fill text-primary me-2"></i>Apply Now
+                        </h5>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="chk_read_jd" style="width: 1.2rem; height: 1.2rem; cursor: pointer;" required>
+                            <label class="form-check-label text-dark fw-semibold ms-1 align-middle" for="chk_read_jd" style="cursor: pointer; font-size: 0.92rem;">
+                                I have read the Job Description.
+                            </label>
+                        </div>
+
+                        <div id="apply_btn_wrapper" class="d-block w-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Please confirm that you have read the Job Description.">
+                            <button type="button" id="btn_sidebar_apply_now" class="btn btn-primary btn-lg w-100 fw-bold py-3 rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2" disabled data-bs-toggle="modal" data-bs-target="#applyNowModal" style="background-color: #2563EB; border-color: #2563EB; pointer-events: none;">
+                                <i class="bi bi-send-fill fs-5"></i> Apply Now
+                            </button>
+                        </div>
+                    </div>
+
                     <h5 class="fw-bold mb-3"><i class="bi bi-share-fill me-2 text-primary"></i> Share this Job</h5>
                     <p class="text-secondary small mb-4">Know someone who fits this role? Share the job link via the channels below.</p>
                     
@@ -258,6 +338,183 @@
         </div>
     </div>
 
+    <!-- Public Apply Now Modal -->
+    <div class="modal fade" id="applyNowModal" tabindex="-1" aria-labelledby="applyNowModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-bottom-0 pb-0 pt-4 px-4">
+                    <div>
+                        <h4 class="modal-title fw-bold text-dark" id="applyNowModalLabel">Job Application</h4>
+                        <p class="text-secondary small mb-0">Fill out your profile details to submit your application directly.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <!-- Top Job Overview Box in Application Form -->
+                    <div class="card p-3 border-0 bg-light rounded-3 mb-4 shadow-sm">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                            <div>
+                                <h5 class="fw-bold text-dark mb-1" style="font-family: 'Outfit', sans-serif;">{{ job.title }}</h5>
+                                <div class="text-primary fw-semibold small"><i class="bi bi-building me-1"></i> {{ job.company.name }}</div>
+                            </div>
+                            <a href="#job-description-section" id="btn_view_jd_from_modal" class="btn btn-sm btn-outline-primary fw-semibold rounded-2">
+                                <i class="bi bi-file-text me-1"></i> View Job Description
+                            </a>
+                        </div>
+                        <div class="row g-2 text-secondary small pt-2 border-top">
+                            <div class="col-6 col-md-4">
+                                <span class="fw-bold text-dark"><i class="bi bi-geo-alt me-1"></i> Location:</span> {{ job.location }}
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <span class="fw-bold text-dark"><i class="bi bi-award me-1"></i> Experience:</span> {{ job.min_experience }} - {{ job.max_experience }} Yrs
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <span class="fw-bold text-dark"><i class="bi bi-cash-stack me-1"></i> Salary:</span> {{ job.salary_range_lpa }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="apply-error-alert" class="alert alert-danger d-none mb-3" role="alert"></div>
+
+                    <form id="publicApplyForm" action="{% url 'frontend:public_job_apply' job.id %}" method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="is_ajax" value="1">
+
+                        <div class="row g-3">
+                            <!-- Full Name -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Full Name <span class="text-danger">*</span></label>
+                                <input type="text" name="full_name" class="form-control rounded-3" placeholder="e.g. Rahul Sharma" required>
+                            </div>
+
+                            <!-- Email -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Email Address <span class="text-danger">*</span></label>
+                                <input type="email" name="email" class="form-control rounded-3" placeholder="e.g. rahul@example.com" required>
+                            </div>
+
+                            <!-- Phone Number -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Phone Number <span class="text-danger">*</span></label>
+                                <input type="tel" name="phone_number" class="form-control rounded-3" placeholder="e.g. +91 9876543210" required>
+                            </div>
+
+                            <!-- Current Location -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Current Location <span class="text-danger">*</span></label>
+                                <input type="text" name="current_location" class="form-control rounded-3" placeholder="e.g. Mumbai, India" required>
+                            </div>
+
+                            <!-- Total Experience -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Total Experience (Years) <span class="text-danger">*</span></label>
+                                <input type="number" step="0.5" min="0" name="total_experience" class="form-control rounded-3" placeholder="e.g. 4.5" required>
+                            </div>
+
+                            <!-- Current Company -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Current Company <span class="text-danger">*</span></label>
+                                <input type="text" name="current_company" class="form-control rounded-3" placeholder="e.g. Acme Corp" required>
+                            </div>
+
+                            <!-- Current Designation -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Current Designation <span class="text-danger">*</span></label>
+                                <input type="text" name="current_designation" class="form-control rounded-3" placeholder="e.g. Senior Developer" required>
+                            </div>
+
+                            <!-- Current CTC -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Current CTC (LPA) <span class="text-danger">*</span></label>
+                                <input type="number" step="0.1" min="0" name="current_ctc" class="form-control rounded-3" placeholder="e.g. 12.0" required>
+                            </div>
+
+                            <!-- Expected CTC -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Expected CTC (LPA) <span class="text-danger">*</span></label>
+                                <input type="number" step="0.1" min="0" name="expected_ctc" class="form-control rounded-3" placeholder="e.g. 16.0" required>
+                            </div>
+
+                            <!-- Notice Period -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Notice Period (Days) <span class="text-danger">*</span></label>
+                                <input type="number" min="0" name="notice_period" class="form-control rounded-3" placeholder="e.g. 30" required>
+                            </div>
+
+                            <!-- Preferred Location -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Preferred Location <span class="text-danger">*</span></label>
+                                <input type="text" name="preferred_location" class="form-control rounded-3" placeholder="e.g. Bangalore / Remote" required>
+                            </div>
+
+                            <!-- Highest Qualification -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Highest Qualification <span class="text-danger">*</span></label>
+                                <input type="text" name="highest_qualification" class="form-control rounded-3" placeholder="e.g. B.Tech in Computer Science" required>
+                            </div>
+
+                            <!-- Key Skills -->
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Key Skills <span class="text-danger">*</span></label>
+                                <input type="text" name="skills" class="form-control rounded-3" placeholder="e.g. Python, Django, React, REST APIs" required>
+                                <div class="form-text small">Separate skills with commas.</div>
+                            </div>
+
+                            <!-- Resume Upload (REQUIRED - PDF ONLY) -->
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Upload Resume (PDF Only) <span class="text-danger">*</span></label>
+                                <input type="file" name="resume_file" class="form-control rounded-3" accept=".pdf,application/pdf" required>
+                                <div class="form-text small text-muted">Allowed Format: PDF | Maximum Size: 10 MB</div>
+                            </div>
+
+                            <!-- Cover Letter (Optional) -->
+                            <div class="col-12">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Cover Letter <span class="text-muted fw-normal">(Optional)</span></label>
+                                <textarea name="cover_letter" rows="3" class="form-control rounded-3" placeholder="Tell the recruiter why you're a great fit for this position..."></textarea>
+                            </div>
+
+                            <!-- LinkedIn (Optional) -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">LinkedIn Profile <span class="text-muted fw-normal">(Optional)</span></label>
+                                <input type="url" name="linkedin_url" class="form-control rounded-3" placeholder="https://linkedin.com/in/username">
+                            </div>
+
+                            <!-- Portfolio (Optional) -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary small mb-1">Portfolio / Website <span class="text-muted fw-normal">(Optional)</span></label>
+                                <input type="url" name="portfolio_url" class="form-control rounded-3" placeholder="https://yourportfolio.com">
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                            <button type="button" class="btn btn-light rounded-3 px-4 fw-semibold" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" id="btn_submit_apply" class="btn btn-primary rounded-3 px-5 fw-bold" style="background-color: #2563EB; border-color: #2563EB;">
+                                <span class="submit-text"><i class="bi bi-send-fill me-1"></i> Submit Application</span>
+                                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Submitted Successfully Modal -->
+    <div class="modal fade" id="applicationSuccessModal" tabindex="-1" aria-labelledby="applicationSuccessModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+                <div class="modal-body py-4">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 text-success rounded-circle mb-3" style="width: 80px; height: 80px;">
+                        <i class="bi bi-check-circle-fill" style="font-size: 3rem;"></i>
+                    </div>
+                    <h3 class="fw-bold text-dark mb-2">Application Submitted Successfully.</h3>
+                    <p class="text-secondary mb-4" style="font-size: 0.95rem;">Your application and uploaded resume have been delivered directly to the recruiter for <strong>{{ job.title }}</strong>.</p>
+                    <button type="button" class="btn btn-primary px-5 py-2.5 rounded-3 fw-bold" data-bs-dismiss="modal" style="background-color: #2563EB; border-color: #2563EB;">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div class="toast-container">
         <div id="copyToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -272,6 +529,54 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Initialize Bootstrap Tooltip for Apply Button Wrapper
+        const applyBtnWrapper = document.getElementById('apply_btn_wrapper');
+        let applyTooltip = null;
+        if (applyBtnWrapper && typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            applyTooltip = new bootstrap.Tooltip(applyBtnWrapper);
+        }
+
+        // Checkbox Read JD Handler to enable Apply Button
+        const chkReadJd = document.getElementById('chk_read_jd');
+        const btnSidebarApplyNow = document.getElementById('btn_sidebar_apply_now');
+
+        if (chkReadJd && btnSidebarApplyNow) {
+            chkReadJd.addEventListener('change', function() {
+                const isChecked = this.checked;
+                if (isChecked) {
+                    btnSidebarApplyNow.removeAttribute('disabled');
+                    btnSidebarApplyNow.style.pointerEvents = 'auto';
+                    if (applyTooltip) {
+                        applyTooltip.disable();
+                        applyTooltip.hide();
+                    }
+                } else {
+                    btnSidebarApplyNow.setAttribute('disabled', 'disabled');
+                    btnSidebarApplyNow.style.pointerEvents = 'none';
+                    if (applyTooltip) {
+                        applyTooltip.enable();
+                    }
+                }
+            });
+        }
+
+        // View Job Description from inside Modal
+        const btnViewJd = document.getElementById('btn_view_jd_from_modal');
+        if (btnViewJd) {
+            btnViewJd.addEventListener('click', function(e) {
+                e.preventDefault();
+                const applyModalEl = document.getElementById('applyNowModal');
+                const applyModal = bootstrap.Modal.getInstance(applyModalEl) || new bootstrap.Modal(applyModalEl);
+                if (applyModal) {
+                    applyModal.hide();
+                }
+                const jdSection = document.getElementById('job-description-section');
+                if (jdSection) {
+                    jdSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
+
         document.getElementById('btn_copy_link').addEventListener('click', function() {
             const url = this.getAttribute('data-url');
             navigator.clipboard.writeText(url).then(function() {
@@ -292,6 +597,95 @@
                 toast.show();
             });
         });
+
+        // AJAX Public Application Form Handling
+        document.getElementById('publicApplyForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = this;
+            const errorAlert = document.getElementById('apply-error-alert');
+            const submitBtn = document.getElementById('btn_submit_apply');
+            const submitText = submitBtn.querySelector('.submit-text');
+            const spinner = submitBtn.querySelector('.spinner-border');
+
+            // Client-side file format validation
+            const fileInput = form.querySelector('input[name="resume_file"]');
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                const fileName = file.name.toLowerCase();
+                if (!fileName.endsWith('.pdf')) {
+                    errorAlert.textContent = 'Only PDF resumes are allowed.';
+                    errorAlert.classList.remove('d-none');
+                    return;
+                }
+                if (file.size > 10 * 1024 * 1024) {
+                    errorAlert.textContent = 'Maximum file size allowed is 10 MB.';
+                    errorAlert.classList.remove('d-none');
+                    return;
+                }
+            }
+
+            errorAlert.classList.add('d-none');
+            errorAlert.textContent = '';
+            submitBtn.disabled = true;
+            submitText.classList.add('d-none');
+            spinner.classList.remove('d-none');
+
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(async response => {
+                let data;
+                try {
+                    data = await response.json();
+                } catch (jsonErr) {
+                    const rawText = await response.text();
+                    throw new Error(rawText.substring(0, 200) || ("Server error (" + response.status + ")"));
+                }
+                return { status: response.status, body: data };
+            })
+            .then(res => {
+                submitBtn.disabled = false;
+                submitText.classList.remove('d-none');
+                spinner.classList.add('d-none');
+
+                if (res.body && res.body.success) {
+                    // Hide apply modal
+                    const applyModalEl = document.getElementById('applyNowModal');
+                    const applyModal = bootstrap.Modal.getInstance(applyModalEl) || new bootstrap.Modal(applyModalEl);
+                    applyModal.hide();
+
+                    // Reset form
+                    form.reset();
+
+                    // Show Success Modal
+                    const successModal = new bootstrap.Modal(document.getElementById('applicationSuccessModal'));
+                    successModal.show();
+                } else {
+                    const errMsg = (res.body && (res.body.message || res.body.error)) ? (res.body.message || res.body.error) : 'Error submitting application. Please check the form.';
+                    errorAlert.textContent = errMsg;
+                    errorAlert.classList.remove('d-none');
+                }
+            })
+            .catch(err => {
+                submitBtn.disabled = false;
+                submitText.classList.remove('d-none');
+                spinner.classList.add('d-none');
+                errorAlert.textContent = err.message || 'An error occurred during submission.';
+                errorAlert.classList.remove('d-none');
+            });
+        });
+
+        // Auto trigger success modal if redirected with ?applied=true
+        if (new URLSearchParams(window.location.search).get('applied') === 'true') {
+            const successModal = new bootstrap.Modal(document.getElementById('applicationSuccessModal'));
+            successModal.show();
+        }
     </script>
 </body>
 </html>

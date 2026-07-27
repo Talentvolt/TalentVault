@@ -538,7 +538,7 @@ def test_save_llm_parsed_data_to_db():
     assert profile.full_name == "Ramanjeet Maurya"
     assert profile.summary == "Experienced manager."
     assert profile.location == "Delhi, India"
-    assert profile.linkedin_url == "linkedin.com/in/ramanjeet"
+    assert profile.linkedin_url == "https://linkedin.com/in/ramanjeet"
     assert profile.current_company == "Amazon"
     assert profile.current_designation == "Operations Manager"
 

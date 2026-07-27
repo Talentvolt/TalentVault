@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load core_tags %}
 
 {% block title %}Candidate Profile | TalentVault{% endblock %}
 
@@ -530,7 +531,7 @@ ul.resume-bullets li, ol.resume-ordered li {
                         <li class="mb-3">
                             <h6 class="fw-bold mb-1" style="font-size: 0.95rem;">{{ project.title }}</h6>
                             <div class="text-secondary x-small mb-1">{{ project.description|safe }}</div>
-                            {% if project.link %}<a href="{{ project.link }}" target="_blank" class="x-small">View Project <i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
+                            {% if project.link %}<a href="{{ project.link|external_url }}" target="_blank" rel="noopener noreferrer" class="x-small">View Project <i class="bi bi-box-arrow-up-right"></i></a>{% endif %}
                         </li>
                         {% empty %}
                         <li class="text-secondary small italic">No projects listed.</li>

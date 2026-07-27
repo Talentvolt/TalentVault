@@ -249,15 +249,15 @@ def run_verification():
     
     logout_res = client.post(reverse('account_logout'))
     assert logout_res.status_code == 302
-    assert logout_res.url in [reverse('candidate_login'), reverse('account_login')] or logout_res.url.startswith('/accounts/login')
+    assert logout_res.url == '/' or logout_res.url in [reverse('candidate_login'), reverse('account_login')] or logout_res.url.startswith('/accounts/login')
     assert '_auth_user_id' not in client.session
     print(" -> Django session and allauth authentication cleared.")
-    print(" -> Redirected to Candidate Login page.")
+    print(" -> Redirected to Homepage (/).")
 
     # Accessing candidate dashboard after sign out
     dash_res = client.get('/dashboard/candidate/')
     assert dash_res.status_code in [301, 302]
-    assert dash_res.headers.get('Cache-Control') is not None
+    assert dash_res.has_header('Cache-Control') or dash_res.has_header('cache-control') or 'Cache-Control' in dash_res or 'cache-control' in dash_res
     print(" -> Protected dashboard page redirected unauthenticated request to login.")
     print(" -> never_cache headers present on responses preventing Back button bypass.")
 

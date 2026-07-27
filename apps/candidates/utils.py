@@ -751,11 +751,11 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     
     filename = sanitize_text(filename, "filename")
     
-    # Support only PDF, DOC, DOCX, RTF, TXT
+    # Support ONLY PDF resumes
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
-    if ext not in ['pdf', 'doc', 'docx', 'rtf', 'txt']:
-        logger.error(f"[PARSER ERROR] Invalid format uploaded: {filename}")
-        return None, "INVALID_FORMAT"
+    if ext != 'pdf':
+        logger.error(f"[PARSER ERROR] Invalid format uploaded: {filename}. Only PDF resumes are allowed.")
+        return None, "Only PDF resumes are allowed."
         
     try:
         if hasattr(file_obj, 'seek'):

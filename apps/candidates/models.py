@@ -35,7 +35,7 @@ class CandidateProfile(BaseAppModel):
     summary = models.TextField(blank=True)
     resume = models.FileField(
         upload_to='resumes/', 
-        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'doc', 'docx'])],
+        validators=[FileExtensionValidator(allowed_extensions=['pdf'])],
         null=True, 
         blank=True
     )
@@ -180,10 +180,23 @@ class CandidateProfile(BaseAppModel):
         verbose_name = _('candidate profile')
         verbose_name_plural = _('candidate profiles')
 
-    def __str__(self):
-        return self.full_name or self.user.email
+    @property
+    def normalized_linkedin_url(self):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(self.linkedin_url)
+
+    @property
+    def normalized_portfolio_url(self):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(self.portfolio_url)
 
     def save(self, *args, **kwargs):
+        from utils.url_helpers import normalize_external_url
+        if self.linkedin_url:
+            self.linkedin_url = normalize_external_url(self.linkedin_url)
+        if self.portfolio_url:
+            self.portfolio_url = normalize_external_url(self.portfolio_url)
+
         version_str = str(self.current_version)
         if self.resume_versions and version_str in self.resume_versions:
             version_data = self.resume_versions[version_str].get("data", {})
@@ -279,6 +292,17 @@ class Project(BaseAppModel):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     link = models.URLField(blank=True, null=True)
+
+    @property
+    def normalized_link(self):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(self.link)
+
+    def save(self, *args, **kwargs):
+        from utils.url_helpers import normalize_external_url
+        if self.link:
+            self.link = normalize_external_url(self.link)
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = _('project')

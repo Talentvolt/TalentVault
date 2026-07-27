@@ -136,45 +136,174 @@
         </div>
     </div>
 
-    <!-- Job Applicants -->
+    <!-- Recent Applications / Job Applicants -->
     <div class="col-12 col-lg-4">
         <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">Job Applicants</h6>
-                <a href="{% url 'frontend:jobs' %}" class="text-primary text-decoration-none small fw-medium">View All</a>
+                <h6 class="fw-bold m-0 text-dark">Recent Applications</h6>
+                <a href="{% url 'frontend:ats_pipeline' %}" class="text-primary text-decoration-none small fw-medium">View All</a>
             </div>
             
-            <div class="d-flex flex-column gap-3 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
-                {% for job in recent_jobs|slice:":5" %}
-                <div class="p-3 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc; transition: all 0.2s ease;">
+            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
+                {% for app in recent_applications|slice:":5" %}
+                <div class="p-2.5 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc;">
                     <div class="d-flex justify-content-between align-items-start">
-                        <a href="{% url 'frontend:job_edit' job.id %}" class="text-decoration-none text-dark fw-bold small hover-primary" style="font-size: 0.85rem;">{{ job.title }}</a>
-                        <span class="badge bg-success bg-opacity-10 text-success rounded px-1.5 py-0.5" style="font-size: 0.65rem;">Active</span>
+                        <div>
+                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ app.job.id }}" class="text-decoration-none text-dark fw-bold small hover-primary" style="font-size: 0.85rem;">
+                                {{ app.candidate.full_name|default:app.candidate.user.email }}
+                            </a>
+                            <div class="text-secondary x-small mt-0.5" style="font-size: 0.72rem;">For {{ app.job.title }}</div>
+                        </div>
+                        <span class="badge {% if app.match_score >= 75 %}bg-success{% elif app.match_score >= 60 %}bg-warning text-dark{% else %}bg-secondary{% endif %} rounded px-1.5 py-0.5" style="font-size: 0.65rem;">
+                            ATS {{ app.match_score|floatformat:0 }}%
+                        </span>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mt-2">
-                        <span class="text-secondary x-small" style="font-size: 0.72rem;"><i class="bi bi-geo-alt me-1"></i>{{ job.location }}</span>
-                        <span class="text-primary x-small fw-semibold" style="font-size: 0.72rem;"><i class="bi bi-file-earmark-person me-1"></i>{{ job.applications.count }} applicant{{ job.applications.count|pluralize }}</span>
+
+                    <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top" style="border-color: #e2e8f0 !important;">
+                        <span class="badge {{ app.badge_class }} rounded px-1.5 py-0.5" style="font-size: 0.65rem;">{{ app.candidate_status_display }}</span>
+
+                        <div class="d-flex align-items-center gap-1">
+                            {% if app.resume %}
+                            <a href="{{ app.resume.url }}" download class="btn btn-xs btn-outline-secondary p-1" style="font-size: 0.7rem;" title="Download Resume">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% elif app.candidate.resume %}
+                            <a href="{{ app.candidate.resume.url }}" download class="btn btn-xs btn-outline-secondary p-1" style="font-size: 0.7rem;" title="Download Resume">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% endif %}
+
+                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ app.job.id }}" class="btn btn-xs btn-primary p-1 text-white" style="font-size: 0.7rem;" title="View Profile">
+                                <i class="bi bi-person"></i>
+                            </a>
+
+                            {% if not app.in_pipeline %}
+                            <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="d-inline m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="job_id" value="{{ app.job.id }}">
+                                <button type="submit" class="btn btn-xs btn-success p-1 text-white" style="font-size: 0.7rem;" title="Shortlist">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 {% empty %}
-                <div class="text-center py-5 text-secondary small">No job applicants found</div>
+                <div class="text-center py-5 text-secondary small">No recent applications found</div>
                 {% endfor %}
             </div>
         </div>
     </div>
 
-    <!-- Referrals -->
+    <!-- Candidate Signup Overview -->
     <div class="col-12 col-lg-4">
         <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
+            <!-- Header -->
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">Referrals</h6>
-                <a href="#" class="text-primary text-decoration-none small fw-medium">View All</a>
+                <h6 class="fw-bold m-0 text-dark">Candidate Signup Overview</h6>
+                <a href="{% url 'frontend:candidate_search' %}" class="btn btn-xs btn-outline-primary fw-semibold rounded-pill px-2 py-0.5" style="font-size: 0.7rem;">
+                    <i class="bi bi-people me-1"></i> View All Candidates
+                </a>
             </div>
-            <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4">
-                <div class="d-flex align-items-center justify-content-center bg-info bg-opacity-10 text-info rounded-circle mb-3" style="width: 72px; height: 72px;">
-                    <i class="bi bi-people fs-1"></i>
+
+            <!-- 5 Statistic Counters -->
+            <div class="row g-1 mb-3 text-center">
+                <!-- Today -->
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-10">
+                        <div class="text-primary x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Today">
+                            <i class="bi bi-person-plus-fill me-0.5"></i>Today
+                        </div>
+                        <div class="fw-black text-primary fs-6 mb-0">{{ candidate_signup_stats.today|default:0 }}</div>
+                    </div>
                 </div>
-                <p class="text-secondary small mb-0 fw-medium">No referrals submitted yet</p>
+                <!-- Yesterday -->
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-info bg-opacity-10 border border-info border-opacity-10">
+                        <div class="text-info x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Yesterday">
+                            <i class="bi bi-clock-history me-0.5"></i>Yest
+                        </div>
+                        <div class="fw-black text-info fs-6 mb-0">{{ candidate_signup_stats.yesterday|default:0 }}</div>
+                    </div>
+                </div>
+                <!-- This Week -->
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-10">
+                        <div class="text-success x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="This Week">
+                            <i class="bi bi-graph-up-arrow me-0.5"></i>Week
+                        </div>
+                        <div class="fw-black text-success fs-6 mb-0">{{ candidate_signup_stats.this_week|default:0 }}</div>
+                    </div>
+                </div>
+                <!-- MTD -->
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 border" style="background-color: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2) !important;">
+                        <div class="x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem; color: #7c3aed;" title="Month To Date">
+                            <i class="bi bi-calendar-check-fill me-0.5"></i>MTD
+                        </div>
+                        <div class="fw-black fs-6 mb-0" style="color: #7c3aed;">{{ candidate_signup_stats.mtd|default:0 }}</div>
+                    </div>
+                </div>
+                <!-- Total Candidates -->
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-dark bg-opacity-10 border border-dark border-opacity-10">
+                        <div class="text-dark x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Total Candidates">
+                            <i class="bi bi-people-fill me-0.5"></i>Total
+                        </div>
+                        <div class="fw-black text-dark fs-6 mb-0">{{ candidate_signup_stats.total|default:0 }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Candidate Activity Section Header -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="x-small fw-bold text-secondary text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">
+                    <i class="bi bi-activity me-1 text-primary"></i>Recent Candidate Activity
+                </span>
+            </div>
+
+            <!-- Activity List -->
+            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
+                {% for cand in recent_candidate_activity %}
+                <div class="p-2 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="overflow-hidden pe-1">
+                            <a href="{% url 'frontend:candidate_detail' cand.id %}" class="text-decoration-none text-dark fw-bold small hover-primary text-truncate d-block" style="font-size: 0.82rem;">
+                                {{ cand.name }}
+                            </a>
+                            <div class="text-secondary x-small text-truncate" style="font-size: 0.7rem;">
+                                <i class="bi bi-envelope me-1"></i>{{ cand.email }}
+                            </div>
+                        </div>
+                        {% if cand.applied_job %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded px-1.5 py-0.5 x-small text-truncate" style="font-size: 0.65rem; max-width: 110px;" title="{{ cand.applied_job.title }}">
+                            <i class="bi bi-briefcase me-0.5"></i>{{ cand.applied_job.title }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-light text-secondary border rounded px-1.5 py-0.5 x-small" style="font-size: 0.65rem;">
+                            No Job Applied
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top" style="border-color: #e2e8f0 !important; font-size: 0.68rem;">
+                        <span class="text-secondary">
+                            <strong class="text-dark">Registered:</strong> {{ cand.registered_date_formatted }}
+                        </span>
+                        <span class="text-secondary">
+                            <strong class="text-dark">Last Login:</strong> {{ cand.last_login_formatted }}
+                        </span>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4 text-secondary small">
+                    <div class="d-flex align-items-center justify-content-center bg-light text-secondary rounded-circle mb-2" style="width: 48px; height: 48px;">
+                        <i class="bi bi-person-x fs-4"></i>
+                    </div>
+                    <span>No candidate registrations yet.</span>
+                </div>
+                {% endfor %}
             </div>
         </div>
     </div>

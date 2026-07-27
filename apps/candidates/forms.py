@@ -5,6 +5,9 @@ from apps.candidates.models import CandidateProfile, CandidateSkill, Education
 from apps.accounts.models import User
 
 class CandidateProfileForm(forms.ModelForm):
+    linkedin_url = forms.CharField(required=False, widget=forms.TextInput(attrs={'placeholder': 'https://linkedin.com/in/username'}))
+    portfolio_url = forms.CharField(required=False, widget=forms.TextInput(attrs={'placeholder': 'https://yourportfolio.com'}))
+
     class Meta:
         model = CandidateProfile
         fields = [
@@ -17,6 +20,16 @@ class CandidateProfileForm(forms.ModelForm):
             'current_salary': 'Current CTC (LPA)',
             'expected_salary': 'Expected CTC (LPA)',
         }
+
+    def clean_linkedin_url(self):
+        from utils.url_helpers import normalize_external_url
+        val = self.cleaned_data.get('linkedin_url')
+        return normalize_external_url(val)
+
+    def clean_portfolio_url(self):
+        from utils.url_helpers import normalize_external_url
+        val = self.cleaned_data.get('portfolio_url')
+        return normalize_external_url(val)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

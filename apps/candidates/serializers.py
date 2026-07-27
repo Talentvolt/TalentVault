@@ -34,6 +34,16 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
     educations = EducationSerializer(many=True, read_only=True)
     projects = ProjectSerializer(many=True, read_only=True)
     certifications = CertificationSerializer(many=True, read_only=True)
+    linkedin_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    portfolio_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_linkedin_url(self, value):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(value)
+
+    def validate_portfolio_url(self, value):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(value)
 
     class Meta:
         model = CandidateProfile

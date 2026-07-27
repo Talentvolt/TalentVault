@@ -1,5 +1,6 @@
 {% extends "layouts/candidate_base.html" %}
 {% load static %}
+{% load core_tags %}
 
 {% block mobile_page_title %}Profile{% endblock %}
 
@@ -180,7 +181,7 @@
                             <button type="button" onclick="deleteResume('{{ request.user.candidate_profile.id }}')" class="h-10 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
                                 <i class="bi bi-trash"></i> Delete
                             </button>
-                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadResumeFile(this)">
+                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,application/pdf" onchange="uploadResumeFile(this)">
                         </div>
                     {% else %}
                         <i class="bi bi-file-earmark-pdf text-4xl text-slate-300 block mb-2"></i>
@@ -190,7 +191,7 @@
                             <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-11 w-full bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-primary/20">
                                 <i class="bi bi-upload"></i> Upload Resume
                             </button>
-                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,.doc,.docx" onchange="uploadResumeFile(this)">
+                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,application/pdf" onchange="uploadResumeFile(this)">
                             {% endif %}
                         </div>
                     {% endif %}
@@ -270,7 +271,7 @@
                 
                 <div class="space-y-3">
                     {% if request.user.candidate_profile.portfolio_url %}
-                        <a href="{{ request.user.candidate_profile.portfolio_url }}" target="_blank" class="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl transition-all duration-150">
+                        <a href="{{ request.user.candidate_profile.portfolio_url|external_url }}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl transition-all duration-150">
                             <span class="flex items-center gap-2.5 text-xs font-semibold text-slate-700 dark:text-slate-350">
                                 <i class="bi bi-github text-lg text-slate-900"></i> Portfolio / GitHub
                             </span>
@@ -279,7 +280,7 @@
                     {% endif %}
 
                     {% if request.user.candidate_profile.linkedin_url %}
-                        <a href="{{ request.user.candidate_profile.linkedin_url }}" target="_blank" class="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl transition-all duration-150">
+                        <a href="{{ request.user.candidate_profile.linkedin_url|external_url }}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl transition-all duration-150">
                             <span class="flex items-center gap-2.5 text-xs font-semibold text-slate-700 dark:text-slate-350">
                                 <i class="bi bi-linkedin text-lg text-blue-600"></i> LinkedIn
                             </span>
@@ -345,29 +346,32 @@
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Featured Projects</h3>
                     {% if edit_mode %}
-                    <button onclick="addNewProject()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Project</button>
+                    <button onclick="openAddProjectModal()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Project</button>
                     {% endif %}
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="projects-grid-container">
                     {% for proj in request.user.candidate_profile.projects.all %}
-                        <div class="p-5 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between h-48 project-item">
+                        <div class="p-5 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between min-h-[12rem] project-item">
                             <div>
                                 <div class="flex items-center justify-between">
                                     <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">{{ proj.title }}</h4>
                                     {% if edit_mode %}
-                                    <button onclick="deleteProject('{{ proj.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="bi bi-trash"></i></button>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="editProject('{{ proj.id }}', '{{ proj.title|escapejs }}', '{{ proj.description|escapejs }}', '{{ proj.link|default:''|escapejs }}')" class="text-slate-400 hover:text-primary text-xs" title="Edit Project"><i class="bi bi-pencil"></i></button>
+                                        <button onclick="confirmDeleteProject('{{ proj.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs" title="Delete Project"><i class="bi bi-trash"></i></button>
+                                    </div>
                                     {% endif %}
                                 </div>
                                 <p class="text-xs text-slate-500 mt-2 leading-relaxed">
                                     {{ proj.description }}
                                 </p>
                             </div>
-                            <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800/80">
-                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">Featured Project</span>
+                            <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800/80 mt-3">
+                                <span class="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold">Featured Project</span>
                                 {% if proj.link %}
                                     <div class="flex gap-2">
-                                        <a href="{{ proj.link }}" target="_blank" class="text-xs text-slate-450 hover:text-slate-900"><i class="bi bi-link-45deg text-base"></i></a>
+                                        <a href="{{ proj.link|external_url }}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline font-semibold flex items-center gap-1">View Project <i class="bi bi-box-arrow-up-right text-xs"></i></a>
                                     </div>
                                 {% endif %}
                             </div>
@@ -383,7 +387,7 @@
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">Education Background</h3>
                     {% if edit_mode %}
-                    <button onclick="addNewEducation()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Education</button>
+                    <button onclick="openAddEducationModal()" class="h-11 px-4 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl transition-all duration-150 flex items-center justify-center gap-1 shadow-md shadow-primary/20"><i class="bi bi-plus-lg"></i> Add Education</button>
                     {% endif %}
                 </div>
 
@@ -394,13 +398,17 @@
                                 <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-850 flex items-center justify-center text-lg"><i class="bi bi-mortarboard-fill text-primary"></i></div>
                                 <div>
                                     <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">{{ edu.degree }}</h4>
-                                    <p class="text-xs text-slate-500 font-semibold mt-0.5">{{ edu.institution }} • {{ edu.field_of_study }}</p>
+                                    <p class="text-xs text-slate-500 font-semibold mt-0.5">{{ edu.institution }}{% if edu.field_of_study %} • {{ edu.field_of_study }}{% endif %}</p>
+                                    {% if edu.percentage_or_cgpa %}
+                                    <p class="text-[11px] text-slate-400 font-medium mt-1"><i class="bi bi-award me-1"></i> {{ edu.percentage_or_cgpa }}</p>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-xs text-slate-455 font-bold">{{ edu.start_date|date:"Y" }} - {{ edu.end_date|date:"Y" }}</span>
+                                <span class="text-xs text-slate-455 font-bold">{% if edu.start_date %}{{ edu.start_date|date:"Y" }}{% endif %}{% if edu.end_date %} - {{ edu.end_date|date:"Y" }}{% endif %}</span>
                                 {% if edit_mode %}
-                                <button onclick="deleteEducation('{{ edu.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="bi bi-trash text-sm"></i></button>
+                                <button onclick="editEducation('{{ edu.id }}', '{{ edu.degree|escapejs }}', '{{ edu.institution|escapejs }}', '{{ edu.field_of_study|default:''|escapejs }}', '{{ edu.start_date|date:'Y-m-d'|default:'' }}', '{{ edu.end_date|date:'Y-m-d'|default:'' }}', '{{ edu.percentage_or_cgpa|default:''|escapejs }}')" class="text-slate-400 hover:text-primary text-xs" title="Edit Education"><i class="bi bi-pencil text-sm"></i></button>
+                                <button onclick="confirmDeleteEducation('{{ edu.id }}', this)" class="text-slate-400 hover:text-rose-500 text-xs" title="Delete Education"><i class="bi bi-trash text-sm"></i></button>
                                 {% endif %}
                             </div>
                         </div>
@@ -501,7 +509,7 @@
             setTimeout(() => { window.location.reload(); }, 800);
         })
         .catch(err => {
-            alert("Error: " + err.message);
+            showToast("Error saving preferences: " + err.message);
         });
     }
 
@@ -563,180 +571,345 @@
         });
     }
 
+    // --- MODAL UTILITY FUNCTIONS ---
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            const dialog = modal.querySelector('.transform');
+            if (dialog) dialog.classList.remove('scale-95');
+        }, 10);
+    }
+
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        modal.classList.add('opacity-0');
+        const dialog = modal.querySelector('.transform');
+        if (dialog) dialog.classList.add('scale-95');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+    // Global listeners for ESC key and Backdrop Click
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            ['projectModal', 'educationModal', 'confirmDeleteModal'].forEach(closeModal);
+        }
+    });
+
+    ['projectModal', 'educationModal', 'confirmDeleteModal'].forEach(id => {
+        const modal = document.getElementById(id);
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal(id);
+                }
+            });
+        }
+    });
+
+    // --- CONFIRMATION DELETE MODAL HANDLERS ---
+    let currentConfirmAction = null;
+    function openConfirmModal(title, message, onConfirm) {
+        document.getElementById('confirmDeleteTitle').textContent = title || "Confirm Deletion";
+        document.getElementById('confirmDeleteMessage').textContent = message || "Are you sure you want to delete this item?";
+        currentConfirmAction = onConfirm;
+        const confirmBtn = document.getElementById('btn_confirm_delete');
+        confirmBtn.onclick = function() {
+            if (currentConfirmAction) currentConfirmAction();
+        };
+        openModal('confirmDeleteModal');
+    }
+
+    function closeConfirmModal() {
+        closeModal('confirmDeleteModal');
+        currentConfirmAction = null;
+    }
+
     function deleteExperience(id, btn) {
-        if (!confirm("Are you sure you want to delete this experience?")) return;
-        fetch(`/api/v1/candidates/experience/${id}/`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => {
-            if (response.status === 204) {
-                btn.closest('.timeline-item').remove();
-                showToast("Experience position deleted successfully!");
-            } else {
-                showToast("Failed to delete experience.");
-            }
+        openConfirmModal("Delete Experience", "Are you sure you want to delete this experience position?", function() {
+            fetch(`/api/v1/candidates/experience/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            })
+            .then(response => {
+                closeConfirmModal();
+                if (response.status === 204) {
+                    if (btn && btn.closest('.timeline-item')) btn.closest('.timeline-item').remove();
+                    showToast("Experience position deleted successfully!");
+                } else {
+                    showToast("Failed to delete experience.");
+                }
+            });
         });
     }
 
-    // Add featured project
-    function addNewProject() {
-        const title = prompt("Enter project name:", "AI Chatbot");
-        const desc = prompt("Enter description:", "Personalized chat assistant utilizing modern models.");
-        const link = prompt("Enter link (URL):", "");
-        
-        if (title && desc) {
-            fetch("/api/v1/candidates/projects/", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    title: title,
-                    description: desc,
-                    link: link || null
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => { throw new Error(JSON.stringify(data)); });
-                }
-                return response.json();
-            })
-            .then(data => {
-                showToast("Project added successfully!");
-                setTimeout(() => { window.location.reload(); }, 800);
-            })
-            .catch(err => {
-                alert("Error adding project: " + err.message);
-            });
-        }
+    // --- PROJECT MODAL HANDLERS ---
+    function openAddProjectModal() {
+        document.getElementById('projectForm').reset();
+        document.getElementById('project_id').value = '';
+        document.getElementById('projectModalTitle').querySelector('span').textContent = 'Add Project';
+        document.getElementById('project-modal-error').classList.add('hidden');
+        openModal('projectModal');
     }
 
-    function deleteProject(id, btn) {
-        if (!confirm("Are you sure you want to delete this project?")) return;
-        fetch(`/api/v1/candidates/projects/${id}/`, {
-            method: 'DELETE',
+    function editProject(id, title, desc, link, tech, github, startDate, endDate) {
+        document.getElementById('project_id').value = id;
+        document.getElementById('project_title').value = title || '';
+        document.getElementById('project_description').value = desc || '';
+        document.getElementById('project_link').value = link || '';
+        document.getElementById('project_technologies').value = tech || '';
+        document.getElementById('project_github_url').value = github || '';
+        document.getElementById('project_start_date').value = startDate || '';
+        document.getElementById('project_end_date').value = endDate || '';
+        document.getElementById('projectModalTitle').querySelector('span').textContent = 'Edit Project';
+        document.getElementById('project-modal-error').classList.add('hidden');
+        openModal('projectModal');
+    }
+
+    function closeProjectModal() {
+        closeModal('projectModal');
+    }
+
+    function handleSaveProject(e) {
+        e.preventDefault();
+        const id = document.getElementById('project_id').value;
+        const title = document.getElementById('project_title').value.trim();
+        const description = document.getElementById('project_description').value.trim();
+        const link = document.getElementById('project_link').value.trim();
+        const errorBox = document.getElementById('project-modal-error');
+        const submitBtn = document.getElementById('btn_save_project');
+
+        if (!title) {
+            errorBox.textContent = "Project Name is required.";
+            errorBox.classList.remove('hidden');
+            return;
+        }
+
+        errorBox.classList.add('hidden');
+        submitBtn.disabled = true;
+
+        const url = id ? `/api/v1/candidates/projects/${id}/` : "/api/v1/candidates/projects/";
+        const method = id ? 'PATCH' : 'POST';
+
+        fetch(url, {
+            method: method,
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': '{{ csrf_token }}'
-            }
+            },
+            body: JSON.stringify({
+                title: title,
+                description: description,
+                link: link || null
+            })
         })
-        .then(response => {
-            if (response.status === 204) {
-                btn.closest('.project-item').remove();
-                showToast("Project deleted successfully!");
-            } else {
-                showToast("Failed to delete project.");
+        .then(async response => {
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || errData.title?.[0] || 'Failed to save project');
             }
+            return response.json();
+        })
+        .then(data => {
+            submitBtn.disabled = false;
+            closeProjectModal();
+            showToast(id ? "Project updated successfully!" : "Project added successfully!");
+            setTimeout(() => { window.location.reload(); }, 800);
+        })
+        .catch(err => {
+            submitBtn.disabled = false;
+            errorBox.textContent = err.message || "An error occurred while saving the project.";
+            errorBox.classList.remove('hidden');
         });
     }
 
-    // Add education background
-    function addNewEducation() {
-        const deg = prompt("Enter degree / course title:", "Master of Technology (M.Tech)");
-        const inst = prompt("Enter institute/university:", "IIT Delhi");
-        const study = prompt("Enter field of study:", "Computer Science");
-        const startDate = prompt("Enter start date (YYYY-MM-DD):", "2022-08-01");
-        const endDate = prompt("Enter end date (YYYY-MM-DD):", "2024-05-15");
-        
-        if (deg && inst) {
-            fetch("/api/v1/candidates/education/", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    institution: inst,
-                    degree: deg,
-                    field_of_study: study,
-                    start_date: startDate || null,
-                    end_date: endDate || null
-                })
+    function confirmDeleteProject(id, btn) {
+        openConfirmModal("Delete Project", "Are you sure you want to delete this project? This action cannot be undone.", function() {
+            fetch(`/api/v1/candidates/projects/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
             })
             .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => { throw new Error(JSON.stringify(data)); });
+                closeConfirmModal();
+                if (response.status === 204) {
+                    if (btn && btn.closest('.project-item')) btn.closest('.project-item').remove();
+                    else window.location.reload();
+                    showToast("Project deleted successfully!");
+                } else {
+                    showToast("Failed to delete project.");
                 }
-                return response.json();
-            })
-            .then(data => {
-                showToast("Education added successfully!");
-                setTimeout(() => { window.location.reload(); }, 800);
-            })
-            .catch(err => {
-                alert("Error adding education: " + err.message);
             });
-        }
+        });
     }
 
-    function deleteEducation(id, btn) {
-        if (!confirm("Are you sure you want to delete this education?")) return;
-        fetch(`/api/v1/candidates/education/${id}/`, {
-            method: 'DELETE',
+    // --- EDUCATION MODAL HANDLERS ---
+    function openAddEducationModal() {
+        document.getElementById('educationForm').reset();
+        document.getElementById('education_id').value = '';
+        document.getElementById('educationModalTitle').querySelector('span').textContent = 'Add Education';
+        document.getElementById('education-modal-error').classList.add('hidden');
+        openModal('educationModal');
+    }
+
+    function editEducation(id, degree, institution, fieldOfStudy, startDate, endDate, percentage) {
+        document.getElementById('education_id').value = id;
+        document.getElementById('edu_degree').value = degree || '';
+        document.getElementById('edu_institution').value = institution || '';
+        document.getElementById('edu_field_of_study').value = fieldOfStudy || '';
+        document.getElementById('edu_start_date').value = startDate || '';
+        document.getElementById('edu_end_date').value = endDate || '';
+        document.getElementById('edu_percentage').value = percentage || '';
+        document.getElementById('educationModalTitle').querySelector('span').textContent = 'Edit Education';
+        document.getElementById('education-modal-error').classList.add('hidden');
+        openModal('educationModal');
+    }
+
+    function closeEducationModal() {
+        closeModal('educationModal');
+    }
+
+    function handleSaveEducation(e) {
+        e.preventDefault();
+        const id = document.getElementById('education_id').value;
+        const degree = document.getElementById('edu_degree').value.trim();
+        const institution = document.getElementById('edu_institution').value.trim();
+        const fieldOfStudy = document.getElementById('edu_field_of_study').value.trim();
+        const startDate = document.getElementById('edu_start_date').value;
+        const endDate = document.getElementById('edu_end_date').value;
+        const percentage = document.getElementById('edu_percentage').value.trim();
+        const errorBox = document.getElementById('education-modal-error');
+        const submitBtn = document.getElementById('btn_save_education');
+
+        if (!degree || !institution) {
+            errorBox.textContent = "Degree and Institution are required.";
+            errorBox.classList.remove('hidden');
+            return;
+        }
+
+        errorBox.classList.add('hidden');
+        submitBtn.disabled = true;
+
+        const url = id ? `/api/v1/candidates/education/${id}/` : "/api/v1/candidates/education/";
+        const method = id ? 'PATCH' : 'POST';
+
+        fetch(url, {
+            method: method,
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': '{{ csrf_token }}'
-            }
+            },
+            body: JSON.stringify({
+                degree: degree,
+                institution: institution,
+                field_of_study: fieldOfStudy || null,
+                start_date: startDate || null,
+                end_date: endDate || null,
+                percentage_or_cgpa: percentage || null
+            })
         })
-        .then(response => {
-            if (response.status === 204) {
-                btn.closest('.education-item').remove();
-                showToast("Education entry deleted successfully!");
-            } else {
-                showToast("Failed to delete education.");
+        .then(async response => {
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || errData.degree?.[0] || errData.institution?.[0] || 'Failed to save education');
             }
+            return response.json();
+        })
+        .then(data => {
+            submitBtn.disabled = false;
+            closeEducationModal();
+            showToast(id ? "Education updated successfully!" : "Education added successfully!");
+            setTimeout(() => { window.location.reload(); }, 800);
+        })
+        .catch(err => {
+            submitBtn.disabled = false;
+            errorBox.textContent = err.message || "An error occurred while saving education.";
+            errorBox.classList.remove('hidden');
+        });
+    }
+
+    function confirmDeleteEducation(id, btn) {
+        openConfirmModal("Delete Education", "Are you sure you want to delete this education entry? This action cannot be undone.", function() {
+            fetch(`/api/v1/candidates/education/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            })
+            .then(response => {
+                closeConfirmModal();
+                if (response.status === 204) {
+                    if (btn && btn.closest('.education-item')) btn.closest('.education-item').remove();
+                    else window.location.reload();
+                    showToast("Education entry deleted successfully!");
+                } else {
+                    showToast("Failed to delete education.");
+                }
+            });
         });
     }
 
     function addNewSkill() {
-        const skillName = prompt("Enter skill name (e.g., Python, React):", "");
-        if (skillName) {
-            fetch("/api/v1/candidates/skills/", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    skill_name: skillName,
-                    years_of_experience: 1,
-                    proficiency: 'Intermediate'
-                })
+        const skillNameInput = document.getElementById('exp-company'); // fallback check or toast
+        openGenericModal("Add Skill", `
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">Skill Name *</label>
+                    <input type="text" id="modal_skill_name" placeholder="e.g. Python, React, AWS" class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold" required>
+                </div>
+            </div>
+        `, `
+            <button onclick="closeGenericModal()" class="h-10 px-4 border border-slate-200 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-350">Cancel</button>
+            <button onclick="submitNewSkillModal()" class="h-10 px-5 bg-primary text-white font-bold text-xs rounded-xl">Save Skill</button>
+        `);
+    }
+
+    function submitNewSkillModal() {
+        const skillName = document.getElementById('modal_skill_name')?.value.trim();
+        if (!skillName) return;
+        fetch("/api/v1/candidates/skills/", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                skill_name: skillName,
+                years_of_experience: 1,
+                proficiency: 'Intermediate'
             })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => { throw new Error(JSON.stringify(data)); });
-                }
-                return response.json();
-            })
-            .then(data => {
-                showToast("Skill added successfully!");
-                setTimeout(() => { window.location.reload(); }, 800);
-            })
-            .catch(err => {
-                alert("Error adding skill: " + err.message);
-            });
-        }
+        })
+        .then(response => {
+            if (!response.ok) return response.json().then(data => { throw new Error(JSON.stringify(data)); });
+            return response.json();
+        })
+        .then(data => {
+            closeGenericModal();
+            showToast("Skill added successfully!");
+            setTimeout(() => { window.location.reload(); }, 800);
+        })
+        .catch(err => {
+            showToast("Error adding skill: " + err.message);
+        });
     }
 
     function deleteSkill(id, btn) {
-        if (!confirm("Are you sure you want to delete this skill?")) return;
-        fetch(`/api/v1/candidates/skills/${id}/`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => {
-            if (response.status === 204) {
-                btn.closest('.skill-item').remove();
-                showToast("Skill deleted successfully!");
-            } else {
-                showToast("Failed to delete skill.");
-            }
+        openConfirmModal("Delete Skill", "Are you sure you want to delete this skill?", function() {
+            fetch(`/api/v1/candidates/skills/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            })
+            .then(response => {
+                closeConfirmModal();
+                if (response.status === 204) {
+                    if (btn && btn.closest('.skill-item')) btn.closest('.skill-item').remove();
+                    showToast("Skill deleted successfully!");
+                } else {
+                    showToast("Failed to delete skill.");
+                }
+            });
         });
     }
 
@@ -827,8 +1000,167 @@
             }, 800);
         })
         .catch(err => {
-            alert("Error uploading resume: " + err.message);
+            showToast("Error uploading resume: " + err.message);
         });
     }
 </script>
+
+<!-- PROJECT MODAL (Add / Edit Project) -->
+<div id="projectModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+            <h3 id="projectModalTitle" class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight flex items-center gap-2">
+                <i class="bi bi-folder-fill text-primary text-lg"></i> <span>Add Project</span>
+            </h3>
+            <button type="button" onclick="closeProjectModal()" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <i class="bi bi-x-lg text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Form Body -->
+        <form id="projectForm" onsubmit="handleSaveProject(event)" class="p-6 space-y-4">
+            <input type="hidden" id="project_id" value="">
+
+            <div id="project-modal-error" class="hidden p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl"></div>
+
+            <!-- Project Name -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Project Name <span class="text-rose-500">*</span></label>
+                <input type="text" id="project_title" required class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. AI Recruitment Portal">
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Description</label>
+                <textarea id="project_description" rows="3" class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="Briefly describe key features, architecture, or outcome..."></textarea>
+            </div>
+
+            <!-- Technologies Used -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Technologies Used</label>
+                <input type="text" id="project_technologies" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. Python, Django, React, PostgreSQL">
+            </div>
+
+            <!-- URLs: GitHub & Live Link -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">GitHub URL</label>
+                    <input type="text" id="project_github_url" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="https://github.com/user/project">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Live Project URL</label>
+                    <input type="text" id="project_link" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="https://myproject.com">
+                </div>
+            </div>
+
+            <!-- Dates -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Start Date</label>
+                    <input type="date" id="project_start_date" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">End Date</label>
+                    <input type="date" id="project_end_date" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+            </div>
+
+            <!-- Modal Footer Buttons -->
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+                <button type="button" onclick="closeProjectModal()" class="h-11 px-5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                <button type="submit" id="btn_save_project" class="h-11 px-6 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl shadow-md shadow-primary/20 transition-all flex items-center gap-2">
+                    <span>Save Project</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- EDUCATION MODAL (Add / Edit Education) -->
+<div id="educationModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+            <h3 id="educationModalTitle" class="font-extrabold text-slate-900 dark:text-white text-base tracking-tight flex items-center gap-2">
+                <i class="bi bi-mortarboard-fill text-primary text-lg"></i> <span>Add Education</span>
+            </h3>
+            <button type="button" onclick="closeEducationModal()" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <i class="bi bi-x-lg text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Form Body -->
+        <form id="educationForm" onsubmit="handleSaveEducation(event)" class="p-6 space-y-4">
+            <input type="hidden" id="education_id" value="">
+
+            <div id="education-modal-error" class="hidden p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl"></div>
+
+            <!-- Degree & Institute -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Degree / Qualification <span class="text-rose-500">*</span></label>
+                    <input type="text" id="edu_degree" required class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. B.Tech / M.Tech / B.Sc">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Institute / College <span class="text-rose-500">*</span></label>
+                    <input type="text" id="edu_institution" required class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. IIT Delhi / Delhi University">
+                </div>
+            </div>
+
+            <!-- University & Specialization -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">University</label>
+                    <input type="text" id="edu_university" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. Anna University">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Specialization / Field of Study</label>
+                    <input type="text" id="edu_field_of_study" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. Computer Science & Engineering">
+                </div>
+            </div>
+
+            <!-- Start Year & End Year / Dates -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Start Year / Date</label>
+                    <input type="date" id="edu_start_date" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">End Year / Date</label>
+                    <input type="date" id="edu_end_date" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+            </div>
+
+            <!-- Percentage / CGPA -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1.5">Percentage / CGPA</label>
+                <input type="text" id="edu_percentage" class="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="e.g. 8.5 CGPA or 82%">
+            </div>
+
+            <!-- Modal Footer Buttons -->
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+                <button type="button" onclick="closeEducationModal()" class="h-11 px-5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                <button type="submit" id="btn_save_education" class="h-11 px-6 bg-primary hover:bg-accent text-white font-bold text-xs rounded-xl shadow-md shadow-primary/20 transition-all flex items-center gap-2">
+                    <span>Save Education</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CONFIRM DELETE MODAL -->
+<div id="confirmDeleteModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-6 transform scale-95 transition-transform duration-300 text-center">
+        <div class="w-14 h-14 bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+        </div>
+        <h3 class="font-extrabold text-slate-900 dark:text-white text-base mb-2" id="confirmDeleteTitle">Confirm Deletion</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-6" id="confirmDeleteMessage">Are you sure you want to delete this item? This action cannot be undone.</p>
+        <div class="flex gap-3 justify-center">
+            <button type="button" onclick="closeConfirmModal()" class="flex-1 h-11 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+            <button type="button" id="btn_confirm_delete" class="flex-1 h-11 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition-all">Delete</button>
+        </div>
+    </div>
+</div>
 {% endblock %}

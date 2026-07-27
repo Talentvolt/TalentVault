@@ -10,7 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.db import transaction
-from django.db.models import Count, Q, Avg
+from django.db.models import Count, Q, Avg, Prefetch
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
@@ -86,6 +86,9 @@ class RoleRedirectView(LoginRequiredMixin, View):
     Redirect users to their respective dashboards based on their role.
     This is used after login (LOGIN_REDIRECT_URL) to route to the correct dashboard.
     """
+    def handle_no_permission(self):
+        return redirect('/')
+
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             role = request.user.role
@@ -95,7 +98,25 @@ class RoleRedirectView(LoginRequiredMixin, View):
                 return redirect('frontend:recruiter_dashboard')
             elif role == User.Role.CANDIDATE:
                 return redirect('frontend:candidate_dashboard')
-        return redirect('frontend:dashboard')
+        return redirect('/')
+
+class ShortcutRouteView(View):
+    """
+    Handles shortcuts like /candidate/, /recruiter/, /admin/.
+    If not authenticated, redirects to homepage /.
+    If authenticated, redirects to appropriate dashboard.
+    """
+    def get(self, request, target=None, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('/')
+        role = request.user.role
+        if role == User.Role.CANDIDATE:
+            return redirect('frontend:candidate_dashboard')
+        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            return redirect('frontend:recruiter_dashboard')
+        elif role == User.Role.SUPER_ADMIN:
+            return redirect('frontend:admin_dashboard')
+        return redirect('/')
 
 class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
     template_name = 'candidate_dashboard.html'
@@ -261,8 +282,48 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
             avg_ats_score=Avg('applications__match_score')
         ).order_by('-applicant_count')[:10]
         
-        # 6. Referrals Count (Database-driven)
-        context['referrals_count'] = 0  # No referral tracking model in the database yet
+        # 6. Candidate Signup Overview Analytics (Single aggregated DB query)
+        from utils.date_helpers import format_relative_time, format_registration_date
+
+        now = django_timezone.now()
+        local_now = django_timezone.localtime(now)
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start = today_start - django_timezone.timedelta(days=1)
+        start_of_week = today_start - django_timezone.timedelta(days=local_now.weekday())
+        start_of_month = today_start.replace(day=1)
+
+        signup_stats = CandidateProfile.objects.aggregate(
+            total=Count('id'),
+            today=Count('id', filter=Q(created_at__gte=today_start)),
+            yesterday=Count('id', filter=Q(created_at__gte=yesterday_start, created_at__lt=today_start)),
+            this_week=Count('id', filter=Q(created_at__gte=start_of_week)),
+            mtd=Count('id', filter=Q(created_at__gte=start_of_month))
+        )
+        context['candidate_signup_stats'] = signup_stats
+
+        # 7. Recent Candidate Activity
+        raw_candidates = CandidateProfile.objects.select_related('user').prefetch_related(
+            Prefetch('job_applications', queryset=Application.objects.select_related('job').order_by('-created_at'), to_attr='latest_applications')
+        ).order_by('-created_at')[:10]
+
+        recent_candidate_activity = []
+        for candidate in raw_candidates:
+            latest_apps = getattr(candidate, 'latest_applications', [])
+            latest_app = latest_apps[0] if latest_apps else None
+            job_obj = latest_app.job if latest_app else None
+
+            recent_candidate_activity.append({
+                'id': candidate.id,
+                'name': candidate.full_name or candidate.user.email,
+                'email': candidate.user.email,
+                'applied_job': job_obj,
+                'registered_date_formatted': format_registration_date(candidate.created_at),
+                'last_login_formatted': format_relative_time(candidate.user.last_login or candidate.created_at)
+            })
+        context['recent_candidate_activity'] = recent_candidate_activity
+
+        # 8. Recent Job Applications
+        context['recent_applications'] = Application.objects.select_related('candidate__user', 'job').order_by('-created_at')[:10]
         
         return context
 
@@ -1294,11 +1355,330 @@ class PublicJobShareView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        job = self.object
         share_url = self.request.build_absolute_uri(
-            reverse('frontend:public_job_share', kwargs={'pk': self.object.pk})
+            reverse('frontend:public_job_share', kwargs={'pk': job.pk})
         )
         context['share_url'] = share_url
+        
+        jd_file = job.jd_file if job.jd_file else None
+        context['jd_file'] = jd_file
+        context['job_description_file'] = jd_file
+        
+        if jd_file:
+            import os
+            try:
+                filename = os.path.basename(jd_file.name)
+            except Exception:
+                filename = str(jd_file)
+            
+            ext = os.path.splitext(filename)[1].lower() if '.' in filename else ''
+            context['jd_file_name'] = filename
+            context['jd_file_ext'] = ext
+            context['is_pdf'] = (ext == '.pdf')
+            context['is_docx'] = (ext in ['.docx', '.doc'])
+
+            if ext in ['.docx', '.doc']:
+                try:
+                    import mammoth
+                    with jd_file.open('rb') as docx_file:
+                        result = mammoth.convert_to_html(docx_file)
+                        context['jd_docx_html'] = result.value
+                except Exception:
+                    try:
+                        import docx
+                        with jd_file.open('rb') as docx_file:
+                            doc = docx.Document(docx_file)
+                            paras = [f"<p>{p.text.strip()}</p>" for p in doc.paragraphs if p.text.strip()]
+                            context['jd_docx_html'] = "".join(paras)
+                    except Exception:
+                        context['jd_docx_html'] = None
+
         return context
+
+class PublicJobApplyView(View):
+    """
+    Public Endpoint for submitting job applications without requiring candidate login.
+    """
+    def post(self, request, job_id, *args, **kwargs):
+        from apps.jobs.models import Job
+        from apps.candidates.models import CandidateProfile, CandidateSkill, Education
+        from apps.applications.models import Application, ApplicationHistory
+        from apps.accounts.models import User
+        from services.candidate_matching_service import CandidateMatchingService
+        from apps.notifications.models import Notification
+        import logging
+        import os
+
+        logger = logging.getLogger(__name__)
+        job = get_object_or_404(Job, pk=job_id)
+        
+        is_ajax = (
+            request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+            'application/json' in request.headers.get('accept', '') or
+            request.POST.get('is_ajax') == '1'
+        )
+
+        try:
+            full_name = request.POST.get('full_name', '').strip()
+            email = request.POST.get('email', '').strip().lower()
+            phone_number = request.POST.get('phone_number', '').strip()
+            current_location = request.POST.get('current_location', '').strip()
+            total_experience_raw = request.POST.get('total_experience', '').strip()
+            current_company = request.POST.get('current_company', '').strip()
+            current_designation = request.POST.get('current_designation', '').strip()
+            current_ctc_raw = request.POST.get('current_ctc', '').strip()
+            expected_ctc_raw = request.POST.get('expected_ctc', '').strip()
+            notice_period_raw = request.POST.get('notice_period', '').strip()
+            preferred_location = request.POST.get('preferred_location', '').strip()
+            highest_qualification = request.POST.get('highest_qualification', '').strip()
+            skills_raw = request.POST.get('skills', '').strip()
+            cover_letter = request.POST.get('cover_letter', '').strip()
+            linkedin_url = request.POST.get('linkedin_url', '').strip()
+            portfolio_url = request.POST.get('portfolio_url', '').strip()
+            
+            resume_file = request.FILES.get('resume_file')
+
+            # Validation
+            errors = []
+            if not full_name:
+                errors.append("Full Name is required.")
+            if not email:
+                errors.append("Email is required.")
+            if not phone_number:
+                errors.append("Phone Number is required.")
+            if not current_location:
+                errors.append("Current Location is required.")
+            if not total_experience_raw:
+                errors.append("Total Experience is required.")
+            if not current_company:
+                errors.append("Current Company is required.")
+            if not current_designation:
+                errors.append("Current Designation is required.")
+            if not current_ctc_raw:
+                errors.append("Current CTC is required.")
+            if not expected_ctc_raw:
+                errors.append("Expected CTC is required.")
+            if not notice_period_raw:
+                errors.append("Notice Period is required.")
+            if not preferred_location:
+                errors.append("Preferred Location is required.")
+            if not highest_qualification:
+                errors.append("Highest Qualification is required.")
+            if not skills_raw:
+                errors.append("Skills are required.")
+            
+            if not resume_file:
+                errors.append("Resume upload is required (PDF Only).")
+            else:
+                filename_str = getattr(resume_file, 'name', '')
+                ext = os.path.splitext(filename_str)[1].lower() if '.' in filename_str else ''
+                if ext != '.pdf':
+                    errors.append("Only PDF resumes are allowed.")
+                elif resume_file.size > 10 * 1024 * 1024:
+                    errors.append("Maximum file size allowed is 10 MB.")
+
+            if errors:
+                err_msg = errors[0] if len(errors) == 1 else " ".join(errors)
+                if is_ajax:
+                    return JsonResponse({'success': False, 'message': err_msg, 'errors': errors}, status=400)
+                messages.error(request, err_msg)
+                return redirect('frontend:public_job_share', pk=job.pk)
+
+            # Numerical Parsing
+            try:
+                total_experience = float(total_experience_raw)
+            except ValueError:
+                total_experience = 0.0
+
+            try:
+                current_ctc = float(current_ctc_raw)
+            except ValueError:
+                current_ctc = None
+
+            try:
+                expected_ctc = float(expected_ctc_raw)
+            except ValueError:
+                expected_ctc = None
+
+            try:
+                notice_period = int(notice_period_raw)
+            except ValueError:
+                notice_period = 30
+
+            # 1. Create or retrieve Candidate User (No candidate account login required)
+            name_parts = full_name.split()
+            first_name = name_parts[0] if name_parts else ''
+            last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+
+            user, user_created = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    'role': User.Role.CANDIDATE,
+                    'phone_number': phone_number,
+                    'first_name': first_name,
+                    'last_name': last_name,
+                }
+            )
+            if user_created:
+                user.set_unusable_password()
+                user.save()
+            elif phone_number and not user.phone_number:
+                user.phone_number = phone_number
+                user.save(update_fields=['phone_number'])
+
+            # 2. Create Candidate Profile
+            profile, _ = CandidateProfile.objects.get_or_create(user=user)
+
+            # 3. Save Profile
+            profile.full_name = full_name
+            profile.location = current_location
+            profile.total_experience = total_experience
+            profile.current_company = current_company
+            profile.current_designation = current_designation
+            profile.current_salary = current_ctc
+            profile.expected_salary = expected_ctc
+            profile.notice_period = notice_period
+            profile.preferred_location = preferred_location
+            if linkedin_url:
+                profile.linkedin_url = linkedin_url
+            if portfolio_url:
+                profile.portfolio_url = portfolio_url
+
+            # 4. Save Resume File (No OCR/parsing - purely manual entry)
+            if resume_file:
+                profile.resume = resume_file
+                profile.original_file = resume_file
+                profile.original_filename = getattr(resume_file, 'name', '')
+            profile.save()
+
+            # 5. Save Skills
+            skill_list = [s.strip() for s in skills_raw.split(',') if s.strip()]
+            for sk_name in skill_list:
+                CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk_name)
+
+            # 6. Save Experience
+            if current_company or current_designation:
+                from apps.candidates.models import Experience
+                Experience.objects.get_or_create(
+                    profile=profile,
+                    company_name=current_company or "N/A",
+                    designation=current_designation or "N/A",
+                    defaults={'is_current': True}
+                )
+
+            # 7. Save Education
+            if highest_qualification:
+                Education.objects.get_or_create(
+                    profile=profile,
+                    degree=highest_qualification,
+                    defaults={'institution': 'N/A'}
+                )
+
+            # Determine Recruiter User
+            recruiter_user = job.created_by
+            if not recruiter_user and job.company:
+                member = job.company.members.first()
+                if member:
+                    recruiter_user = member.user
+
+            # 8. Create or Update Application
+            app, app_created = Application.objects.get_or_create(
+                job=job,
+                candidate=profile,
+                defaults={
+                    'recruiter': recruiter_user,
+                    'stage': Application.ApplicationStage.OPEN,
+                    'in_pipeline': True,
+                    'cover_letter': cover_letter,
+                    'current_company': current_company,
+                    'current_designation': current_designation,
+                    'total_experience': total_experience,
+                    'current_ctc': current_ctc,
+                    'expected_ctc': expected_ctc,
+                    'notice_period': notice_period,
+                    'preferred_location': preferred_location,
+                    'current_location': current_location,
+                    'mobile_number': phone_number,
+                    'linkedin_url': linkedin_url,
+                    'portfolio_url': portfolio_url,
+                    'resume': profile.resume or resume_file,
+                    'key_skills': skill_list,
+                }
+            )
+
+            if not app_created:
+                app.in_pipeline = True
+                app.is_active = True
+                app.stage = Application.ApplicationStage.OPEN
+                app.cover_letter = cover_letter or app.cover_letter
+                app.resume = profile.resume or resume_file or app.resume
+                app.current_company = current_company
+                app.current_designation = current_designation
+                app.total_experience = total_experience
+                app.current_ctc = current_ctc
+                app.expected_ctc = expected_ctc
+                app.notice_period = notice_period
+                app.preferred_location = preferred_location
+                app.current_location = current_location
+                app.mobile_number = phone_number
+                app.linkedin_url = linkedin_url or app.linkedin_url
+                app.portfolio_url = portfolio_url or app.portfolio_url
+                app.key_skills = skill_list
+                app.save()
+
+            # Create History Entry
+            ApplicationHistory.objects.create(
+                application=app,
+                from_stage=Application.ApplicationStage.OPEN,
+                to_stage=Application.ApplicationStage.OPEN,
+                notes="Application submitted via Public Job Link."
+            )
+
+            # Sync & Store ATS Match Score
+            try:
+                CandidateMatchingService.update_ats_scores(candidate_id=profile.id, job_id=job.id)
+                ats_data = CandidateMatchingService.calculate_job_ats_score(profile, job)
+                app.match_score = ats_data.get('total_score', 0.0)
+                app.save(update_fields=['match_score'])
+            except Exception as ats_err:
+                logger.warning(f"ATS score sync warning: {ats_err}")
+
+            # Recruiter Notification
+            if recruiter_user:
+                try:
+                    Notification.objects.create(
+                        recipient=recruiter_user,
+                        title="New Public Job Application",
+                        message=f"{full_name} submitted an application for '{job.title}' via public link.",
+                        notification_type='APPLICATION_STATUS'
+                    )
+                except Exception:
+                    pass
+
+            success_msg = "Application Submitted Successfully."
+
+            if is_ajax:
+                return JsonResponse({
+                    'success': True,
+                    'message': success_msg,
+                    'application_id': str(app.id)
+                })
+
+            messages.success(request, success_msg)
+            return redirect(reverse('frontend:public_job_share', kwargs={'pk': job.pk}) + '?applied=true')
+
+        except Exception as e:
+            logger.exception("Error processing public job application")
+            error_message = str(e)
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'message': f"Application Error: {error_message}",
+                    'error': error_message
+                }, status=400)
+            messages.error(request, f"Application Error: {error_message}")
+            return redirect('frontend:public_job_share', pk=job_id)
 
 class AddToPipelineView(RecruiterRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
