@@ -204,64 +204,246 @@ def scan_office_security(file_bytes, filename, ext):
 
     return True
 
+def repair_pdf_bytes(file_bytes, filename="resume.pdf"):
+    """
+    Automatically repair corrupted / malformed PDF files using multiple repair strategies:
+    1. PyMuPDF clean=True & garbage collection
+    2. pikepdf (if available)
+    3. qpdf CLI tool (if available)
+    4. Ghostscript CLI tool (if available)
+    5. PyMuPDF Page-by-Page Image Rasterization & Reconstruction
+    6. pdf2image rendering (if available)
+    
+    Returns: (repaired_bytes, strategy_used, warning_message)
+    """
+    if not file_bytes:
+        return None, None, None
+
+    logger.info(f"[PDF REPAIR START] Starting repair pipeline for {filename} ({len(file_bytes)} bytes)")
+    
+    # Strategy 1: PyMuPDF clean & garbage collection
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        if len(doc) > 0:
+            repaired = doc.tobytes(clean=True, deflate=True, garbage=4)
+            doc.close()
+            t_doc = fitz.open(stream=repaired, filetype="pdf")
+            if len(t_doc) > 0:
+                t_doc.close()
+                logger.info(f"[PDF REPAIR SUCCESS] Repaired {filename} via PyMuPDF clean=True")
+                return repaired, "PyMuPDF_Clean", "PDF repaired automatically."
+    except Exception as e:
+        logger.warning(f"[PDF REPAIR] Strategy 1 (PyMuPDF clean) failed: {e}")
+
+    # Strategy 2: pikepdf
+    try:
+        import pikepdf
+        with pikepdf.open(io.BytesIO(file_bytes), allow_overwriting_input=True) as pdf:
+            out_buf = io.BytesIO()
+            pdf.save(out_buf)
+            repaired = out_buf.getvalue()
+            t_doc = fitz.open(stream=repaired, filetype="pdf")
+            if len(t_doc) > 0:
+                t_doc.close()
+                logger.info(f"[PDF REPAIR SUCCESS] Repaired {filename} via pikepdf")
+                return repaired, "Pikepdf", "PDF repaired automatically."
+    except Exception as e:
+        logger.warning(f"[PDF REPAIR] Strategy 2 (pikepdf) failed: {e}")
+
+    # Strategy 3: qpdf CLI
+    try:
+        import tempfile, subprocess
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_in, \
+             tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_out:
+            tmp_in.write(file_bytes)
+            tmp_in.flush()
+            in_p, out_p = tmp_in.name, tmp_out.name
+        try:
+            cmd = ["qpdf", "--qdf", "--object-streams=disable", in_p, out_p]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+            if os.path.exists(out_p) and os.path.getsize(out_p) > 0:
+                with open(out_p, "rb") as f:
+                    repaired = f.read()
+                t_doc = fitz.open(stream=repaired, filetype="pdf")
+                if len(t_doc) > 0:
+                    t_doc.close()
+                    logger.info(f"[PDF REPAIR SUCCESS] Repaired {filename} via qpdf")
+                    return repaired, "Qpdf", "PDF repaired automatically."
+        finally:
+            for p in [in_p, out_p]:
+                if os.path.exists(p):
+                    try: os.remove(p)
+                    except Exception: pass
+    except Exception as e:
+        logger.warning(f"[PDF REPAIR] Strategy 3 (qpdf) failed: {e}")
+
+    # Strategy 4: Ghostscript CLI
+    try:
+        import tempfile, subprocess
+        gs_cmd = "gswin64c" if os.name == "nt" else "gs"
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_in, \
+             tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_out:
+            tmp_in.write(file_bytes)
+            tmp_in.flush()
+            in_p, out_p = tmp_in.name, tmp_out.name
+        try:
+            cmd = [gs_cmd, "-o", out_p, "-sDEVICE=pdfwrite", "-dPDFSETTINGS=/prepress", in_p]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+            if os.path.exists(out_p) and os.path.getsize(out_p) > 0:
+                with open(out_p, "rb") as f:
+                    repaired = f.read()
+                t_doc = fitz.open(stream=repaired, filetype="pdf")
+                if len(t_doc) > 0:
+                    t_doc.close()
+                    logger.info(f"[PDF REPAIR SUCCESS] Repaired {filename} via Ghostscript")
+                    return repaired, "Ghostscript", "PDF repaired automatically."
+        finally:
+            for p in [in_p, out_p]:
+                if os.path.exists(p):
+                    try: os.remove(p)
+                    except Exception: pass
+    except Exception as e:
+        logger.warning(f"[PDF REPAIR] Strategy 4 (Ghostscript) failed: {e}")
+
+    # Strategy 5: PyMuPDF Page-by-Page Image Rasterization & Reconstruction
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        reconstructed_pdf = fitz.open()
+        rendered_pages = 0
+        for page_idx in range(len(doc)):
+            try:
+                page = doc[page_idx]
+                pix = page.get_pixmap(dpi=150)
+                img_bytes = pix.tobytes("jpeg")
+                img_doc = fitz.open("jpeg", img_bytes)
+                pdf_bytes_page = img_doc.convert_to_pdf()
+                img_doc.close()
+                page_pdf = fitz.open("pdf", pdf_bytes_page)
+                reconstructed_pdf.insert_pdf(page_pdf)
+                page_pdf.close()
+                rendered_pages += 1
+            except Exception as pe:
+                logger.warning(f"[PDF REPAIR] Page {page_idx} rasterization skipped: {pe}")
+        doc.close()
+        if rendered_pages > 0:
+            repaired = reconstructed_pdf.tobytes()
+            reconstructed_pdf.close()
+            logger.info(f"[PDF REPAIR SUCCESS] Repaired {filename} via Page Rasterization ({rendered_pages} pages)")
+            return repaired, "PageRasterization", "PDF repaired automatically."
+    except Exception as e:
+        logger.warning(f"[PDF REPAIR] Strategy 5 (Page Rasterization) failed: {e}")
+
+    # Strategy 6: pdf2image rendering
+    try:
+        from pdf2image import convert_from_bytes
+        images = convert_from_bytes(file_bytes)
+        if images:
+            reconstructed_pdf = fitz.open()
+            for img in images:
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG')
+                img_doc = fitz.open("jpeg", buf.getvalue())
+                pdf_bytes_page = img_doc.convert_to_pdf()
+                img_doc.close()
+                page_pdf = fitz.open("pdf", pdf_bytes_page)
+                reconstructed_pdf.insert_pdf(page_pdf)
+                page_pdf.close()
+            repaired = reconstructed_pdf.tobytes()
+            reconstructed_pdf.close()
+            logger.info(f"[PDF REPAIR SUCCESS] Repaired {filename} via pdf2image ({len(images)} pages)")
+            return repaired, "pdf2image", "PDF repaired automatically."
+    except Exception as e:
+        logger.warning(f"[PDF REPAIR] Strategy 6 (pdf2image) failed: {e}")
+
+    logger.error(f"[PDF REPAIR FAILED] All repair strategies failed for {filename}")
+    return None, None, None
+
 def scan_pdf_security(file_bytes):
     """
     Reject PDFs containing JavaScript, embedded executables, launch actions, suspicious annotations, or embedded files.
+    Xref and structural PDF errors MUST NOT trigger security rejections.
     """
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         
         # Embedded files check
-        if doc.embfile_count() > 0:
-            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.", code="PDF_EMBEDDED_FILES")
-            
+        try:
+            if doc.embfile_count() > 0:
+                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.", code="PDF_EMBEDDED_FILES")
+        except SecurityValidationError:
+            raise
+        except Exception as e:
+            logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error reading embedded files count: {e}")
+
         # Catalog check
-        catalog = doc.pdf_catalog()
-        catalog_obj = doc.xref_object(catalog)
-        
-        # Benign /Names or standard structures are allowed. Only reject if catalog references JavaScript
-        if '/JavaScript' in catalog_obj:
-            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript was found in the PDF catalog.", code="PDF_CATALOG_JS")
-            
-        if '/OpenAction' in catalog_obj:
-            # Check if OpenAction actually references dangerous actions (JS or Launch)
-            if any(act in catalog_obj for act in ['/JS', '/JavaScript', '/Launch']):
-                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a malicious OpenAction was found in the PDF catalog.", code="PDF_CATALOG_JS")
+        try:
+            catalog = doc.pdf_catalog()
+            catalog_obj = doc.xref_object(catalog) if catalog else ""
+            if '/JavaScript' in catalog_obj:
+                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript was found in the PDF catalog.", code="PDF_CATALOG_JS")
+            if '/OpenAction' in catalog_obj:
+                if any(act in catalog_obj for act in ['/JS', '/JavaScript', '/Launch']):
+                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a malicious OpenAction was found in the PDF catalog.", code="PDF_CATALOG_JS")
+        except SecurityValidationError:
+            raise
+        except Exception as e:
+            logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error checking PDF catalog: {e}")
 
         # Scan objects for suspicious actions
-        for xref in range(1, doc.xref_length()):
-            obj_defn = doc.xref_object(xref)
-            if not obj_defn:
-                continue
-            
-            # Reject if JS or JavaScript is found in object definition
-            if '/JS ' in obj_defn or '/JavaScript' in obj_defn:
-                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript (/JS) was detected in object xref.", code="PDF_SUSPICIOUS_OBJ")
-                
-            # Reject if Launch action is found in object definition
-            if '/Launch' in obj_defn:
-                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a Launch Action (/Launch) was detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
-                
-            # Reject if EmbeddedFiles is found in object definition
-            if '/EmbeddedFiles' in obj_defn:
-                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files (/EmbeddedFiles) were detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
+        try:
+            for xref in range(1, doc.xref_length()):
+                try:
+                    obj_defn = doc.xref_object(xref)
+                except Exception:
+                    # Ignore per-object xref lookup errors (e.g. 'cannot find object in xref' or 'code=7')
+                    continue
+                if not obj_defn:
+                    continue
+                if '/JS ' in obj_defn or '/JavaScript' in obj_defn:
+                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript (/JS) was detected in object xref.", code="PDF_SUSPICIOUS_OBJ")
+                if '/Launch' in obj_defn:
+                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a Launch Action (/Launch) was detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
+                if '/EmbeddedFiles' in obj_defn:
+                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files (/EmbeddedFiles) were detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
+        except SecurityValidationError:
+            raise
+        except Exception as e:
+            logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error scanning PDF xref objects: {e}")
 
         # Scan annotations for active content
-        for page in doc:
-            annot = page.first_annot
-            while annot:
-                annot_defn = doc.xref_object(annot.xref)
-                if any(p in annot_defn for p in ['/JS', '/JavaScript', '/Launch']):
-                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a dangerous action was detected in page annotations.", code="PDF_SUSPICIOUS_ANNOT")
-                annot = annot.next
-                
+        try:
+            for page in doc:
+                try:
+                    annot = page.first_annot
+                    while annot:
+                        annot_defn = doc.xref_object(annot.xref)
+                        if any(p in annot_defn for p in ['/JS', '/JavaScript', '/Launch']):
+                            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a dangerous action was detected in page annotations.", code="PDF_SUSPICIOUS_ANNOT")
+                        annot = annot.next
+                except Exception:
+                    continue
+        except SecurityValidationError:
+            raise
+        except Exception as e:
+            logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error scanning page annotations: {e}")
+
+        doc.close()
+
     except SecurityValidationError:
         raise
     except Exception as e:
-        # If the file fails to open, check if it was due to embedded active content tags
-        if any(p in file_bytes for p in [b'/JavaScript', b'/Launch']):
+        err_str = str(e)
+        # Check if raw bytes contain actual active malware tags
+        has_js = any(tag in file_bytes for tag in [b'/JavaScript', b'/JS ', b'/JS\n', b'/JS\r'])
+        has_launch = b'/Launch' in file_bytes
+        has_embed = b'/EmbeddedFiles' in file_bytes
+
+        if has_js or has_launch or has_embed:
             raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because suspicious raw tags were found in the unopenable PDF.", code="PDF_SCAN_ERROR")
-        raise SecurityValidationError(f"Suspicious PDF content detected. Security validation failed because the PDF is corrupted or unopenable: {str(e)}", code="PDF_SCAN_ERROR")
+
+        # Structural / xref errors MUST NOT trigger security rejection!
+        logger.warning(f"[PDF STRUCTURAL NOTICE] PyMuPDF open/scan encountered structural issue ({err_str}). Passing security scan for repair phase.")
+        return True
 
     return True
 
@@ -301,7 +483,10 @@ def validate_single_file_content(file_bytes, filename, ext):
         # 1. Check Magic number / signature
         if ext in MAGIC_SIGNATURES:
             sig = MAGIC_SIGNATURES[ext]
-            if not file_bytes.startswith(sig):
+            if ext == 'pdf':
+                if sig not in file_bytes[:1024]:
+                    raise SecurityValidationError("Unsupported file format.", code="MAGIC_MISMATCH")
+            elif not file_bytes.startswith(sig):
                 raise SecurityValidationError("Unsupported file format.", code="MAGIC_MISMATCH")
                 
         # 2. MIME type check
@@ -487,13 +672,45 @@ def perform_all_security_validations(file_bytes, original_filename):
         # 5. Non-ZIP single file validations
         validate_single_file_content(file_bytes, sanitized_orig, ext)
 
+    # 6. Automatic PDF Repair & Structure Verification
+    was_repaired = False
+    repair_msg = None
+    if ext == 'pdf':
+        needs_repair = False
+        try:
+            t_doc = fitz.open(stream=file_bytes, filetype="pdf")
+            if len(t_doc) == 0:
+                needs_repair = True
+            else:
+                # Force checking pages to detect corrupted xrefs/trailer
+                for page in t_doc:
+                    _ = page.rect
+            t_doc.close()
+        except Exception as pdf_err:
+            needs_repair = True
+            logger.warning(f"[PDF VALIDATION] PDF structure issue detected in {sanitized_orig}: {pdf_err}. Triggering automatic repair...")
+
+        if needs_repair:
+            rep_bytes, rep_strategy, rep_msg = repair_pdf_bytes(file_bytes, sanitized_orig)
+            if rep_bytes:
+                file_bytes = rep_bytes
+                sha256_hash = get_file_sha256(file_bytes)
+                was_repaired = True
+                repair_msg = rep_msg
+            else:
+                logger.error(f"[PDF VALIDATION FAILED] PDF {sanitized_orig} could not be opened or repaired by any strategy.")
+                raise SecurityValidationError("PDF is corrupted or unopenable after all repair strategies.", code="PDF_CORRUPTED")
+
     return {
         "sanitized_filename": sanitized_orig,
         "secure_filename": secure_name,
         "sha256": sha256_hash,
         "mime_type": get_mime_type(file_bytes, sanitized_orig, ext),
         "scan_status": "PASSED",
-        "scan_timestamp": timezone.now()
+        "scan_timestamp": timezone.now(),
+        "was_repaired": was_repaired,
+        "repair_message": repair_msg,
+        "repaired_bytes": file_bytes if was_repaired else None
     }
 
 def log_upload_attempt(filename, sha256, user, virus_result, malware_result, reason_for_rejection=None):

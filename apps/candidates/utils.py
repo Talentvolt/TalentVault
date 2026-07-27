@@ -36,13 +36,19 @@ _thread_local_timings = threading.local()
 def get_spacy_nlp():
     global _GLOBAL_SPACY_NLP
     if _GLOBAL_SPACY_NLP is None:
+        import sys
+        if sys.platform == 'win32':
+            # On Windows, PyTorch/EasyOCR DLL conflict can cause 0xc0000139 in thinc.
+            # Catch/bypass spaCy C-level DLL crash safely on Windows.
+            _GLOBAL_SPACY_NLP = False
+            return None
         try:
             import spacy
             _GLOBAL_SPACY_NLP = spacy.load("en_core_web_sm")
         except Exception as e:
             logger.warning(f"Failed to load spaCy model: {e}")
             _GLOBAL_SPACY_NLP = False
-    return _GLOBAL_SPACY_NLP
+    return _GLOBAL_SPACY_NLP if _GLOBAL_SPACY_NLP is not False else None
 
 def clean_extracted_text(text: str) -> str:
     if not text:
@@ -775,6 +781,11 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             logger.error(f"[PARSER SECURITY REJECT] File {filename} failed security check: {str(e)}")
             return None, "SECURITY_FAILED"
 
+    if security_data and security_data.get("repaired_bytes"):
+        file_bytes = security_data["repaired_bytes"]
+        logger.info(f"[PARSER PDF REPAIRED] Using repaired PDF bytes for {filename}. Warning: {security_data.get('repair_message')}")
+        print(f"[PARSER PDF REPAIRED] Using repaired PDF bytes for {filename}. Warning: {security_data.get('repair_message')}")
+
     from services.resume_intelligence import ResumeIntelligenceService
     
     sha256 = security_data.get('sha256') if security_data else hashlib.sha256(file_bytes).hexdigest()
@@ -1073,6 +1084,9 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                         return False
                         
                     words = name_clean.lower().split()
+                    honorifics = {'mr', 'mrs', 'ms', 'dr', 'er', 'prof'}
+                    words_to_check = words[1:] if (words and words[0] in honorifics and len(words) > 1) else words
+                    
                     blacklisted_words = {
                         'manager', 'developer', 'executive', 'engineer', 'lead', 'associate', 'specialist', 'director', 
                         'analyst', 'consultant', 'officer', 'administrator', 'coordinator', 'technician', 'representative', 
@@ -1084,13 +1098,13 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                         'recruiter', 'team', 'page', 'phone', 'email', 'address', 'contact', 'mobile', 'cv', 'resume',
                         'biodata', 'curriculum', 'vitae'
                     }
-                    if any(w in blacklisted_words for w in words):
+                    if any(w in blacklisted_words for w in words_to_check):
                         return False
                         
                     if ' ' not in name_clean and len(name_clean) > 12:
                         return False
                         
-                    if not (1 <= len(words) <= 5):
+                    if not (1 <= len(words) <= 6):
                         return False
                         
                     return True
@@ -1186,12 +1200,32 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 if largest_font_name:
                     return largest_font_name
 
+                # 4.5 Regex & Honorifics Name Detection
+                regex_name = None
+                match_honorific = re.search(r'\b(?:Mr|Mrs|Ms|Dr|Er|Prof)\.?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)', text)
+                if match_honorific:
+                    cand = match_honorific.group(0).strip().title()
+                    if is_acceptable_name(cand):
+                        regex_name = cand
+
+                if not regex_name:
+                    top_lines = [l.strip() for l in text.split('\n') if l.strip()][:5]
+                    for line in top_lines:
+                        clean_line = re.sub(r'^[•\-\*\+\s\.,●■#]+|[•\-\*\+\s\.,●■#]+$', '', line).strip()
+                        if is_acceptable_name(clean_line):
+                            regex_name = clean_line.title()
+                            break
+
+                logger.info(f"[NAME] Regex / Honorifics Name: {regex_name or 'None'}")
+                print(f"[NAME] Regex / Honorifics Name: {regex_name or 'None'}")
+                if regex_name:
+                    return regex_name
+
                 # 5. Email Fallback
                 email_name = None
                 if email and '@' in email:
                     username = email.split('@')[0]
                     if username:
-                        import re
                         username_no_digits = re.sub(r'\d+', '', username)
                         
                         lowered = username_no_digits.lower()

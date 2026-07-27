@@ -1,6 +1,7 @@
 import os
 import io
 import zipfile
+import fitz
 import pytest
 from unittest.mock import patch, MagicMock
 from utils.security import (
@@ -118,7 +119,11 @@ def test_successful_validation_and_database_store(mock_ocr, mock_scan, mock_magi
     user = User.objects.create_user(email="john@example.com", password="password123")
     
     # PDF Header bytes
-    pdf_bytes = b"%PDF-1.4\n%...\n"
+    pdf_doc = fitz.open()
+    page = pdf_doc.new_page(width=600, height=800)
+    page.insert_text((50, 50), "John Doe Resume")
+    pdf_bytes = pdf_doc.tobytes()
+    pdf_doc.close()
     
     file_obj = io.BytesIO(pdf_bytes)
     uploaded_file = SimpleUploadedFile("resume.pdf", pdf_bytes, content_type="application/pdf")

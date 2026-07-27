@@ -36,13 +36,7 @@ if importlib.util.find_spec("paddleocr") is not None:
         PADDLE_AVAILABLE = False
 
 
-EASY_AVAILABLE = False
-if importlib.util.find_spec("easyocr") is not None:
-    try:
-        import easyocr
-        EASY_AVAILABLE = True
-    except Exception:
-        EASY_AVAILABLE = False
+EASY_AVAILABLE = importlib.util.find_spec("easyocr") is not None
 
 TESSERACT_AVAILABLE = False
 if importlib.util.find_spec("pytesseract") is not None:
@@ -53,14 +47,7 @@ if importlib.util.find_spec("pytesseract") is not None:
     except Exception:
         TESSERACT_AVAILABLE = False
 
-SPACY_AVAILABLE = False
-if importlib.util.find_spec("spacy") is not None:
-    try:
-        import spacy
-        spacy.load("en_core_web_sm")
-        SPACY_AVAILABLE = True
-    except Exception:
-        SPACY_AVAILABLE = False
+SPACY_AVAILABLE = importlib.util.find_spec("spacy") is not None
 
 
 def escape_plain_text(text: str) -> str:
@@ -1017,18 +1004,18 @@ class ResumeIntelligenceService:
 
         # Extract NER (spaCy)
         spacy_persons = []
-        if SPACY_AVAILABLE:
-            try:
-                import spacy
-                nlp = spacy.load("en_core_web_sm")
+        try:
+            from apps.candidates.utils import get_spacy_nlp
+            nlp = get_spacy_nlp()
+            if nlp:
                 doc = nlp("\n".join(header_lines))
                 for ent in doc.ents:
                     if ent.label_ == "PERSON":
                         ent_text = " ".join(ent.text.strip().split())
                         if is_valid_name_candidate(ent_text):
                             spacy_persons.append(ent_text)
-            except Exception as e:
-                print(f"spaCy PERSON extraction failed: {e}")
+        except Exception as e:
+            print(f"spaCy PERSON extraction failed: {e}")
 
         valid_parsed_name = None
         if parsed_name:
@@ -1360,26 +1347,43 @@ class ResumeIntelligenceService:
             text_pymupdf = ""
             try:
                 import fitz
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                try:
+                    doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    _ = len(doc)
+                except Exception as pdf_open_err:
+                    logger.warning(f"[PDF OCR PIPELINE] PyMuPDF open error for {filename}: {pdf_open_err}. Invoking PDF Repair Engine...")
+                    from utils.security import repair_pdf_bytes
+                    rep_bytes, rep_strat, rep_msg = repair_pdf_bytes(file_bytes, filename)
+                    if rep_bytes:
+                        file_bytes = rep_bytes
+                        doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    else:
+                        doc = None
+
                 pages_data = []
-                for page_idx, page in enumerate(doc):
-                    page_rect = page.rect
-                    page_w = page_rect.width
-                    blocks_dict = page.get_text("dict")
-                    page_lines = []
-                    
-                    for b in blocks_dict.get("blocks", []):
-                        if b.get("type") == 0:
-                            for line in b.get("lines", []):
-                                spans = line.get("spans", [])
-                                if not spans: continue
-                                line_text = " ".join("".join([s.get("text", "") for s in spans]).split())
-                                if line_text:
-                                    max_size = max(s.get("size", 0.0) for s in spans)
-                                    is_bold = any("bold" in s.get("font", "").lower() or "black" in s.get("font", "").lower() or (s.get("flags", 0) & 16) for s in spans)
-                                    x0, y0, x1, y1 = line.get("bbox", (0,0,0,0))
-                                    page_lines.append({"text": line_text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "is_bold": is_bold, "font_size": max_size})
-                    pages_data.append((page_w, page_lines))
+                if doc is not None:
+                    for page_idx in range(len(doc)):
+                        try:
+                            page = doc[page_idx]
+                            page_rect = page.rect
+                            page_w = page_rect.width
+                            blocks_dict = page.get_text("dict")
+                            page_lines = []
+                            
+                            for b in blocks_dict.get("blocks", []):
+                                if b.get("type") == 0:
+                                    for line in b.get("lines", []):
+                                        spans = line.get("spans", [])
+                                        if not spans: continue
+                                        line_text = " ".join("".join([s.get("text", "") for s in spans]).split())
+                                        if line_text:
+                                            max_size = max(s.get("size", 0.0) for s in spans)
+                                            is_bold = any("bold" in s.get("font", "").lower() or "black" in s.get("font", "").lower() or (s.get("flags", 0) & 16) for s in spans)
+                                            x0, y0, x1, y1 = line.get("bbox", (0,0,0,0))
+                                            page_lines.append({"text": line_text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "is_bold": is_bold, "font_size": max_size})
+                            pages_data.append((page_w, page_lines))
+                        except Exception as pe:
+                            logger.warning(f"[PDF OCR PIPELINE] Page {page_idx} direct text extraction skipped: {pe}")
 
                 classified_pages = []
                 total_left_len = 0
@@ -1530,6 +1534,7 @@ class ResumeIntelligenceService:
 
         # Local helper to run OCR on a single page
         def process_single_page_ocr(p_idx, img):
+            global GLOBAL_PADDLE_OCR, PADDLE_AVAILABLE
             # Duplicate OCR check (page-level cache)
             raw_bytes = img.tobytes()
             img_hash = hashlib.sha256(raw_bytes).hexdigest()
@@ -1560,8 +1565,9 @@ class ResumeIntelligenceService:
                     except Exception as e:
                         logger.error(f"PaddleOCR failed on page {p_idx} (attempt {attempt+1}): {e}")
             
-            # Try EasyOCR (up to 2 attempts)
-            if not engine_success and EASY_AVAILABLE:
+            # Try EasyOCR (up to 2 attempts, disabled on Windows worker threads due to torch OpenMP DLL bug)
+            import sys
+            if not engine_success and EASY_AVAILABLE and sys.platform != 'win32':
                 for attempt in range(2):
                     try:
                         import easyocr
