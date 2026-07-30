@@ -45,6 +45,7 @@ from apps.accounts.views import (
     EmployerLoginView,
     EmployerSignupView,
     AdminLoginView,
+    RegistrationPendingView,
     CandidateForgotPasswordView,
     CandidateOTPVerificationView,
     CandidateResetPasswordView,
@@ -86,6 +87,7 @@ urlpatterns = [
     # Employer Auth
     path('accounts/login/employer/', EmployerLoginView.as_view(), name='employer_login'),
     path('accounts/signup/employer/', EmployerSignupView.as_view(), name='employer_signup'),
+    path('accounts/registration-pending/', RegistrationPendingView.as_view(), name='registration_pending'),
     
     # Admin Auth
     path('accounts/login/admin/', AdminLoginView.as_view(), name='admin_login'),
@@ -108,6 +110,19 @@ urlpatterns = [
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
 
+from apps.core.views import (
+    custom_bad_request_view,
+    custom_permission_denied_view,
+    custom_page_not_found_view,
+    custom_server_error_view,
+)
+
 urlpatterns += [
     path('media/<path:path>', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
+
+handler400 = custom_bad_request_view
+handler403 = custom_permission_denied_view
+handler404 = custom_page_not_found_view
+handler500 = custom_server_error_view
+

@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,6 +12,9 @@ from .serializers import (
 from services.application_service import ApplicationService
 from permissions.roles import IsRecruiter, IsCandidate
 from utils.pagination import StandardResultsSetPagination
+from utils.tenant import get_tenant_applications_qs
+
+logger = logging.getLogger(__name__)
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     """
@@ -36,11 +40,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'CANDIDATE':
-            return Application.objects.filter(candidate__user=user)
-        # Recruiters can see all applications for their company's jobs
-        return super().get_queryset()
+        return get_tenant_applications_qs(self.request.user)
 
     @action(detail=False, methods=['post'], serializer_class=ApplicationApplySerializer)
     def apply(self, request):

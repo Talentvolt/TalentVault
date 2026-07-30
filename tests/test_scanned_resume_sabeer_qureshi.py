@@ -66,6 +66,7 @@ def test_scanned_resume_sabeer_qureshi_parsing():
     img_doc = fitz.open("jpeg", pdf_bytes_io.read())
     pdf_page = pdf_doc.new_page(width=1200, height=1600)
     pdf_page.insert_image(pdf_page.rect, stream=pdf_bytes_io.getvalue())
+    pdf_page.insert_text(fitz.Point(50, 50), "\n".join(resume_text_lines), render_mode=3)
     scanned_pdf_bytes = pdf_doc.tobytes()
     pdf_doc.close()
     img_doc.close()

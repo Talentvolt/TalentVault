@@ -47,6 +47,13 @@ class Job(BaseAppModel):
 
     assets_required = models.JSONField(default=list, blank=True, help_text="List of required assets (e.g. Bike, Laptop)")
     
+    department = models.CharField(max_length=100, blank=True, default='')
+    required_skills_text = models.TextField(blank=True, default='', help_text="Comma separated required skills")
+    preferred_skills_text = models.TextField(blank=True, default='', help_text="Comma separated preferred skills")
+    education = models.CharField(max_length=100, blank=True, default='')
+    notice_period = models.PositiveIntegerField(default=30, help_text="Maximum notice period in days")
+    ai_matching_enabled = models.BooleanField(default=True)
+
     status = models.CharField(
         max_length=20, 
         choices=JobStatus.choices, 
@@ -60,6 +67,18 @@ class Job(BaseAppModel):
     closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='closed_jobs')
 
     screening_questions = models.JSONField(default=list, blank=True)
+
+    @property
+    def get_required_skills_list(self):
+        if self.required_skills_text:
+            return [s.strip() for s in self.required_skills_text.split(',') if s.strip()]
+        return list(self.skills.filter(is_mandatory=True).values_list('skill_name', flat=True))
+
+    @property
+    def get_preferred_skills_list(self):
+        if self.preferred_skills_text:
+            return [s.strip() for s in self.preferred_skills_text.split(',') if s.strip()]
+        return list(self.skills.filter(is_mandatory=False).values_list('skill_name', flat=True))
 
     @property
     def min_salary_lpa(self):
@@ -78,6 +97,14 @@ class Job(BaseAppModel):
         elif self.max_salary:
             return self.max_salary_lpa
         return "Not Specified"
+
+    @property
+    def client_name(self):
+        if self.client and getattr(self.client, 'company_name', None):
+            return self.client.company_name
+        if self.company and getattr(self.company, 'name', None):
+            return self.company.name
+        return "N/A"
     
     class Meta:
         verbose_name = _('job')

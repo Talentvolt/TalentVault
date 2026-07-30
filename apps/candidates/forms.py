@@ -80,8 +80,11 @@ class ManualCandidateForm(forms.Form):
     primary_skills = forms.CharField(max_length=255, required=False, help_text="Comma-separated primary skills")
     secondary_skills = forms.CharField(max_length=255, required=False, help_text="Comma-separated secondary skills")
     
-    # Other
+    # Other & Social Links
     summary = forms.CharField(widget=forms.Textarea, required=False)
+    linkedin_url = forms.CharField(max_length=500, required=False)
+    portfolio_url = forms.CharField(max_length=500, required=False)
+    github_url = forms.CharField(max_length=500, required=False)
     
     # Resume file (optional in manual entry)
     resume = forms.FileField(required=False)

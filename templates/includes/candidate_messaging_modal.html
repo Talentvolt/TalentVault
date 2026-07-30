@@ -1,0 +1,431 @@
+<!-- Internshala-Style Candidate Messaging Modal -->
+<div class="modal fade" id="candidateMessagingModal" tabindex="-1" aria-labelledby="candidateMessagingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 1050px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden; height: 80vh; max-height: 720px;">
+            <!-- Header -->
+            <div class="modal-header bg-dark text-white border-0 px-4 py-3" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="d-flex align-items-center justify-content-center rounded-3 bg-primary bg-opacity-25 text-primary p-2" style="width: 38px; height: 38px;">
+                        <i class="bi bi-chat-dots-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <h6 class="modal-title fw-bold text-white mb-0" id="candidateMessagingModalLabel">Candidate Messaging & Inbox</h6>
+                        <span class="text-secondary small" style="font-size: 0.75rem; color: #94a3b8 !important;">Direct recruiter communication</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Modal Body (Two-Column Layout) -->
+            <div class="modal-body p-0 d-flex flex-column flex-md-row" style="height: 100%; overflow: hidden;">
+                <!-- Left Sidebar: Conversations & Candidate Search -->
+                <div class="col-12 col-md-4 border-end bg-light d-flex flex-column h-100" style="border-color: #e2e8f0 !important;">
+                    <!-- Search Input -->
+                    <div class="p-3 bg-white border-bottom" style="border-color: #e2e8f0 !important;">
+                        <div class="position-relative">
+                            <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" style="font-size: 0.85rem;"></i>
+                            <input type="text" id="candidateChatSearchInput" class="form-control form-control-sm ps-5 rounded-pill" placeholder="Search candidate name or email..." style="background-color: #f8fafc; border-color: #cbd5e1;">
+                        </div>
+                    </div>
+
+                    <!-- Conversation List -->
+                    <div class="flex-grow-1 custom-scrollbar overflow-y-auto" id="conversationListContainer">
+                        <div class="text-center py-5 text-muted small">
+                            <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                            <div>Loading conversations...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Pane: Active Conversation & Chat Window -->
+                <div class="col-12 col-md-8 bg-white d-flex flex-column h-100" id="chatWindowPane">
+                    <!-- Chat Header -->
+                    <div class="p-3 border-bottom bg-white d-flex align-items-center justify-content-between" id="activeChatHeader" style="border-color: #e2e8f0 !important;">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="position-relative">
+                                <div id="activeChatAvatar" class="rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 1rem;">
+                                    C
+                                </div>
+                                <span class="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle"></span>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0" id="activeChatCandidateName" style="font-size: 0.95rem;">Select a candidate</h6>
+                                <div class="text-muted small" id="activeChatSubtitle" style="font-size: 0.76rem;">Click on a conversation to start chatting</div>
+                            </div>
+                        </div>
+                        <div id="activeChatActions" class="d-none">
+                            <a id="activeChatProfileLink" href="#" target="_blank" class="btn btn-sm btn-outline-soft rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.78rem;">
+                                <i class="bi bi-person me-1"></i> View Profile
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages Container -->
+                    <div class="flex-grow-1 p-3.5 custom-scrollbar overflow-y-auto d-flex flex-column gap-3" id="chatMessagesContainer" style="background-color: #f8fafc;">
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5 text-muted">
+                            <i class="bi bi-chat-left-text fs-1 text-secondary opacity-50 mb-2"></i>
+                            <h6 class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">No Active Conversation Selected</h6>
+                            <p class="small text-muted mb-0" style="max-width: 300px; font-size: 0.8rem;">Select a candidate from the left panel or click "Message Candidate" on any profile to send a direct message.</p>
+                        </div>
+                    </div>
+
+                    <!-- Emoji Picker Popover Box -->
+                    <div id="emojiPickerPopover" class="d-none p-2 bg-white border rounded-3 shadow-sm position-absolute" style="bottom: 75px; right: 20px; z-index: 1055; width: 260px;">
+                        <div class="d-flex flex-wrap gap-1 fs-5 justify-content-center" id="emojiList">
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">😊</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">👍</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">👋</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">💼</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">📄</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">🙏</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">🎉</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">✉️</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">📞</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">🗓️</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">👏</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">⭐</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">🔥</span>
+                            <span class="emoji-item cursor-pointer p-1 rounded hover-light">✅</span>
+                        </div>
+                    </div>
+
+                    <!-- Attachment Selected Chip -->
+                    <div id="attachmentChipContainer" class="d-none px-3 py-1.5 bg-light border-top d-flex align-items-center justify-content-between" style="font-size: 0.78rem;">
+                        <span class="text-primary fw-medium text-truncate me-2"><i class="bi bi-paperclip me-1"></i> Attachment: <span id="attachmentFileName" class="text-dark"></span></span>
+                        <button type="button" class="btn-close btn-xs" id="removeAttachmentBtn" style="font-size: 0.65rem;"></button>
+                    </div>
+
+                    <!-- Input Bar -->
+                    <form id="sendMessageForm" class="p-3 bg-white border-top d-flex align-items-center gap-2" style="border-color: #e2e8f0 !important;" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" id="chatRecipientUserId" name="recipient_id" value="">
+                        <input type="file" id="chatAttachmentInput" name="attachment" class="d-none" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip">
+
+                        <!-- Attachment Trigger Button -->
+                        <button type="button" id="triggerAttachmentBtn" class="btn btn-light rounded-circle text-secondary p-2 flex-shrink-0" style="width: 38px; height: 38px;" title="Attach file">
+                            <i class="bi bi-paperclip fs-5"></i>
+                        </button>
+
+                        <!-- Emoji Trigger Button -->
+                        <button type="button" id="triggerEmojiBtn" class="btn btn-light rounded-circle text-secondary p-2 flex-shrink-0" style="width: 38px; height: 38px;" title="Add emoji">
+                            <i class="bi bi-emoji-smile fs-5"></i>
+                        </button>
+
+                        <!-- Text Input -->
+                        <input type="text" id="chatTextInput" name="message_text" class="form-control rounded-pill border px-3.5 py-2" placeholder="Write a message to candidate..." style="font-size: 0.88rem;" autocomplete="off" disabled>
+
+                        <!-- Send Button -->
+                        <button type="submit" id="sendMessageSubmitBtn" class="btn btn-primary rounded-circle p-2 flex-shrink-0 shadow-sm" style="width: 40px; height: 40px;" disabled title="Send Message">
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inline Candidate Messaging Script -->
+<script>
+    let activeCandidateId = null;
+    let activeRecipientUserId = null;
+
+    function openCandidateChat(candidateId, candidateName, recipientUserId) {
+        activeCandidateId = candidateId;
+        activeRecipientUserId = recipientUserId;
+
+        const modalEl = document.getElementById('candidateMessagingModal');
+        if (!modalEl) return;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        loadConversationsList(candidateId);
+        if (candidateId) {
+            loadCandidateThread(candidateId, candidateName, recipientUserId);
+        }
+    }
+
+    function loadConversationsList(selectCandidateId = null) {
+        const container = document.getElementById('conversationListContainer');
+        const searchVal = document.getElementById('candidateChatSearchInput')?.value || '';
+
+        fetch(`/messages/api/?q=${encodeURIComponent(searchVal)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    container.innerHTML = '<div class="p-4 text-center text-muted small">Unable to load conversations.</div>';
+                    return;
+                }
+
+                // Update unread badge in top navbar if exists
+                if (data.total_unread_count !== undefined) {
+                    const badgeEls = document.querySelectorAll('.unread-messages-badge');
+                    badgeEls.forEach(b => {
+                        b.textContent = data.total_unread_count;
+                        b.classList.toggle('d-none', data.total_unread_count === 0);
+                    });
+                }
+
+                if (data.conversations.length === 0) {
+                    container.innerHTML = '<div class="p-4 text-center text-muted small">No candidate conversations found.</div>';
+                    return;
+                }
+
+                let html = '';
+                data.conversations.forEach(c => {
+                    const isActive = selectCandidateId && String(selectCandidateId) === String(c.candidate_id);
+                    const initial = (c.candidate_name || 'C').charAt(0).toUpperCase();
+
+                    html += `
+                        <div class="conversation-item p-3 border-bottom cursor-pointer transition-all ${isActive ? 'bg-white shadow-xs border-start border-3 border-primary' : 'hover-bg-white'}" 
+                             onclick="loadCandidateThread('${c.candidate_id}', '${c.candidate_name.replace(/'/g, "\\'")}', '${c.recipient_user_id}')"
+                             style="cursor: pointer; border-color: #f1f5f9 !important;">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar-circle rounded-circle bg-primary bg-opacity-10 text-primary fw-bold d-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px;">
+                                    ${initial}
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex justify-content-between align-items-center mb-0.5">
+                                        <h6 class="fw-bold text-dark text-truncate mb-0" style="font-size: 0.86rem;">${c.candidate_name}</h6>
+                                        <span class="text-muted x-small" style="font-size: 0.7rem;">${c.last_time || ''}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-secondary text-truncate small" style="font-size: 0.78rem;">${c.last_message || 'No messages yet'}</span>
+                                        ${c.unread_count > 0 ? `<span class="badge bg-danger rounded-pill px-2 py-0.5" style="font-size: 0.65rem;">${c.unread_count}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+            })
+            .catch(err => {
+                console.error("Error loading conversations:", err);
+                container.innerHTML = '<div class="p-4 text-center text-muted small">Failed to load conversations.</div>';
+            });
+    }
+
+    function loadCandidateThread(candidateId, candidateName, recipientUserId) {
+        activeCandidateId = candidateId;
+        activeRecipientUserId = recipientUserId;
+
+        document.getElementById('chatRecipientUserId').value = recipientUserId;
+        document.getElementById('chatTextInput').disabled = false;
+        document.getElementById('sendMessageSubmitBtn').disabled = false;
+        document.getElementById('activeChatCandidateName').textContent = candidateName || 'Candidate';
+        document.getElementById('activeChatSubtitle').textContent = 'Active Direct Messaging Thread';
+        document.getElementById('activeChatAvatar').textContent = (candidateName || 'C').charAt(0).toUpperCase();
+
+        const profileLink = document.getElementById('activeChatProfileLink');
+        const actionsBox = document.getElementById('activeChatActions');
+        if (candidateId) {
+            profileLink.href = `/candidates/${candidateId}/`;
+            actionsBox.classList.remove('d-none');
+        } else {
+            actionsBox.classList.add('d-none');
+        }
+
+        const container = document.getElementById('chatMessagesContainer');
+        container.innerHTML = '<div class="text-center py-5 text-muted small"><div class="spinner-border spinner-border-sm text-primary mb-2"></div><div>Loading messages...</div></div>';
+
+        fetch(`/messages/api/?candidate_id=${candidateId}&recipient_user_id=${recipientUserId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    container.innerHTML = '<div class="p-4 text-center text-muted small">Unable to load messages.</div>';
+                    return;
+                }
+
+                if (data.messages.length === 0) {
+                    container.innerHTML = `
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 text-center py-5 text-muted">
+                            <i class="bi bi-chat-heart fs-1 text-primary opacity-50 mb-2"></i>
+                            <h6 class="fw-bold text-dark mb-1">Start Conversation with ${data.candidate?.name || candidateName}</h6>
+                            <p class="small text-muted mb-0" style="font-size: 0.8rem;">Send a friendly greeting or application update to connect.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                data.messages.forEach(m => {
+                    if (m.is_me) {
+                        // Recruiter Message (Right)
+                        html += `
+                            <div class="d-flex flex-column align-items-end mb-2">
+                                <div class="p-3 rounded-3 text-white shadow-xs" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); max-width: 75%; font-size: 0.88rem; border-bottom-right-radius: 4px !important;">
+                                    ${m.text ? `<div>${escapeHtml(m.text)}</div>` : ''}
+                                    ${m.attachment_url ? `
+                                        <div class="mt-2 pt-1 border-top border-white border-opacity-25">
+                                            <a href="${m.attachment_url}" target="_blank" class="text-white text-decoration-none fw-semibold small d-inline-flex align-items-center gap-1">
+                                                <i class="bi bi-paperclip"></i> ${escapeHtml(m.attachment_name || 'Attachment')}
+                                            </a>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div class="d-flex align-items-center gap-1 text-muted x-small mt-1" style="font-size: 0.68rem;">
+                                    <span>${m.timestamp}</span>
+                                    <i class="bi ${m.is_read ? 'bi-check-all text-primary' : 'bi-check'} ms-0.5"></i>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Candidate Message (Left)
+                        html += `
+                            <div class="d-flex flex-column align-items-start mb-2">
+                                <div class="p-3 rounded-3 bg-white border text-dark shadow-xs" style="max-width: 75%; font-size: 0.88rem; border-color: #e2e8f0 !important; border-bottom-left-radius: 4px !important;">
+                                    ${m.text ? `<div>${escapeHtml(m.text)}</div>` : ''}
+                                    ${m.attachment_url ? `
+                                        <div class="mt-2 pt-1 border-top border-light">
+                                            <a href="${m.attachment_url}" target="_blank" class="text-primary text-decoration-none fw-semibold small d-inline-flex align-items-center gap-1">
+                                                <i class="bi bi-paperclip"></i> ${escapeHtml(m.attachment_name || 'Attachment')}
+                                            </a>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div class="text-muted x-small mt-1" style="font-size: 0.68rem;">
+                                    ${m.timestamp}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+
+                container.innerHTML = html;
+                container.scrollTop = container.scrollHeight;
+            })
+            .catch(err => {
+                console.error("Error loading candidate thread:", err);
+                container.innerHTML = '<div class="p-4 text-center text-muted small">Failed to load message thread.</div>';
+            });
+    }
+
+    function escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('candidateChatSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                loadConversationsList(activeCandidateId);
+            });
+        }
+
+        // Emoji Picker Toggle
+        const triggerEmojiBtn = document.getElementById('triggerEmojiBtn');
+        const emojiPopover = document.getElementById('emojiPickerPopover');
+        if (triggerEmojiBtn && emojiPopover) {
+            triggerEmojiBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                emojiPopover.classList.toggle('d-none');
+            });
+
+            document.querySelectorAll('.emoji-item').forEach(el => {
+                el.addEventListener('click', function() {
+                    const textInput = document.getElementById('chatTextInput');
+                    textInput.value += this.textContent;
+                    emojiPopover.classList.add('d-none');
+                    textInput.focus();
+                });
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!emojiPopover.contains(e.target) && e.target !== triggerEmojiBtn) {
+                    emojiPopover.classList.add('d-none');
+                }
+            });
+        }
+
+        // Attachment File Select
+        const triggerAttachmentBtn = document.getElementById('triggerAttachmentBtn');
+        const fileInput = document.getElementById('chatAttachmentInput');
+        const chipContainer = document.getElementById('attachmentChipContainer');
+        const fileNameSpan = document.getElementById('attachmentFileName');
+        const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
+
+        if (triggerAttachmentBtn && fileInput) {
+            triggerAttachmentBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    fileNameSpan.textContent = this.files[0].name;
+                    chipContainer.classList.remove('d-none');
+                } else {
+                    chipContainer.classList.add('d-none');
+                }
+            });
+
+            if (removeAttachmentBtn) {
+                removeAttachmentBtn.addEventListener('click', function() {
+                    fileInput.value = '';
+                    chipContainer.classList.add('d-none');
+                });
+            }
+        }
+
+        // Send Message Submit Form
+        const sendForm = document.getElementById('sendMessageForm');
+        if (sendForm) {
+            sendForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const textInput = document.getElementById('chatTextInput');
+                const recipientInput = document.getElementById('chatRecipientUserId');
+                const messageText = textInput.value.trim();
+                const attachmentFile = fileInput ? fileInput.files[0] : null;
+
+                if (!messageText && !attachmentFile) return;
+
+                const formData = new FormData();
+                formData.append('recipient_id', recipientInput.value);
+                formData.append('candidate_id', activeCandidateId || '');
+                formData.append('message_text', messageText);
+                if (attachmentFile) {
+                    formData.append('attachment', attachmentFile);
+                }
+
+                // Get CSRF token from input or cookie
+                let csrfToken = document.querySelector('#sendMessageForm [name=csrfmiddlewaretoken]')?.value || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+                if (!csrfToken) {
+                    const match = document.cookie.match(/csrftoken=([^;]+)/);
+                    if (match) csrfToken = match[1];
+                }
+
+                fetch('/messages/api/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken || ''
+                    },
+                    body: formData
+                })
+                .then(async res => {
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok || !data) {
+                        const errMsg = (data && data.error) ? data.error : `HTTP ${res.status} error occurred while sending message.`;
+                        throw new Error(errMsg);
+                    }
+                    return data;
+                })
+                .then(data => {
+                    if (data.success) {
+                        textInput.value = '';
+                        if (fileInput) fileInput.value = '';
+                        if (chipContainer) chipContainer.classList.add('d-none');
+                        loadCandidateThread(activeCandidateId, document.getElementById('activeChatCandidateName').textContent, activeRecipientUserId);
+                        loadConversationsList(activeCandidateId);
+                    } else {
+                        alert(data.error || 'Failed to send message.');
+                    }
+                })
+                .catch(err => {
+                    console.error("Error sending message:", err);
+                    alert(err.message || 'An error occurred while sending message.');
+                });
+            });
+        }
+    });
+</script>

@@ -1,0 +1,195 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Submitted | TalentVault</title>
+    <!-- Browser Favicons & Web Manifest -->
+    <link rel="icon" type="image/x-icon" href="{% static 'images/logo/favicon.ico' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'images/logo/favicon-16x16.png' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'images/logo/favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{% static 'images/logo/favicon-48x48.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'images/logo/apple-touch-icon.png' %}">
+    <link rel="manifest" href="{% static 'images/logo/site.webmanifest' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6C4DFF;
+            --background: #FAFAFC;
+            --text-dark: #0F172A;
+            --text-muted: #64748B;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--background);
+            color: var(--text-dark);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .pending-card {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 24px;
+            padding: 3.5rem 3rem;
+            max-width: 560px;
+            width: 100%;
+            box-shadow: 0 20px 50px -15px rgba(108, 77, 255, 0.08);
+            text-align: center;
+        }
+
+        .success-icon-box {
+            width: 80px;
+            height: 80px;
+            background: #F3E8FF;
+            color: var(--primary);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 2rem auto;
+            font-size: 2.5rem;
+            box-shadow: 0 10px 25px -5px rgba(108, 77, 255, 0.2);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #FEF3C7;
+            color: #92400E;
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 0.4rem 1.1rem;
+            border-radius: 9999px;
+            margin-bottom: 1.5rem;
+            letter-spacing: 0.3px;
+        }
+
+        .status-badge .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #D97706;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .card-title-main {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0F172A;
+            margin-bottom: 1rem;
+            letter-spacing: -0.5px;
+        }
+
+        .card-desc {
+            color: #475569;
+            font-size: 1.05rem;
+            line-height: 1.65;
+            margin-bottom: 2rem;
+        }
+
+        .timeline-box {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .btn-home {
+            background: linear-gradient(135deg, #6C4DFF 0%, #7B3EFF 100%);
+            color: #FFFFFF;
+            font-weight: 700;
+            height: 48px;
+            border-radius: 12px;
+            border: none;
+            padding: 0 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            box-shadow: 0 8px 20px -4px rgba(108, 77, 255, 0.35);
+            transition: all 0.25s ease;
+        }
+
+        .btn-home:hover {
+            color: #FFFFFF;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px -4px rgba(108, 77, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="pending-card">
+        <div class="mb-4">
+            <a href="/">
+                <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault" style="width: 200px; height: auto; object-fit: contain;">
+            </a>
+        </div>
+
+        <div class="success-icon-box">
+            <i class="bi bi-patch-check-fill"></i>
+        </div>
+
+        <div class="status-badge">
+            <span class="dot"></span>
+            Status: Pending Verification
+        </div>
+
+        <h1 class="card-title-main">Registration Submitted</h1>
+
+        <p class="card-desc">
+            Your company registration has been submitted successfully.<br>
+            Our team will verify your company details.<br>
+            Your account will be activated within <strong>24–48 hours</strong>.<br>
+            You will receive an email once your account has been approved.
+        </p>
+
+        <div class="timeline-box">
+            <div class="timeline-item mb-2">
+                <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                <div>
+                    <strong class="d-block text-dark small">Account Created</strong>
+                    <span class="text-secondary small">Company details received</span>
+                </div>
+            </div>
+            <div class="timeline-item mb-2">
+                <i class="bi bi-clock-history text-warning fs-5"></i>
+                <div>
+                    <strong class="d-block text-dark small">Admin Verification (In Progress)</strong>
+                    <span class="text-secondary small">Reviewing company credentials</span>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <i class="bi bi-envelope-at text-primary fs-5"></i>
+                <div>
+                    <strong class="d-block text-dark small">Email Activation</strong>
+                    <span class="text-secondary small">Login access enabled upon approval</span>
+                </div>
+            </div>
+        </div>
+
+        <a href="{% url 'employer_login' %}" class="btn-home">
+            <i class="bi bi-arrow-left"></i> Return to Recruiter Login
+        </a>
+    </div>
+
+</body>
+</html>

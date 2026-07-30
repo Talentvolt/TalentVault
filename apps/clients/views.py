@@ -1,3 +1,4 @@
+import logging
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from apps.core.permissions import RecruiterRequiredMixin
 from django.urls import reverse_lazy
@@ -5,6 +6,9 @@ from django.db.models import Count, Q
 from apps.jobs.models import Job
 from .models import Client
 from .forms import ClientForm
+from utils.tenant import get_tenant_clients_qs
+
+logger = logging.getLogger(__name__)
 
 class ClientListView(RecruiterRequiredMixin, ListView):
     model = Client
@@ -13,8 +17,9 @@ class ClientListView(RecruiterRequiredMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        # Annotate with the number of open (ACTIVE) jobs
-        queryset = Client.objects.annotate(
+        # Multi-tenant data isolation: filter clients for logged in recruiter/company
+        base_qs = get_tenant_clients_qs(self.request.user)
+        queryset = base_qs.annotate(
             open_jobs_count=Count('jobs', filter=Q(jobs__status=Job.JobStatus.ACTIVE))
         )
         
@@ -49,6 +54,9 @@ class ClientDetailView(RecruiterRequiredMixin, DetailView):
     template_name = 'client_detail.html'
     context_object_name = 'client'
 
+    def get_queryset(self):
+        return get_tenant_clients_qs(self.request.user)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Fetch associated jobs
@@ -77,6 +85,9 @@ class ClientUpdateView(RecruiterRequiredMixin, UpdateView):
     form_class = ClientForm
     template_name = 'client_form.html'
 
+    def get_queryset(self):
+        return get_tenant_clients_qs(self.request.user)
+
     def form_valid(self, form):
         form.instance.updated_by = self.request.user
         return super().form_valid(form)
@@ -94,3 +105,7 @@ class ClientDeleteView(RecruiterRequiredMixin, DeleteView):
     model = Client
     template_name = 'client_confirm_delete.html'
     success_url = reverse_lazy('clients:client_list')
+
+    def get_queryset(self):
+        return get_tenant_clients_qs(self.request.user)
+

@@ -1273,6 +1273,27 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 if email_name:
                     return email_name
 
+                # 6. Filename Fallback
+                filename_name = None
+                if filename:
+                    base_fname = os.path.splitext(os.path.basename(filename))[0]
+                    clean_fname = re.sub(r'[\._\-]+', ' ', base_fname)
+                    non_name_words = {
+                        'resume', 'cv', 'profile', 'bio', 'updated', 'final', 'latest', 'draft',
+                        'document', 'scanned', 'only', 'test', 'sample', 'dummy', 'file', 'temp',
+                        'image', 'scan', 'copy', 'new', 'doc', 'pdf', 'docx', 'secure'
+                    }
+                    parts = [w for w in clean_fname.split() if w.isalpha() and len(w) >= 2 and w.lower() not in non_name_words]
+                    if len(parts) >= 1:
+                        fname_cand = " ".join(parts).title()
+                        if is_acceptable_name(fname_cand):
+                            filename_name = fname_cand
+
+                logger.info(f"[NAME] Filename Fallback: {filename_name or 'None'}")
+                print(f"[NAME] Filename Fallback: {filename_name or 'None'}")
+                if filename_name:
+                    return filename_name
+
                 return "Unknown Candidate"
 
             candidate_name = get_priority_name()[:255]

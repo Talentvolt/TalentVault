@@ -20,7 +20,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, authenticate
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
-from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django import forms
 from .models import User, OTPVerification
 from django.contrib.auth.tokens import default_token_generator
@@ -43,13 +43,11 @@ logger = logging.getLogger(__name__)
 
 def redirect_role_dashboard(user):
     role = user.role
-    if role == User.Role.SUPER_ADMIN:
-        return redirect('frontend:admin_dashboard')
-    elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+    if role in [User.Role.SUPER_ADMIN, User.Role.RECRUITER, User.Role.COMPANY_ADMIN] or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
         return redirect('frontend:recruiter_dashboard')
     elif role == User.Role.CANDIDATE:
         return redirect('frontend:candidate_dashboard')
-    return redirect('frontend:dashboard')
+    return redirect('frontend:recruiter_dashboard')
 
 def is_rate_limited(request, key, max_attempts=5, period=300):
     attempts_key = f"attempts_{key}"
@@ -204,6 +202,7 @@ class CustomLoginView(View):
     template_name = 'registration/login.html'
 
     @method_decorator(never_cache)
+    @method_decorator(ensure_csrf_cookie)
     @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
@@ -253,7 +252,6 @@ class CustomLogoutView(View):
         request.session.flush()
         response = redirect('/')
         response.delete_cookie('sessionid')
-        response.delete_cookie('csrftoken')
         response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
         response['Pragma'] = 'no-cache'
         response['Expires'] = '0'
@@ -433,6 +431,40 @@ class EmployerSignupForm(forms.ModelForm):
         model = User
         fields = ['email', 'password', 'phone_number']
 
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not email:
+            raise forms.ValidationError("Email is required.")
+        email = email.strip().lower()
+
+        # Check 1: User model (case-insensitive)
+        user_matches = User.objects.filter(email__iexact=email)
+        if user_matches.exists():
+            matched_user = user_matches.first()
+            print(f"\n==================================================")
+            print(f"[EMPLOYER SIGNUP DEBUG] User.objects.filter(email__iexact='{email}') returned exists=True")
+            print(f"[EMPLOYER SIGNUP DEBUG] Table: accounts_user (User) | Record ID: {matched_user.pk}")
+            print(f"[EMPLOYER SIGNUP DEBUG] Record Details: Email='{matched_user.email}', Role={matched_user.role}, Active={matched_user.is_active}, Verified={matched_user.is_verified}")
+            print(f"==================================================\n")
+            raise forms.ValidationError("An account with this email address already exists.")
+
+        # Check 2: django-allauth EmailAddress model (case-insensitive)
+        try:
+            from allauth.account.models import EmailAddress
+            ea_matches = EmailAddress.objects.filter(email__iexact=email)
+            if ea_matches.exists():
+                matched_ea = ea_matches.first()
+                print(f"\n==================================================")
+                print(f"[EMPLOYER SIGNUP DEBUG] EmailAddress.objects.filter(email__iexact='{email}') returned exists=True")
+                print(f"[EMPLOYER SIGNUP DEBUG] Table: account_emailaddress (EmailAddress) | Record ID: {matched_ea.pk}")
+                print(f"[EMPLOYER SIGNUP DEBUG] Record Details: Email='{matched_ea.email}', User_ID={matched_ea.user_id}, Verified={matched_ea.verified}")
+                print(f"==================================================\n")
+                raise forms.ValidationError("An account with this email address already exists.")
+        except Exception:
+            pass
+
+        return email
+
 
 class LoginSelectView(View):
     template_name = 'registration/login_select.html'
@@ -458,6 +490,7 @@ class CandidateLoginView(View):
     template_name = 'registration/candidate_login.html'
 
     @method_decorator(never_cache)
+    @method_decorator(ensure_csrf_cookie)
     @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
@@ -620,11 +653,15 @@ class EmployerLoginView(View):
     template_name = 'registration/employer_login.html'
 
     @method_decorator(never_cache)
+    @method_decorator(ensure_csrf_cookie)
     @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             if request.user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
-                return redirect('frontend:recruiter_dashboard')
+                if request.user.role == User.Role.SUPER_ADMIN or getattr(request.user, 'recruiter_status', 'ACTIVE') == User.RecruiterStatus.ACTIVE:
+                    return redirect('frontend:recruiter_dashboard')
+                else:
+                    logout(request)
             else:
                 return redirect('frontend:candidate_dashboard')
         form = EmployerLoginForm()
@@ -635,7 +672,7 @@ class EmployerLoginView(View):
     def post(self, request, *args, **kwargs):
         form = EmployerLoginForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data.get('email')
+            email = form.cleaned_data.get('email', '').strip().lower()
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
@@ -644,21 +681,41 @@ class EmployerLoginView(View):
                 if user_check.role == User.Role.CANDIDATE:
                     form.add_error(None, "This workspace is reserved for Recruiters/Employers. Please use the Candidate Portal to sign in.")
                     return render(request, self.template_name, {'form': form})
+
+                if user_check.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+                    rec_status = getattr(user_check, 'recruiter_status', User.RecruiterStatus.ACTIVE)
+                    if rec_status == User.RecruiterStatus.PENDING:
+                        form.add_error(None, "Your account is currently under verification. Please wait until TalentVault approves your company.")
+                        return render(request, self.template_name, {'form': form})
+                    elif rec_status == User.RecruiterStatus.REJECTED:
+                        form.add_error(None, "Your company verification was rejected. Please contact TalentVault Support.")
+                        return render(request, self.template_name, {'form': form})
+                    elif rec_status == User.RecruiterStatus.SUSPENDED or not user_check.is_active:
+                        form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
+                        return render(request, self.template_name, {'form': form})
             except User.DoesNotExist:
                 pass
 
             user = authenticate(request, username=email, password=password)
             if user is not None:
                 if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
-                    if user.is_active:
-                        login(request, user)
-                        if remember_me:
-                            request.session.set_expiry(1209600)  # 2 weeks
+                    rec_status = getattr(user, 'recruiter_status', User.RecruiterStatus.ACTIVE)
+                    if user.role == User.Role.SUPER_ADMIN or rec_status == User.RecruiterStatus.ACTIVE:
+                        if user.is_active:
+                            login(request, user)
+                            if remember_me:
+                                request.session.set_expiry(1209600)  # 2 weeks
+                            else:
+                                request.session.set_expiry(0)
+                            return redirect('frontend:recruiter_dashboard')
                         else:
-                            request.session.set_expiry(0)
-                        return redirect('frontend:recruiter_dashboard')
-                    else:
-                        form.add_error(None, "This account is disabled.")
+                            form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
+                    elif rec_status == User.RecruiterStatus.PENDING:
+                        form.add_error(None, "Your account is currently under verification. Please wait until TalentVault approves your company.")
+                    elif rec_status == User.RecruiterStatus.REJECTED:
+                        form.add_error(None, "Your company verification was rejected. Please contact TalentVault Support.")
+                    elif rec_status == User.RecruiterStatus.SUSPENDED:
+                        form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
                 else:
                     form.add_error(None, "This workspace is reserved for Recruiters/Employers.")
             else:
@@ -671,22 +728,124 @@ class EmployerSignupView(View):
     template_name = 'registration/employer_signup.html'
 
     def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            logout(request)
         form = EmployerSignupForm()
         return render(request, self.template_name, {'form': form})
 
     def post(self, request, *args, **kwargs):
         form = EmployerSignupForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email'].strip().lower()
+            password = form.cleaned_data['password']
+            phone_number = form.cleaned_data['phone_number'].strip()
+            org_name = form.cleaned_data['org_name'].strip()
+            hiring_type = form.cleaned_data['hiring_type']
+            website = form.cleaned_data.get('website', '')
+            company_size = form.cleaned_data.get('company_size', '')
+            industry = form.cleaned_data.get('industry', '')
+
+            user_matches = User.objects.filter(email__iexact=email)
+            if user_matches.exists():
+                matched_user = user_matches.first()
+                print(f"\n==================================================")
+                print(f"[EMPLOYER SIGNUP VIEW DEBUG] User.objects.filter(email__iexact='{email}') returned exists=True")
+                print(f"[EMPLOYER SIGNUP VIEW DEBUG] Table: accounts_user (User) | Record ID: {matched_user.pk}")
+                print(f"[EMPLOYER SIGNUP VIEW DEBUG] Record Details: Email='{matched_user.email}', Role={matched_user.role}")
+                print(f"==================================================\n")
+                form.add_error('email', 'An account with this email address already exists.')
+                return render(request, self.template_name, {'form': form})
+
+            # Create User with recruiter_status = PENDING
+            user = User.objects.create_user(
+                email=email,
+                password=password,
+                phone_number=phone_number,
+                role=User.Role.RECRUITER,
+                recruiter_status=User.RecruiterStatus.PENDING,
+                is_active=True,
+                is_verified=True
+            )
+
+            # Create or get Company & CompanyMember link
+            from apps.companies.models import Company, CompanyMember
+            from django.utils.text import slugify
+            base_slug = slugify(org_name) or 'company'
+            slug = base_slug
+            idx = 1
+            while Company.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{idx}"
+                idx += 1
+
+            company, _ = Company.objects.get_or_create(
+                name=org_name,
+                defaults={
+                    'slug': slug,
+                    'website': website,
+                    'industry': industry or 'Technology',
+                    'employee_count': company_size,
+                    'description': f"{org_name} ({hiring_type.title()})"
+                }
+            )
+
+            CompanyMember.objects.get_or_create(
+                company=company,
+                user=user,
+                defaults={
+                    'designation': 'Hiring Manager / Recruiter',
+                    'role': CompanyMember.MemberRole.ADMIN
+                }
+            )
+
+            # Send Admin Notification Email for New Recruiter Registration
+            try:
+                from django.urls import reverse
+                from django.utils import timezone
+                from apps.accounts.services.email_service import send_recruiter_registration_admin_notification
+
+                try:
+                    approval_url = request.build_absolute_uri(reverse('frontend:admin_recruiter_approvals'))
+                except Exception:
+                    approval_url = request.build_absolute_uri('/dashboard/admin/recruiter-approvals/')
+
+                reg_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+                recruiter_name = user.get_full_name().strip() or email
+
+                send_recruiter_registration_admin_notification(
+                    company_name=org_name,
+                    recruiter_name=recruiter_name,
+                    email=email,
+                    phone=phone_number,
+                    hiring_type=hiring_type.title(),
+                    registration_time=reg_time,
+                    approval_url=approval_url
+                )
+            except Exception as notify_err:
+                logger.error(f"Failed to send recruiter registration admin notification email: {notify_err}")
+
+            request.session['pending_employer_email'] = email
+            return redirect('registration_pending')
+
         return render(request, self.template_name, {'form': form})
+
+
+class RegistrationPendingView(View):
+    template_name = 'registration/registration_pending.html'
+
+    def get(self, request, *args, **kwargs):
+        email = request.session.get('pending_employer_email', '')
+        return render(request, self.template_name, {'email': email})
 
 
 class AdminLoginView(View):
     template_name = 'registration/admin_login.html'
 
     @method_decorator(never_cache)
+    @method_decorator(ensure_csrf_cookie)
     @method_decorator(csrf_protect)
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return redirect_role_dashboard(request.user)
+            return redirect('frontend:recruiter_dashboard')
         form = LoginForm()
         return render(request, self.template_name, {'form': form})
 
@@ -695,13 +854,13 @@ class AdminLoginView(View):
     def post(self, request, *args, **kwargs):
         form = LoginForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data.get('email')
+            email = form.cleaned_data.get('email', '').strip().lower()
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
             user = authenticate(request, username=email, password=password)
             if user is not None:
-                if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                if user.role == User.Role.SUPER_ADMIN or user.is_superuser or user.is_staff:
                     if user.is_active:
                         login(request, user)
                         if remember_me:
@@ -710,9 +869,9 @@ class AdminLoginView(View):
                             request.session.set_expiry(0)
                         return redirect('frontend:recruiter_dashboard')
                     else:
-                        form.add_error(None, "This account is disabled.")
+                        form.add_error(None, "This administrator account is disabled.")
                 else:
-                    form.add_error(None, "This workspace is reserved for Recruiters/Employers.")
+                    form.add_error(None, "Access denied. Only system administrators can log in here.")
             else:
                 form.add_error(None, "Invalid email or password.")
         

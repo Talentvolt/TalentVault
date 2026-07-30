@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,6 +8,9 @@ from .serializers import InterviewSerializer, InterviewFeedbackSerializer
 from services.interview_service import InterviewService
 from permissions.roles import IsRecruiter
 from utils.pagination import StandardResultsSetPagination
+from utils.tenant import get_tenant_interviews_qs
+
+logger = logging.getLogger(__name__)
 
 class InterviewViewSet(viewsets.ModelViewSet):
     """
@@ -30,12 +34,7 @@ class InterviewViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'CANDIDATE':
-            return Interview.objects.filter(application__candidate__user=user)
-        elif user.role in ['RECRUITER', 'COMPANY_ADMIN', 'SUPER_ADMIN']:
-            return Interview.objects.filter(application__job__company__members__user=user).distinct()
-        return super().get_queryset()
+        return get_tenant_interviews_qs(self.request.user)
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):

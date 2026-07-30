@@ -4,7 +4,15 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold m-0">Admin Control Center</h3>
+    <div>
+        <h3 class="fw-bold m-0 text-dark">Admin Control Center</h3>
+        <p class="text-secondary small m-0 mt-1">Platform overview, system activity, recruiter approvals, and administration metrics.</p>
+    </div>
+    {% if pending_recruiters_count %}
+    <a href="{% url 'frontend:admin_recruiter_approvals' %}?status=PENDING" class="btn btn-warning text-dark font-bold shadow-sm rounded-pill px-3 py-1.5 small">
+        <i class="bi bi-shield-check me-1"></i> {{ pending_recruiters_count }} Recruiter{% if pending_recruiters_count > 1 %}s{% endif %} Pending Approval
+    </a>
+    {% endif %}
 </div>
 
 <!-- Statistics Cards -->
@@ -35,6 +43,46 @@
     </div>
 </div>
 
+<!-- Recruiter Approvals Table (if pending recruiters exist) -->
+{% if pending_recruiters %}
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0 border-start border-warning border-4">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-dark"><i class="bi bi-clock-history me-2 text-warning"></i>Pending Recruiter Approvals</span>
+                <a href="{% url 'frontend:admin_recruiter_approvals' %}?status=PENDING" class="btn btn-sm btn-outline-warning fw-bold">View All Pending ({{ pending_recruiters_count }})</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3 small">Recruiter Email</th>
+                                <th class="py-3 small">Company</th>
+                                <th class="py-3 small">Industry</th>
+                                <th class="px-4 py-3 text-end small">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in pending_recruiters %}
+                            <tr>
+                                <td class="px-4 fw-bold small">{{ item.user.email }}</td>
+                                <td><span class="small">{{ item.company_name }}</span></td>
+                                <td><span class="badge bg-light text-dark border small">{{ item.company_industry }}</span></td>
+                                <td class="px-4 text-end">
+                                    <a href="{% url 'frontend:admin_recruiter_approvals' %}" class="btn btn-xs btn-warning fw-bold px-2 py-1 small">Review</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-4 mb-4">
     <!-- System Activity -->
     <div class="col-lg-8">
@@ -60,8 +108,8 @@
                                     <div class="fw-bold small">{{ app.candidate.user.get_full_name|default:app.candidate.user.email }}</div>
                                 </td>
                                 <td><span class="small">{{ app.job.title }}</span></td>
-                                <td><span class="badge {{ app.badge_class }} small">{{ app.get_stage_display }}</span></td>
-                                <td class="px-4 text-end"><span class="text-secondary small">{{ app.created_at|date:"M d" }}</span></td>
+                                <td><span class="badge {{ app.badge_class|default:'bg-secondary text-white' }} small">{{ app.candidate_status_display|default:app.get_stage_display }}</span></td>
+                                <td class="px-4 text-end"><span class="text-secondary small">{{ app.created_at|date:"M d, Y" }}</span></td>
                             </tr>
                             {% empty %}
                             <tr>
@@ -82,6 +130,7 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <a href="/admin/accounts/user/" class="btn btn-outline-dark text-start"><i class="bi bi-person-gear me-2"></i> Manage Users</a>
+                    <a href="{% url 'frontend:admin_recruiter_approvals' %}" class="btn btn-outline-warning text-start"><i class="bi bi-shield-check me-2"></i> Recruiter Approvals {% if pending_recruiters_count %}<span class="badge bg-warning text-dark float-end">{{ pending_recruiters_count }}</span>{% endif %}</a>
                     <a href="/admin/jobs/job/" class="btn btn-outline-dark text-start"><i class="bi bi-briefcase me-2"></i> Audit Job Posts</a>
                     <a href="{% url 'frontend:analytics' %}" class="btn btn-outline-dark text-start"><i class="bi bi-graph-up me-2"></i> System Analytics</a>
                 </div>

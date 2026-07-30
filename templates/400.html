@@ -1,0 +1,14 @@
+{% extends "layouts/recruiter_base.html" %}
+{% block title %}400 Bad Request - TalentVault{% endblock %}
+{% block content %}
+<div class="container py-5 text-center">
+    <div class="card shadow-sm mx-auto" style="max-width: 500px; border-radius: 12px;">
+        <div class="card-body p-5">
+            <h1 class="display-1 text-warning fw-bold">400</h1>
+            <h3 class="mb-3">Bad Request</h3>
+            <p class="text-muted mb-4">{{ message|default:"The server could not understand the request due to invalid syntax or parameters." }}</p>
+            <a href="/" class="btn btn-primary px-4 py-2">Return Home</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

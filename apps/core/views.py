@@ -1,5 +1,7 @@
+import os
 import random
 import json
+import logging
 from decimal import Decimal
 from datetime import datetime
 from django.http import JsonResponse, HttpResponse, FileResponse, Http404
@@ -27,10 +29,19 @@ from apps.companies.models import CompanyMember, Company
 from .permissions import SuperAdminRequiredMixin, RecruiterRequiredMixin, CandidateRequiredMixin
 from services.resume_intelligence import ResumeIntelligenceService
 from services.candidate_matching_service import CandidateMatchingService
+from utils.tenant import (
+    get_user_company,
+    get_tenant_jobs_qs,
+    get_tenant_clients_qs,
+    get_tenant_applications_qs,
+    get_tenant_candidates_qs,
+    get_tenant_interviews_qs,
+)
 
 from apps.core.models import Location
-
 from services.location_service import LocationService
+
+logger = logging.getLogger(__name__)
 
 class LocationSearchView(View):
     def get(self, request, *args, **kwargs):
@@ -91,12 +102,12 @@ class RoleRedirectView(LoginRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            role = request.user.role
-            if role == User.Role.SUPER_ADMIN:
+            user = request.user
+            if user.role == User.Role.SUPER_ADMIN or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
                 return redirect('frontend:admin_dashboard')
-            elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            elif user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
                 return redirect('frontend:recruiter_dashboard')
-            elif role == User.Role.CANDIDATE:
+            elif user.role == User.Role.CANDIDATE:
                 return redirect('frontend:candidate_dashboard')
         return redirect('/')
 
@@ -109,13 +120,13 @@ class ShortcutRouteView(View):
     def get(self, request, target=None, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect('/')
-        role = request.user.role
-        if role == User.Role.CANDIDATE:
-            return redirect('frontend:candidate_dashboard')
-        elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
-            return redirect('frontend:recruiter_dashboard')
-        elif role == User.Role.SUPER_ADMIN:
+        user = request.user
+        if user.role == User.Role.SUPER_ADMIN or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
             return redirect('frontend:admin_dashboard')
+        elif user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            return redirect('frontend:recruiter_dashboard')
+        elif user.role == User.Role.CANDIDATE:
+            return redirect('frontend:candidate_dashboard')
         return redirect('/')
 
 class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
@@ -168,36 +179,73 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
 class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
     template_name = 'recruiter_dashboard.html'
     
+    def dispatch(self, request, *args, **kwargs):
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            print(f"[RECRUITER DASHBOARD VIEW] request.user: {request.user}")
+            print(f"[RECRUITER DASHBOARD VIEW] request.user.role: {getattr(request.user, 'role', None)}")
+            print(f"[RECRUITER DASHBOARD VIEW] request.user.is_superuser: {getattr(request.user, 'is_superuser', False)}")
+            print(f"[RECRUITER DASHBOARD VIEW] request.user.is_staff: {getattr(request.user, 'is_staff', False)}")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        user = self.request.user
         
-        # Current Database counts/objects
+        # Detect logged in user role
+        is_super_admin = (user.role == User.Role.SUPER_ADMIN) or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False)
+        is_company_admin = (user.role == User.Role.COMPANY_ADMIN)
+        is_recruiter = (user.role == User.Role.RECRUITER)
+        
+        context['is_super_admin'] = is_super_admin
+        context['is_company_admin'] = is_company_admin
+        context['is_recruiter'] = is_recruiter
+        context['user_role'] = user.role
+        context['user_role_display'] = "Super Admin" if is_super_admin else ("Company Admin" if is_company_admin else "Recruiter")
+        
         context['timezone_now'] = timezone.now()
         from apps.candidates.models import CandidateProfile
         from apps.applications.models import Application
         from apps.notifications.models import EmailLog
+        from apps.interviews.models import Interview
         from django.utils import timezone as django_timezone
+        from django.db.models import Count, Q, Avg, Prefetch
         
-        context['total_candidates_count'] = CandidateProfile.objects.count()
-        context['open_jobs_count'] = Job.objects.filter(status='ACTIVE').count()
+        company_member = user.company_affiliations.select_related('company').first()
+        company = company_member.company if company_member else None
+        context['company'] = company
+        
+        jobs_qs = get_tenant_jobs_qs(user)
+        apps_qs = get_tenant_applications_qs(user)
+        interviews_qs = get_tenant_interviews_qs(user)
+        candidates_qs = get_tenant_candidates_qs(user)
+        
+        context['total_candidates_count'] = candidates_qs.count()
+        context['open_jobs_count'] = jobs_qs.filter(status='ACTIVE').count()
+        context['open_positions_count'] = context['open_jobs_count']
         context['total_emails_count'] = EmailLog.objects.count()
         
         # New applications count (last 7 days)
         seven_days_ago = django_timezone.now() - django_timezone.timedelta(days=7)
-        context['new_applications_count'] = Application.objects.filter(created_at__gte=seven_days_ago).count()
+        context['new_applications_count'] = apps_qs.filter(created_at__gte=seven_days_ago).count()
+        
+        # New applications today count
+        today_start = django_timezone.localtime(django_timezone.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+        context['applications_today_count'] = apps_qs.filter(created_at__gte=today_start).count()
+        context['total_pipeline_count'] = apps_qs.count()
         
         # Interviews scheduled for today
         today_date = django_timezone.now().date()
-        context['interviews_today_count'] = Interview.objects.filter(start_time__date=today_date).count()
+        context['interviews_today_count'] = interviews_qs.filter(start_time__date=today_date).count()
         
         # Recent Job Openings
-        context['recent_jobs'] = Job.objects.filter(status='ACTIVE').order_by('-created_at')[:5]
+        context['recent_jobs'] = jobs_qs.filter(status='ACTIVE').order_by('-created_at')[:5]
         
         # Candidates added over last 7 days (for line chart)
         candidates_by_day = []
         for i in range(6, -1, -1):
             day = today_date - django_timezone.timedelta(days=i)
-            count = CandidateProfile.objects.filter(created_at__date=day).count()
+            count = candidates_qs.filter(created_at__date=day).count()
             candidates_by_day.append({
                 'day': day.strftime("%a"),
                 'count': count
@@ -205,15 +253,27 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         context['candidates_by_day'] = candidates_by_day
         
         # 1. Total Interviews (Scheduled Interviews)
-        context['upcoming_interviews'] = Interview.objects.filter(
+        context['upcoming_interviews'] = interviews_qs.filter(
             status='SCHEDULED'
         ).select_related('application__candidate__user', 'application__job').order_by('start_time')[:10]
-        context['total_interviews_count'] = Interview.objects.filter(status='SCHEDULED').count()
+        context['total_interviews_count'] = interviews_qs.filter(status='SCHEDULED').count()
         
-        # 2. My Tasks (Recruiter Actionable Items from database records)
+        # 2. My Tasks (Recruiter Actionable Items + Admin pending approvals)
         tasks = []
-        # Task type 1: Screen new applicants
-        pending_screening = Application.objects.filter(stage='APPLIED').select_related('candidate__user', 'job')
+        if is_super_admin:
+            pending_rec_count = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').count()
+            if pending_rec_count > 0:
+                tasks.append({
+                    'title': f"Verify {pending_rec_count} Recruiter Account Registration{'s' if pending_rec_count > 1 else ''}",
+                    'subtitle': "Company Verification Pending",
+                    'due': "Today",
+                    'badge': "Admin Priority",
+                    'badge_class': "bg-danger-subtle text-danger",
+                    'task_type': 'admin_approval',
+                    'object_id': 'pending_recruiters'
+                })
+
+        pending_screening = apps_qs.filter(stage__in=['OPEN', 'SYSTEM_SUBMITTED', 'SCREENING_FEEDBACK_PENDING']).select_related('candidate__user', 'job')
         for app in pending_screening:
             tasks.append({
                 'title': f"Screen {app.candidate.full_name or app.candidate.user.email}",
@@ -224,7 +284,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
                 'task_type': 'screen',
                 'object_id': str(app.id)
             })
-        # Task type 2: Conduct scheduled interviews
+            
         for interview in context['upcoming_interviews']:
             tasks.append({
                 'title': f"Conduct {interview.round or 'Interview'} with {interview.application.candidate.full_name or interview.application.candidate.user.email}",
@@ -244,9 +304,8 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         # 4. Applicant Status (Pipeline stats counts)
         pipeline_counts = []
         for stage_val, stage_label in Application.ApplicationStage.choices:
-            count = Application.objects.filter(stage=stage_val).count()
+            count = apps_qs.filter(stage=stage_val).count()
             
-            # Map stages to CSS classes based on the requested colors:
             if stage_val == 'OPEN':
                 badge_class = 'bg-primary text-white' # blue
             elif stage_val in ['SCREENING_SELECT', 'INTERVIEW_SELECT']:
@@ -277,7 +336,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         context['pipeline_counts'] = pipeline_counts
         
         # 5. Job Applicants (Active jobs and their applicant counts)
-        context['job_applicants'] = Job.objects.filter(status='ACTIVE').annotate(
+        context['job_applicants'] = jobs_qs.filter(status='ACTIVE').annotate(
             applicant_count=Count('applications'),
             avg_ats_score=Avg('applications__match_score')
         ).order_by('-applicant_count')[:10]
@@ -292,7 +351,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         start_of_week = today_start - django_timezone.timedelta(days=local_now.weekday())
         start_of_month = today_start.replace(day=1)
 
-        signup_stats = CandidateProfile.objects.aggregate(
+        signup_stats = candidates_qs.aggregate(
             total=Count('id'),
             today=Count('id', filter=Q(created_at__gte=today_start)),
             yesterday=Count('id', filter=Q(created_at__gte=yesterday_start, created_at__lt=today_start)),
@@ -302,8 +361,8 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         context['candidate_signup_stats'] = signup_stats
 
         # 7. Recent Candidate Activity
-        raw_candidates = CandidateProfile.objects.select_related('user').prefetch_related(
-            Prefetch('job_applications', queryset=Application.objects.select_related('job').order_by('-created_at'), to_attr='latest_applications')
+        raw_candidates = candidates_qs.select_related('user').prefetch_related(
+            Prefetch('job_applications', queryset=apps_qs.select_related('job').order_by('-created_at'), to_attr='latest_applications')
         ).order_by('-created_at')[:10]
 
         recent_candidate_activity = []
@@ -322,13 +381,275 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
             })
         context['recent_candidate_activity'] = recent_candidate_activity
 
+        # Dynamic Greeting based on Asia/Kolkata local time
+        import zoneinfo
+        kolkata_tz = zoneinfo.ZoneInfo('Asia/Kolkata')
+        now_local = django_timezone.localtime(django_timezone.now(), kolkata_tz)
+        hour = now_local.hour
+
+        if 5 <= hour < 12:
+            greeting_prefix = "Good Morning"
+            greeting_emoji = "👋"
+        elif 12 <= hour < 17:
+            greeting_prefix = "Good Afternoon"
+            greeting_emoji = "☀️"
+        elif 17 <= hour < 21:
+            greeting_prefix = "Good Evening"
+            greeting_emoji = "🌇"
+        else:
+            greeting_prefix = "Good Night"
+            greeting_emoji = "🌙"
+
+        first_name = (user.first_name or "").strip()
+        if first_name and "@" not in first_name and "talentvault" not in first_name.lower():
+            greeting_text = f"{greeting_prefix}, {first_name} {greeting_emoji}"
+        else:
+            greeting_text = f"{greeting_prefix} {greeting_emoji}"
+
+        context['dynamic_greeting'] = greeting_text
+
         # 8. Recent Job Applications
-        context['recent_applications'] = Application.objects.select_related('candidate__user', 'job').order_by('-created_at')[:10]
+        context['recent_applications'] = apps_qs.select_related('candidate__user', 'job').order_by('-created_at')[:10]
         
+        # 9. Super Admin specific data
+        if is_super_admin:
+            context['pending_recruiters_count'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').count()
+            
+        return context
+
+
+class RecruiterJobsView(RecruiterRequiredMixin, TemplateView):
+    template_name = 'recruiter_jobs.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        company_member = user.company_affiliations.select_related('company').first()
+        company = company_member.company if company_member else None
+
+        status_filter = self.request.GET.get('status', 'ALL').upper()
+
+        jobs_qs = get_tenant_jobs_qs(user)
+
+        if status_filter in ['ACTIVE', 'DRAFT', 'PAUSED', 'ON_HOLD', 'CLOSED']:
+            jobs_qs = jobs_qs.filter(status=status_filter)
+
+        context['jobs'] = jobs_qs.order_by('-created_at')
+        context['company'] = company
+        context['status_filter'] = status_filter
+        context['active_count'] = get_tenant_jobs_qs(user).filter(status='ACTIVE').count()
+        context['closed_count'] = get_tenant_jobs_qs(user).filter(status='CLOSED').count()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        action = request.POST.get('action')
+        company_member = user.company_affiliations.select_related('company').first()
+        company = company_member.company if company_member else None
+
+        if not company:
+            from apps.companies.models import Company, CompanyMember
+            from django.utils.text import slugify
+            comp_name = f"{user.first_name or 'Recruiter'} Organization"
+            company, _ = Company.objects.get_or_create(
+                name=comp_name,
+                defaults={'slug': slugify(f"{comp_name}-{user.id}")}
+            )
+            CompanyMember.objects.get_or_create(company=company, user=user, defaults={'designation': 'Recruiter'})
+
+        if action == 'create':
+            title = request.POST.get('title', '').strip()
+            department = request.POST.get('department', '').strip()
+            job_type = request.POST.get('job_type', 'FULL_TIME')
+            location = request.POST.get('location', '').strip()
+            min_exp = int(request.POST.get('min_experience') or 0)
+            max_exp = int(request.POST.get('max_experience') or 1)
+            min_sal = request.POST.get('min_salary') or None
+            max_sal = request.POST.get('max_salary') or None
+            req_skills = request.POST.get('required_skills', '').strip()
+            pref_skills = request.POST.get('preferred_skills', '').strip()
+            education = request.POST.get('education', '').strip()
+            notice_period = int(request.POST.get('notice_period') or 30)
+            description = request.POST.get('description', '').strip()
+            ai_matching_enabled = request.POST.get('ai_matching_enabled') == 'on' or request.POST.get('ai_matching_enabled') == 'true'
+
+            new_job = Job.objects.create(
+                company=company,
+                created_by=user,
+                title=title,
+                department=department,
+                job_type=job_type,
+                location=location,
+                min_experience=min_exp,
+                max_experience=max_exp,
+                min_salary=min_sal if min_sal else None,
+                max_salary=max_sal if max_sal else None,
+                required_skills_text=req_skills,
+                preferred_skills_text=pref_skills,
+                education=education,
+                notice_period=notice_period,
+                description=description,
+                ai_matching_enabled=ai_matching_enabled,
+                status='ACTIVE'
+            )
+
+            from apps.jobs.models import JobSkill
+            if req_skills:
+                for sname in req_skills.split(','):
+                    sname_clean = sname.strip()
+                    if sname_clean:
+                        JobSkill.objects.get_or_create(job=new_job, skill_name=sname_clean, defaults={'is_mandatory': True})
+            if pref_skills:
+                for sname in pref_skills.split(','):
+                    sname_clean = sname.strip()
+                    if sname_clean:
+                        JobSkill.objects.get_or_create(job=new_job, skill_name=sname_clean, defaults={'is_mandatory': False})
+
+            messages.success(request, f"Job '{title}' has been created and published successfully!")
+            return redirect('frontend:recruiter_jobs')
+
+        return redirect('frontend:recruiter_jobs')
+
+
+class ParseJobDescriptionView(RecruiterRequiredMixin, View):
+    """
+    AJAX endpoint for uploading and parsing a Job Description document (PDF, DOC, DOCX).
+    Returns extracted fields to auto-fill the Create Job Posting modal.
+    """
+    def post(self, request, *args, **kwargs):
+        if 'jd_file' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'error': 'No file uploaded. Please select a PDF, DOC, or DOCX file.'
+            }, status=400)
+
+        uploaded_file = request.FILES['jd_file']
+        filename = uploaded_file.name
+        ext = os.path.splitext(filename)[1].lower().replace('.', '')
+
+        if ext not in ['pdf', 'doc', 'docx']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid file format. Supported formats: PDF, DOC, DOCX.'
+            }, status=400)
+
+        if uploaded_file.size > 10 * 1024 * 1024:
+            return JsonResponse({
+                'success': False,
+                'error': 'File size exceeds maximum limit of 10 MB.'
+            }, status=400)
+
+        try:
+            from apps.jobs.services import JobDescriptionParserService
+            file_bytes = uploaded_file.read()
+            raw_text = JobDescriptionParserService.extract_text(file_bytes, filename)
+
+            if not raw_text or len(raw_text.strip()) < 10:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Unable to extract automatically. Please fill the remaining fields manually.'
+                })
+
+            parsed_result = JobDescriptionParserService.parse_jd(raw_text)
+            return JsonResponse(parsed_result)
+
+        except Exception as e:
+            logger.error(f"[JD PARSE ERROR] Exception parsing JD file {filename}: {e}", exc_info=True)
+            return JsonResponse({
+                'success': False,
+                'error': 'Unable to extract automatically. Please fill the remaining fields manually.'
+            })
+
+
+class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
+    template_name = 'recruiter_candidates.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        import re
+
+        recruiter_jobs = get_tenant_jobs_qs(user).filter(status='ACTIVE').order_by('-created_at')
+
+        job_id_param = self.request.GET.get('job_id')
+        selected_job = None
+        if job_id_param:
+            selected_job = recruiter_jobs.filter(id=job_id_param).first()
+        if not selected_job and recruiter_jobs.exists():
+            selected_job = recruiter_jobs.first()
+
+        search_query = self.request.GET.get('q', '').strip().lower()
+        min_exp_param = self.request.GET.get('min_exp')
+        location_param = self.request.GET.get('location', '').strip().lower()
+        sort_by = self.request.GET.get('sort', 'match_desc')
+
+        all_candidates = get_tenant_candidates_qs(user).select_related('user')
+        matched_candidates = []
+
+        if selected_job:
+            job_required_skills = {s.strip().lower() for s in selected_job.get_required_skills_list if s.strip()}
+            TITLE_STOP_WORDS = {'senior', 'junior', 'lead', 'manager', 'associate', 'director', 'intern', 'staff', 'principal', 'vp', 'head', 'executive', 'assistant'}
+            job_title_words = set(re.findall(r'\w+', (selected_job.title or '').lower())) - TITLE_STOP_WORDS
+
+            for cand in all_candidates:
+                analysis = CandidateMatchingService.calculate_job_ats_score(cand, selected_job)
+                score = analysis['total_score']
+
+                cand_skills = {s.strip().lower() for s in cand.skills.values_list('skill_name', flat=True) if s.strip()}
+                matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
+                missing_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() not in cand_skills]
+
+                cand_title_words = set(re.findall(r'\w+', (cand.current_designation or '').lower())) - TITLE_STOP_WORDS
+                title_overlap = bool(job_title_words.intersection(cand_title_words))
+
+                # Exclude unrelated candidates: candidate must have at least 1 matching skill OR title overlap
+                if len(matched_skill_names) == 0 and not title_overlap:
+                    continue
+
+                if search_query:
+                    c_text = f"{(cand.full_name or '')} {(cand.user.email or '')} {(cand.current_designation or '')} {(cand.location or '')} {' '.join(cand_skills)}".lower()
+                    if search_query not in c_text:
+                        continue
+
+                if min_exp_param:
+                    try:
+                        if cand.total_experience < float(min_exp_param):
+                            continue
+                    except ValueError:
+                        pass
+
+                if location_param and location_param not in (cand.location or '').lower():
+                    continue
+
+                matched_candidates.append({
+                    'candidate': cand,
+                    'job': selected_job,
+                    'match_score': score,
+                    'matched_skills': matched_skill_names,
+                    'missing_skills': missing_skill_names,
+                    'match_label': analysis['match_label'],
+                    'badge_class': analysis['badge_class'],
+                })
+
+        if sort_by == 'match_desc':
+            matched_candidates.sort(key=lambda x: x['match_score'], reverse=True)
+        elif sort_by == 'match_asc':
+            matched_candidates.sort(key=lambda x: x['match_score'])
+        elif sort_by == 'exp_desc':
+            matched_candidates.sort(key=lambda x: float(x['candidate'].total_experience or 0), reverse=True)
+
+        context['recruiter_jobs'] = recruiter_jobs
+        context['selected_job'] = selected_job
+        context['candidates'] = matched_candidates
+        context['search_query'] = search_query
+        context['selected_job_id'] = str(selected_job.id) if selected_job else ''
         return context
 
 class AdminDashboardView(SuperAdminRequiredMixin, TemplateView):
-    template_name = 'admin_dashboard.html'
+    template_name = 'recruiter_dashboard.html'
+    
+    def get(self, request, *args, **kwargs):
+        return redirect('frontend:recruiter_dashboard')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -336,13 +657,130 @@ class AdminDashboardView(SuperAdminRequiredMixin, TemplateView):
         context['open_jobs'] = Job.objects.filter(status='ACTIVE').count()
         context['candidates_added'] = CandidateProfile.objects.count()
         context['interviews_scheduled'] = Interview.objects.count()
-        context['placements'] = Application.objects.filter(stage='HIRED').count()
+        context['placements'] = Application.objects.filter(stage__in=['ACCEPTED', 'JOINED', 'HIRED', 'OFFER_STAGE']).count()
         context['duplicates_found'] = DuplicateResumeLog.objects.count()
         context['resumes_uploaded_today'] = CandidateProfile.objects.filter(created_at__date=today).count()
         context['recent_applicants'] = Application.objects.select_related('candidate__user', 'job').order_by('-created_at')[:10]
         context['total_users'] = User.objects.count()
         context['total_recruiters'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN]).count()
+        context['pending_recruiters_count'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').count()
+        
+        pending_qs = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').order_by('-created_at')[:5]
+        pending_list = []
+        for u in pending_qs:
+            cm = u.company_affiliations.select_related('company').first()
+            comp = cm.company if cm else None
+            pending_list.append({
+                'user': u,
+                'company_name': comp.name if comp else "Company",
+                'company_industry': comp.industry if comp else "Technology"
+            })
+        context['pending_recruiters'] = pending_list
         return context
+
+
+class AdminRecruiterApprovalsView(SuperAdminRequiredMixin, TemplateView):
+    template_name = 'admin_recruiter_approvals.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        status_filter = self.request.GET.get('status', 'PENDING').upper()
+        if status_filter not in ['PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'ALL']:
+            status_filter = 'PENDING'
+
+        recruiter_qs = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN]).order_by('-created_at')
+        if status_filter != 'ALL':
+            recruiter_qs = recruiter_qs.filter(recruiter_status=status_filter)
+
+        recruiter_list = []
+        for u in recruiter_qs:
+            cm = u.company_affiliations.select_related('company').first()
+            comp = cm.company if cm else None
+            recruiter_list.append({
+                'user': u,
+                'company_name': comp.name if comp else (u.first_name + " Company" if u.first_name else "Company"),
+                'company_website': comp.website if comp else '',
+                'company_industry': comp.industry if comp else '',
+                'company_size': comp.employee_count if comp else ''
+            })
+
+        context['recruiters'] = recruiter_list
+        context['status_filter'] = status_filter
+        context['pending_count'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').count()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user_id = request.POST.get('user_id')
+        action = request.POST.get('action')
+
+        if not user_id or not action:
+            messages.error(request, "Invalid request parameters.")
+            return redirect('frontend:admin_recruiter_approvals')
+
+        target_user = get_object_or_404(User, pk=user_id, role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN])
+
+        from django.urls import reverse
+
+        if action in ['approve', 'reactivate']:
+            target_user.recruiter_status = User.RecruiterStatus.ACTIVE
+            target_user.is_active = True
+            target_user.save()
+            msg_action = "Reactivated" if action == 'reactivate' else "Approved"
+            messages.success(request, f"{msg_action} recruiter {target_user.email} successfully. Account is now ACTIVE.")
+
+            if action == 'approve':
+                try:
+                    from django.utils import timezone
+                    from apps.accounts.services.email_service import send_recruiter_approval_emails
+
+                    cm = target_user.company_affiliations.select_related('company').first()
+                    comp_name = cm.company.name if cm else "your company"
+                    login_url = request.build_absolute_uri('/accounts/login/employer/')
+                    appr_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+                    send_recruiter_approval_emails(
+                        recruiter_email=target_user.email,
+                        company_name=comp_name,
+                        approval_timestamp=appr_time,
+                        login_url=login_url
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending approval email to {target_user.email}: {e}")
+
+            return redirect(f"{reverse('frontend:admin_recruiter_approvals')}?status=ACTIVE")
+
+        elif action == 'reject':
+            target_user.recruiter_status = User.RecruiterStatus.REJECTED
+            target_user.is_active = False
+            target_user.save()
+            messages.warning(request, f"Rejected recruiter {target_user.email}. Verification status set to REJECTED.")
+
+            try:
+                from django.utils import timezone
+                from apps.accounts.services.email_service import send_recruiter_rejection_emails
+
+                cm = target_user.company_affiliations.select_related('company').first()
+                comp_name = cm.company.name if cm else "your company"
+                rej_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+                send_recruiter_rejection_emails(
+                    recruiter_email=target_user.email,
+                    company_name=comp_name,
+                    rejection_timestamp=rej_time
+                )
+            except Exception as e:
+                logger.error(f"Error sending rejection email to {target_user.email}: {e}")
+
+            return redirect(f"{reverse('frontend:admin_recruiter_approvals')}?status=REJECTED")
+
+        elif action == 'suspend':
+            target_user.recruiter_status = User.RecruiterStatus.SUSPENDED
+            target_user.is_active = False
+            target_user.save()
+            messages.info(request, f"Suspended recruiter {target_user.email}. Account status set to SUSPENDED.")
+            return redirect(f"{reverse('frontend:admin_recruiter_approvals')}?status=SUSPENDED")
+
+        return redirect('frontend:admin_recruiter_approvals')
 
 class JobActionView(RecruiterRequiredMixin, View):
     def post(self, request, pk, action):
@@ -470,7 +908,7 @@ class JobsView(LoginRequiredMixin, ListView):
                 
             return queryset
         else:
-            queryset = Job.objects.annotate(
+            queryset = get_tenant_jobs_qs(self.request.user).annotate(
                 app_count=Count('applications'),
                 interview_count=Count('applications__interviews')
             )
@@ -618,6 +1056,9 @@ class JobUpdateView(RecruiterRequiredMixin, UpdateView):
     template_name = 'job_create.html'
     success_url = reverse_lazy('frontend:jobs')
 
+    def get_queryset(self):
+        return get_tenant_jobs_qs(self.request.user)
+
     def get_initial(self):
         initial = super().get_initial()
         initial['skills_tags'] = ", ".join(self.object.skills.values_list('skill_name', flat=True))
@@ -661,6 +1102,9 @@ class JobDeleteView(RecruiterRequiredMixin, DeleteView):
     success_url = reverse_lazy('frontend:jobs')
     template_name = 'job_confirm_delete.html'
 
+    def get_queryset(self):
+        return get_tenant_jobs_qs(self.request.user)
+
     def form_valid(self, form):
         messages.success(self.request, "Job deleted successfully.")
         return super().form_valid(form)
@@ -673,123 +1117,256 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        from django.db.models import Prefetch
-        from apps.applications.models import Application
+        from django.db.models import Prefetch, Q
         
-        queryset = CandidateProfile.objects.select_related('user').prefetch_related(
+        queryset = get_tenant_candidates_qs(self.request.user).select_related('user').prefetch_related(
             'skills',
+            'experiences',
+            'educations',
             Prefetch(
                 'job_applications',
-                queryset=Application.objects.select_related('job', 'job__company', 'created_by').order_by('-created_at')
+                queryset=get_tenant_applications_qs(self.request.user).select_related('job', 'job__company', 'job__client', 'created_by').order_by('-created_at')
             )
-        ).all()
+        )
         
-        # Get Filter Params
+        # 1. Search Filter (q)
         q = self.request.GET.get('q')
+        if q and q.strip():
+            q_clean = q.strip()
+            queryset = queryset.filter(
+                Q(full_name__icontains=q_clean) |
+                Q(user__first_name__icontains=q_clean) |
+                Q(user__last_name__icontains=q_clean) |
+                Q(user__email__icontains=q_clean) |
+                Q(user__phone_number__icontains=q_clean) |
+                Q(current_company__icontains=q_clean) |
+                Q(current_designation__icontains=q_clean) |
+                Q(location__icontains=q_clean) |
+                Q(preferred_location__icontains=q_clean) |
+                Q(summary__icontains=q_clean) |
+                Q(raw_resume_text__icontains=q_clean) |
+                Q(original_summary__icontains=q_clean) |
+                Q(ai_summary__icontains=q_clean) |
+                Q(skills__skill_name__icontains=q_clean) |
+                Q(experiences__company_name__icontains=q_clean) |
+                Q(experiences__designation__icontains=q_clean) |
+                Q(job_applications__job__title__icontains=q_clean) |
+                Q(job_applications__mobile_number__icontains=q_clean)
+            )
+
+        # 2. Department Filter
+        department = self.request.GET.get('department')
+        if department and department.strip():
+            dept = department.strip()
+            queryset = queryset.filter(
+                Q(job_applications__job__department__icontains=dept) |
+                Q(preferred_job_role__icontains=dept)
+            )
+        
+        # 3. Job Filter
+        job_id = self.request.GET.get('job_id')
+        selected_job = None
+        if job_id and job_id.strip():
+            job_id_clean = job_id.strip()
+            queryset = queryset.filter(job_applications__job_id=job_id_clean)
+            selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id_clean).first()
+
+        # 4. Pipeline Stage Filter
+        stage = self.request.GET.get('stage')
+        if stage and stage.strip():
+            stg = stage.strip().upper()
+            if stg == 'OPEN':
+                queryset = queryset.filter(job_applications__stage='OPEN')
+            elif stg == 'APPLIED':
+                queryset = queryset.filter(job_applications__stage__in=['OPEN', 'SYSTEM_SUBMITTED'])
+            elif stg in ['UNDER_REVIEW', 'UNDER REVIEW', 'SCREENING']:
+                queryset = queryset.filter(job_applications__stage__in=['SCREENING_FEEDBACK_PENDING', 'SYSTEM_SELECTED', 'AUTOMATION_SKIPPED', 'SCREENING_SELECT'])
+            elif stg in ['SELECTED', 'SHORTLISTED', 'SCREENING_SELECT']:
+                queryset = queryset.filter(job_applications__stage__in=['SCREENING_SELECT', 'INTERVIEW_SELECT', 'ACCEPTED', 'JOINED', 'OFFER_STAGE', 'DOCUMENTATION_STAGE', 'NEGOTIATION_STAGE'])
+            elif stg in ['REJECTED', 'SCREENING_REJECT', 'INTERVIEW_REJECT', 'SYSTEM_REJECTED']:
+                queryset = queryset.filter(job_applications__stage__in=['SCREENING_REJECT', 'INTERVIEW_REJECT', 'SYSTEM_REJECTED', 'DROPOUT'])
+            elif stg in ['INTERVIEW', 'INTERVIEWING', 'INTERVIEW_SCHEDULE']:
+                queryset = queryset.filter(job_applications__stage__in=['INTERVIEW_SCHEDULE', 'INTERVIEW_IN_PROCESS', 'INTERVIEW_SELECT'])
+            elif stg in ['OFFER', 'OFFER_STAGE']:
+                queryset = queryset.filter(job_applications__stage__in=['OFFER_STAGE'])
+            elif stg in ['JOINED', 'ACCEPTED']:
+                queryset = queryset.filter(job_applications__stage__in=['JOINED', 'ACCEPTED', 'JOINING_CONFIRMATION_RECEIVED', 'JOINING_CONFIRMATION_REQUESTED'])
+            elif stg in ['TALENT_POOL', 'TALENT POOL', 'SOURCED', 'UNASSIGNED']:
+                queryset = queryset.filter(Q(job_applications__isnull=True) | Q(job_applications__stage='SOURCED'))
+            else:
+                queryset = queryset.filter(job_applications__stage=stg)
+
+        # 5. Tags Filter (support multiple)
+        tag_list = self.request.GET.getlist('tags')
+        if not tag_list and self.request.GET.get('tags'):
+            tag_list = [t.strip() for t in self.request.GET.get('tags').split(',') if t.strip()]
+
+        for tag in tag_list:
+            t_clean = tag.strip().lower()
+            if not t_clean:
+                continue
+            if t_clean in ['immediate', 'immediate joiner', 'immediate_joiner']:
+                queryset = queryset.filter(is_immediate_joiner=True)
+            elif t_clean in ['referral', 'referred']:
+                queryset = queryset.filter(
+                    Q(summary__icontains='referral') |
+                    Q(recruiter_notes__icontains='referral') |
+                    Q(job_applications__cover_letter__icontains='referral')
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(summary__icontains=t_clean) |
+                    Q(recruiter_notes__icontains=t_clean) |
+                    Q(skills__skill_name__icontains=t_clean)
+                )
+
+        # 6. Skills Filter (support multi-skills)
         skills = self.request.GET.get('skills')
+        if skills and skills.strip():
+            skill_items = [s.strip() for s in skills.split(',') if s.strip()]
+            for s in skill_items:
+                queryset = queryset.filter(
+                    Q(skills__skill_name__icontains=s) |
+                    Q(raw_resume_text__icontains=s) |
+                    Q(summary__icontains=s)
+                )
+
+        # 7. Location Filter (City, State, District, Remote)
         location = self.request.GET.get('location')
+        if location and location.strip():
+            loc = location.strip()
+            if loc.lower() == 'remote':
+                queryset = queryset.filter(
+                    Q(location__icontains='remote') |
+                    Q(preferred_location__icontains='remote') |
+                    Q(job_applications__preferred_work_mode__icontains='remote') |
+                    Q(job_applications__job__work_mode='REMOTE') |
+                    Q(job_applications__job__is_remote=True)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(location__icontains=loc) |
+                    Q(preferred_location__icontains=loc) |
+                    Q(job_applications__current_location__icontains=loc) |
+                    Q(job_applications__current_location_city__icontains=loc) |
+                    Q(job_applications__current_location_state__icontains=loc) |
+                    Q(job_applications__preferred_location__icontains=loc)
+                )
+
+        # 8. Experience Filter
         min_exp = self.request.GET.get('min_exp')
         max_exp = self.request.GET.get('max_exp')
+        if min_exp and min_exp.strip():
+            try:
+                queryset = queryset.filter(total_experience__gte=float(min_exp))
+            except ValueError:
+                pass
+        if max_exp and max_exp.strip():
+            try:
+                queryset = queryset.filter(total_experience__lte=float(max_exp))
+            except ValueError:
+                pass
+
+        # 9. Current Company Filter
         company = self.request.GET.get('company')
+        if company and company.strip():
+            comp = company.strip()
+            queryset = queryset.filter(
+                Q(current_company__icontains=comp) |
+                Q(experiences__company_name__icontains=comp) |
+                Q(job_applications__current_company__icontains=comp)
+            )
+
         designation = self.request.GET.get('designation')
+        if designation and designation.strip():
+            desig = designation.strip()
+            queryset = queryset.filter(
+                Q(current_designation__icontains=desig) |
+                Q(experiences__designation__icontains=desig)
+            )
+
         max_ctc = self.request.GET.get('max_ctc')
+        if max_ctc and max_ctc.strip():
+            try:
+                queryset = queryset.filter(current_salary__lte=float(max_ctc))
+            except ValueError:
+                pass
+
         max_np = self.request.GET.get('max_np')
-        
+        if max_np and max_np.strip():
+            try:
+                queryset = queryset.filter(notice_period__lte=int(max_np))
+            except ValueError:
+                pass
+
+        # 10. ATS Suitability Score Filter
         min_ats = self.request.GET.get('min_ats')
         max_ats = self.request.GET.get('max_ats')
+        if min_ats and min_ats.strip():
+            try:
+                min_v = int(min_ats)
+                if selected_job:
+                    queryset = queryset.filter(
+                        Q(job_applications__job=selected_job, job_applications__match_score__gte=min_v) |
+                        Q(ats_score__gte=min_v)
+                    )
+                else:
+                    queryset = queryset.filter(ats_score__gte=min_v)
+            except ValueError:
+                pass
+
+        if max_ats and max_ats.strip():
+            try:
+                max_v = int(max_ats)
+                if selected_job:
+                    queryset = queryset.filter(
+                        Q(job_applications__job=selected_job, job_applications__match_score__lte=max_v) |
+                        Q(ats_score__lte=max_v)
+                    )
+                else:
+                    queryset = queryset.filter(ats_score__lte=max_v)
+            except ValueError:
+                pass
+
+        queryset = queryset.distinct()
+
+        # 11. Sorting
         sort_by = self.request.GET.get('sort_by')
-        job_id = self.request.GET.get('job_id')
-
-        if q:
-            queryset = queryset.filter(
-                Q(user__email__icontains=q) | 
-                Q(user__first_name__icontains=q) |
-                Q(user__last_name__icontains=q) |
-                Q(summary__icontains=q)
-            )
-        
-        if skills:
-            skill_list = [s.strip() for s in skills.split(',') if s.strip()]
-            for s in skill_list:
-                queryset = queryset.filter(skills__skill_name__icontains=s)
-        
-        if location:
-            queryset = queryset.filter(location__icontains=location)
-            
-        if min_exp:
-            queryset = queryset.filter(total_experience__gte=float(min_exp))
-        if max_exp:
-            queryset = queryset.filter(total_experience__lte=float(max_exp))
-            
-        if company:
-            queryset = queryset.filter(current_company__icontains=company)
-        if designation:
-            queryset = queryset.filter(current_designation__icontains=designation)
-            
-        if max_ctc:
-            queryset = queryset.filter(current_salary__lte=float(max_ctc))
-            
-        if max_np:
-            queryset = queryset.filter(notice_period__lte=int(max_np))
-            
-        selected_job = None
-        if job_id:
-            from apps.jobs.models import Job
-            selected_job = Job.objects.filter(id=job_id).first()
-
-        # If a job is selected, calculate dynamic scores and filter/sort list in python
-        if selected_job:
-            from services.candidate_matching_service import CandidateMatchingService
-            candidate_list = list(queryset)
-            # Precompute scores against selected job
-            for c in candidate_list:
-                c.temp_score = CandidateMatchingService.calculate_job_ats_score(c, selected_job)['total_score']
-            
-            # Apply Min/Max ATS filters on the list
-            if min_ats and min_ats.strip():
-                candidate_list = [c for c in candidate_list if c.temp_score >= int(min_ats)]
-            if max_ats and max_ats.strip():
-                candidate_list = [c for c in candidate_list if c.temp_score <= int(max_ats)]
-                
-            # Sort candidate_list
-            if sort_by == 'ats_desc':
-                candidate_list.sort(key=lambda x: x.temp_score, reverse=True)
-            elif sort_by == 'ats_asc':
-                candidate_list.sort(key=lambda x: x.temp_score, reverse=False)
+        if sort_by in ['ats_desc', 'highest_ats']:
+            if selected_job:
+                queryset = queryset.order_by('-job_applications__match_score', '-ats_score', '-created_at')
             else:
-                candidate_list.sort(key=lambda x: (x.temp_score, x.created_at), reverse=True)
-                
-            return candidate_list
-        else:
-            # No job selected: filter by general ats_score field
-            if min_ats and min_ats.strip():
-                queryset = queryset.filter(ats_score__gte=int(min_ats))
-            if max_ats and max_ats.strip():
-                queryset = queryset.filter(ats_score__lte=int(max_ats))
-                
-            queryset = queryset.distinct()
-            if sort_by == 'ats_desc':
                 queryset = queryset.order_by('-ats_score', '-created_at')
-            elif sort_by == 'ats_asc':
-                queryset = queryset.order_by('ats_score', '-created_at')
+        elif sort_by in ['ats_asc', 'lowest_ats']:
+            if selected_job:
+                queryset = queryset.order_by('job_applications__match_score', 'ats_score', 'created_at')
             else:
-                queryset = queryset.order_by('-created_at')
-                
-            return queryset
+                queryset = queryset.order_by('ats_score', 'created_at')
+        elif sort_by in ['oldest', 'created_at_asc']:
+            queryset = queryset.order_by('created_at')
+        elif sort_by in ['most_experience', 'exp_desc']:
+            queryset = queryset.order_by('-total_experience', '-created_at')
+        elif sort_by in ['least_experience', 'exp_asc']:
+            queryset = queryset.order_by('total_experience', '-created_at')
+        elif sort_by in ['recently_updated', 'updated']:
+            queryset = queryset.order_by('-updated_at')
+        else:
+            queryset = queryset.order_by('-created_at')
+
+        return queryset
 
     def get_context_data(self, **kwargs):
-        from apps.jobs.models import Job
         context = super().get_context_data(**kwargs)
         job_id = self.request.GET.get('job_id')
         selected_job = None
-        if job_id:
-            selected_job = Job.objects.filter(id=job_id).first()
+        if job_id and job_id.strip():
+            selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id.strip()).first()
             
         context['selected_job'] = selected_job
         context['filters'] = self.request.GET
-        context['active_jobs'] = Job.objects.filter(status='ACTIVE')
+        context['active_jobs'] = get_tenant_jobs_qs(self.request.user).filter(status='ACTIVE')
         
-        # Attach match details dynamically for page display
+        # Compute match details only for current paginated page slice
         from services.candidate_matching_service import CandidateMatchingService
         candidates_list = list(context.get('candidates') or context.get('object_list') or [])
         for candidate in candidates_list:
@@ -797,7 +1374,10 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             candidate.latest_application = apps_list[0] if apps_list else None
             
             if selected_job:
-                candidate.match_details = CandidateMatchingService.calculate_job_ats_score(candidate, selected_job)
+                try:
+                    candidate.match_details = CandidateMatchingService.calculate_job_ats_score(candidate, selected_job)
+                except Exception:
+                    candidate.match_details = None
             else:
                 candidate.match_details = None
                 
@@ -813,8 +1393,8 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        self.job = get_object_or_404(Job, id=self.kwargs['job_id'])
-        queryset = Application.objects.filter(job=self.job).select_related('candidate__user').prefetch_related('candidate__skills', 'candidate__educations')
+        self.job = get_object_or_404(get_tenant_jobs_qs(self.request.user), id=self.kwargs['job_id'])
+        queryset = get_tenant_applications_qs(self.request.user).filter(job=self.job).select_related('candidate__user').prefetch_related('candidate__skills', 'candidate__educations')
         
         # Sync ATS scores for applications under this job
         from services.candidate_matching_service import CandidateMatchingService
@@ -964,6 +1544,9 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
     template_name = 'candidate_detail.html'
     context_object_name = 'candidate'
 
+    def get_queryset(self):
+        return get_tenant_candidates_qs(self.request.user)
+
     def get_context_data(self, **kwargs):
         from apps.jobs.models import Job
         from apps.applications.models import Application
@@ -971,10 +1554,8 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
         
         context = super().get_context_data(**kwargs)
         
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"[DETAIL_VIEW] Recruiter {self.request.user.email} accessed candidate profile: {self.object.id} ({self.object.full_name})")
-        context['active_jobs'] = Job.objects.filter(status='ACTIVE')
+        context['active_jobs'] = get_tenant_jobs_qs(self.request.user).filter(status='ACTIVE')
         context['stage_choices'] = Application.ApplicationStage.choices
         
         job_id = self.request.GET.get('job_id')
@@ -1220,6 +1801,9 @@ class CandidateUpdateView(RecruiterRequiredMixin, UpdateView):
     form_class = CandidateProfileForm
     success_url = reverse_lazy('frontend:candidate_search')
 
+    def get_queryset(self):
+        return get_tenant_candidates_qs(self.request.user)
+
     def get_success_url(self):
         return reverse_lazy('frontend:candidate_detail', kwargs={'pk': self.object.pk})
 
@@ -1233,7 +1817,7 @@ class CandidateDeleteView(RecruiterRequiredMixin, View):
     def post(self, request, id, *args, **kwargs):
         try:
             with transaction.atomic():
-                queryset = CandidateProfile.objects.select_for_update()
+                queryset = get_tenant_candidates_qs(request.user).select_for_update()
                 candidate = get_object_or_404(queryset, id=id)
                 user = candidate.user
                 if user and user.role == 'CANDIDATE':
@@ -1249,7 +1833,7 @@ class CandidateDeleteView(RecruiterRequiredMixin, View):
 
 class CandidateRejectView(RecruiterRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
-        candidate = get_object_or_404(CandidateProfile, pk=pk)
+        candidate = get_object_or_404(get_tenant_candidates_qs(request.user), pk=pk)
         job_id = request.POST.get('job_id') or request.GET.get('job_id')
         if job_id:
             applications = Application.objects.filter(candidate=candidate, job_id=job_id)
@@ -1323,17 +1907,40 @@ class PublicCandidateProfileView(DetailView):
     template_name = 'public_candidate_profile.html'
     context_object_name = 'candidate'
 
+    def get_queryset(self):
+        return CandidateProfile.objects.select_related('user').prefetch_related(
+            'skills', 'experiences', 'educations', 'projects', 'certifications'
+        )
+
+    def get(self, request, *args, **kwargs):
+        try:
+            self.object = self.get_object()
+        except (Http404, CandidateProfile.DoesNotExist):
+            return render(request, '404.html', {'message': 'Candidate profile no longer available.'}, status=404)
+        except Exception as e:
+            logger.error(f"Error loading public candidate profile view {kwargs.get('pk')}: {e}")
+            return render(request, '404.html', {'message': 'Candidate profile no longer available.'}, status=404)
+        
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         import os
-        context['resume_filename'] = os.path.basename(self.object.resume.name) if self.object.resume else ""
-        context['resume_extension'] = os.path.splitext(self.object.resume.name)[1].lower().replace('.', '') if self.object.resume else ""
+        candidate = self.object
+        try:
+            context['resume_filename'] = os.path.basename(candidate.resume.name) if candidate.resume else ""
+            context['resume_extension'] = os.path.splitext(candidate.resume.name)[1].lower().replace('.', '') if candidate.resume else ""
+        except Exception:
+            context['resume_filename'] = ""
+            context['resume_extension'] = ""
         
-        has_ocr_data = bool(self.object.raw_resume_text.strip()) or bool(self.object.parsed_json) or self.object.experiences.exists()
         file_physically_exists = False
-        if self.object.resume:
+        if candidate.resume:
             try:
-                if self.object.resume.name and self.object.resume.storage.exists(self.object.resume.name):
+                if candidate.resume.name and candidate.resume.storage.exists(candidate.resume.name):
+                    file_physically_exists = True
+                elif hasattr(candidate.resume.storage, 'url') and not hasattr(candidate.resume.storage, 'path'):
                     file_physically_exists = True
             except Exception:
                 pass
@@ -1343,7 +1950,7 @@ class PublicCandidateProfileView(DetailView):
             resume_missing = False
         else:
             resume_exists = False
-            resume_missing = bool(self.object.resume)
+            resume_missing = bool(candidate.resume)
         context['resume_exists'] = resume_exists
         context['resume_missing'] = resume_missing
         return context
@@ -1353,12 +1960,30 @@ class PublicJobShareView(DetailView):
     template_name = 'public_job_share.html'
     context_object_name = 'job'
 
+    def get_queryset(self):
+        return Job.objects.select_related('company', 'client').prefetch_related('skills')
+
+    def get(self, request, *args, **kwargs):
+        try:
+            self.object = self.get_object()
+        except (Http404, Job.DoesNotExist):
+            return render(request, '404.html', {'message': 'Job no longer available.'}, status=404)
+        except Exception as e:
+            logger.error(f"Error loading public job share view {kwargs.get('pk')}: {e}")
+            return render(request, '404.html', {'message': 'Job no longer available.'}, status=404)
+        
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         job = self.object
-        share_url = self.request.build_absolute_uri(
-            reverse('frontend:public_job_share', kwargs={'pk': job.pk})
-        )
+        try:
+            share_url = self.request.build_absolute_uri(
+                reverse('frontend:public_job_share', kwargs={'pk': job.pk})
+            )
+        except Exception:
+            share_url = ""
         context['share_url'] = share_url
         
         jd_file = job.jd_file if job.jd_file else None
@@ -1861,13 +2486,14 @@ class ATSPipelineView(RecruiterRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         job_id = self.request.GET.get('job_id')
+        tenant_jobs = get_tenant_jobs_qs(self.request.user)
         if not job_id:
-            job = Job.objects.filter(status='ACTIVE').first()
+            job = tenant_jobs.filter(status='ACTIVE').first()
         else:
-            job = Job.objects.filter(id=job_id).first()
+            job = tenant_jobs.filter(id=job_id).first()
         
         context['selected_job'] = job
-        context['all_jobs'] = Job.objects.filter(status='ACTIVE')
+        context['all_jobs'] = tenant_jobs.filter(status='ACTIVE')
         
         if job:
             apps = Application.objects.filter(job=job, in_pipeline=True).select_related('candidate__user')
@@ -1946,7 +2572,7 @@ class InterviewsView(LoginRequiredMixin, ListView):
     context_object_name = 'interviews'
     
     def get_queryset(self):
-        return Interview.objects.all().order_by('start_time')
+        return get_tenant_interviews_qs(self.request.user).order_by('start_time')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1954,8 +2580,12 @@ class InterviewsView(LoginRequiredMixin, ListView):
             context['base_template'] = 'layouts/candidate_base.html'
         else:
             context['base_template'] = 'layouts/recruiter_base.html'
-            context['applications'] = Application.objects.select_related('candidate__user', 'job').all()
-            context['recruiters'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN])
+            context['applications'] = get_tenant_applications_qs(self.request.user).select_related('candidate__user', 'job')
+            company = get_user_company(self.request.user)
+            if company:
+                context['recruiters'] = User.objects.filter(company_affiliations__company=company)
+            else:
+                context['recruiters'] = User.objects.filter(id=self.request.user.id)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2036,7 +2666,7 @@ class ExportCandidatesView(RecruiterRequiredMixin, View):
         response['Content-Disposition'] = 'attachment; filename="candidates.csv"'
         writer = csv.writer(response)
         writer.writerow(['Name', 'Email', 'Phone', 'Location', 'Experience', 'Current Company', 'Designation', 'Current CTC', 'Expected CTC', 'Notice Period'])
-        for c in CandidateProfile.objects.select_related('user').all():
+        for c in get_tenant_candidates_qs(request.user).select_related('user'):
             writer.writerow([
                 c.user.get_full_name() or c.user.email,
                 c.user.email,
@@ -2057,8 +2687,8 @@ class ExportJobsView(RecruiterRequiredMixin, View):
         response['Content-Disposition'] = 'attachment; filename="jobs.csv"'
         writer = csv.writer(response)
         writer.writerow(['Title', 'Company', 'Location', 'Job Type', 'Experience Level', 'Salary Min', 'Salary Max', 'Status'])
-        for j in Job.objects.select_related('company').all():
-            writer.writerow([j.title, j.company.name, j.location, j.job_type, f"{j.min_experience}-{j.max_experience} Years", j.min_salary, j.max_salary, j.status])
+        for j in get_tenant_jobs_qs(request.user).select_related('company'):
+            writer.writerow([j.title, j.company.name if j.company else '', j.location, j.job_type, f"{j.min_experience}-{j.max_experience} Years", j.min_salary, j.max_salary, j.status])
         return response
 
 class ExportInterviewsView(RecruiterRequiredMixin, View):
@@ -2067,10 +2697,10 @@ class ExportInterviewsView(RecruiterRequiredMixin, View):
         response['Content-Disposition'] = 'attachment; filename="interviews.csv"'
         writer = csv.writer(response)
         writer.writerow(['Candidate', 'Job', 'Start Time', 'End Time', 'Round', 'Status', 'Meeting Link'])
-        for i in Interview.objects.select_related('application__candidate__user', 'application__job').all():
+        for i in get_tenant_interviews_qs(request.user).select_related('application__candidate__user', 'application__job'):
             writer.writerow([
-                i.application.candidate.user.email,
-                i.application.job.title,
+                i.application.candidate.user.email if i.application and i.application.candidate and i.application.candidate.user else '',
+                i.application.job.title if i.application and i.application.job else '',
                 i.start_time,
                 i.end_time,
                 i.round,
@@ -2088,7 +2718,7 @@ class AnalyticsView(RecruiterRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         
         # Hiring Funnel Data
-        funnel_data = Application.objects.values('stage').annotate(count=Count('id'))
+        funnel_data = get_tenant_applications_qs(self.request.user).values('stage').annotate(count=Count('id'))
         context['funnel_labels'] = [s[1] for s in Application.ApplicationStage.choices]
         context['funnel_values'] = []
         for stage_code, stage_label in Application.ApplicationStage.choices:
@@ -2096,11 +2726,11 @@ class AnalyticsView(RecruiterRequiredMixin, TemplateView):
             context['funnel_values'].append(count)
             
         # Top Skills Data
-        top_skills = CandidateSkill.objects.values('skill_name').annotate(count=Count('id')).order_by('-count')[:5]
+        top_skills = CandidateSkill.objects.filter(profile__in=get_tenant_candidates_qs(self.request.user)).values('skill_name').annotate(count=Count('id')).order_by('-count')[:5]
         context['skill_labels'] = [item['skill_name'] for item in top_skills]
         context['skill_values'] = [item['count'] for item in top_skills]
         
-        # Source Data (Mocked as we don't have source field yet, but I'll use random for now or just 0s)
+        # Source Data
         context['source_labels'] = ['LinkedIn', 'Indeed', 'Naukri', 'Referral']
         context['source_values'] = [45, 30, 20, 5]
         
@@ -2111,6 +2741,322 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         if self.request.user.role == 'CANDIDATE':
             return ['candidate_settings.html']
         return ['settings.html']
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        cm = user.company_affiliations.select_related('company').first()
+        context['company_name'] = cm.company.name if cm and cm.company else ""
+        context['designation'] = cm.designation if cm else ""
+        return context
+
+    def post(self, request, *args, **kwargs):
+        view = ProfileSettingsUpdateView.as_view()
+        response = view(request, *args, **kwargs)
+        if isinstance(response, JsonResponse):
+            import json
+            data = json.loads(response.content)
+            if data.get('success'):
+                from django.contrib import messages
+                messages.success(request, data.get('message', 'Profile settings saved successfully!'))
+            else:
+                from django.contrib import messages
+                messages.error(request, data.get('error', 'Failed to update profile settings.'))
+            return redirect('frontend:settings')
+        return response
+
+
+class ProfileSettingsUpdateView(LoginRequiredMixin, View):
+    """
+    AJAX endpoint to validate, save profile settings (photo, names, company, designation, phone, email).
+    """
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        phone_number = request.POST.get('phone_number') or request.POST.get('phone', '')
+        company_name = request.POST.get('company_name', '').strip()
+        designation = request.POST.get('designation', '').strip()
+
+        if not email or '@' not in email:
+            return JsonResponse({'success': False, 'error': 'Please enter a valid email address.'}, status=400)
+
+        if User.objects.filter(email__iexact=email).exclude(id=user.id).exists():
+            return JsonResponse({'success': False, 'error': 'This email address is already in use by another account.'}, status=400)
+
+        user.first_name = first_name
+        user.last_name = last_name
+        user.email = email
+        if phone_number is not None:
+            user.phone_number = phone_number.strip()
+
+        if 'profile_picture' in request.FILES:
+            photo_file = request.FILES['profile_picture']
+            from django.core.files.storage import FileSystemStorage
+            fs = FileSystemStorage()
+            filename = fs.save(f"profile_photos/{user.id}_{photo_file.name}", photo_file)
+            user.profile_picture = fs.url(filename)
+        elif request.POST.get('profile_picture_url'):
+            user.profile_picture = request.POST.get('profile_picture_url').strip()
+
+        user.save()
+
+        if company_name:
+            from apps.companies.models import Company, CompanyMember
+            from django.utils.text import slugify
+            company, _ = Company.objects.get_or_create(
+                name=company_name,
+                defaults={'slug': slugify(company_name) or str(user.id)[:8]}
+            )
+            cm = user.company_affiliations.first()
+            if cm:
+                cm.company = company
+                if designation:
+                    cm.designation = designation
+                cm.save()
+            else:
+                CompanyMember.objects.create(
+                    company=company,
+                    user=user,
+                    designation=designation or "Recruiter",
+                    role=CompanyMember.MemberRole.RECRUITER
+                )
+
+        from django.contrib import messages
+        messages.success(request, "Profile settings updated successfully!")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Profile settings updated successfully!',
+            'user': {
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'full_name': user.get_full_name() or user.first_name or "Recruiter",
+                'email': user.email,
+                'phone_number': user.phone_number or '',
+                'profile_picture': user.profile_picture or '',
+                'company_name': company_name,
+                'designation': designation
+            }
+        })
+
+
+class CandidateMessageAPIView(LoginRequiredMixin, View):
+    """
+    AJAX Endpoint for Candidate Messaging (Inbox, Chat Thread, Send Message, Emoji, Attachment, Read Status).
+    """
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        candidate_id = request.GET.get('candidate_id')
+        recipient_user_id = request.GET.get('recipient_user_id')
+        search_query = request.GET.get('q', '').strip()
+
+        from apps.notifications.models import CandidateMessage
+        from apps.candidates.models import CandidateProfile
+        from django.utils import timezone as django_timezone
+
+        total_unread_count = CandidateMessage.objects.filter(
+            recipient=user,
+            is_read=False
+        ).count()
+
+        if candidate_id or recipient_user_id:
+            cand_profile = None
+            target_user = None
+
+            if recipient_user_id and recipient_user_id not in ['undefined', 'null', 'None']:
+                try:
+                    target_user = User.objects.get(id=recipient_user_id)
+                except Exception:
+                    target_user = None
+                if not target_user:
+                    try:
+                        cand_profile = CandidateProfile.objects.get(id=recipient_user_id)
+                        target_user = cand_profile.user
+                    except Exception:
+                        pass
+
+            if not target_user and candidate_id and candidate_id not in ['undefined', 'null', 'None']:
+                try:
+                    cand_profile = CandidateProfile.objects.get(id=candidate_id)
+                    target_user = cand_profile.user
+                except Exception:
+                    pass
+
+            if target_user and not cand_profile:
+                try:
+                    cand_profile = target_user.candidate_profile
+                except Exception:
+                    cand_profile = None
+
+            if not target_user:
+                return JsonResponse({'success': False, 'error': 'Candidate user not found.'}, status=404)
+
+            messages_qs = CandidateMessage.objects.filter(
+                Q(sender=user, recipient=target_user) | Q(sender=target_user, recipient=user)
+            ).order_by('created_at')
+
+            unread_incoming = messages_qs.filter(recipient=user, is_read=False)
+            if unread_incoming.exists():
+                unread_incoming.update(is_read=True, read_at=django_timezone.now())
+
+            messages_list = []
+            for msg in messages_qs:
+                messages_list.append({
+                    'id': str(msg.id),
+                    'sender_id': str(msg.sender.id),
+                    'is_me': msg.sender.id == user.id,
+                    'text': msg.message_text,
+                    'attachment_url': msg.attachment.url if msg.attachment else None,
+                    'attachment_name': msg.attachment_name or (os.path.basename(msg.attachment.name) if msg.attachment else None),
+                    'timestamp': django_timezone.localtime(msg.created_at).strftime("%I:%M %p, %b %d"),
+                    'is_read': msg.is_read
+                })
+
+            cand_name = cand_profile.full_name if cand_profile and cand_profile.full_name else (target_user.get_full_name() or target_user.email)
+
+            return JsonResponse({
+                'success': True,
+                'candidate': {
+                    'id': str(cand_profile.id) if cand_profile else '',
+                    'user_id': str(target_user.id),
+                    'name': cand_name,
+                    'email': target_user.email,
+                    'avatar': target_user.profile_picture or f"https://ui-avatars.com/api/?background=2563eb&color=fff&name={cand_name}"
+                },
+                'messages': messages_list,
+                'total_unread_count': total_unread_count
+            })
+
+        # Search or list conversations
+        candidates_qs = get_tenant_candidates_qs(user).select_related('user')
+        if search_query:
+            candidates_qs = candidates_qs.filter(
+                Q(full_name__icontains=search_query) | Q(user__email__icontains=search_query)
+            )
+
+        conversations = []
+        for cand in candidates_qs[:30]:
+            last_msg = CandidateMessage.objects.filter(
+                Q(sender=user, recipient=cand.user) | Q(sender=cand.user, recipient=user)
+            ).order_by('-created_at').first()
+
+            unread_count = CandidateMessage.objects.filter(
+                sender=cand.user,
+                recipient=user,
+                is_read=False
+            ).count()
+
+            cand_name = cand.full_name or cand.user.email
+            last_text = last_msg.message_text if last_msg else "Click to start chatting"
+            if last_msg and last_msg.attachment and not last_text:
+                last_text = "📎 Attachment"
+
+            conversations.append({
+                'candidate_id': str(cand.id),
+                'recipient_user_id': str(cand.user.id),
+                'candidate_name': cand_name,
+                'candidate_email': cand.user.email,
+                'avatar': cand.user.profile_picture or f"https://ui-avatars.com/api/?background=2563eb&color=fff&name={cand_name}",
+                'last_message': last_text,
+                'last_time': django_timezone.localtime(last_msg.created_at).strftime("%b %d, %I:%M %p") if last_msg else '',
+                'unread_count': unread_count
+            })
+
+        return JsonResponse({
+            'success': True,
+            'conversations': conversations,
+            'total_unread_count': total_unread_count
+        })
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        
+        recipient_id = request.POST.get('recipient_id') or request.POST.get('recipient_user_id')
+        candidate_id = request.POST.get('candidate_id')
+        message_text = request.POST.get('message_text', '').strip()
+        attachment_file = request.FILES.get('attachment')
+
+        if request.content_type and 'application/json' in request.content_type:
+            import json
+            try:
+                data = json.loads(request.body.decode('utf-8'))
+                recipient_id = recipient_id or data.get('recipient_id') or data.get('recipient_user_id')
+                candidate_id = candidate_id or data.get('candidate_id')
+                message_text = message_text or str(data.get('message_text') or data.get('message') or '').strip()
+            except Exception:
+                pass
+
+        from apps.notifications.models import CandidateMessage
+        from apps.candidates.models import CandidateProfile
+        from django.utils import timezone as django_timezone
+
+        target_user = None
+        cand_profile = None
+
+        if recipient_id in ['undefined', 'null', 'None']:
+            recipient_id = None
+        if candidate_id in ['undefined', 'null', 'None']:
+            candidate_id = None
+
+        if recipient_id:
+            try:
+                target_user = User.objects.get(id=recipient_id)
+            except Exception:
+                target_user = None
+
+            if not target_user:
+                try:
+                    cand_profile = CandidateProfile.objects.get(id=recipient_id)
+                    target_user = cand_profile.user
+                except Exception:
+                    pass
+
+        if not target_user and candidate_id:
+            try:
+                cand_profile = CandidateProfile.objects.get(id=candidate_id)
+                target_user = cand_profile.user
+            except Exception:
+                pass
+
+        if target_user and not cand_profile:
+            try:
+                cand_profile = target_user.candidate_profile
+            except Exception:
+                cand_profile = None
+
+        if not target_user:
+            return JsonResponse({'success': False, 'error': 'Recipient candidate not found.'}, status=400)
+
+        if not message_text and not attachment_file:
+            return JsonResponse({'success': False, 'error': 'Message text or attachment is required.'}, status=400)
+
+        try:
+            msg = CandidateMessage.objects.create(
+                sender=user,
+                recipient=target_user,
+                candidate=cand_profile,
+                message_text=message_text,
+                attachment=attachment_file,
+                attachment_name=attachment_file.name if attachment_file else None
+            )
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'Failed to save message: {str(e)}'}, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'message': {
+                'id': str(msg.id),
+                'sender_id': str(user.id),
+                'is_me': True,
+                'text': msg.message_text,
+                'attachment_url': msg.attachment.url if msg.attachment else None,
+                'attachment_name': msg.attachment_name,
+                'timestamp': django_timezone.localtime(msg.created_at).strftime("%I:%M %p, %b %d")
+            }
+        })
+
 
 from apps.candidates.utils import handle_resume_upload
 from django.contrib import messages
@@ -2282,28 +3228,29 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                             user.save()
                             profile = CandidateProfile.objects.create(user=user)
                         
-                        profile.full_name = form.cleaned_data['full_name']
-                        profile.current_company = form.cleaned_data['current_company']
-                        profile.current_designation = form.cleaned_data['current_designation']
-                        profile.total_experience = form.cleaned_data['total_experience'] or 0.0
-                        profile.location = form.cleaned_data['location'] or "Unknown"
+                        profile.full_name = form.cleaned_data.get('full_name', '')
+                        profile.current_company = form.cleaned_data.get('current_company', '')
+                        profile.current_designation = form.cleaned_data.get('current_designation', '')
+                        profile.total_experience = form.cleaned_data.get('total_experience') or 0.0
+                        profile.location = form.cleaned_data.get('location') or "Unknown"
                         
-                        curr_sal = form.cleaned_data['current_salary']
+                        curr_sal = form.cleaned_data.get('current_salary')
                         if curr_sal is not None:
                             profile.current_salary = curr_sal * 100000
                         else:
                             profile.current_salary = None
                             
-                        exp_sal = form.cleaned_data['expected_salary']
+                        exp_sal = form.cleaned_data.get('expected_salary')
                         if exp_sal is not None:
                             profile.expected_salary = exp_sal * 100000
                         else:
                             profile.expected_salary = None
                             
-                        profile.notice_period = form.cleaned_data['notice_period'] or 30
-                        profile.linkedin_url = form.cleaned_data['linkedin_url']
-                        profile.portfolio_url = form.cleaned_data['portfolio_url']
-                        profile.summary = form.cleaned_data['summary'] or ""
+                        profile.notice_period = form.cleaned_data.get('notice_period') or 30
+                        profile.linkedin_url = form.cleaned_data.get('linkedin_url', '')
+                        profile.portfolio_url = form.cleaned_data.get('portfolio_url', '')
+                        profile.summary = form.cleaned_data.get('summary', '') or ""
+                        profile.created_by = request.user
                         
                         # Store customized parsing payload in parsed_json
                         parsed_json = profile.parsed_json or {}
@@ -2313,19 +3260,19 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                                 "email": email,
                                 "phone": phone,
                                 "location": profile.location,
-                                "preferred_location": form.cleaned_data['preferred_location'],
+                                "preferred_location": form.cleaned_data.get('preferred_location', ''),
                                 "current_company": profile.current_company,
                                 "current_designation": profile.current_designation,
                                 "total_experience": float(profile.total_experience),
-                                "relevant_experience": float(form.cleaned_data['relevant_experience'] or 0.0),
-                                "highest_qualification": form.cleaned_data['highest_qualification'],
-                                "college_university": form.cleaned_data['college_university'],
+                                "relevant_experience": float(form.cleaned_data.get('relevant_experience') or 0.0),
+                                "highest_qualification": form.cleaned_data.get('highest_qualification', ''),
+                                "college_university": form.cleaned_data.get('college_university', ''),
                                 "linkedin_url": profile.linkedin_url,
-                                "github_url": form.cleaned_data['github_url'],
+                                "github_url": form.cleaned_data.get('github_url', ''),
                                 "portfolio_url": profile.portfolio_url,
                             },
-                            "skills": [s.strip() for s in (form.cleaned_data['primary_skills'] or '').split(',') if s.strip()] +
-                                      [s.strip() for s in (form.cleaned_data['secondary_skills'] or '').split(',') if s.strip()],
+                            "skills": [s.strip() for s in (form.cleaned_data.get('primary_skills') or '').split(',') if s.strip()] +
+                                      [s.strip() for s in (form.cleaned_data.get('secondary_skills') or '').split(',') if s.strip()],
                             "summary": profile.summary
                         })
                         profile.parsed_json = parsed_json
@@ -3305,24 +4252,31 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
     """
     def get(self, request, pk, *args, **kwargs):
         import os
-        candidate = get_object_or_404(CandidateProfile, pk=pk)
-        
-        if not candidate.resume:
-            return HttpResponse("No resume file found.", status=404)
-            
+        import mimetypes
         try:
-            if candidate.resume and candidate.resume.storage.exists(candidate.resume.name):
-                # Retrieve the original sanitized filename instead of the secure internal uuid name
-                filename = candidate.original_filename or os.path.basename(candidate.resume.name)
-                f = candidate.resume.open('rb')
-                import mimetypes
-                content_type, _ = mimetypes.guess_type(candidate.resume.name)
+            candidate = get_object_or_404(CandidateProfile, pk=pk)
+            if not candidate.resume:
+                return HttpResponse("No resume file found.", status=404)
+                
+            resume_file = candidate.resume
+            try:
+                if hasattr(resume_file.storage, 'url') and not hasattr(resume_file.storage, 'path'):
+                    return redirect(resume_file.url)
+            except Exception:
+                pass
+
+            if resume_file and resume_file.storage.exists(resume_file.name):
+                filename = candidate.original_filename or os.path.basename(resume_file.name)
+                f = resume_file.open('rb')
+                content_type, _ = mimetypes.guess_type(resume_file.name)
                 if not content_type:
                     content_type = 'application/octet-stream'
                 response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
                 return response
+            elif hasattr(resume_file, 'url') and resume_file.url:
+                return redirect(resume_file.url)
         except Exception as e:
-            return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
+            logger.error(f"Error downloading candidate resume {pk}: {e}")
             
         return HttpResponse("No resume file found.", status=404)
 
@@ -3334,39 +4288,67 @@ class PublicCandidateResumePreviewView(View):
     Only displays the original uploaded file stored in CandidateProfile.resume.
     """
     def get(self, request, pk, *args, **kwargs):
-        candidate = get_object_or_404(CandidateProfile, pk=pk)
-        candidate.preview_status = 'VIEWED'
-        candidate.save(update_fields=['preview_status'])
-        
-        from utils.preview import generate_resume_preview_response
-        return generate_resume_preview_response(candidate)
+        try:
+            candidate = CandidateProfile.objects.filter(pk=pk).first()
+            if not candidate or not candidate.resume:
+                return render(request, '404.html', {'message': 'Candidate profile no longer available.'}, status=404)
+            
+            candidate.preview_status = 'VIEWED'
+            try:
+                candidate.save(update_fields=['preview_status'])
+            except Exception:
+                pass
+            
+            from utils.preview import generate_resume_preview_response
+            return generate_resume_preview_response(candidate)
+        except Exception as e:
+            logger.error(f"Error in public candidate resume preview {pk}: {e}")
+            return render(request, '404.html', {'message': 'Resume preview no longer available.'}, status=404)
 
 
 class PublicCandidateResumeDownloadView(View):
     """
-    Forces public download of the original candidate resume file stored in CandidateProfile.resume, preserving filename.
+    Forces public download of candidate resume file stored in CandidateProfile.resume,
+    supporting both local media storage and AWS S3 media storage gracefully without error.
     """
     def get(self, request, pk, *args, **kwargs):
         import os
-        candidate = get_object_or_404(CandidateProfile, pk=pk)
-        
-        if not candidate.resume:
-            return HttpResponse("No resume file found.", status=404)
-            
+        import mimetypes
         try:
-            if candidate.resume and candidate.resume.storage.exists(candidate.resume.name):
-                filename = candidate.original_filename or os.path.basename(candidate.resume.name)
-                f = candidate.resume.open('rb')
-                import mimetypes
-                content_type, _ = mimetypes.guess_type(candidate.resume.name)
-                if not content_type:
-                    content_type = 'application/octet-stream'
-                response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
-                return response
-        except Exception as e:
-            return HttpResponse(f"Error downloading resume: {str(e)}", status=500)
+            candidate = CandidateProfile.objects.filter(pk=pk).first()
+            if not candidate:
+                return render(request, '404.html', {'message': 'Candidate profile no longer available.'}, status=404)
             
-        return HttpResponse("No resume file found.", status=404)
+            if not candidate.resume:
+                return render(request, '404.html', {'message': 'Resume file no longer available.'}, status=404)
+            
+            resume_file = candidate.resume
+            # Support AWS S3 / Remote Storage
+            try:
+                if hasattr(resume_file.storage, 'url') and not hasattr(resume_file.storage, 'path'):
+                    return redirect(resume_file.url)
+            except Exception:
+                pass
+
+            try:
+                if resume_file.storage.exists(resume_file.name):
+                    filename = candidate.original_filename or os.path.basename(resume_file.name)
+                    f = resume_file.open('rb')
+                    content_type, _ = mimetypes.guess_type(resume_file.name)
+                    if not content_type:
+                        content_type = 'application/pdf' if filename.lower().endswith('.pdf') else 'application/octet-stream'
+                    response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+                    return response
+            except Exception as e:
+                logger.error(f"Error opening candidate resume file {pk}: {e}")
+
+            if hasattr(resume_file, 'url') and resume_file.url:
+                return redirect(resume_file.url)
+
+        except Exception as e:
+            logger.error(f"Error downloading candidate resume {pk}: {e}")
+            
+        return render(request, '404.html', {'message': 'Resume file no longer available.'}, status=404)
 
 
 # --- NEW CANDIDATE PORTAL VIEWS ---
@@ -3731,3 +4713,32 @@ class ToggleSaveJobView(CandidateRequiredMixin, View):
             job = get_object_or_404(Job, id=job_id)
             SavedJob.objects.create(candidate=candidate_profile, job=job)
             return JsonResponse({'status': 'saved'})
+
+
+# --- CUSTOM PRODUCTION ERROR HANDLERS ---
+
+def custom_bad_request_view(request, exception=None):
+    logger.error(f"400 Bad Request at {request.path}: {exception}")
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.path.startswith('/api/'):
+        return JsonResponse({'error': 'Bad Request', 'message': str(exception) if exception else 'Invalid request parameters.'}, status=400)
+    return render(request, '400.html', {'message': str(exception) if exception else 'Invalid request.'}, status=400)
+
+def custom_permission_denied_view(request, exception=None):
+    logger.warning(f"403 Permission Denied at {request.path}: {exception}")
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.path.startswith('/api/'):
+        return JsonResponse({'error': 'Permission Denied', 'message': 'You do not have permission to perform this action.'}, status=403)
+    return render(request, '403.html', {'message': 'You do not have permission to access this resource.'}, status=403)
+
+def custom_page_not_found_view(request, exception=None):
+    logger.info(f"404 Not Found at {request.path}")
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.path.startswith('/api/'):
+        return JsonResponse({'error': 'Not Found', 'message': 'The requested resource was not found.'}, status=404)
+    return render(request, '404.html', {'message': 'The page you requested could not be found.'}, status=404)
+
+def custom_server_error_view(request):
+    import traceback
+    logger.error(f"500 Internal Server Error at {request.path}\n{traceback.format_exc()}")
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.path.startswith('/api/'):
+        return JsonResponse({'error': 'Server Error', 'message': 'An internal error occurred. Our team has been notified.'}, status=500)
+    return render(request, '500.html', {'message': 'An unexpected error occurred. Please try again later.'}, status=500)
+

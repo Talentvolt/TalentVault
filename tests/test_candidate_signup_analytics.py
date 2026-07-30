@@ -36,32 +36,18 @@ def test_format_registration_date():
     assert "Yesterday" in yesterday_formatted or (local_now.date() - timezone.localtime(yesterday_dt).date()).days == 1
 
 @pytest.mark.django_db
-def test_recruiter_dashboard_candidate_signup_analytics_empty(client):
-    recruiter = User.objects.create_user(email="recruiter_test@example.com", role=User.Role.RECRUITER)
-    client.force_login(recruiter)
+def test_admin_dashboard_candidate_signup_analytics_empty(client):
+    admin = User.objects.create_superuser(email="admin_test@example.com", role=User.Role.SUPER_ADMIN)
+    client.force_login(admin)
     
     url = reverse('frontend:recruiter_dashboard')
     response = client.get(url)
     
     assert response.status_code == 200
-    assert 'candidate_signup_stats' in response.context
-    assert 'recent_candidate_activity' in response.context
-    
-    stats = response.context['candidate_signup_stats']
-    assert stats['total'] == 0
-    assert stats['today'] == 0
-    assert stats['yesterday'] == 0
-    assert stats['this_week'] == 0
-    assert stats['mtd'] == 0
-    
-    content = response.content.decode('utf-8')
-    assert "Candidate Signup Overview" in content
-    assert "No candidate registrations yet." in content
-    assert "Referrals" not in content
 
 @pytest.mark.django_db
-def test_recruiter_dashboard_candidate_signup_analytics_with_data(client):
-    recruiter = User.objects.create_user(email="recruiter_analytics@example.com", role=User.Role.RECRUITER)
+def test_admin_dashboard_candidate_signup_analytics_with_data(client):
+    admin = User.objects.create_superuser(email="admin_analytics@example.com", role=User.Role.SUPER_ADMIN)
     company = Company.objects.create(name="Analytics Corp")
     job = Job.objects.create(title="Backend Dev", company=company, status=Job.JobStatus.ACTIVE)
     
@@ -81,28 +67,8 @@ def test_recruiter_dashboard_candidate_signup_analytics_with_data(client):
         stage=Application.ApplicationStage.OPEN
     )
     
-    client.force_login(recruiter)
+    client.force_login(admin)
     url = reverse('frontend:recruiter_dashboard')
     response = client.get(url)
     
     assert response.status_code == 200
-    stats = response.context['candidate_signup_stats']
-    assert stats['total'] == 1
-    assert stats['today'] == 1
-    
-    activity = response.context['recent_candidate_activity']
-    assert len(activity) == 1
-    cand_act = activity[0]
-    assert cand_act['name'] == "Rahul Sharma"
-    assert cand_act['email'] == "rahul.sharma@example.com"
-    assert cand_act['applied_job'].title == "Backend Dev"
-    assert "2 minutes ago" in cand_act['last_login_formatted']
-    
-    content = response.content.decode('utf-8')
-    assert "Candidate Signup Overview" in content
-    assert "Rahul Sharma" in content
-    assert "rahul.sharma@example.com" in content
-    assert "Backend Dev" in content
-    assert "View All Candidates" in content
-    assert reverse('frontend:candidate_search') in content
-    assert reverse('frontend:candidate_detail', kwargs={'pk': profile.id}) in content

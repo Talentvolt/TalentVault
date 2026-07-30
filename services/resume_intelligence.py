@@ -25,14 +25,22 @@ _OCR_CACHE = {}
 
 if importlib.util.find_spec("paddleocr") is not None:
     try:
-        from paddleocr import PaddleOCR
-        # Try to import paddle module as well to verify installation
-        import paddle
-        PADDLE_AVAILABLE = True
+        import os, sys
+        stderr_fd = sys.stderr.fileno()
+        with open(os.devnull, 'w') as devnull:
+            old_stderr = os.dup(stderr_fd)
+            os.dup2(devnull.fileno(), stderr_fd)
+            try:
+                from paddleocr import PaddleOCR
+                import paddle
+            finally:
+                os.dup2(old_stderr, stderr_fd)
+                os.close(old_stderr)
         GLOBAL_PADDLE_OCR = PaddleOCR(use_textline_orientation=True, lang='en')
+        PADDLE_AVAILABLE = True
         logger.info("Loaded global PaddleOCR instance at startup successfully.")
-    except Exception as e:
-        logger.error(f"Failed to load global PaddleOCR at startup: {e}")
+    except (ImportError, OSError, Exception) as e:
+        logger.info(f"PaddleOCR C++ runtime unavailable ({e}). OCR fallbacks active.")
         PADDLE_AVAILABLE = False
 
 

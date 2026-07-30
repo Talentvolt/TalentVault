@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, Education
@@ -9,11 +10,14 @@ from .serializers import (
 )
 from permissions.roles import IsRecruiter, IsCandidate
 from utils.pagination import StandardResultsSetPagination
+from utils.tenant import get_tenant_candidates_qs
+
+logger = logging.getLogger(__name__)
 
 class CandidateProfileViewSet(viewsets.ModelViewSet):
     """
     CRUD for Candidate Profiles.
-    Recruiters can list and search. Candidates can only view/edit their own profile.
+    Recruiters can list and search tenant profiles. Candidates can only view/edit their own profile.
     """
     queryset = CandidateProfile.objects.all()
     serializer_class = CandidateProfileSerializer
@@ -32,11 +36,7 @@ class CandidateProfileViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'CANDIDATE':
-            return CandidateProfile.objects.filter(user=user)
-        # Recruiters and Admins can see all profiles
-        return super().get_queryset()
+        return get_tenant_candidates_qs(self.request.user)
 
 class CandidateSkillViewSet(viewsets.ModelViewSet):
     serializer_class = CandidateSkillSerializer

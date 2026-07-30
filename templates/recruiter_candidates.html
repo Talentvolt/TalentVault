@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Candidates | AI Matching Workspace | TalentVault{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-2 border-bottom">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">AI Candidate Matching</h2>
+            <p class="text-secondary small m-0">Semantic candidate recommendations matched specifically to your active job postings.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-purple-subtle text-purple fs-6 px-3 py-2 border"><i class="bi bi-cpu-fill me-1"></i> AI Matching Engine Active</span>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-2" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Filter & Job Selector Bar -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-4">
+        <form method="get" action="{% url 'frontend:recruiter_candidates' %}" class="row g-3 align-items-center">
+            <!-- Job Selection Dropdown -->
+            <div class="col-lg-4">
+                <label class="form-label fw-bold small text-muted mb-1"><i class="bi bi-briefcase me-1 text-purple"></i>Select Job for AI Matching</label>
+                <select name="job_id" class="form-select fw-semibold" onchange="this.form.submit()">
+                    {% for j in recruiter_jobs %}
+                        <option value="{{ j.id }}" {% if selected_job and selected_job.id == j.id %}selected{% endif %}>
+                            {{ j.title }} ({{ j.location }})
+                        </option>
+                    {% empty %}
+                        <option value="">No Active Jobs Posted</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Search Input -->
+            <div class="col-lg-3">
+                <label class="form-label fw-bold small text-muted mb-1">Search Candidates</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-secondary"></i></span>
+                    <input type="text" name="q" value="{{ search_query }}" class="form-control border-start-0" placeholder="Skills, title, candidate name...">
+                </div>
+            </div>
+
+            <!-- Experience Filter -->
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label fw-bold small text-muted mb-1">Min Exp (Yrs)</label>
+                <input type="number" name="min_exp" value="{{ request.GET.min_exp }}" min="0" max="30" class="form-control" placeholder="Any">
+            </div>
+
+            <!-- Sort By -->
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label fw-bold small text-muted mb-1">Sort By</label>
+                <select name="sort" class="form-select" onchange="this.form.submit()">
+                    <option value="match_desc" {% if request.GET.sort == 'match_desc' or not request.GET.sort %}selected{% endif %}>AI Match % (High → Low)</option>
+                    <option value="exp_desc" {% if request.GET.sort == 'exp_desc' %}selected{% endif %}>Experience (High → Low)</option>
+                </select>
+            </div>
+
+            <div class="col-lg-1 col-md-4 mt-lg-4 text-end">
+                <button type="submit" class="btn btn-purple w-100 font-semibold"><i class="bi bi-funnel"></i> Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {% if selected_job %}
+    <div class="alert bg-purple-subtle border-purple border text-purple rounded-3 mb-4 d-flex align-items-center justify-content-between py-2.5 px-3">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-info-circle-fill fs-5"></i>
+            <div>
+                <strong>Matching Job: {{ selected_job.title }}</strong> | Required Skills: 
+                {% for sk in selected_job.get_required_skills_list %}
+                    <span class="badge bg-white text-purple border me-1">{{ sk }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        <span class="badge bg-purple text-white">{{ candidates|length }} Matches Found</span>
+    </div>
+    {% endif %}
+
+    <!-- Matched Candidate Cards List -->
+    <div class="row g-4">
+        {% for match in candidates %}
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 bg-white p-4">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                    
+                    <!-- Left: Candidate Info -->
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="w-14 h-14 rounded-2xl bg-purple-subtle text-purple d-flex align-items-center justify-content-center fs-2 font-bold flex-shrink-0">
+                            {{ match.candidate.full_name|default:match.candidate.user.email|slice:":1"|upper }}
+                        </div>
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                <h5 class="fw-bold text-dark m-0">{{ match.candidate.full_name|default:match.candidate.user.email }}</h5>
+                                <span class="badge {{ match.badge_class }} fs-6 px-3 py-1.5 rounded-pill shadow-sm">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> {{ match.match_score }}% AI Match
+                                </span>
+                            </div>
+                            <p class="text-secondary small m-0 mb-2">
+                                <strong class="text-dark">{{ match.candidate.current_designation|default:"Candidate" }}</strong> 
+                                {% if match.candidate.current_company %}at <span>{{ match.candidate.current_company }}</span>{% endif %}
+                            </p>
+                            
+                            <!-- Key Metrics Row -->
+                            <div class="d-flex flex-wrap align-items-center gap-3 text-secondary small">
+                                <span><i class="bi bi-briefcase me-1 text-purple"></i><strong>{{ match.candidate.total_experience }}</strong> Yrs Exp</span>
+                                <span><i class="bi bi-geo-alt me-1 text-purple"></i><strong>{{ match.candidate.location|default:"Flexible" }}</strong></span>
+                                <span><i class="bi bi-cash-stack me-1 text-purple"></i>Expected: <strong>{{ match.candidate.expected_salary|default:"N/A" }} LPA</strong></span>
+                                <span><i class="bi bi-clock-history me-1 text-purple"></i>Notice: <strong>{{ match.candidate.notice_period }} Days</strong></span>
+                                <span><i class="bi bi-file-earmark-check me-1 text-purple"></i>ATS Score: <strong>{{ match.candidate.ats_score }}/100</strong></span>
+                            </div>
+
+                            <!-- Matched Skills Badges -->
+                            <div class="mt-3">
+                                <span class="text-muted extra-small font-bold text-uppercase me-2">Matching Skills:</span>
+                                {% for skill in match.matched_skills %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle me-1 px-2.5 py-1">
+                                        <i class="bi bi-check-lg me-1"></i> {{ skill }}
+                                    </span>
+                                {% empty %}
+                                    <span class="text-muted small">Semantic profile match</span>
+                                {% endfor %}
+
+                                {% if match.missing_skills %}
+                                    <span class="text-muted extra-small font-bold text-uppercase ms-2 me-2">Missing:</span>
+                                    {% for mskill in match.missing_skills %}
+                                        <span class="badge bg-light text-secondary border me-1 px-2 py-0.5">{{ mskill }}</span>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Action Buttons -->
+                    <div class="d-flex flex-wrap flex-lg-column align-items-end justify-content-center gap-2 border-start-lg ps-lg-4">
+                        <div class="d-flex gap-2 w-100">
+                            {% if match.candidate.resume %}
+                                <a href="{% url 'frontend:candidate_resume_preview' match.candidate.id %}" target="_blank" class="btn btn-sm btn-outline-purple flex-grow-1 font-semibold">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i> View Resume
+                                </a>
+                            {% endif %}
+                            <a href="{% url 'frontend:candidate_detail' match.candidate.id %}" class="btn btn-sm btn-purple flex-grow-1 font-semibold">
+                                <i class="bi bi-person-lines-fill me-1"></i> View Profile
+                            </a>
+                        </div>
+                        
+                        <div class="d-flex gap-2 w-100 mt-1">
+                            <form method="post" action="{% url 'frontend:add_to_pipeline' match.candidate.id %}" class="flex-grow-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="job_id" value="{{ selected_job.id }}">
+                                <button type="submit" class="btn btn-sm btn-success w-100 font-semibold">
+                                    <i class="bi bi-star-fill me-1"></i> Shortlist
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'frontend:candidate_reject' match.candidate.id %}" class="flex-grow-1">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100 font-semibold" onclick="return confirm('Reject this candidate match?');">
+                                    <i class="bi bi-x-lg me-1"></i> Reject
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+                <i class="bi bi-cpu fs-1 text-purple mb-3 d-block"></i>
+                <h4 class="fw-bold text-dark">No Matching Candidates Found</h4>
+                <p class="text-secondary small max-w-md mx-auto">
+                    No candidates in the database met the AI criteria for this job filters. Try creating a job with different required skills or expanding your filter parameters.
+                </p>
+                <div class="mt-3">
+                    <a href="{% url 'frontend:recruiter_jobs' %}?create=true" class="btn btn-purple font-semibold">
+                        <i class="bi bi-plus-lg me-1"></i> Create New Job Posting
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

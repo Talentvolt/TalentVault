@@ -29,33 +29,136 @@
                 <div class="card border-0 shadow-sm p-4">
                     <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-person me-2"></i>Profile Settings</h5>
                     
-                    <div class="d-flex align-items-center gap-4 mb-4 pb-4 border-bottom">
-                        <img src="{{ request.user.profile_picture|default:'https://ui-avatars.com/api/?name='|add:request.user.email|add:'&background=2563eb&color=fff' }}" class="rounded-circle border" width="80" height="80" alt="Avatar">
-                        <div>
-                            <h6 class="fw-bold m-0">{{ request.user.get_full_name|default:"Recruiter Account" }}</h6>
-                            <p class="text-secondary small m-0">{{ request.user.email }}</p>
-                            <span class="badge bg-primary bg-opacity-10 text-primary mt-2">Connected with Google</span>
+                    <form id="profileSettingsForm" enctype="multipart/form-data" method="POST" action="{% url 'frontend:profile_settings_update' %}">
+                        {% csrf_token %}
+
+                        <!-- Profile Photo Header -->
+                        <div class="d-flex align-items-center gap-4 mb-4 pb-4 border-bottom">
+                            <div class="position-relative">
+                                <img id="profileAvatarPreview" src="{{ request.user.profile_picture|default:'https://ui-avatars.com/api/?name='|add:request.user.email|add:'&background=2563eb&color=fff' }}" class="rounded-circle border border-2 border-primary border-opacity-25 shadow-xs" width="84" height="84" alt="Avatar" style="object-fit: cover;">
+                                <label for="profilePhotoInput" class="position-absolute bottom-0 end-0 bg-primary text-white rounded-circle p-1.5 cursor-pointer shadow-sm" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;" title="Change Profile Photo">
+                                    <i class="bi bi-camera-fill" style="font-size: 0.75rem;"></i>
+                                </label>
+                                <input type="file" id="profilePhotoInput" name="profile_picture" class="d-none" accept="image/*">
+                            </div>
+                            <div>
+                                <h6 class="fw-bold m-0" id="profileHeaderFullName">{{ request.user.get_full_name|default:request.user.first_name|default:"Recruiter Account" }}</h6>
+                                <p class="text-secondary small m-0" id="profileHeaderEmail">{{ request.user.email }}</p>
+                                <span class="badge bg-primary bg-opacity-10 text-primary mt-1.5" style="font-size: 0.7rem;">Active Recruiter Profile</span>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <form onsubmit="event.preventDefault(); alert('Profile preferences updated (Mock)');">
-                        <div class="row mb-3">
+
+                        <!-- Fields Grid -->
+                        <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label class="form-label small fw-semibold">First Name</label>
-                                <input type="text" class="form-control" value="{{ request.user.first_name }}" readonly>
+                                <label class="form-label small fw-semibold">First Name <span class="text-danger">*</span></label>
+                                <input type="text" name="first_name" class="form-control" value="{{ request.user.first_name }}" required placeholder="e.g. Rahul">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small fw-semibold">Last Name</label>
-                                <input type="text" class="form-control" value="{{ request.user.last_name }}" readonly>
+                                <input type="text" name="last_name" class="form-control" value="{{ request.user.last_name }}" placeholder="e.g. Sharma">
                             </div>
                         </div>
-                        <div class="mb-4">
-                            <label class="form-label small fw-semibold">Email Address</label>
-                            <input type="email" class="form-control" value="{{ request.user.email }}" readonly>
-                            <div class="form-text text-secondary">Contact details are synchronized automatically via Google credentials.</div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Company Name</label>
+                                <input type="text" name="company_name" class="form-control" value="{{ company_name }}" placeholder="e.g. TalentVault Tech">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Designation</label>
+                                <input type="text" name="designation" class="form-control" value="{{ designation }}" placeholder="e.g. Senior Talent Acquisition Specialist">
+                            </div>
                         </div>
-                        <button type="submit" class="btn btn-primary px-4">Save Profile Settings</button>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Email Address <span class="text-danger">*</span></label>
+                                <input type="email" name="email" class="form-control" value="{{ request.user.email }}" required placeholder="e.g. recruiter@company.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Phone Number</label>
+                                <input type="tel" name="phone_number" class="form-control" value="{{ request.user.phone_number|default:'' }}" placeholder="e.g. +91 98765 43210">
+                            </div>
+                        </div>
+
+                        <div id="settingsToastAlert" class="alert alert-success d-none mb-3 py-2 px-3 small fw-medium" role="alert">
+                            <i class="bi bi-check-circle-fill me-1.5"></i> <span id="settingsToastMsg">Profile settings saved successfully!</span>
+                        </div>
+
+                        <button type="submit" id="saveProfileBtn" class="btn btn-primary px-4 fw-semibold">
+                            <i class="bi bi-floppy me-1.5"></i> Save Profile Settings
+                        </button>
                     </form>
+
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const photoInput = document.getElementById('profilePhotoInput');
+                            const avatarPreview = document.getElementById('profileAvatarPreview');
+
+                            if (photoInput && avatarPreview) {
+                                photoInput.addEventListener('change', function() {
+                                    if (this.files && this.files[0]) {
+                                        const reader = new FileReader();
+                                        reader.onload = e => avatarPreview.src = e.target.result;
+                                        reader.readAsDataURL(this.files[0]);
+                                    }
+                                });
+                            }
+
+                            const form = document.getElementById('profileSettingsForm');
+                            const alertBox = document.getElementById('settingsToastAlert');
+                            const alertMsg = document.getElementById('settingsToastMsg');
+                            const saveBtn = document.getElementById('saveProfileBtn');
+
+                            if (form) {
+                                form.addEventListener('submit', function(e) {
+                                    e.preventDefault();
+                                    saveBtn.disabled = true;
+                                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1.5"></span> Saving...';
+
+                                    const formData = new FormData(form);
+
+                                    fetch('{% url "frontend:profile_settings_update" %}', {
+                                        method: 'POST',
+                                        headers: {
+                                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                                        },
+                                        body: formData
+                                    })
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        saveBtn.disabled = false;
+                                        saveBtn.innerHTML = '<i class="bi bi-floppy me-1.5"></i> Save Profile Settings';
+
+                                        if (data.success) {
+                                            alertBox.className = 'alert alert-success mb-3 py-2 px-3 small fw-medium fade show';
+                                            alertMsg.textContent = data.message || 'Profile settings saved successfully!';
+                                            
+                                            // Update header preview
+                                            if (data.user) {
+                                                document.getElementById('profileHeaderFullName').textContent = data.user.full_name;
+                                                document.getElementById('profileHeaderEmail').textContent = data.user.email;
+                                            }
+
+                                            setTimeout(() => {
+                                                alertBox.classList.add('d-none');
+                                            }, 4000);
+                                        } else {
+                                            alertBox.className = 'alert alert-danger mb-3 py-2 px-3 small fw-medium fade show';
+                                            alertMsg.textContent = data.error || 'Failed to save settings.';
+                                        }
+                                    })
+                                    .catch(err => {
+                                        saveBtn.disabled = false;
+                                        saveBtn.innerHTML = '<i class="bi bi-floppy me-1.5"></i> Save Profile Settings';
+                                        alertBox.className = 'alert alert-danger mb-3 py-2 px-3 small fw-medium fade show';
+                                        alertMsg.textContent = 'An error occurred while saving profile settings.';
+                                    });
+                                });
+                            }
+                        });
+                    </script>
                 </div>
             </div>
             

@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,6 +7,9 @@ from apps.companies.models import Company, CompanyMember
 from .serializers import CompanySerializer, CompanyMemberSerializer
 from permissions.roles import IsCompanyAdmin, IsRecruiter
 from utils.pagination import StandardResultsSetPagination
+from utils.tenant import get_user_company
+
+logger = logging.getLogger(__name__)
 
 class CompanyViewSet(viewsets.ModelViewSet):
     """
@@ -43,10 +47,17 @@ class CompanyMemberViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCompanyAdmin]
 
     def get_queryset(self):
+        user = self.request.user
         company_id = self.kwargs.get('company_pk')
-        return CompanyMember.objects.filter(company_id=company_id)
+        if user.role == 'SUPER_ADMIN' or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+            return CompanyMember.objects.filter(company_id=company_id)
+        user_comp = get_user_company(user)
+        if user_comp and str(user_comp.id) == str(company_id):
+            return CompanyMember.objects.filter(company_id=company_id)
+        return CompanyMember.objects.none()
 
     def perform_create(self, serializer):
         company_id = self.kwargs.get('company_pk')
         company = Company.objects.get(id=company_id)
         serializer.save(company=company)
+

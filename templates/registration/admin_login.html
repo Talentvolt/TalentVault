@@ -4,25 +4,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Administrator Access | TalentVault</title>
-    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
-    <link rel="icon" href="{% static 'img/logo_square.png' %}" type="image/png">
+    <!-- Browser Favicons & Web Manifest -->
+    <link rel="icon" type="image/x-icon" href="{% static 'images/logo/favicon.ico' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'images/logo/favicon-16x16.png' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'images/logo/favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{% static 'images/logo/favicon-48x48.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'images/logo/apple-touch-icon.png' %}">
+    <link rel="manifest" href="{% static 'images/logo/site.webmanifest' %}">
+    <title>TalentVault Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --background: #fafafa;
-            --text-dark: #0f172a;
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(226, 232, 240, 0.8);
-            --card-shadow: 0 20px 40px -15px rgba(79, 70, 229, 0.06);
+            --primary: #6C4DFF;
+            --primary-hover: #7B3EFF;
+            --background: #FAFAFC;
+            --text-dark: #0F172A;
+            --text-muted: #64748B;
+            --border-light: #E2E8F0;
         }
 
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
             background-color: var(--background);
             color: var(--text-dark);
             margin: 0;
@@ -36,81 +40,93 @@
             width: 100vw;
         }
 
-        /* Left Branding Panel */
+        /* Left Branding Panel - Clean White SaaS Aesthetic (Stripe / Linear / Notion / Vercel style) */
         .brand-panel {
-            flex: 1.2;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #020617 100%);
+            flex: 1.25;
+            background: linear-gradient(135deg, #F8F6FF 0%, #FFFFFF 100%);
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             padding: 4rem;
-            color: #ffffff;
+            color: #0F172A;
             overflow: hidden;
+            border-right: 1px solid var(--border-light);
         }
 
-        /* Animated Background Gradients for Left Panel */
+        /* Soft dotted/radial decorative pattern in bottom-left corner (5-8% opacity) */
         .brand-panel::before {
             content: '';
             position: absolute;
-            top: -20%;
-            left: -20%;
-            width: 80%;
-            height: 80%;
-            background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, transparent 70%);
-            border-radius: 50%;
-            animation: floatGlow 15s infinite alternate ease-in-out;
+            bottom: -5%;
+            left: -5%;
+            width: 320px;
+            height: 320px;
+            background-image: radial-gradient(circle, #6C4DFF 1.5px, transparent 1.5px);
+            background-size: 20px 20px;
+            opacity: 0.07;
+            pointer-events: none;
+            z-index: 1;
         }
 
+        /* Subtle glowing light sphere in top corner */
         .brand-panel::after {
             content: '';
             position: absolute;
-            bottom: -10%;
-            right: -10%;
-            width: 70%;
-            height: 70%;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 60%);
+            top: -15%;
+            right: -15%;
+            width: 450px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(108, 77, 255, 0.08) 0%, rgba(123, 62, 255, 0.02) 60%, transparent 80%);
             border-radius: 50%;
-            animation: floatGlow 12s infinite alternate-reverse ease-in-out;
-        }
-
-        @keyframes floatGlow {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(40px, 40px) scale(1.08); }
+            filter: blur(40px);
+            pointer-events: none;
+            z-index: 1;
         }
 
         .brand-header {
             z-index: 2;
+            background: transparent;
+        }
+
+        .brand-logo-img {
+            width: 220px;
+            height: auto;
+            object-fit: contain;
+            display: block;
+            background: transparent;
         }
 
         .brand-content {
             z-index: 2;
             max-width: 520px;
-            margin-top: -2rem;
+            margin-top: -1rem;
         }
 
         .brand-tagline {
-            font-size: 3.2rem;
+            font-size: 3rem;
             font-weight: 800;
             line-height: 1.15;
             letter-spacing: -1.5px;
-            margin-bottom: 1.5rem;
-            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            margin-bottom: 1.25rem;
+            color: #0F172A;
+            background: linear-gradient(135deg, #0F172A 0%, #334155 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
         .brand-desc {
-            font-size: 1.1rem;
-            line-height: 1.6;
-            color: #94a3b8;
-            font-weight: 400;
+            font-size: 1.05rem;
+            line-height: 1.65;
+            color: #475569;
+            font-weight: 500;
         }
 
         .brand-footer {
             z-index: 2;
             font-size: 0.85rem;
-            color: #475569;
+            color: #64748B;
+            font-weight: 500;
         }
 
         /* Right Authentication Panel */
@@ -119,7 +135,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background-color: #fafafa;
+            background-color: #FAFAFC;
             position: relative;
             padding: 2rem;
         }
@@ -129,21 +145,36 @@
             max-width: 440px;
         }
 
+        /* White Glassmorphism Card */
         .glass-card {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--border-light);
             border-radius: 24px;
             padding: 3rem 2.5rem;
-            box-shadow: var(--card-shadow);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 20px 50px -15px rgba(108, 77, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .card-title-main {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #0F172A;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.35rem;
+        }
+
+        .card-subtitle {
+            color: #64748B;
+            font-size: 0.9rem;
+            font-weight: 500;
         }
 
         .form-label {
             font-weight: 600;
             font-size: 0.85rem;
-            color: #1e293b;
+            color: #1E293B;
             margin-bottom: 0.5rem;
         }
 
@@ -153,22 +184,23 @@
             align-items: center;
         }
 
+        /* Modern Rounded Inputs */
         .form-control-custom {
             height: 52px;
             border-radius: 12px;
-            border: 1.5px solid #e2e8f0;
-            padding: 0 1rem;
+            border: 1.5px solid var(--border-light);
+            padding: 0 1.1rem;
             font-size: 0.95rem;
             width: 100%;
-            background-color: #ffffff;
+            background-color: #FFFFFF;
             color: var(--text-dark);
             outline: none;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease-in-out;
         }
 
         .form-control-custom:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
+            box-shadow: 0 0 0 4px rgba(108, 77, 255, 0.12);
         }
 
         .input-icon-btn {
@@ -176,7 +208,7 @@
             right: 12px;
             background: none;
             border: none;
-            color: #64748b;
+            color: #64748B;
             cursor: pointer;
             padding: 4px;
             display: flex;
@@ -188,17 +220,18 @@
             color: var(--primary);
         }
 
+        /* Full-Width Gradient Button (#6C4DFF -> #7B3EFF) */
         .btn-signin {
-            background: linear-gradient(135deg, #4f46e5, #312e81);
-            color: #ffffff;
-            font-weight: 600;
+            background: linear-gradient(135deg, #6C4DFF 0%, #7B3EFF 100%);
+            color: #FFFFFF;
+            font-weight: 700;
             height: 52px;
             border-radius: 12px;
             border: none;
             width: 100%;
-            margin-top: 1rem;
-            box-shadow: 0 8px 20px -4px rgba(79, 70, 229, 0.3);
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            margin-top: 1.25rem;
+            box-shadow: 0 8px 20px -4px rgba(108, 77, 255, 0.35);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -207,15 +240,15 @@
 
         .btn-signin:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 25px -4px rgba(79, 70, 229, 0.45);
-            color: #ffffff;
+            box-shadow: 0 12px 25px -4px rgba(108, 77, 255, 0.5);
+            color: #FFFFFF;
         }
 
         .alert-error {
-            background-color: #fef2f2;
-            border: 1px solid #fee2e2;
+            background-color: #FEF2F2;
+            border: 1px solid #FEE2E2;
             border-radius: 12px;
-            color: #b91c1c;
+            color: #B91C1C;
             font-size: 0.85rem;
             padding: 0.75rem 1rem;
             margin-bottom: 1.5rem;
@@ -224,7 +257,14 @@
             gap: 0.5rem;
         }
 
-        /* Mobile Responsive */
+        /* Mobile Header Logo */
+        .mobile-brand-logo {
+            display: none;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        /* Mobile & Tablet Responsive */
         @media (max-width: 991px) {
             .split-layout {
                 flex-direction: column;
@@ -235,6 +275,12 @@
             .auth-panel {
                 flex: 1;
                 width: 100%;
+                padding: 1.5rem;
+                overflow-y: auto;
+            }
+            .mobile-brand-logo {
+                display: flex;
+                justify-content: center;
             }
         }
     </style>
@@ -242,11 +288,11 @@
 <body>
 
     <div class="split-layout">
-        <!-- Left Branding Panel -->
+        <!-- Left Branding Panel - Clean White SaaS -->
         <div class="brand-panel">
-            <div class="brand-header mb-4">
-                <a href="/">
-                    <img src="{% static 'img/logo.png' %}" alt="TalentVault" style="height: 45px; width: auto; object-fit: contain;">
+            <div class="brand-header mb-4" style="background: transparent;">
+                <a href="/" style="background: transparent; display: inline-block;">
+                    <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault" class="brand-logo-img">
                 </a>
             </div>
             
@@ -263,10 +309,18 @@
         <!-- Right Authentication Panel -->
         <div class="auth-panel">
             <div class="auth-container">
+                
+                <!-- Mobile Top Logo Header -->
+                <div class="mobile-brand-logo">
+                    <a href="/">
+                        <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault" style="width: 220px; height: auto; object-fit: contain;">
+                    </a>
+                </div>
+
                 <div class="glass-card">
                     <div class="text-center mb-4">
-                        <h3 class="fw-bold">Administrator Login</h3>
-                        <p class="text-secondary small">Secure access for TalentVault administrators only.</p>
+                        <h3 class="card-title-main">Administrator Login</h3>
+                        <p class="card-subtitle">Secure access for TalentVault administrators only.</p>
                     </div>
 
                     {% if form.errors or form.non_field_errors %}

@@ -127,7 +127,7 @@ ul.resume-bullets li, ol.resume-ordered li {
     {% if selected_job %}
         <a href="{% url 'frontend:job_candidates' selected_job.id %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Job Candidates</a>
     {% else %}
-        <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Talent Vault</a>
+        <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to TalentVault</a>
     {% endif %}
     <div class="d-flex gap-2">
         <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
@@ -207,6 +207,9 @@ ul.resume-bullets li, ol.resume-ordered li {
                                 {% else %}
                                 <span class="badge {{ candidate.ats_score_badge_class }} px-3 py-1.5 rounded-pill fw-bold" style="font-size: 12px;">ATS Suitability: {{ candidate.ats_score }}%</span>
                                 {% endif %}
+                                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 py-1.5 fw-semibold d-inline-flex align-items-center gap-1.5 shadow-sm ms-2" onclick="openCandidateChat('{{ candidate.id }}', '{{ candidate.full_name|escapejs }}', '{{ candidate.user.id }}')">
+                                    <i class="bi bi-chat-dots-fill"></i> Message Candidate
+                                </button>
                             </div>
                             
                             <h5 class="text-primary fw-semibold mb-3" style="font-size: 1.1rem;">
@@ -837,7 +840,7 @@ ul.resume-bullets li, ol.resume-ordered li {
         <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Candidate</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <form method="POST" action="{% url 'frontend:candidate_delete' candidate.id %}" onsubmit="if (this.submitted) return false; this.submitted = true; const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.innerHTML = '<span class=\'spinner-border spinner-border-sm me-2\' role=\'status\' aria-hidden=\'true\'></span>Deleting...'; return true;">
+      <form method="POST" action="{% url 'frontend:candidate_delete' candidate.id %}" onsubmit="if (this.submitted) return false; this.submitted = true; const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.innerHTML = '<span class='spinner-border spinner-border-sm me-2' role='status' aria-hidden='true'></span>Deleting...'; return true;">
         {% csrf_token %}
         <div class="modal-body">
             <p>Are you sure you want to permanently delete this candidate?</p>

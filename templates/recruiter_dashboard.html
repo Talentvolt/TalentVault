@@ -26,7 +26,7 @@
 <!-- Welcome Header -->
 <div class="d-flex justify-content-between align-items-center mb-4 fade-in">
     <div>
-        <h2 class="fw-bold m-0 text-dark" style="font-size: 1.75rem; letter-spacing: -0.5px;">Good Morning, TalentVault 👋</h2>
+        <h2 class="fw-bold m-0 text-dark" style="font-size: 1.75rem; letter-spacing: -0.5px;" id="dashboardDynamicGreeting">{{ dynamic_greeting|default:"Good Morning 👋" }}</h2>
         <p class="text-secondary small m-0 mt-1">Here's what's happening with your recruitment today.</p>
     </div>
     <div>
@@ -313,6 +313,40 @@
 {% block extra_js %}
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        // Dynamic greeting calculation
+        function updateDynamicGreeting() {
+            const greetingEl = document.getElementById('dashboardDynamicGreeting');
+            if (!greetingEl) return;
+
+            const now = new Date();
+            const hour = now.getHours();
+            const firstName = "{{ request.user.first_name|default:''|escapejs }}".trim();
+
+            let prefix = "Good Morning";
+            let emoji = "👋";
+
+            if (hour >= 5 && hour < 12) {
+                prefix = "Good Morning";
+                emoji = "👋";
+            } else if (hour >= 12 && hour < 17) {
+                prefix = "Good Afternoon";
+                emoji = "☀️";
+            } else if (hour >= 17 && hour < 21) {
+                prefix = "Good Evening";
+                emoji = "🌇";
+            } else {
+                prefix = "Good Night";
+                emoji = "🌙";
+            }
+
+            if (firstName && !firstName.includes('@') && !firstName.toLowerCase().includes('talentvault')) {
+                greetingEl.textContent = `${prefix}, ${firstName} ${emoji}`;
+            } else {
+                greetingEl.textContent = `${prefix} ${emoji}`;
+            }
+        }
+        updateDynamicGreeting();
+
         // Doughnut Chart (Pipeline stage distribution)
         const doughnutCtx = document.getElementById('pipelineDoughnutChart').getContext('2d');
         const doughnutLabels = [{% for item in pipeline_counts %}'{{ item.label }}',{% endfor %}];

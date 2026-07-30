@@ -35,10 +35,24 @@ class RoleAccessMiddleware:
                     res = redirect('/')
                     return self._add_no_cache_headers(res)
             else:
-                role = request.user.role
-                
+                user = request.user
+                role = user.role
+                is_admin_user = (role == User.Role.SUPER_ADMIN) or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False)
+
+                if is_admin_user:
+                    admin_forbidden_prefixes = [
+                        '/dashboard/candidate/',
+                        '/profile/',
+                        '/career-resources/',
+                        '/jobs/saved/',
+                        '/jobs/recommended/',
+                    ]
+                    if any(path.startswith(prefix) for prefix in admin_forbidden_prefixes):
+                        res = redirect('frontend:admin_dashboard')
+                        return self._add_no_cache_headers(res)
+
                 # Restrict Candidate Access
-                if role == User.Role.CANDIDATE:
+                elif role == User.Role.CANDIDATE:
                     candidate_forbidden_prefixes = [
                         '/dashboard/recruiter/',
                         '/dashboard/admin/',
@@ -62,10 +76,11 @@ class RoleAccessMiddleware:
                         res = redirect('frontend:candidate_dashboard')
                         return self._add_no_cache_headers(res)
                 
-                # Restrict Recruiter / Admin Access
-                elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                # Restrict Recruiter Access
+                elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
                     recruiter_forbidden_prefixes = [
                         '/dashboard/candidate/',
+                        '/dashboard/admin/',
                         '/profile/',
                         '/career-resources/',
                         '/jobs/saved/',

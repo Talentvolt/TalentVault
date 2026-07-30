@@ -20,12 +20,15 @@ class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
+        extra_fields.setdefault('recruiter_status', 'ACTIVE')
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email, password=None, **extra_fields):
         """Create and save a SuperUser with the given email and password."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('role', 'SUPER_ADMIN')
+        extra_fields.setdefault('recruiter_status', 'ACTIVE')
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
@@ -48,10 +51,23 @@ class User(AbstractUser, UUIDModel, TimeStampedModel):
         RECRUITER = "RECRUITER", _("Recruiter")
         CANDIDATE = "CANDIDATE", _("Candidate")
 
+    class RecruiterStatus(models.TextChoices):
+        PENDING = "PENDING", _("Pending Verification")
+        ACTIVE = "ACTIVE", _("Active")
+        REJECTED = "REJECTED", _("Rejected")
+        SUSPENDED = "SUSPENDED", _("Suspended")
+
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
         default=Role.RECRUITER,
+        db_index=True
+    )
+
+    recruiter_status = models.CharField(
+        max_length=20,
+        choices=RecruiterStatus.choices,
+        default=RecruiterStatus.PENDING,
         db_index=True
     )
 
@@ -80,6 +96,12 @@ class User(AbstractUser, UUIDModel, TimeStampedModel):
 
     def __str__(self):
         return f"{self.email} ({self.role})"
+
+    def save(self, *args, **kwargs):
+        if self.is_superuser or self.is_staff:
+            self.role = self.Role.SUPER_ADMIN
+            self.recruiter_status = self.RecruiterStatus.ACTIVE
+        super().save(*args, **kwargs)
 
 
 import hashlib

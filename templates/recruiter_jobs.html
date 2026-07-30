@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Jobs | Recruiter Workspace | TalentVault{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-2 border-bottom">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">Job Management</h2>
+            <p class="text-secondary small m-0">Create, manage, edit, and close job postings for <strong class="text-dark">{{ company.name|default:"Your Company" }}</strong>.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-purple shadow-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#createJobModal">
+                <i class="bi bi-plus-lg me-1"></i> Create Job
+            </button>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-2" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Filter Bar -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex gap-2">
+                <a href="{% url 'frontend:recruiter_jobs' %}?status=ALL" class="btn btn-sm {% if status_filter == 'ALL' %}btn-purple fw-bold{% else %}btn-outline-secondary{% endif %}">
+                    All Jobs
+                </a>
+                <a href="{% url 'frontend:recruiter_jobs' %}?status=ACTIVE" class="btn btn-sm {% if status_filter == 'ACTIVE' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+                    Active ({{ active_count|default:"0" }})
+                </a>
+                <a href="{% url 'frontend:recruiter_jobs' %}?status=CLOSED" class="btn btn-sm {% if status_filter == 'CLOSED' %}btn-secondary fw-bold{% else %}btn-outline-secondary{% endif %}">
+                    Closed ({{ closed_count|default:"0" }})
+                </a>
+            </div>
+            <div>
+                <span class="text-secondary small">Total Jobs: <strong>{{ jobs|length }}</strong></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jobs Table -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4 py-3 small text-uppercase fw-bold">Job Title & Department</th>
+                            <th class="py-3 small text-uppercase fw-bold">Location</th>
+                            <th class="py-3 small text-uppercase fw-bold">Experience</th>
+                            <th class="py-3 small text-uppercase fw-bold">Salary (LPA)</th>
+                            <th class="py-3 small text-uppercase fw-bold">Required Skills</th>
+                            <th class="py-3 small text-uppercase fw-bold">AI Matching</th>
+                            <th class="py-3 small text-uppercase fw-bold">Status</th>
+                            <th class="px-4 py-3 text-end small text-uppercase fw-bold">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in jobs %}
+                        <tr>
+                            <td class="px-4">
+                                <div class="fw-bold text-dark">{{ job.title }}</div>
+                                <span class="text-secondary small">{{ job.department|default:"General" }} | {{ job.get_job_type_display }}</span>
+                            </td>
+                            <td><span class="small text-dark">{{ job.location }}</span></td>
+                            <td><span class="small text-dark">{{ job.min_experience }} - {{ job.max_experience }} yrs</span></td>
+                            <td><span class="small fw-semibold text-dark">{{ job.salary_range_lpa }}</span></td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1" style="max-width: 200px;">
+                                    {% for s in job.get_required_skills_list %}
+                                        <span class="badge bg-purple-subtle text-purple border" style="font-size: 11px;">{{ s }}</span>
+                                    {% empty %}
+                                        <span class="text-muted small">None</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if job.ai_matching_enabled %}
+                                    <span class="badge bg-success-subtle text-success border"><i class="bi bi-cpu-fill me-1"></i> Enabled</span>
+                                {% else %}
+                                    <span class="badge bg-light text-secondary border">Disabled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if job.status == 'ACTIVE' %}
+                                    <span class="badge bg-success px-3 py-2">Active</span>
+                                {% elif job.status == 'CLOSED' %}
+                                    <span class="badge bg-secondary px-3 py-2">Closed</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark px-3 py-2">{{ job.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 text-end">
+                                <div class="d-inline-flex gap-1">
+                                    <a href="{% url 'frontend:recruiter_candidates' %}?job_id={{ job.id }}" class="btn btn-sm btn-purple shadow-sm fw-semibold" title="View Matched Candidates">
+                                        <i class="bi bi-people-fill me-1"></i> Candidates
+                                    </a>
+                                    <a href="{% url 'frontend:job_edit' job.id %}" class="btn btn-sm btn-outline-secondary" title="Edit Job">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    {% if job.status == 'ACTIVE' %}
+                                    <form method="post" action="{% url 'frontend:job_action' job.id 'close' %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Close Job" onclick="return confirm('Close this job posting?');">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <form method="post" action="{% url 'frontend:job_action' job.id 'reopen' %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-success" title="Reopen Job">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <form method="post" action="{% url 'frontend:job_delete' job.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Job" onclick="return confirm('Delete this job completely?');">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-secondary">
+                                <i class="bi bi-briefcase fs-2 text-muted d-block mb-2"></i>
+                                No jobs found for this filter. Click <strong>Create Job</strong> above to post your first position!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Create Job -->
+<div class="modal fade" id="createJobModal" tabindex="-1" aria-labelledby="createJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom py-3 px-4">
+                <h5 class="modal-title fw-bold text-dark" id="createJobModalLabel"><i class="bi bi-briefcase-fill text-purple me-2"></i>Create New Job Posting</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'frontend:recruiter_jobs' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create">
+                <div class="modal-body p-4">
+                    <!-- Section: Upload Job Description (Optional) -->
+                    <div class="card border-0 bg-light-subtle rounded-3 p-3 mb-4 shadow-sm" style="border: 1px dashed #6d4aff !important; background: #f8f9ff;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-file-earmark-arrow-up text-purple me-2"></i>Upload Job Description (Optional)</h6>
+                            <span class="badge bg-purple-soft text-purple small">Supported: PDF, DOC, DOCX (Max 10 MB)</span>
+                        </div>
+                        <div class="row align-items-center g-2">
+                            <div class="col-md-8">
+                                <input type="file" id="jdFileInput" accept=".pdf,.doc,.docx" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" id="uploadJdBtn" class="btn btn-purple btn-sm w-100 fw-bold">
+                                    <i class="bi bi-magic me-1"></i> Upload & Auto Fill
+                                </button>
+                            </div>
+                        </div>
+                        <div id="jdUploadAlert" class="mt-2 d-none"></div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold small">Job Title *</label>
+                            <input type="text" name="title" required class="form-control" placeholder="e.g. Senior DevOps Engineer">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Department</label>
+                            <input type="text" name="department" class="form-control" placeholder="e.g. Engineering">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Employment Type</label>
+                            <select name="job_type" class="form-select">
+                                <option value="FULL_TIME">Full Time</option>
+                                <option value="PART_TIME">Part Time</option>
+                                <option value="CONTRACT">Contract</option>
+                                <option value="FREELANCE">Freelance</option>
+                                <option value="HYBRID">Hybrid</option>
+                                <option value="WORK_FROM_HOME">Work From Home</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Location *</label>
+                            <input type="text" name="location" required class="form-control" placeholder="e.g. Bangalore / Remote">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Education</label>
+                            <input type="text" name="education" class="form-control" placeholder="e.g. B.Tech / BE / MCA">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Min Experience (Yrs)</label>
+                            <input type="number" name="min_experience" min="0" max="40" value="2" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Max Experience (Yrs)</label>
+                            <input type="number" name="max_experience" min="0" max="40" value="5" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Min Salary (LPA)</label>
+                            <input type="number" step="0.5" name="min_salary" placeholder="e.g. 10.0" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Max Salary (LPA)</label>
+                            <input type="number" step="0.5" name="max_salary" placeholder="e.g. 18.0" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Required Skills (Comma separated) *</label>
+                        <input type="text" name="required_skills" required class="form-control" placeholder="e.g. Docker, AWS, Linux, Kubernetes, Terraform">
+                        <span class="text-secondary small">These skills will be used for AI candidate matching.</span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold small">Preferred Skills (Optional)</label>
+                            <input type="text" name="preferred_skills" class="form-control" placeholder="e.g. Python, Ansible, CI/CD">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Notice Period (Max Days)</label>
+                            <input type="number" name="notice_period" value="30" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Job Description *</label>
+                        <textarea name="description" required rows="4" class="form-control" placeholder="Enter detailed job description and key responsibilities..."></textarea>
+                    </div>
+
+                    <div class="form-check form-switch mt-3">
+                        <input class="form-check-input" type="checkbox" name="ai_matching_enabled" id="aiMatchingSwitch" checked>
+                        <label class="form-check-label fw-semibold text-dark" for="aiMatchingSwitch">
+                            Enable AI Candidate Matching for this Job
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer border-top py-3 px-4 d-flex justify-content-between">
+                    <div>
+                        <button type="button" id="previewJdBtn" class="btn btn-outline-purple fw-semibold">
+                            <i class="bi bi-eye me-1"></i> Preview JD
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-purple px-4 fw-bold">Publish Job</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Preview JD -->
+<div class="modal fade" id="previewJdModal" tabindex="-1" aria-labelledby="previewJdModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom py-3 px-4 bg-light">
+                <h5 class="modal-title fw-bold text-dark" id="previewJdModalLabel">
+                    <i class="bi bi-file-earmark-text-fill text-purple me-2"></i>Job Description Preview
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-4">
+                    <h3 id="prevTitle" class="fw-bold text-dark mb-1">Job Title</h3>
+                    <div class="d-flex flex-wrap align-items-center gap-2 text-secondary small">
+                        <span id="prevDept" class="badge bg-purple-soft text-purple fs-6">Department</span>
+                        <span id="prevType" class="badge bg-secondary fs-6">Full Time</span>
+                        <span><i class="bi bi-geo-alt me-1"></i><span id="prevLocation">Location</span></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4 p-3 bg-light rounded-3">
+                    <div class="col-md-3">
+                        <div class="text-secondary small fw-bold">EXPERIENCE</div>
+                        <div id="prevExp" class="fw-bold text-dark">0 - 5 Yrs</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-secondary small fw-bold">SALARY RANGE</div>
+                        <div id="prevSalary" class="fw-bold text-dark">Not Disclosed</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-secondary small fw-bold">EDUCATION</div>
+                        <div id="prevEdu" class="fw-bold text-dark">Bachelor's Degree</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-secondary small fw-bold">NOTICE PERIOD</div>
+                        <div id="prevNotice" class="fw-bold text-dark">30 Days</div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="fw-bold text-dark mb-2">Required Skills</h6>
+                    <div id="prevReqSkills" class="d-flex flex-wrap gap-1"></div>
+                </div>
+
+                <div class="mb-4" id="prevPrefSkillsContainer">
+                    <h6 class="fw-bold text-dark mb-2">Preferred Skills</h6>
+                    <div id="prevPrefSkills" class="d-flex flex-wrap gap-1"></div>
+                </div>
+
+                <div>
+                    <h6 class="fw-bold text-dark mb-2">Full Job Description</h6>
+                    <div id="prevDesc" class="p-3 bg-light rounded-3 text-dark style-whitespace-pre-line" style="white-space: pre-line; max-height: 350px; overflow-y: auto;"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-3 px-4">
+                <button type="button" class="btn btn-purple fw-bold px-4" data-bs-dismiss="modal">Close Preview</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Auto-open create modal if query parameter create=true is present
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('create') === 'true') {
+            var myModal = new bootstrap.Modal(document.getElementById('createJobModal'));
+            myModal.show();
+        }
+
+        const createForm = document.querySelector('#createJobModal form');
+        if (!createForm) return;
+
+        // Track manually edited fields so auto-fill doesn't overwrite user edits
+        const userEditedFields = new Set();
+        createForm.querySelectorAll('input, select, textarea').forEach(field => {
+            field.addEventListener('input', () => userEditedFields.add(field.name));
+            field.addEventListener('change', () => userEditedFields.add(field.name));
+        });
+
+        // JD Upload & Auto Fill
+        const uploadBtn = document.getElementById('uploadJdBtn');
+        const fileInput = document.getElementById('jdFileInput');
+        const alertBox = document.getElementById('jdUploadAlert');
+
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', function() {
+                const file = fileInput.files[0];
+                if (!file) {
+                    showAlert('Please select a PDF, DOC, or DOCX file to upload.', 'warning');
+                    return;
+                }
+
+                const allowedExts = ['pdf', 'doc', 'docx'];
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                if (!allowedExts.includes(fileExt)) {
+                    showAlert('Invalid file format. Supported formats: PDF, DOC, DOCX.', 'danger');
+                    return;
+                }
+
+                if (file.size > 10 * 1024 * 1024) {
+                    showAlert('File size exceeds maximum limit of 10 MB.', 'danger');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('jd_file', file);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                uploadBtn.disabled = true;
+                uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Extracting...';
+                hideAlert();
+
+                fetch("{% url 'frontend:parse_jd' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                })
+                .then(res => res.json())
+                .then(resData => {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="bi bi-magic me-1"></i> Upload & Auto Fill';
+
+                    if (!resData.success) {
+                        showAlert(resData.error || 'Unable to extract automatically. Please fill the remaining fields manually.', 'warning');
+                        return;
+                    }
+
+                    const data = resData.data;
+
+                    // Clear previous highlights
+                    createForm.querySelectorAll('.border-warning, .bg-warning-subtle').forEach(el => {
+                        el.classList.remove('border-warning', 'bg-warning-subtle');
+                    });
+
+                    // Helper function to auto fill unedited fields
+                    function fillField(name, value) {
+                        if (value === undefined || value === null) return;
+                        if (!userEditedFields.has(name) || !createForm.elements[name].value.trim()) {
+                            const input = createForm.elements[name];
+                            if (input) {
+                                input.value = value;
+                            }
+                        }
+                    }
+
+                    fillField('title', data.title);
+                    fillField('department', data.department);
+                    fillField('job_type', data.job_type);
+                    fillField('location', data.location);
+                    fillField('education', data.education);
+                    fillField('min_experience', data.min_experience);
+                    fillField('max_experience', data.max_experience);
+                    fillField('min_salary', data.min_salary);
+                    fillField('max_salary', data.max_salary);
+                    fillField('required_skills', data.required_skills);
+                    fillField('preferred_skills', data.preferred_skills);
+                    fillField('notice_period', data.notice_period);
+                    fillField('description', data.description);
+
+                    // Highlight low confidence fields for manual verification
+                    const lowConf = data.low_confidence_fields || [];
+                    let highlightedCount = 0;
+                    lowConf.forEach(fieldName => {
+                        const input = createForm.elements[fieldName];
+                        if (input) {
+                            input.classList.add('border-warning', 'bg-warning-subtle');
+                            highlightedCount++;
+                        }
+                    });
+
+                    if (highlightedCount > 0) {
+                        showAlert('Job description parsed successfully! Highlighted fields require your verification.', 'info');
+                    } else {
+                        showAlert('Job description parsed and form auto-filled successfully!', 'success');
+                    }
+                })
+                .catch(err => {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="bi bi-magic me-1"></i> Upload & Auto Fill';
+                    showAlert('Unable to extract automatically. Please fill the remaining fields manually.', 'warning');
+                });
+            });
+        }
+
+        function showAlert(msg, type) {
+            if (!alertBox) return;
+            alertBox.className = `alert alert-${type} py-2 px-3 small rounded-3 mb-0`;
+            alertBox.innerHTML = `<i class="bi bi-info-circle-fill me-1"></i> ${msg}`;
+            alertBox.classList.remove('d-none');
+        }
+
+        function hideAlert() {
+            if (!alertBox) return;
+            alertBox.classList.add('d-none');
+        }
+
+        // Preview JD Button
+        const previewBtn = document.getElementById('previewJdBtn');
+        if (previewBtn) {
+            previewBtn.addEventListener('click', function() {
+                const title = createForm.elements['title'].value || 'Untitled Job';
+                const dept = createForm.elements['department'].value || 'General';
+                const jobTypeSelect = createForm.elements['job_type'];
+                const jobTypeLabel = jobTypeSelect ? jobTypeSelect.options[jobTypeSelect.selectedIndex].text : 'Full Time';
+                const loc = createForm.elements['location'].value || 'Not Specified';
+                const edu = createForm.elements['education'].value || 'Not Specified';
+                const minExp = createForm.elements['min_experience'].value || '0';
+                const maxExp = createForm.elements['max_experience'].value || '0';
+                const minSal = createForm.elements['min_salary'].value;
+                const maxSal = createForm.elements['max_salary'].value;
+                const reqSkills = createForm.elements['required_skills'].value;
+                const prefSkills = createForm.elements['preferred_skills'].value;
+                const notice = createForm.elements['notice_period'].value || '30';
+                const desc = createForm.elements['description'].value || 'No description provided.';
+
+                document.getElementById('prevTitle').textContent = title;
+                document.getElementById('prevDept').textContent = dept;
+                document.getElementById('prevType').textContent = jobTypeLabel;
+                document.getElementById('prevLocation').textContent = loc;
+                document.getElementById('prevEdu').textContent = edu;
+                document.getElementById('prevExp').textContent = `${minExp} - ${maxExp} Yrs`;
+
+                let salText = 'Not Disclosed';
+                if (minSal || maxSal) {
+                    salText = `${minSal || '0'} - ${maxSal || '0'} LPA`;
+                }
+                document.getElementById('prevSalary').textContent = salText;
+                document.getElementById('prevNotice').textContent = `${notice} Days`;
+                document.getElementById('prevDesc').textContent = desc;
+
+                // Skills Badges
+                const reqSkillsContainer = document.getElementById('prevReqSkills');
+                reqSkillsContainer.innerHTML = '';
+                if (reqSkills) {
+                    reqSkills.split(',').forEach(s => {
+                        const sClean = s.strip ? s.strip() : s.trim();
+                        if (sClean) {
+                            reqSkillsContainer.innerHTML += `<span class="badge bg-purple-soft text-purple fs-6">${sClean}</span>`;
+                        }
+                    });
+                } else {
+                    reqSkillsContainer.innerHTML = '<span class="text-secondary small">None specified</span>';
+                }
+
+                const prefSkillsContainer = document.getElementById('prevPrefSkills');
+                prefSkillsContainer.innerHTML = '';
+                if (prefSkills) {
+                    prefSkills.split(',').forEach(s => {
+                        const sClean = s.strip ? s.strip() : s.trim();
+                        if (sClean) {
+                            prefSkillsContainer.innerHTML += `<span class="badge bg-secondary fs-6">${sClean}</span>`;
+                        }
+                    });
+                    document.getElementById('prevPrefSkillsContainer').classList.remove('d-none');
+                } else {
+                    document.getElementById('prevPrefSkillsContainer').classList.add('d-none');
+                }
+
+                const previewModal = new bootstrap.Modal(document.getElementById('previewJdModal'));
+                previewModal.show();
+            });
+        }
+    });
+</script>
+{% endblock %}

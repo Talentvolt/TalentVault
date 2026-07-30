@@ -1,21 +1,28 @@
 """
 Date & Time helper functions for candidate activity and dashboard statistics.
 """
+import zoneinfo
 from django.utils import timezone as django_timezone
+
+KOLKATA_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+
 
 def format_relative_time(dt):
     """
-    Formats a datetime object into a human-readable relative time string:
-    'Just now', '2 minutes ago', '10 minutes ago', '1 hour ago', 'Yesterday', '2 days ago', '1 week ago', etc.
+    Formats a datetime object into a human-readable relative time string in Asia/Kolkata timezone:
+    'Just now', '5 minutes ago', '2 hours ago', 'Yesterday', '2 days ago', '1 week ago', etc.
     """
     if not dt:
         return "Never logged in"
     
-    now = django_timezone.now()
-    if dt > now:
+    # Convert dt to Asia/Kolkata timezone aware datetime
+    local_dt = django_timezone.localtime(dt, KOLKATA_TZ)
+    local_now = django_timezone.localtime(django_timezone.now(), KOLKATA_TZ)
+
+    if local_dt > local_now:
         return "Just now"
         
-    diff = now - dt
+    diff = local_now - local_dt
     seconds = int(diff.total_seconds())
     
     if seconds < 60:
@@ -27,13 +34,11 @@ def format_relative_time(dt):
         
     hours = minutes // 60
     if hours < 24:
-        local_now = django_timezone.localtime(now)
-        local_dt = django_timezone.localtime(dt)
         if local_dt.date() == (local_now.date() - django_timezone.timedelta(days=1)):
             return "Yesterday"
         return f"{hours} hour{'s' if hours > 1 else ''} ago"
         
-    days = diff.days
+    days = (local_now.date() - local_dt.date()).days
     if days == 1:
         return "Yesterday"
     if days < 7:
@@ -53,7 +58,7 @@ def format_relative_time(dt):
 
 def format_registration_date(dt):
     """
-    Formats candidate registration timestamp:
+    Formats candidate registration timestamp in Asia/Kolkata timezone:
     - Today: 'Today 10:42 AM'
     - Yesterday: 'Yesterday 4:20 PM'
     - Same year: 'Jul 26'
@@ -61,8 +66,9 @@ def format_registration_date(dt):
     """
     if not dt:
         return ""
-    local_dt = django_timezone.localtime(dt)
-    today = django_timezone.localtime(django_timezone.now()).date()
+    local_dt = django_timezone.localtime(dt, KOLKATA_TZ)
+    local_now = django_timezone.localtime(django_timezone.now(), KOLKATA_TZ)
+    today = local_now.date()
     yesterday = today - django_timezone.timedelta(days=1)
     
     if local_dt.date() == today:

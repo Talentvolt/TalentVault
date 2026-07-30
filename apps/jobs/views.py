@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,6 +7,9 @@ from apps.jobs.models import Job
 from .serializers import JobSerializer
 from permissions.roles import IsRecruiter
 from utils.pagination import StandardResultsSetPagination
+from utils.tenant import get_tenant_jobs_qs
+
+logger = logging.getLogger(__name__)
 
 class JobViewSet(viewsets.ModelViewSet):
     """
@@ -31,11 +35,12 @@ class JobViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'CANDIDATE':
-            return Job.objects.filter(status=Job.JobStatus.ACTIVE)
-        # Recruiters see all jobs (can filter by company)
-        return super().get_queryset()
+        return get_tenant_jobs_qs(self.request.user)
+
+    def perform_create(self, serializer):
+        from utils.tenant import get_user_company
+        company = get_user_company(self.request.user)
+        serializer.save(created_by=self.request.user, company=company or serializer.validated_data.get('company'))
 
     @action(detail=True, methods=['post'], url_path='publish')
     def publish_job(self, request, pk=None):
@@ -63,3 +68,4 @@ class JobViewSet(viewsets.ModelViewSet):
         job.status = Job.JobStatus.PAUSED
         job.save()
         return Response({'status': 'Job paused successfully'}, status=status.HTTP_200_OK)
+

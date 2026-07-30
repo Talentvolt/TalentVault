@@ -36,3 +36,25 @@ class EmailLog(BaseAppModel):
     
     class Meta:
         ordering = ['-created_at']
+
+class CandidateMessage(BaseAppModel):
+    """
+    Direct recruiter-candidate messages similar to Internshala messaging.
+    """
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_candidate_messages')
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_candidate_messages')
+    candidate = models.ForeignKey('candidates.CandidateProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='messages')
+    message_text = models.TextField(blank=True)
+    attachment = models.FileField(upload_to='candidate_messages/attachments/', null=True, blank=True)
+    attachment_name = models.CharField(max_length=255, blank=True, null=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('candidate message')
+        verbose_name_plural = _('candidate messages')
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Message from {self.sender.email} to {self.recipient.email}: {self.message_text[:30]}"
+
