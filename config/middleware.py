@@ -24,11 +24,14 @@ class RoleAccessMiddleware:
         if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/')):
             if not request.user.is_authenticated:
                 # Public paths allowed without login
-                public_exact_paths = {'/', '/employers/', '/employers'}
+                public_exact_paths = {'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt'}
                 public_prefixes = (
                     '/accounts/',
                     '/jobs/share/',
+                    '/share/job/',
                     '/share/candidate/',
+                    '/sitemap',
+                    '/robots.txt',
                 )
                 is_public = path in public_exact_paths or any(path.startswith(prefix) for prefix in public_prefixes) or '/public-apply/' in path
                 if not is_public:
