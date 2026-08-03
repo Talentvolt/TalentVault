@@ -19,43 +19,86 @@ from apps.candidates.models import (
 
 import importlib.util
 
-PADDLE_AVAILABLE = False
+# Set thread and memory limits for PaddleOCR & OpenMP before loading C++ runtimes
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("FLAGS_allocator_strategy", "naive_best_fit")
+os.environ.setdefault("FLAGS_eager_delete_tensor_gb", "0")
+
 GLOBAL_PADDLE_OCR = None
+_PADDLE_AVAILABLE_CACHE = None
 _OCR_CACHE = {}
 
-if importlib.util.find_spec("paddleocr") is not None:
-    try:
-        import os, sys
-        stderr_fd = sys.stderr.fileno()
-        with open(os.devnull, 'w') as devnull:
-            old_stderr = os.dup(stderr_fd)
-            os.dup2(devnull.fileno(), stderr_fd)
-            try:
-                from paddleocr import PaddleOCR
-                import paddle
-            finally:
-                os.dup2(old_stderr, stderr_fd)
-                os.close(old_stderr)
-        GLOBAL_PADDLE_OCR = PaddleOCR(use_textline_orientation=True, lang='en')
-        PADDLE_AVAILABLE = True
-        logger.info("Loaded global PaddleOCR instance at startup successfully.")
-    except (ImportError, OSError, Exception) as e:
-        logger.info(f"PaddleOCR C++ runtime unavailable ({e}). OCR fallbacks active.")
-        PADDLE_AVAILABLE = False
+def get_paddle_ocr_instance():
+    global GLOBAL_PADDLE_OCR, _PADDLE_AVAILABLE_CACHE
+    if _PADDLE_AVAILABLE_CACHE is False:
+        return None
+    if GLOBAL_PADDLE_OCR is not None:
+        return GLOBAL_PADDLE_OCR
 
+    if importlib.util.find_spec("paddleocr") is not None:
+        try:
+            import os, sys
+            os.environ["OMP_NUM_THREADS"] = "1"
+            os.environ["MKL_NUM_THREADS"] = "1"
+            os.environ["OPENBLAS_NUM_THREADS"] = "1"
+            stderr_fd = sys.stderr.fileno()
+            with open(os.devnull, 'w') as devnull:
+                old_stderr = os.dup(stderr_fd)
+                os.dup2(devnull.fileno(), stderr_fd)
+                try:
+                    from paddleocr import PaddleOCR
+                finally:
+                    os.dup2(old_stderr, stderr_fd)
+                    os.close(old_stderr)
+            GLOBAL_PADDLE_OCR = PaddleOCR(
+                use_textline_orientation=False,
+                use_angle_cls=False,
+                lang='en',
+                show_log=False,
+                enable_mkldnn=False
+            )
+            _PADDLE_AVAILABLE_CACHE = True
+            logger.info("Lazy-loaded global PaddleOCR instance successfully.")
+            return GLOBAL_PADDLE_OCR
+        except (ImportError, OSError, Exception) as e:
+            logger.info(f"PaddleOCR C++ runtime unavailable ({e}). Fallbacks active.")
+            _PADDLE_AVAILABLE_CACHE = False
+            GLOBAL_PADDLE_OCR = None
+            return None
+    else:
+        _PADDLE_AVAILABLE_CACHE = False
+        return None
 
-EASY_AVAILABLE = importlib.util.find_spec("easyocr") is not None
+def is_paddle_available():
+    global _PADDLE_AVAILABLE_CACHE
+    if _PADDLE_AVAILABLE_CACHE is None:
+        get_paddle_ocr_instance()
+    return bool(_PADDLE_AVAILABLE_CACHE)
 
-TESSERACT_AVAILABLE = False
-if importlib.util.find_spec("pytesseract") is not None:
-    try:
-        import pytesseract
-        pytesseract.get_tesseract_version()
-        TESSERACT_AVAILABLE = True
-    except Exception:
-        TESSERACT_AVAILABLE = False
+def is_easyocr_available():
+    return importlib.util.find_spec("easyocr") is not None
 
-SPACY_AVAILABLE = importlib.util.find_spec("spacy") is not None
+def is_tesseract_available():
+    if importlib.util.find_spec("pytesseract") is not None:
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+            return True
+        except Exception:
+            return False
+    return False
+
+def is_spacy_available():
+    return importlib.util.find_spec("spacy") is not None
+
+# Backward compatibility attributes
+PADDLE_AVAILABLE = property(lambda self: is_paddle_available())
+EASY_AVAILABLE = property(lambda self: is_easyocr_available())
+TESSERACT_AVAILABLE = property(lambda self: is_tesseract_available())
+SPACY_AVAILABLE = property(lambda self: is_spacy_available())
+
 
 
 def escape_plain_text(text: str) -> str:
@@ -1504,7 +1547,9 @@ class ResumeIntelligenceService:
                 import fitz
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
                 pdf = pypdfium2.PdfDocument(file_bytes)
-                for i in range(len(pdf)):
+                # Limit scanned PDF page processing to at most 3 pages to prevent worker timeout
+                max_pages_to_scan = min(3, len(pdf))
+                for i in range(max_pages_to_scan):
                     fitz_page = doc[i]
                     total_text_len = len(fitz_page.get_text().strip())
                     
@@ -1514,9 +1559,9 @@ class ResumeIntelligenceService:
                     else:
                         # Skip OCR if there are no images on the page
                         has_images = len(fitz_page.get_images()) > 0
-                        if has_images:
+                        if has_images or total_text_len == 0:
                             page = pdf[i]
-                            bitmap = page.render(scale=2)
+                            bitmap = page.render(scale=1.5)
                             image_list.append((i, "image", bitmap.to_pil()))
                         else:
                             image_list.append((i, "blank", ""))
@@ -1527,7 +1572,7 @@ class ResumeIntelligenceService:
             return {"text": extracted_text or "Could not open document.", "engine": "Error / Fallback Text", "confidence": 50.0, "resume_type": "CORRUPTED", "largest_bold_name": None}
 
         # Local helper for image compression
-        def compress_image_for_ocr(img, max_size=1500):
+        def compress_image_for_ocr(img, max_size=1200):
             try:
                 w, h = img.size
                 if not isinstance(w, (int, float)) or not isinstance(h, (int, float)):
@@ -1542,7 +1587,6 @@ class ResumeIntelligenceService:
 
         # Local helper to run OCR on a single page
         def process_single_page_ocr(p_idx, img):
-            global GLOBAL_PADDLE_OCR, PADDLE_AVAILABLE
             # Duplicate OCR check (page-level cache)
             raw_bytes = img.tobytes()
             img_hash = hashlib.sha256(raw_bytes).hexdigest()
@@ -1550,57 +1594,63 @@ class ResumeIntelligenceService:
                 cached = _OCR_CACHE[img_hash]
                 return p_idx, cached["text"], cached["engine"], cached["confidence"]
 
-            img_compressed = compress_image_for_ocr(img)
+            img_compressed = compress_image_for_ocr(img, max_size=1200)
             img_preproc = ResumeIntelligenceService.preprocess_image_for_ocr(img_compressed)
             
             page_text, engine_success, used_engine_name, page_confidence = "", False, "", 0.0
             
-            # Try PaddleOCR (up to 2 attempts)
-            if PADDLE_AVAILABLE:
+            # Try PaddleOCR safely (lazy-loaded, memory-optimized)
+            paddle_inst = get_paddle_ocr_instance()
+            if paddle_inst is not None:
                 for attempt in range(2):
                     try:
-                        ocr = GLOBAL_PADDLE_OCR
-                        if ocr is None:
-                            from paddleocr import PaddleOCR
-                            GLOBAL_PADDLE_OCR = PaddleOCR(use_textline_orientation=True, lang='en')
-                            ocr = GLOBAL_PADDLE_OCR
-                        res = ocr.ocr(np.array(img_preproc.convert('RGB')), cls=True)
+                        res = paddle_inst.ocr(np.array(img_preproc.convert('RGB')), cls=False)
                         if res and res[0]:
-                            lines, confs = [line[1][0] for line in res[0]], [line[1][1] * 100 for line in res[0]]
-                            page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
-                            used_engine_name, engine_success = "PaddleOCR", True
-                            break
-                    except Exception as e:
-                        logger.error(f"PaddleOCR failed on page {p_idx} (attempt {attempt+1}): {e}")
+                            lines = [line[1][0] for line in res[0] if line and len(line) > 1 and line[1]]
+                            confs = [line[1][1] * 100 for line in res[0] if line and len(line) > 1 and line[1]]
+                            if lines:
+                                page_text = "\n".join(lines)
+                                page_confidence = sum(confs) / len(confs)
+                                used_engine_name = "PaddleOCR"
+                                engine_success = True
+                                break
+                    except (Exception, BaseException) as e:
+                        logger.warning(f"PaddleOCR execution failed on page {p_idx} (attempt {attempt+1}): {e}")
             
-            # Try EasyOCR (up to 2 attempts, disabled on Windows worker threads due to torch OpenMP DLL bug)
+            # Try EasyOCR (up to 2 attempts, guarded on Windows)
             import sys
-            if not engine_success and EASY_AVAILABLE and sys.platform != 'win32':
+            if not engine_success and is_easyocr_available() and sys.platform != 'win32':
                 for attempt in range(2):
                     try:
                         import easyocr
-                        reader = easyocr.Reader(['en'])
+                        reader = easyocr.Reader(['en'], gpu=False)
                         res = reader.readtext(np.array(img_preproc.convert('RGB')))
                         if res:
-                            lines, confs = [r[1] for r in res], [r[2] * 100 for r in res]
-                            page_text, page_confidence = "\n".join(lines), sum(confs) / len(confs)
-                            used_engine_name, engine_success = "EasyOCR", True
-                            break
+                            lines = [r[1] for r in res if len(r) > 1]
+                            confs = [r[2] * 100 for r in res if len(r) > 2]
+                            if lines:
+                                page_text = "\n".join(lines)
+                                page_confidence = sum(confs) / len(confs)
+                                used_engine_name = "EasyOCR"
+                                engine_success = True
+                                break
                     except Exception as e:
-                        logger.error(f"EasyOCR failed on page {p_idx} (attempt {attempt+1}): {e}")
+                        logger.warning(f"EasyOCR failed on page {p_idx} (attempt {attempt+1}): {e}")
             
             # Try Tesseract (up to 2 attempts)
-            if not engine_success and TESSERACT_AVAILABLE:
+            if not engine_success and is_tesseract_available():
                 for attempt in range(2):
                     try:
                         import pytesseract
                         text = pytesseract.image_to_string(img_preproc)
                         if text.strip():
-                            page_text, page_confidence, used_engine_name = text, 92.5, "Tesseract"
+                            page_text = text.strip()
+                            page_confidence = 92.5
+                            used_engine_name = "Tesseract"
                             engine_success = True
                             break
                     except Exception as e:
-                        logger.error(f"Tesseract failed on page {p_idx} (attempt {attempt+1}): {e}")
+                        logger.warning(f"Tesseract failed on page {p_idx} (attempt {attempt+1}): {e}")
 
             res_dict = {
                 "text": page_text,
@@ -1610,26 +1660,32 @@ class ResumeIntelligenceService:
             _OCR_CACHE[img_hash] = res_dict
             return p_idx, page_text, used_engine_name, page_confidence
 
-        # Run page preprocessing and OCR in parallel!
-        import concurrent.futures
+        # Run page preprocessing and OCR sequentially to prevent C++ thread contention / SIGABRT
+        import time
+        import gc
         ocr_results_by_page = {}
         ocr_tasks = [(idx, img) for idx, page_type, img in image_list if page_type == "image"]
         
         if ocr_tasks:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(ocr_tasks))) as executor:
-                futures = {executor.submit(process_single_page_ocr, idx, img): idx for idx, img in ocr_tasks}
-                for future in concurrent.futures.as_completed(futures):
-                    idx = futures[future]
-                    try:
-                        p_idx, page_text, used_engine_name, page_confidence = future.result()
-                        ocr_results_by_page[p_idx] = {
-                            "text": page_text,
-                            "engine": used_engine_name,
-                            "confidence": page_confidence
-                        }
-                    except Exception as e:
-                        logger.error(f"Parallel OCR failed for page {idx}: {e}")
-                        ocr_results_by_page[idx] = {"text": "", "engine": "Failed", "confidence": 0.0}
+            ocr_start_time = time.time()
+            for idx, img in ocr_tasks:
+                # 10 second total time budget guard for OCR tasks
+                if time.time() - ocr_start_time > 10.0:
+                    logger.warning(f"[OCR TIMEOUT GUARD] Exceeded 10s OCR budget. Skipping remaining {len(ocr_tasks)} OCR pages.")
+                    break
+                try:
+                    p_idx, page_text, used_engine_name, page_confidence = process_single_page_ocr(idx, img)
+                    ocr_results_by_page[p_idx] = {
+                        "text": page_text,
+                        "engine": used_engine_name,
+                        "confidence": page_confidence
+                    }
+                except Exception as e:
+                    logger.error(f"Sequential OCR failed for page {idx}: {e}")
+                    ocr_results_by_page[idx] = {"text": "", "engine": "Failed", "confidence": 0.0}
+
+            gc.collect()
+
 
         # Reassemble page results
         ocr_results = {"text": "", "engine": "", "confidence": 0.0}

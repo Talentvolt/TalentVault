@@ -796,16 +796,16 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     t_openai = 0.0
     t_validation = 0.0
     
-    if existing_profile and existing_profile.raw_resume_text and not overwrite:
+    if existing_profile and (existing_profile.raw_resume_text or existing_profile.parsed_json) and not overwrite:
         logger.info(f"[PARSER DEDUPLICATION] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
         print(f"[PARSER DEDUPLICATION] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
-        text = existing_profile.raw_resume_text
-        parsed_data = existing_profile.parsed_json
+        text = existing_profile.raw_resume_text or ""
+        parsed_data = existing_profile.parsed_json or {}
         ocr_result = {
             "text": text,
-            "engine": existing_profile.ocr_engine,
-            "confidence": float(existing_profile.ocr_confidence),
-            "resume_type": existing_profile.resume_type,
+            "engine": existing_profile.ocr_engine or "Cached DB",
+            "confidence": float(existing_profile.ocr_confidence or 100.0),
+            "resume_type": existing_profile.resume_type or "CACHED",
             "largest_bold_name": existing_profile.full_name
         }
         cached_duplicate = True
