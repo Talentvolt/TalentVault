@@ -26,20 +26,34 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("FLAGS_allocator_strategy", "naive_best_fit")
 os.environ.setdefault("FLAGS_eager_delete_tensor_gb", "0")
 
+import threading
+import concurrent.futures
+import time
+
 GLOBAL_PADDLE_OCR = None
 _PADDLE_AVAILABLE_CACHE = None
+_PADDLE_LOCK = threading.Lock()
 _OCR_CACHE = {}
 
-def get_paddle_ocr_instance():
+def get_paddle_ocr_instance(timeout_seconds=15):
     global GLOBAL_PADDLE_OCR, _PADDLE_AVAILABLE_CACHE
     if _PADDLE_AVAILABLE_CACHE is False:
         return None
     if GLOBAL_PADDLE_OCR is not None:
         return GLOBAL_PADDLE_OCR
 
-    if importlib.util.find_spec("paddleocr") is not None:
-        try:
-            import os, sys
+    with _PADDLE_LOCK:
+        if GLOBAL_PADDLE_OCR is not None:
+            return GLOBAL_PADDLE_OCR
+        if _PADDLE_AVAILABLE_CACHE is False:
+            return None
+
+        if importlib.util.find_spec("paddleocr") is None:
+            _PADDLE_AVAILABLE_CACHE = False
+            return None
+
+        def _init_paddle():
+            import sys, os
             os.environ["OMP_NUM_THREADS"] = "1"
             os.environ["MKL_NUM_THREADS"] = "1"
             os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -52,24 +66,37 @@ def get_paddle_ocr_instance():
                 finally:
                     os.dup2(old_stderr, stderr_fd)
                     os.close(old_stderr)
-            GLOBAL_PADDLE_OCR = PaddleOCR(
+            return PaddleOCR(
                 use_textline_orientation=False,
                 use_angle_cls=False,
                 lang='en',
                 show_log=False,
                 enable_mkldnn=False
             )
-            _PADDLE_AVAILABLE_CACHE = True
-            logger.info("Lazy-loaded global PaddleOCR instance successfully.")
-            return GLOBAL_PADDLE_OCR
-        except (ImportError, OSError, Exception) as e:
+
+        t0 = time.time()
+        logger.info("[PADDLEOCR INIT] Initializing singleton PaddleOCR instance...")
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_init_paddle)
+                inst = future.result(timeout=timeout_seconds)
+                GLOBAL_PADDLE_OCR = inst
+                _PADDLE_AVAILABLE_CACHE = True
+                logger.info(f"[PADDLEOCR INIT SUCCESS] PaddleOCR initialized in {time.time() - t0:.2f}s.")
+                return GLOBAL_PADDLE_OCR
+        except concurrent.futures.TimeoutError:
+            import traceback
+            stack_info = "".join(traceback.format_stack())
+            logger.error(f"HANG DETECTED: PaddleOCR initialization timed out (> {timeout_seconds}s).\nStack:\n{stack_info}")
+            print(f"HANG DETECTED: PaddleOCR initialization timed out (> {timeout_seconds}s).\nStack:\n{stack_info}")
+            _PADDLE_AVAILABLE_CACHE = False
+            GLOBAL_PADDLE_OCR = None
+            return None
+        except Exception as e:
             logger.info(f"PaddleOCR C++ runtime unavailable ({e}). Fallbacks active.")
             _PADDLE_AVAILABLE_CACHE = False
             GLOBAL_PADDLE_OCR = None
             return None
-    else:
-        _PADDLE_AVAILABLE_CACHE = False
-        return None
 
 def is_paddle_available():
     global _PADDLE_AVAILABLE_CACHE
@@ -1599,12 +1626,18 @@ class ResumeIntelligenceService:
             
             page_text, engine_success, used_engine_name, page_confidence = "", False, "", 0.0
             
-            # Try PaddleOCR safely (lazy-loaded, memory-optimized)
+            # Try PaddleOCR safely (lazy-loaded, memory-optimized with 20s timeout)
             paddle_inst = get_paddle_ocr_instance()
             if paddle_inst is not None:
+                def _do_paddle(img_arr):
+                    return paddle_inst.ocr(img_arr, cls=False)
+
                 for attempt in range(2):
                     try:
-                        res = paddle_inst.ocr(np.array(img_preproc.convert('RGB')), cls=False)
+                        img_arr = np.array(img_preproc.convert('RGB'))
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                            fut = pool.submit(_do_paddle, img_arr)
+                            res = fut.result(timeout=20.0)
                         if res and res[0]:
                             lines = [line[1][0] for line in res[0] if line and len(line) > 1 and line[1]]
                             confs = [line[1][1] * 100 for line in res[0] if line and len(line) > 1 and line[1]]
@@ -1614,6 +1647,12 @@ class ResumeIntelligenceService:
                                 used_engine_name = "PaddleOCR"
                                 engine_success = True
                                 break
+                    except concurrent.futures.TimeoutError:
+                        import traceback
+                        stack_info = "".join(traceback.format_stack())
+                        logger.error(f"HANG DETECTED: PaddleOCR page {p_idx} execution timed out (> 20s).\nStack:\n{stack_info}")
+                        print(f"HANG DETECTED: PaddleOCR page {p_idx} execution timed out (> 20s).\nStack:\n{stack_info}")
+                        break
                     except (Exception, BaseException) as e:
                         logger.warning(f"PaddleOCR execution failed on page {p_idx} (attempt {attempt+1}): {e}")
             

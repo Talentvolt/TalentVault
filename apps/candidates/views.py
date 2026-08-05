@@ -36,7 +36,7 @@ class CandidateProfileViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        return get_tenant_candidates_qs(self.request.user)
+        return get_tenant_candidates_qs(self.request.user).select_related('user').prefetch_related('skills', 'experiences', 'educations', 'projects', 'certifications')
 
 class CandidateSkillViewSet(viewsets.ModelViewSet):
     serializer_class = CandidateSkillSerializer
@@ -47,7 +47,8 @@ class CandidateSkillViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         profile = CandidateProfile.objects.get(user=self.request.user)
-        serializer.save(profile=profile)
+        skill_name = serializer.validated_data.get('skill_name', '').strip()
+        CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill_name)
 
 class ExperienceViewSet(viewsets.ModelViewSet):
     serializer_class = ExperienceSerializer

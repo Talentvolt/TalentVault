@@ -36,7 +36,7 @@ MAX_FILENAME_LENGTH = 255
 EXTRACTION_RATIO_LIMIT = 100.0  # Reject if uncompressed size / compressed size exceeds this
 
 # Supported extensions
-SUPPORTED_EXTENSIONS = {'pdf', 'doc', 'docx', 'rtf', 'txt', 'zip'}
+SUPPORTED_EXTENSIONS = {'pdf', 'doc', 'docx', 'rtf', 'txt', 'zip', 'png', 'jpg', 'jpeg', 'webp', 'tiff'}
 
 # MIME Type mappings
 SUPPORTED_MIME_TYPES = {
@@ -48,8 +48,13 @@ SUPPORTED_MIME_TYPES = {
         'application/octet-stream'
     ],
     'rtf': ['application/rtf', 'text/rtf', 'application/x-rtf'],
-    'txt': ['text/plain'],
-    'zip': ['application/zip', 'application/x-zip-compressed', 'application/x-zip']
+    'txt': ['text/plain', 'text/ascii'],
+    'zip': ['application/zip', 'application/x-zip-compressed', 'application/x-zip'],
+    'png': ['image/png'],
+    'jpg': ['image/jpeg', 'image/jpg'],
+    'jpeg': ['image/jpeg', 'image/jpg'],
+    'webp': ['image/webp'],
+    'tiff': ['image/tiff']
 }
 
 # Magic numbers

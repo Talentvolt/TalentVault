@@ -135,7 +135,8 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        candidate_profile = getattr(user, 'candidate_profile', None)
+        from apps.candidates.models import CandidateProfile
+        candidate_profile = CandidateProfile.objects.filter(user=user).prefetch_related('skills', 'educations', 'experiences', 'job_applications', 'saved_jobs').first()
         
         if candidate_profile:
             context['candidate_profile'] = candidate_profile
@@ -147,15 +148,14 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
             context['saved_jobs_count'] = SavedJob.objects.filter(candidate=candidate_profile).count()
             context['interviews_count'] = Interview.objects.filter(application__candidate=candidate_profile).count()
             
-            context['recent_activity'] = Notification.objects.filter(recipient=user).order_by('-created_at')[:5]
-            context['upcoming_interviews'] = Interview.objects.filter(
+            context['recent_activity'] = list(Notification.objects.filter(recipient=user).order_by('-created_at')[:5])
+            context['upcoming_interviews'] = list(Interview.objects.filter(
                 application__candidate=candidate_profile, 
                 start_time__gte=timezone.now()
-            ).select_related('application__job').order_by('start_time')[:3]
+            ).select_related('application__job', 'application__job__company').order_by('start_time')[:3])
             
             from services.candidate_matching_service import CandidateMatchingService
-            recommended = CandidateMatchingService.get_recommended_jobs(candidate_profile, limit=5)
-            context['recommended_jobs'] = recommended
+            context['recommended_jobs'] = CandidateMatchingService.get_recommended_jobs(candidate_profile, limit=5)
             
             context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
             context['saved_job_ids'] = list(candidate_profile.saved_jobs.values_list('job_id', flat=True))
@@ -178,15 +178,6 @@ class CandidateDashboardView(CandidateRequiredMixin, TemplateView):
 
 class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
     template_name = 'recruiter_dashboard.html'
-    
-    def dispatch(self, request, *args, **kwargs):
-        user = getattr(request, 'user', None)
-        if user and user.is_authenticated:
-            print(f"[RECRUITER DASHBOARD VIEW] request.user: {request.user}")
-            print(f"[RECRUITER DASHBOARD VIEW] request.user.role: {getattr(request.user, 'role', None)}")
-            print(f"[RECRUITER DASHBOARD VIEW] request.user.is_superuser: {getattr(request.user, 'is_superuser', False)}")
-            print(f"[RECRUITER DASHBOARD VIEW] request.user.is_staff: {getattr(request.user, 'is_staff', False)}")
-        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -241,11 +232,18 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         # Recent Job Openings
         context['recent_jobs'] = jobs_qs.filter(status='ACTIVE').order_by('-created_at')[:5]
         
-        # Candidates added over last 7 days (for line chart)
+        # Candidates added over last 7 days (Single aggregated query)
         candidates_by_day = []
+        six_days_ago = today_date - django_timezone.timedelta(days=6)
+        cand_counts_dict = dict(
+            candidates_qs.filter(created_at__date__gte=six_days_ago)
+            .values('created_at__date')
+            .annotate(cnt=Count('id'))
+            .values_list('created_at__date', 'cnt')
+        )
         for i in range(6, -1, -1):
             day = today_date - django_timezone.timedelta(days=i)
-            count = candidates_qs.filter(created_at__date=day).count()
+            count = cand_counts_dict.get(day, 0)
             candidates_by_day.append({
                 'day': day.strftime("%a"),
                 'count': count
@@ -301,10 +299,13 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         # 3. Mails From Candidates (Latest Candidate messages/logs)
         context['candidate_mails'] = EmailLog.objects.all().order_by('-created_at')[:10]
         
-        # 4. Applicant Status (Pipeline stats counts)
+        # 4. Applicant Status (Single aggregated query for pipeline stats counts)
+        stage_counts_dict = dict(
+            apps_qs.values('stage').annotate(cnt=Count('id')).values_list('stage', 'cnt')
+        )
         pipeline_counts = []
         for stage_val, stage_label in Application.ApplicationStage.choices:
-            count = apps_qs.filter(stage=stage_val).count()
+            count = stage_counts_dict.get(stage_val, 0)
             
             if stage_val == 'OPEN':
                 badge_class = 'bg-primary text-white' # blue
@@ -583,7 +584,7 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
         location_param = self.request.GET.get('location', '').strip().lower()
         sort_by = self.request.GET.get('sort', 'match_desc')
 
-        all_candidates = get_tenant_candidates_qs(user).select_related('user')
+        all_candidates = get_tenant_candidates_qs(user).select_related('user').prefetch_related('skills', 'educations', 'experiences')[:50]
         matched_candidates = []
 
         if selected_job:
@@ -595,7 +596,7 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
                 analysis = CandidateMatchingService.calculate_job_ats_score(cand, selected_job)
                 score = analysis['total_score']
 
-                cand_skills = {s.strip().lower() for s in cand.skills.values_list('skill_name', flat=True) if s.strip()}
+                cand_skills = {s.skill_name.strip().lower() for s in cand.skills.all() if s.skill_name and s.skill_name.strip()}
                 matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
                 missing_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() not in cand_skills]
 
@@ -825,7 +826,7 @@ class JobsView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         if self.request.user.role == 'CANDIDATE':
-            queryset = Job.objects.filter(status='ACTIVE')
+            queryset = Job.objects.filter(status='ACTIVE').select_related('company').prefetch_related('skills')
             
             # 1. Search by Keyword (title, description)
             q = self.request.GET.get('q', '')
@@ -908,7 +909,7 @@ class JobsView(LoginRequiredMixin, ListView):
                 
             return queryset
         else:
-            queryset = get_tenant_jobs_qs(self.request.user).annotate(
+            queryset = get_tenant_jobs_qs(self.request.user).select_related('company', 'client').prefetch_related('skills').annotate(
                 app_count=Count('applications'),
                 interview_count=Count('applications__interviews')
             )
@@ -978,10 +979,16 @@ class JobsView(LoginRequiredMixin, ListView):
                 Job.objects.filter(status='ACTIVE').exclude(location=None).exclude(location='').values_list('location', flat=True)
             )))
         else:
-            context['active_count'] = Job.objects.filter(status='ACTIVE').count()
-            context['draft_count'] = Job.objects.filter(status='DRAFT').count()
-            context['on_hold_count'] = Job.objects.filter(status='ON_HOLD').count()
-            context['closed_count'] = Job.objects.filter(status='CLOSED').count()
+            status_counts = Job.objects.aggregate(
+                active=Count('id', filter=Q(status='ACTIVE')),
+                draft=Count('id', filter=Q(status='DRAFT')),
+                on_hold=Count('id', filter=Q(status='ON_HOLD')),
+                closed=Count('id', filter=Q(status='CLOSED'))
+            )
+            context['active_count'] = status_counts['active']
+            context['draft_count'] = status_counts['draft']
+            context['on_hold_count'] = status_counts['on_hold']
+            context['closed_count'] = status_counts['closed']
             
             # Preserve search, filter and sort inputs in template
             context['q'] = self.request.GET.get('q', '')
@@ -3570,10 +3577,22 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         t = threading.Thread(target=run_parser_thread)
         t.start()
         
+        import time
+        stream_start_time = time.time()
+        max_stream_duration = 90.0
+
         def stream_generator():
             yield json.dumps({"stage": "upload_complete"}) + " " * 1024 + "\n"
             
             while True:
+                if time.time() - stream_start_time > max_stream_duration:
+                    import traceback
+                    stack_info = "".join(traceback.format_stack())
+                    logger.error(f"HANG DETECTED: ResumeParserView streaming response exceeded 90s max limit.\nStack:\n{stack_info}")
+                    print(f"HANG DETECTED: ResumeParserView streaming response exceeded 90s max limit.\nStack:\n{stack_info}")
+                    yield json.dumps({"stage": "error", "message": "Parsing operation timed out. Please try again."}) + " " * 1024 + "\n"
+                    break
+
                 try:
                     item = q.get(timeout=1.0)
                 except queue.Empty:

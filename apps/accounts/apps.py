@@ -1,5 +1,8 @@
+import logging
 from django.apps import AppConfig
 from django.db.models.signals import post_migrate
+
+logger = logging.getLogger(__name__)
 
 def create_default_recruiter(sender, **kwargs):
     from django.db import connection
@@ -24,7 +27,7 @@ def create_default_recruiter(sender, **kwargs):
             if created:
                 user.set_password("TalentVault2026!")
                 user.save()
-                print("Default recruiter account growfluencestudio@gmail.com created successfully with password TalentVault2026!")
+                logger.info("Default recruiter account created successfully.")
             
             # Ensure default company association exists for dashboard integrity
             if 'companies_company' in tables and 'companies_companymember' in tables:
@@ -46,9 +49,7 @@ def create_default_recruiter(sender, **kwargs):
                     }
                 )
     except Exception as err:
-        import traceback
-        print(f"Error in create_default_recruiter: {err}")
-        traceback.print_exc()
+        logger.error(f"Error in create_default_recruiter: {err}")
 
 def setup_google_social_app(sender, **kwargs):
     from django.db import connection
@@ -100,9 +101,7 @@ def setup_google_social_app(sender, **kwargs):
             if site not in app.sites.all():
                 app.sites.add(site)
     except Exception as e:
-        import traceback
-        print(f"Error in setup_google_social_app: {e}")
-        traceback.print_exc()
+        logger.error(f"Error in setup_google_social_app: {e}")
 
 class AccountsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
@@ -126,6 +125,6 @@ class AccountsConfig(AppConfig):
 
             GoogleProvider.get_auth_params_from_request = custom_get_auth_params_from_request
         except Exception as err:
-            print(f"Error patching GoogleProvider: {err}")
+            logger.error(f"Error patching GoogleProvider: {err}")
 
 

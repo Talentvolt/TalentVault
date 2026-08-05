@@ -544,7 +544,7 @@ def test_save_llm_parsed_data_to_db():
 
     # Check relational tables
     assert profile.skills.count() == 3
-    assert list(profile.skills.values_list("skill_name", flat=True)) == ["Python", "Java", "Leadership"]
+    assert set(profile.skills.values_list("skill_name", flat=True)) == {"Python", "Java", "Leadership"}
 
     assert profile.experiences.count() == 1
     exp = profile.experiences.first()

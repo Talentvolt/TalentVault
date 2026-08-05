@@ -17,20 +17,13 @@ os.environ.setdefault("FLAGS_eager_delete_tensor_gb", "0")
 _GLOBAL_PADDLE_OCR = None
 _OCR_CACHE = {}
 
-def get_paddle_ocr_instance():
+def get_paddle_ocr_instance(timeout_seconds=15):
     try:
         from services.resume_intelligence import get_paddle_ocr_instance as _get_inst
-        return _get_inst()
-    except Exception:
-        global _GLOBAL_PADDLE_OCR
-        if _GLOBAL_PADDLE_OCR is None:
-            try:
-                from paddleocr import PaddleOCR
-                _GLOBAL_PADDLE_OCR = PaddleOCR(use_textline_orientation=False, use_angle_cls=False, lang='en', show_log=False, enable_mkldnn=False)
-            except Exception as e:
-                logger.warning(f"Failed to initialize PaddleOCR: {str(e)}. Will fallback to Tesseract.")
-                _GLOBAL_PADDLE_OCR = False
-        return _GLOBAL_PADDLE_OCR if _GLOBAL_PADDLE_OCR is not False else None
+        return _get_inst(timeout_seconds=timeout_seconds)
+    except Exception as e:
+        logger.warning(f"Failed to fetch PaddleOCR instance: {str(e)}.")
+        return None
 
 
 def compress_image_for_ocr(img: Image.Image, max_size=1500) -> Image.Image:

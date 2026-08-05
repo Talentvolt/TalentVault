@@ -7,14 +7,17 @@ from apps.candidates.models import CandidateProfile
 from apps.interviews.models import Interview
 
 def get_user_company(user):
-    """Returns company for recruiter/company_admin user or None."""
+    """Returns company for recruiter/company_admin user or None (cached per request/user instance)."""
     if not user or not user.is_authenticated:
         return None
+    if hasattr(user, '_cached_company'):
+        return user._cached_company
     try:
         cm = user.company_affiliations.select_related('company').first()
-        return cm.company if cm else None
+        user._cached_company = cm.company if cm else None
     except Exception:
-        return None
+        user._cached_company = None
+    return user._cached_company
 
 def get_tenant_jobs_qs(user):
     """Returns tenant-scoped Job queryset."""
@@ -70,12 +73,11 @@ def get_tenant_candidates_qs(user):
     
     company = get_user_company(user)
     if company:
-        # Exclude candidates created by other companies
-        other_company_candidates = CandidateProfile.objects.filter(
-            Q(created_by__company_affiliations__company__isnull=False) &
-            ~Q(created_by__company_affiliations__company=company)
-        )
-        return CandidateProfile.objects.exclude(id__in=other_company_candidates.values_list('id', flat=True)).distinct()
+        return CandidateProfile.objects.filter(
+            Q(created_by__company_affiliations__company=company) |
+            Q(created_by__company_affiliations__company__isnull=True) |
+            Q(created_by__isnull=True)
+        ).distinct()
     
     return CandidateProfile.objects.all()
 

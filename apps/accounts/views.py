@@ -311,7 +311,7 @@ class SignupView(CreateView):
                 }
             )
         except Exception as company_err:
-            print(f"Error associating company in signup: {company_err}")
+            logger.error(f"Error associating company in signup: {company_err}")
             
         from django.contrib import messages
         messages.success(self.request, "Account created successfully! Please log in.")
@@ -440,12 +440,6 @@ class EmployerSignupForm(forms.ModelForm):
         # Check 1: User model (case-insensitive)
         user_matches = User.objects.filter(email__iexact=email)
         if user_matches.exists():
-            matched_user = user_matches.first()
-            print(f"\n==================================================")
-            print(f"[EMPLOYER SIGNUP DEBUG] User.objects.filter(email__iexact='{email}') returned exists=True")
-            print(f"[EMPLOYER SIGNUP DEBUG] Table: accounts_user (User) | Record ID: {matched_user.pk}")
-            print(f"[EMPLOYER SIGNUP DEBUG] Record Details: Email='{matched_user.email}', Role={matched_user.role}, Active={matched_user.is_active}, Verified={matched_user.is_verified}")
-            print(f"==================================================\n")
             raise forms.ValidationError("An account with this email address already exists.")
 
         # Check 2: django-allauth EmailAddress model (case-insensitive)
@@ -453,12 +447,6 @@ class EmployerSignupForm(forms.ModelForm):
             from allauth.account.models import EmailAddress
             ea_matches = EmailAddress.objects.filter(email__iexact=email)
             if ea_matches.exists():
-                matched_ea = ea_matches.first()
-                print(f"\n==================================================")
-                print(f"[EMPLOYER SIGNUP DEBUG] EmailAddress.objects.filter(email__iexact='{email}') returned exists=True")
-                print(f"[EMPLOYER SIGNUP DEBUG] Table: account_emailaddress (EmailAddress) | Record ID: {matched_ea.pk}")
-                print(f"[EMPLOYER SIGNUP DEBUG] Record Details: Email='{matched_ea.email}', User_ID={matched_ea.user_id}, Verified={matched_ea.verified}")
-                print(f"==================================================\n")
                 raise forms.ValidationError("An account with this email address already exists.")
         except Exception:
             pass
@@ -519,18 +507,6 @@ class CandidateLoginView(View):
             remember_me = form.cleaned_data.get('remember_me')
 
             user_check = User.objects.filter(email=email).first()
-            user_found = bool(user_check)
-            u_is_verified = user_check.is_verified if user_check else False
-            u_email_verified = user_check.email_verified if user_check else False
-
-            print(f"\n==================================================")
-            print(f"[LOGIN DEBUG] DURING LOGIN:")
-            print(f"[LOGIN DEBUG] Target Email: '{email}'")
-            print(f"[LOGIN DEBUG] User Found in DB: {user_found}")
-            print(f"[LOGIN DEBUG] user.is_verified: {u_is_verified}")
-            print(f"[LOGIN DEBUG] user.email_verified: {u_email_verified}")
-            print(f"==================================================\n")
-
             if user_check:
                 if user_check.role != User.Role.CANDIDATE:
                     form.add_error(None, "This workspace is reserved for Candidates. Please use the Recruiter Portal to sign in.")
@@ -540,7 +516,6 @@ class CandidateLoginView(View):
                 if not user_check.is_verified:
                     if OTPVerification.objects.filter(email=email, verified=True).exists():
                         complete_user_verification(user_check)
-                        print(f"[LOGIN DEBUG] Fixed unverified user status for '{email}'. user.is_verified set to True!")
 
                 if not user_check.is_verified:
                     form.add_error(None, "Please verify your email before logging in.")
@@ -555,7 +530,6 @@ class CandidateLoginView(View):
                             request.session.set_expiry(1209600)  # 2 weeks
                         else:
                             request.session.set_expiry(0)
-                        print(f"[LOGIN DEBUG] LOGIN SUCCESSFUL for '{email}'! Redirecting to candidate dashboard...")
                         return redirect('frontend:candidate_dashboard')
                     else:
                         form.add_error(None, "This account is disabled.")
@@ -585,13 +559,6 @@ class CandidateSignupView(View):
             user_exists = User.objects.filter(email=email).exists()
             existing_user = User.objects.filter(email=email).first()
             existing_verified = existing_user.is_verified if existing_user else False
-
-            print(f"\n==================================================")
-            print(f"[OTP VERIFICATION DEBUG] BEFORE VERIFICATION (SIGNUP):")
-            print(f"[OTP VERIFICATION DEBUG] Target Email: '{email}'")
-            print(f"[OTP VERIFICATION DEBUG] User Exists in DB: {user_exists}")
-            print(f"[OTP VERIFICATION DEBUG] Existing User is_verified: {existing_verified}")
-            print(f"==================================================\n")
 
             # Clean up expired OTP records
             OTPVerification.cleanup_expired()
@@ -747,12 +714,6 @@ class EmployerSignupView(View):
 
             user_matches = User.objects.filter(email__iexact=email)
             if user_matches.exists():
-                matched_user = user_matches.first()
-                print(f"\n==================================================")
-                print(f"[EMPLOYER SIGNUP VIEW DEBUG] User.objects.filter(email__iexact='{email}') returned exists=True")
-                print(f"[EMPLOYER SIGNUP VIEW DEBUG] Table: accounts_user (User) | Record ID: {matched_user.pk}")
-                print(f"[EMPLOYER SIGNUP VIEW DEBUG] Record Details: Email='{matched_user.email}', Role={matched_user.role}")
-                print(f"==================================================\n")
                 form.add_error('email', 'An account with this email address already exists.')
                 return render(request, self.template_name, {'form': form})
 
@@ -927,16 +888,6 @@ def complete_user_verification(user, pending_signup=None):
     c_is_verified = getattr(profile, 'is_verified', None)
     c_email_verified = getattr(profile, 'email_verified', None)
 
-    print(f"\n==================================================")
-    print(f"[OTP VERIFICATION DEBUG] AFTER VERIFICATION:")
-    print(f"[OTP VERIFICATION DEBUG] Target Email: '{user.email}'")
-    print(f"[OTP VERIFICATION DEBUG] user.is_verified: {user.is_verified}")
-    print(f"[OTP VERIFICATION DEBUG] user.email_verified: {user.email_verified}")
-    print(f"[OTP VERIFICATION DEBUG] candidate.is_verified: {c_is_verified}")
-    print(f"[OTP VERIFICATION DEBUG] candidate.email_verified: {c_email_verified}")
-    print(f"[OTP VERIFICATION DEBUG] Saved to Database: True")
-    print(f"==================================================\n")
-
     logger.info(f"User {user.email} verified successfully. is_verified=True, email_verified=True.")
     return user, profile
 
@@ -961,13 +912,6 @@ class CandidateForgotPasswordView(View):
             })
 
         target_email = user.email
-
-        print(f"\n==================================================")
-        print(f"[OTP VERIFICATION DEBUG] BEFORE VERIFICATION (FORGOT PASSWORD):")
-        print(f"[OTP VERIFICATION DEBUG] Target Email: '{target_email}'")
-        print(f"[OTP VERIFICATION DEBUG] User Exists in DB: True")
-        print(f"[OTP VERIFICATION DEBUG] Existing User is_verified: {user.is_verified}")
-        print(f"==================================================\n")
 
         # Clean up expired OTPs
         OTPVerification.cleanup_expired()

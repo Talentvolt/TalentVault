@@ -84,18 +84,17 @@ class CandidateProfile(BaseAppModel):
 
     @property
     def has_profile_photo(self):
-
         try:
             return bool(self.profile_photo and self.profile_photo.name and self.profile_photo.storage.exists(self.profile_photo.name))
         except Exception:
-            return False
+            return bool(self.profile_photo and self.profile_photo.name)
 
     @property
     def has_resume(self):
         try:
             return bool(self.resume and self.resume.name and self.resume.storage.exists(self.resume.name))
         except Exception:
-            return False
+            return bool(self.resume and self.resume.name)
 
     @property
     def resume_exists(self):

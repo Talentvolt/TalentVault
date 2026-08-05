@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Load .env file
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
@@ -18,10 +18,18 @@ ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
     "testserver",
-
     "talent-vault.in",
     "www.talent-vault.in",
+    ".onrender.com",
 ]
+
+env_allowed_hosts = os.environ.get("ALLOWED_HOSTS")
+if env_allowed_hosts:
+    for host in env_allowed_hosts.split(","):
+        host = host.strip()
+        if host and host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
+
 CSRF_COOKIE_NAME = 'csrftoken'
 SESSION_COOKIE_NAME = 'sessionid'
 CSRF_COOKIE_HTTPONLY = False
@@ -36,10 +44,20 @@ CSRF_TRUSTED_ORIGINS = [
     "https://www.talent-vault.in",
 ]
 
+env_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS")
+if env_csrf:
+    for origin in env_csrf.split(","):
+        origin = origin.strip()
+        if origin and origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
+
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+    if RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    origin = f"https://{RENDER_EXTERNAL_HOSTNAME}"
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
     
     # Production / Render Security Settings
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -99,6 +117,7 @@ AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -226,9 +245,16 @@ else:
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-print("DEBUG =", DEBUG)
-print("AWS_STORAGE_BUCKET_NAME =", AWS_STORAGE_BUCKET_NAME)
-print("STORAGES =", STORAGES)
+# Cache configuration (Fast in-memory cache)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'talentvault-locmem-cache',
+    }
+}
+
+# WhiteNoise production caching
+WHITENOISE_MAX_AGE = 31536000
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

@@ -1,9 +1,12 @@
+import logging
 import traceback
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from apps.accounts.models import User
 from apps.companies.models import Company, CompanyMember
 from allauth.socialaccount.models import SocialAccount
 from allauth.account.models import EmailAddress
+
+logger = logging.getLogger(__name__)
 
 class MySocialAccountAdapter(DefaultSocialAccountAdapter):
     def populate_user_profile(self, user, sociallogin):
@@ -44,11 +47,9 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
                     }
                 )
             except Exception as company_err:
-                print(f"Error associating default company: {company_err}")
-                traceback.print_exc()
+                logger.error(f"Error associating default company: {company_err}")
         except Exception as profile_err:
-            print(f"Error in populate_user_profile: {profile_err}")
-            traceback.print_exc()
+            logger.error(f"Error in populate_user_profile: {profile_err}")
             raise profile_err
 
     def pre_social_login(self, request, sociallogin):
@@ -99,8 +100,7 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
             except User.DoesNotExist:
                 pass
         except Exception as pre_login_err:
-            print(f"Error in pre_social_login: {pre_login_err}")
-            traceback.print_exc()
+            logger.error(f"Error in pre_social_login: {pre_login_err}")
             raise pre_login_err
 
     def save_user(self, request, sociallogin, form=None):
@@ -110,20 +110,11 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
             self.populate_user_profile(user, sociallogin)
             return user
         except Exception as save_user_err:
-            print(f"Error in save_user: {save_user_err}")
-            traceback.print_exc()
+            logger.error(f"Error in save_user: {save_user_err}")
             raise save_user_err
 
     def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
-        print("="*40 + " GOOGLE OAUTH AUTHENTICATION ERROR " + "="*40)
-        print(f"Provider: {provider}")
-        print(f"Error: {error}")
-        print(f"Exception: {exception}")
-        if exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
-        else:
-            traceback.print_exc()
-        print("="*110)
+        logger.error(f"GOOGLE OAUTH AUTHENTICATION ERROR Provider: {provider}, Error: {error}, Exception: {exception}")
         super().on_authentication_error(request, provider, error, exception, extra_context)
 
 
@@ -173,11 +164,10 @@ class CandidateSocialAccountAdapter(DefaultSocialAccountAdapter):
                         if response.status_code == 200:
                             profile.profile_photo.save(f"photo_{profile.id}.jpg", ContentFile(response.content), save=True)
                     except Exception as img_err:
-                        print(f"Error downloading Google profile picture: {img_err}")
+                        logger.error(f"Error downloading Google profile picture: {img_err}")
                         
         except Exception as profile_err:
-            print(f"Error in populate_user_profile: {profile_err}")
-            traceback.print_exc()
+            logger.error(f"Error in populate_user_profile: {profile_err}")
             raise profile_err
 
     def pre_social_login(self, request, sociallogin):
@@ -228,8 +218,7 @@ class CandidateSocialAccountAdapter(DefaultSocialAccountAdapter):
             except User.DoesNotExist:
                 pass
         except Exception as pre_login_err:
-            print(f"Error in pre_social_login: {pre_login_err}")
-            traceback.print_exc()
+            logger.error(f"Error in pre_social_login: {pre_login_err}")
             raise pre_login_err
 
     def save_user(self, request, sociallogin, form=None):
@@ -239,18 +228,9 @@ class CandidateSocialAccountAdapter(DefaultSocialAccountAdapter):
             self.populate_user_profile(user, sociallogin)
             return user
         except Exception as save_user_err:
-            print(f"Error in save_user: {save_user_err}")
-            traceback.print_exc()
+            logger.error(f"Error in save_user: {save_user_err}")
             raise save_user_err
 
     def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
-        print("="*40 + " GOOGLE OAUTH AUTHENTICATION ERROR " + "="*40)
-        print(f"Provider: {provider}")
-        print(f"Error: {error}")
-        print(f"Exception: {exception}")
-        if exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
-        else:
-            traceback.print_exc()
-        print("="*110)
+        logger.error(f"GOOGLE OAUTH AUTHENTICATION ERROR Provider: {provider}, Error: {error}, Exception: {exception}")
         super().on_authentication_error(request, provider, error, exception, extra_context)

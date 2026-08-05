@@ -1,6 +1,50 @@
 from django.shortcuts import redirect
 from apps.accounts.models import User
 
+PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt'})
+PUBLIC_PREFIXES = (
+    '/accounts/',
+    '/jobs/share/',
+    '/share/job/',
+    '/share/candidate/',
+    '/sitemap',
+    '/robots.txt',
+)
+
+ADMIN_FORBIDDEN_PREFIXES = (
+    '/dashboard/candidate/',
+    '/profile/',
+    '/career-resources/',
+    '/jobs/saved/',
+    '/jobs/recommended/',
+)
+
+CANDIDATE_FORBIDDEN_PREFIXES = (
+    '/dashboard/recruiter/',
+    '/dashboard/admin/',
+    '/pipeline/',
+    '/analytics/',
+    '/candidates/',
+    '/resume-parser/',
+    '/email-campaigns/',
+    '/export/',
+    '/jobs/new/',
+    '/clients/',
+    '/employers/'
+)
+
+RECRUITER_FORBIDDEN_PREFIXES = (
+    '/dashboard/candidate/',
+    '/dashboard/admin/',
+    '/profile/',
+    '/career-resources/',
+    '/jobs/saved/',
+    '/jobs/recommended/',
+    '/applications/'
+)
+
+JOB_FORBIDDEN_SUFFIXES = ('/edit/', '/delete/', '/candidates/')
+
 class RoleAccessMiddleware:
     """
     Middleware to ensure users only access dashboards permitted for their role,
@@ -23,17 +67,7 @@ class RoleAccessMiddleware:
         # Bypass static, media and API
         if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/')):
             if not request.user.is_authenticated:
-                # Public paths allowed without login
-                public_exact_paths = {'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt'}
-                public_prefixes = (
-                    '/accounts/',
-                    '/jobs/share/',
-                    '/share/job/',
-                    '/share/candidate/',
-                    '/sitemap',
-                    '/robots.txt',
-                )
-                is_public = path in public_exact_paths or any(path.startswith(prefix) for prefix in public_prefixes) or '/public-apply/' in path
+                is_public = path in PUBLIC_EXACT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES) or '/public-apply/' in path
                 if not is_public:
                     res = redirect('/')
                     return self._add_no_cache_headers(res)
@@ -43,37 +77,17 @@ class RoleAccessMiddleware:
                 is_admin_user = (role == User.Role.SUPER_ADMIN) or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False)
 
                 if is_admin_user:
-                    admin_forbidden_prefixes = [
-                        '/dashboard/candidate/',
-                        '/profile/',
-                        '/career-resources/',
-                        '/jobs/saved/',
-                        '/jobs/recommended/',
-                    ]
-                    if any(path.startswith(prefix) for prefix in admin_forbidden_prefixes):
+                    if any(path.startswith(prefix) for prefix in ADMIN_FORBIDDEN_PREFIXES):
                         res = redirect('frontend:admin_dashboard')
                         return self._add_no_cache_headers(res)
 
                 # Restrict Candidate Access
                 elif role == User.Role.CANDIDATE:
-                    candidate_forbidden_prefixes = [
-                        '/dashboard/recruiter/',
-                        '/dashboard/admin/',
-                        '/pipeline/',
-                        '/analytics/',
-                        '/candidates/',
-                        '/resume-parser/',
-                        '/email-campaigns/',
-                        '/export/',
-                        '/jobs/new/',
-                        '/clients/',
-                        '/employers/'
-                    ]
-                    is_forbidden = any(path.startswith(prefix) for prefix in candidate_forbidden_prefixes)
+                    is_forbidden = any(path.startswith(prefix) for prefix in CANDIDATE_FORBIDDEN_PREFIXES)
                     if path.endswith('/resume/preview/') or path.endswith('/resume/download/'):
                         is_forbidden = False
                     if not is_forbidden and path.startswith('/jobs/'):
-                        is_forbidden = any(suffix in path for suffix in ['/edit/', '/delete/', '/candidates/'])
+                        is_forbidden = any(suffix in path for suffix in JOB_FORBIDDEN_SUFFIXES)
                         
                     if is_forbidden:
                         res = redirect('frontend:candidate_dashboard')
@@ -81,16 +95,7 @@ class RoleAccessMiddleware:
                 
                 # Restrict Recruiter Access
                 elif role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
-                    recruiter_forbidden_prefixes = [
-                        '/dashboard/candidate/',
-                        '/dashboard/admin/',
-                        '/profile/',
-                        '/career-resources/',
-                        '/jobs/saved/',
-                        '/jobs/recommended/',
-                        '/applications/'
-                    ]
-                    if any(path.startswith(prefix) for prefix in recruiter_forbidden_prefixes):
+                    if any(path.startswith(prefix) for prefix in RECRUITER_FORBIDDEN_PREFIXES):
                         res = redirect('frontend:recruiter_dashboard')
                         return self._add_no_cache_headers(res)
                     
@@ -101,3 +106,4 @@ class RoleAccessMiddleware:
             self._add_no_cache_headers(response)
 
         return response
+

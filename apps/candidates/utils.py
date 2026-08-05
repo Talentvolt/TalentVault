@@ -31,6 +31,8 @@ STRIP_NON_ALPHA_RE = re.compile(r'[^a-z\s]')
 _GLOBAL_SPACY_NLP = None
 
 import threading
+import concurrent.futures
+import traceback
 _thread_local_timings = threading.local()
 
 def get_spacy_nlp():
@@ -668,7 +670,7 @@ class OpenAIResumeParser:
             raise ValueError("OpenAI API Key is not configured.")
         
         model_name = getattr(settings, "OPENAI_MODEL_NAME", "gpt-4.1-mini")
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=45.0)
         
         system_content = (
             "You are a professional resume parsing assistant.\n"
@@ -681,17 +683,29 @@ class OpenAIResumeParser:
         )
         
         t0 = time.time()
-        completion = client.beta.chat.completions.parse(
-            model=model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_content
-                },
-                {"role": "user", "content": text}
-            ],
-            response_format=FastResumeSchema
-        )
+        import concurrent.futures
+        def _do_openai_call():
+            return client.beta.chat.completions.parse(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": text}
+                ],
+                response_format=FastResumeSchema,
+                timeout=45.0
+            )
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_do_openai_call)
+                completion = fut.result(timeout=45.0)
+        except concurrent.futures.TimeoutError:
+            import traceback
+            stack_info = "".join(traceback.format_stack())
+            logger.error(f"HANG DETECTED: OpenAI API parsing call timed out (> 45s).\nStack:\n{stack_info}")
+            print(f"HANG DETECTED: OpenAI API parsing call timed out (> 45s).\nStack:\n{stack_info}")
+            raise TimeoutError("OpenAI API call timed out after 45s.")
+
         openai_duration = time.time() - t0
         logger.info(f"[TIMING] OpenAI API call took: {openai_duration:.4f}s")
         print(f"[TIMING] OpenAI API call took: {openai_duration:.4f}s")
@@ -753,23 +767,39 @@ def copy_storage_file(source_field, target_path):
 
 def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None, user=None):
     import time
-    t_process_start = time.time()
+    import uuid
+    import traceback
     
+    t_process_start = time.time()
+    request_id = str(uuid.uuid4())[:8]
     filename = sanitize_text(filename, "filename")
     
-    # Support ONLY PDF resumes
+    logger.info(f"[TIMING] [{request_id}] START Upload: {filename}")
+    print(f"[TIMING] [{request_id}] START Upload: {filename}")
+    
+    # Support PDF, DOCX, DOC, RTF, TXT, and Image formats
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
-    if ext != 'pdf':
-        logger.error(f"[PARSER ERROR] Invalid format uploaded: {filename}. Only PDF resumes are allowed.")
-        return None, "Only PDF resumes are allowed."
+    allowed_extensions = {'pdf', 'docx', 'doc', 'rtf', 'txt', 'png', 'jpg', 'jpeg', 'webp', 'tiff'}
+    if ext not in allowed_extensions:
+        logger.error(f"[PARSER ERROR] [{request_id}] Invalid format uploaded: {filename} (ext: {ext}). Allowed: {allowed_extensions}")
+        print(f"[PARSER ERROR] [{request_id}] Invalid format uploaded: {filename} (ext: {ext}).")
+        return None, "INVALID_FORMAT"
         
     try:
+        t_upload_start = time.time()
         if hasattr(file_obj, 'seek'):
             file_obj.seek(0)
         file_bytes = file_obj.read()
-        logger.info(f"[PARSER START] Uploaded resume: {filename}, size: {len(file_bytes)} bytes")
+        t_upload = time.time() - t_upload_start
+        logger.info(f"[PARSER START] [{request_id}] Uploaded resume: {filename}, size: {len(file_bytes)} bytes")
+        logger.info(f"[TIMING] [{request_id}] END Upload: {filename} (took {t_upload:.4f}s)")
+        print(f"[TIMING] [{request_id}] END Upload: {filename} (took {t_upload:.4f}s)")
     except Exception as e:
-        logger.error(f"[PARSER READ ERROR] Error reading file bytes for {filename}: {str(e)}", exc_info=True)
+        tb = traceback.format_exc()
+        logger.error(f"[PARSER READ ERROR] [{request_id}] Step: Read File Bytes | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
+        print(f"=== PARSER ERROR AT Read File Bytes ===")
+        print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
+        print(tb)
         return None, "READ_ERROR"
 
     # Enforce security validation if not already done
@@ -778,13 +808,17 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         try:
             security_data = perform_all_security_validations(file_bytes, filename)
         except Exception as e:
-            logger.error(f"[PARSER SECURITY REJECT] File {filename} failed security check: {str(e)}")
+            tb = traceback.format_exc()
+            logger.error(f"[PARSER SECURITY REJECT] [{request_id}] Step: Security Validation | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
+            print(f"=== PARSER ERROR AT Security Validation ===")
+            print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
+            print(tb)
             return None, "SECURITY_FAILED"
 
     if security_data and security_data.get("repaired_bytes"):
         file_bytes = security_data["repaired_bytes"]
-        logger.info(f"[PARSER PDF REPAIRED] Using repaired PDF bytes for {filename}. Warning: {security_data.get('repair_message')}")
-        print(f"[PARSER PDF REPAIRED] Using repaired PDF bytes for {filename}. Warning: {security_data.get('repair_message')}")
+        logger.info(f"[PARSER PDF REPAIRED] [{request_id}] Using repaired PDF bytes for {filename}. Warning: {security_data.get('repair_message')}")
+        print(f"[PARSER PDF REPAIRED] [{request_id}] Using repaired PDF bytes for {filename}. Warning: {security_data.get('repair_message')}")
 
     from services.resume_intelligence import ResumeIntelligenceService
     
@@ -797,8 +831,8 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     t_validation = 0.0
     
     if existing_profile and (existing_profile.raw_resume_text or existing_profile.parsed_json) and not overwrite:
-        logger.info(f"[PARSER DEDUPLICATION] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
-        print(f"[PARSER DEDUPLICATION] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
+        logger.info(f"[PARSER DEDUPLICATION] [{request_id}] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
+        print(f"[PARSER DEDUPLICATION] [{request_id}] Reusing cached OCR & LLM parse for exact duplicate file: {filename}")
         text = existing_profile.raw_resume_text or ""
         parsed_data = existing_profile.parsed_json or {}
         ocr_result = {
@@ -813,24 +847,52 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     if not cached_duplicate:
         # 1. OCR Engine Execution / Text Extraction
         t_ocr_start = time.time()
+        logger.info(f"[TIMING] [{request_id}] START OCR / Extract Text: {filename}")
+        print(f"[TIMING] [{request_id}] START OCR / Extract Text: {filename}")
         try:
-            logger.info(f"[PARSER OCR RUNNING] Running OCR pipeline for: {filename}")
+            logger.info(f"[PARSER OCR RUNNING] [{request_id}] Running OCR/text extraction pipeline for: {filename}")
             if progress_callback:
                 progress_callback("reading_pdf")
                 progress_callback("extracting_text")
-            ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
+            
+            # Execute with 45s total OCR timeout guard
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(ResumeIntelligenceService.run_ocr_pipeline, file_bytes, filename)
+                ocr_result = fut.result(timeout=45.0)
+                
             text = ocr_result["text"]
-            logger.info(f"[PARSER OCR SUCCESS] Engine: {ocr_result['engine']}, Confidence: {ocr_result['confidence']}%")
+            t_ocr = time.time() - t_ocr_start
+            logger.info(f"[PARSER OCR SUCCESS] [{request_id}] Engine: {ocr_result['engine']}, Confidence: {ocr_result['confidence']}%")
+            logger.info(f"[TIMING] [{request_id}] END OCR / Extract Text: {filename} (took {t_ocr:.4f}s)")
+            print(f"[TIMING] [{request_id}] END OCR / Extract Text: {filename} (took {t_ocr:.4f}s)")
+        except concurrent.futures.TimeoutError:
+            t_ocr = time.time() - t_ocr_start
+            stack_info = "".join(traceback.format_stack())
+            logger.error(f"HANG DETECTED: [{request_id}] Step: Extract Text | File: {filename} | OCR pipeline exceeded 45s timeout.\nStack:\n{stack_info}")
+            print(f"HANG DETECTED: [{request_id}] Step: Extract Text | File: {filename} | OCR pipeline exceeded 45s timeout.")
+            print(stack_info)
+            # Fallback to empty text structure instead of failing
+            ocr_result = {"text": "", "engine": "Timeout Fallback", "confidence": 0.0, "resume_type": "UNKNOWN", "largest_bold_name": None}
+            text = ""
         except Exception as e:
-            logger.error(f"[PARSER OCR FAILURE] Failed during OCR pipeline on {filename}: {str(e)}", exc_info=True)
+            t_ocr = time.time() - t_ocr_start
+            tb = traceback.format_exc()
+            logger.error(f"[PARSER OCR FAILURE] [{request_id}] Step: Extract Text | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
+            print(f"=== PARSER ERROR AT Extract Text ===")
+            print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
+            print(tb)
             return None, "OCR_FAILED"
-        t_ocr = time.time() - t_ocr_start
-        logger.info(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
-        print(f"[TIMING] Text Extraction/OCR Pipeline took: {t_ocr:.4f}s")
         
-        # 2. Run OpenAI parser and profile photo extraction in parallel!
+        # Check overall timing guard
+        if time.time() - t_process_start > 60.0:
+            stack_info = "".join(traceback.format_stack())
+            logger.warning(f"HANG DETECTED: [{request_id}] Parsing step duration warning > 60s for {filename}.\nStack:\n{stack_info}")
+            print(f"HANG DETECTED: [{request_id}] Parsing step duration warning > 60s for {filename}.")
+        
+        # 2. Run AI Parsing and profile photo extraction in parallel!
         t_parallel_start = time.time()
-        import concurrent.futures
+        logger.info(f"[TIMING] [{request_id}] START Gemini / AI Parsing: {filename}")
+        print(f"[TIMING] [{request_id}] START Gemini / AI Parsing: {filename}")
         
         parsed_data = None
         photo_bytes = None
@@ -841,7 +903,7 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         def run_openai_parser():
             nonlocal openai_duration, validation_duration
             try:
-                logger.info(f"[PARSER LLM RUNNING] Attempting OpenAI parsing for: {filename}")
+                logger.info(f"[PARSER LLM RUNNING] [{request_id}] Attempting AI parsing for: {filename}")
                 if progress_callback:
                     progress_callback("ai_parsing")
                 clean_text = clean_extracted_text(text)
@@ -851,39 +913,61 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 validation_duration = _thread_local_timings.timings.get("validation", 0.0)
                 return res
             except Exception as e:
-                logger.error(f"[PARSER LLM FAILURE] OpenAI parsing failed, falling back to NLP parser: {str(e)}", exc_info=True)
+                tb = traceback.format_exc()
+                logger.error(f"[PARSER LLM FAILURE] [{request_id}] Step: AI Parsing | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
+                print(f"=== PARSER ERROR AT AI Parsing ===")
+                print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
+                print(tb)
                 return None
 
         def run_photo_extraction():
             try:
                 return extract_profile_photo(file_bytes, filename)
             except Exception as e:
-                logger.error(f"[PARSER PHOTO FAILURE] Photo extraction failed: {str(e)}", exc_info=True)
+                logger.error(f"[PARSER PHOTO FAILURE] [{request_id}] Step: Photo Extraction | File: {filename} | Error: {str(e)}")
                 return None, None
+
+        # Close stale DB connections prior to thread pool execution
+        from django.db import connection
+        connection.close()
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             future_openai = executor.submit(run_openai_parser)
             future_photo = executor.submit(run_photo_extraction)
             
-            parsed_data = future_openai.result()
-            photo_bytes, photo_ext = future_photo.result()
+            try:
+                parsed_data = future_openai.result(timeout=45.0)
+            except concurrent.futures.TimeoutError:
+                stack_info = "".join(traceback.format_stack())
+                logger.error(f"HANG DETECTED: [{request_id}] Step: AI Parsing | File: {filename} | AI Parsing exceeded 45s timeout.\nStack:\n{stack_info}")
+                print(f"HANG DETECTED: [{request_id}] Step: AI Parsing | File: {filename} | AI Parsing exceeded 45s timeout.")
+                parsed_data = None
+                
+            try:
+                photo_bytes, photo_ext = future_photo.result(timeout=15.0)
+            except concurrent.futures.TimeoutError:
+                photo_bytes, photo_ext = None, None
             
         t_parallel = time.time() - t_parallel_start
-        logger.info(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
-        print(f"[TIMING] Parallel OpenAI parsing & Photo extraction took: {t_parallel:.4f}s")
+        logger.info(f"[TIMING] [{request_id}] END Gemini / AI Parsing: {filename} (took {t_parallel:.4f}s)")
+        print(f"[TIMING] [{request_id}] END Gemini / AI Parsing: {filename} (took {t_parallel:.4f}s)")
         
         t_openai = openai_duration
         t_validation = validation_duration
 
         if parsed_data is None:
             try:
-                logger.info(f"[PARSER NLP RUNNING] Extracting data from OCR text length: {len(text)}")
+                logger.info(f"[PARSER NLP RUNNING] [{request_id}] Extracting data via NLP fallback from text length: {len(text)}")
                 t_val_start = time.time()
                 parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
                 t_validation += time.time() - t_val_start
-                logger.info("[PARSER NLP SUCCESS] parse_resume_nlp completed")
+                logger.info(f"[PARSER NLP SUCCESS] [{request_id}] parse_resume_nlp completed")
             except Exception as e:
-                logger.error(f"[PARSER NLP FAILURE] parse_resume_nlp raised an exception: {str(e)}", exc_info=True)
+                tb = traceback.format_exc()
+                logger.error(f"[PARSER NLP FAILURE] [{request_id}] Step: NLP Fallback | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
+                print(f"=== PARSER ERROR AT NLP Fallback ===")
+                print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
+                print(tb)
 
         # ai_improve step (only if NLP succeeded; still guarded individually)
         if parsed_data is not None:
@@ -1411,101 +1495,115 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             # Skills save
             t_skills_start = time.time()
             profile.skills.all().delete()
-            for skill in parsed_data.get('skills', []):
-                CandidateSkill.objects.get_or_create(profile=profile, skill_name=skill.strip().title()[:100])
+            raw_skills = set(skill.strip().title()[:100] for skill in parsed_data.get('skills', []) if isinstance(skill, str) and skill.strip())
+            if raw_skills:
+                CandidateSkill.objects.bulk_create([CandidateSkill(profile=profile, skill_name=s) for s in raw_skills], ignore_conflicts=True)
             t_skills = time.time() - t_skills_start
             logger.info(f"[TIMING] Skills DB save took: {t_skills:.4f}s")
-            print(f"[TIMING] Skills DB save took: {t_skills:.4f}s")
                 
             # Experience save
             t_exp_start = time.time()
             profile.experiences.all().delete()
+            exp_objs = []
             for exp in parsed_data.get('experience', []):
                 description_html = ResumeIntelligenceService.parse_experience_description_to_html(exp.get('description', ''))
-                Experience.objects.create(
+                exp_objs.append(Experience(
                     profile=profile,
                     company_name=(exp.get('company') or '')[:100],
                     designation=(exp.get('designation') or '')[:100],
                     description=description_html,
                     start_date=parse_date_robust(exp.get('start_date'), None),
                     end_date=parse_date_robust(exp.get('end_date'), None)
-                )
+                ))
+            if exp_objs:
+                Experience.objects.bulk_create(exp_objs)
             t_exp = time.time() - t_exp_start
             logger.info(f"[TIMING] Experience DB save took: {t_exp:.4f}s")
-            print(f"[TIMING] Experience DB save took: {t_exp:.4f}s")
                 
             # Education save
             t_edu_start = time.time()
             profile.educations.all().delete()
+            edu_objs = []
             for edu in parsed_data.get('education', []):
-                Education.objects.create(
+                edu_objs.append(Education(
                     profile=profile,
                     institution=(edu.get('institution') or '')[:100],
                     degree=(edu.get('degree') or '')[:100],
                     field_of_study=(edu.get('field_of_study') or '')[:100],
-                    percentage_or_cgpa=(edu.get('score') or '')[:20],
+                    percentage_or_cgpa=str(edu.get('score') or '')[:20],
                     start_date=parse_date_robust(edu.get('start_date'), None),
                     end_date=parse_date_robust(edu.get('end_date'), None)
-                )
+                ))
+            if edu_objs:
+                Education.objects.bulk_create(edu_objs)
             t_edu = time.time() - t_edu_start
             logger.info(f"[TIMING] Education DB save took: {t_edu:.4f}s")
-            print(f"[TIMING] Education DB save took: {t_edu:.4f}s")
                 
             # Projects save
             t_proj_start = time.time()
             profile.projects.all().delete()
+            proj_objs = []
             for proj in parsed_data.get('projects', []):
-                Project.objects.create(
+                proj_objs.append(Project(
                     profile=profile,
                     title=(proj.get('title') or '')[:255],
                     description=ResumeIntelligenceService.parse_experience_description_to_html(proj.get('description', '')),
                     link=proj.get('link', '')
-                )
+                ))
+            if proj_objs:
+                Project.objects.bulk_create(proj_objs)
             t_proj = time.time() - t_proj_start
             logger.info(f"[TIMING] Projects DB save took: {t_proj:.4f}s")
-            print(f"[TIMING] Projects DB save took: {t_proj:.4f}s")
                 
             # Certifications save
             t_cert_start = time.time()
             profile.certifications.all().delete()
+            cert_objs = []
             for cert in parsed_data.get('certifications', []):
-                Certification.objects.create(
+                cert_objs.append(Certification(
                     profile=profile,
                     name=(cert.get('name') or '')[:255],
                     issuing_organization=(cert.get('issuing_organization') or '')[:255],
                     issue_date=parse_date_robust(cert.get('issue_date'), None)
-                )
+                ))
+            if cert_objs:
+                Certification.objects.bulk_create(cert_objs)
             t_cert = time.time() - t_cert_start
             logger.info(f"[TIMING] Certifications DB save took: {t_cert:.4f}s")
-            print(f"[TIMING] Certifications DB save took: {t_cert:.4f}s")
                 
             # Calculate and save ATS suitability score
             t_ats_start = time.time()
+            logger.info(f"[TIMING] [{request_id}] START ATS: {filename}")
+            print(f"[TIMING] [{request_id}] START ATS: {filename}")
             try:
                 from services.candidate_matching_service import CandidateMatchingService
                 CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
                 if progress_callback:
                     progress_callback("ats_score_generated")
             except Exception as e:
-                logger.error(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}", exc_info=True)
-                print(f"[PARSER ATS ERROR] Failed updating ATS suitability index score: {str(e)}")
+                tb = traceback.format_exc()
+                logger.error(f"[PARSER ATS ERROR] [{request_id}] Step: ATS Scoring | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
+                print(f"=== PARSER ERROR AT ATS Scoring ===")
+                print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
+                print(tb)
             t_ats = time.time() - t_ats_start
-            logger.info(f"[TIMING] ATS suitability scoring took: {t_ats:.4f}s")
-            print(f"[TIMING] ATS suitability scoring took: {t_ats:.4f}s")
+            logger.info(f"[TIMING] [{request_id}] END ATS: {filename} (took {t_ats:.4f}s)")
+            print(f"[TIMING] [{request_id}] END ATS: {filename} (took {t_ats:.4f}s)")
             
             # Dynamic PDF generation: Skipped entirely during upload parsing!
             logger.info("[TIMING] ReportLab PDF generation skipped during parsing upload.")
             print("[TIMING] ReportLab PDF generation skipped during parsing upload.")
 
             t_db = time.time() - t_db_start
-            logger.info(f"[TIMING] Total Database Transaction took: {t_db:.4f}s")
-            print(f"[TIMING] Total Database Transaction took: {t_db:.4f}s")
+            logger.info(f"[TIMING] [{request_id}] END Save Candidate: {filename} (took {t_db:.4f}s)")
+            print(f"[TIMING] [{request_id}] END Save Candidate: {filename} (took {t_db:.4f}s)")
 
-            logger.info(f"[PARSER COMPLETED] Candidate Profile created/updated successfully: {profile.id}")
-            print(f"[PARSER COMPLETED] Candidate Profile created successfully: ID={profile.id}, Name={profile.full_name}")
+            logger.info(f"[PARSER COMPLETED] [{request_id}] Candidate Profile created/updated successfully: {profile.id}")
+            print(f"[PARSER COMPLETED] [{request_id}] Candidate Profile created successfully: ID={profile.id}, Name={profile.full_name}")
             
             t_total = time.time() - t_process_start
-            logger.info(f"[TIMING] process_resume_file TOTAL duration: {t_total:.4f}s")
+            logger.info(f"[TIMING] [{request_id}] END Parser: {filename} (TOTAL took {t_total:.4f}s)")
+            print(f"[TIMING] [{request_id}] END Parser: {filename} (TOTAL took {t_total:.4f}s)")
             
             # Print exact timing stages as requested
             print(f"OCR: {t_ocr:.2f}s")
@@ -1640,12 +1738,20 @@ def select_best_profile_photo(images_list):
     import os
     import re
 
-    # Load Haar cascades
-    face_cascade_path = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
-    profile_cascade_path = os.path.join(cv2.data.haarcascades, 'haarcascade_profileface.xml')
-    face_cascade = cv2.CascadeClassifier(face_cascade_path)
-    profile_cascade = cv2.CascadeClassifier(profile_cascade_path)
-    use_face_detection = not (face_cascade.empty() or profile_cascade.empty())
+    # Load Haar cascades safely
+    try:
+        data_path = getattr(cv2, 'data', None)
+        haarcascades = getattr(data_path, 'haarcascades', '') if data_path else ''
+        face_cascade_path = os.path.join(haarcascades, 'haarcascade_frontalface_default.xml') if haarcascades else ''
+        profile_cascade_path = os.path.join(haarcascades, 'haarcascade_profileface.xml') if haarcascades else ''
+        
+        face_cascade = cv2.CascadeClassifier(face_cascade_path) if hasattr(cv2, 'CascadeClassifier') and face_cascade_path else None
+        profile_cascade = cv2.CascadeClassifier(profile_cascade_path) if hasattr(cv2, 'CascadeClassifier') and profile_cascade_path else None
+        use_face_detection = bool(face_cascade and not face_cascade.empty())
+    except Exception:
+        face_cascade = None
+        profile_cascade = None
+        use_face_detection = False
 
     valid_candidates = []
 

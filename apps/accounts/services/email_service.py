@@ -47,12 +47,6 @@ def send_email_otp(email: str, otp: str, purpose: str = "signup") -> Tuple[bool,
     target_email = email.strip().lower()
     masked_target = mask_email(target_email)
 
-    print(f"\n==================================================")
-    print(f"[EMAIL OTP DEBUG] send_email_otp() CALLED!")
-    print(f"[EMAIL OTP DEBUG] Target Email: '{target_email}'")
-    print(f"[EMAIL OTP DEBUG] GENERATED OTP CODE: '{otp}'")
-    print(f"[EMAIL OTP DEBUG] Purpose: '{purpose}'")
-
     subject = "Your TalentVault Verification Code"
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@talent-vault.in'
     context = {'otp': otp, 'purpose': purpose, 'email': target_email}
@@ -81,9 +75,7 @@ def send_email_otp(email: str, otp: str, purpose: str = "signup") -> Tuple[bool,
             f"© 2026 TalentVault"
         )
 
-
     try:
-        print(f"[EMAIL OTP DEBUG] Attempting to send multi-part email via SMTP to {target_email}...")
         email_message = EmailMultiAlternatives(
             subject=subject,
             body=text_content,
@@ -93,18 +85,10 @@ def send_email_otp(email: str, otp: str, purpose: str = "signup") -> Tuple[bool,
         email_message.attach_alternative(html_content, "text/html")
         email_message.send(fail_silently=False)
 
-        print(f"[EMAIL OTP DEBUG] SUCCESS! Multi-part Email sent to {masked_target}")
-        print(f"==================================================\n")
-
         logger.info(f"Successfully sent multi-part Email OTP to {masked_target} for {purpose}")
         return True, "Verification code sent to your email successfully."
 
     except Exception as exc:
-        print(f"\n[EMAIL OTP DEBUG] Exception CAUGHT while sending email!")
-        print(f"[EMAIL OTP DEBUG] Exception Class: {exc.__class__.__name__}")
-        print(f"[EMAIL OTP DEBUG] Exception Message: {str(exc)}")
-        print(f"==================================================\n")
-
         logger.error(f"Failed to send Email OTP to {masked_target}: {str(exc)}")
         return False, f"Failed to send email OTP: {str(exc)}"
 

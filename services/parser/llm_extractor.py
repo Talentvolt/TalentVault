@@ -156,16 +156,30 @@ class LLMExtractor:
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set.")
             
-        client = OpenAI(api_key=self.api_key)
+        import concurrent.futures
+        client = OpenAI(api_key=self.api_key, timeout=45.0)
         
-        completion = client.beta.chat.completions.parse(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text}
-            ],
-            response_format=ResumeSchema
-        )
+        def _do_call():
+            return client.beta.chat.completions.parse(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": text}
+                ],
+                response_format=ResumeSchema,
+                timeout=45.0
+            )
+            
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_do_call)
+                completion = fut.result(timeout=45.0)
+        except concurrent.futures.TimeoutError:
+            import traceback
+            stack_info = "".join(traceback.format_stack())
+            logger.error(f"HANG DETECTED: LLMExtractor OpenAI API call timed out (> 45s).\nStack:\n{stack_info}")
+            print(f"HANG DETECTED: LLMExtractor OpenAI API call timed out (> 45s).\nStack:\n{stack_info}")
+            raise TimeoutError("LLMExtractor OpenAI call timed out after 45s.")
         
         parsed_response = completion.choices[0].message.parsed
         extracted_dict = parsed_response.model_dump()
@@ -437,101 +451,101 @@ def save_llm_parsed_data_to_db(profile: CandidateProfile, validated_data: dict) 
     profile.skills.all().delete()
     tech_skills = _flatten(validated_data.get("technical_skills")) or []
     soft_skills = _flatten(validated_data.get("soft_skills")) or []
-    for sk in (tech_skills + soft_skills):
-        if sk:
-            CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title()[:100])
+    # 3. Sync Skills using bulk_create
+    profile.skills.all().delete()
+    all_skills = set(sk.strip().title()[:100] for sk in (tech_skills + soft_skills) if sk and isinstance(sk, str) and sk.strip())
+    if all_skills:
+        CandidateSkill.objects.bulk_create([CandidateSkill(profile=profile, skill_name=sk) for sk in all_skills], ignore_conflicts=True)
 
-    # 4. Sync Experiences
+    # 4. Sync Experiences using bulk_create
     profile.experiences.all().delete()
     work_exp = validated_data.get("work_experience", {})
     if work_exp and isinstance(work_exp.get("value"), list):
+        from services.resume_intelligence import ResumeIntelligenceService
+        exp_objs = []
         for item in work_exp["value"]:
             comp = _flatten(item.get("company")) or "Unknown"
             desig = _flatten(item.get("designation")) or "Role"
             desc = _flatten(item.get("description")) or ""
-            loc = _flatten(item.get("location")) or ""
-            
             s_date = parse_date_robust(_flatten(item.get("start_date")))
             e_date = parse_date_robust(_flatten(item.get("end_date")))
-            
-            # Note: Django model Experience description should preserve HTML formatting exactly
-            from services.resume_intelligence import ResumeIntelligenceService
             desc_html = ResumeIntelligenceService.parse_experience_description_to_html(desc)
-            
-            Experience.objects.create(
+            exp_objs.append(Experience(
                 profile=profile,
                 company_name=comp[:255],
                 designation=desig[:255],
                 description=desc_html,
                 start_date=s_date,
                 end_date=e_date
-            )
+            ))
+        if exp_objs:
+            Experience.objects.bulk_create(exp_objs)
 
-    # 5. Sync Education
+    # 5. Sync Education using bulk_create
     profile.educations.all().delete()
     education = validated_data.get("education", {})
     if education and isinstance(education.get("value"), list):
+        edu_objs = []
         for item in education["value"]:
             deg = _flatten(item.get("degree")) or "Degree"
             inst = _flatten(item.get("college")) or _flatten(item.get("university")) or "Institution"
             field = _flatten(item.get("branch")) or "General"
             cgpa = _flatten(item.get("cgpa")) or _flatten(item.get("percentage")) or ""
-            
             s_year = _flatten(item.get("start_year"))
             e_year = _flatten(item.get("end_year"))
-            
-            # If only one completion year exists, store it as end_date
             if s_year and not e_year:
                 e_year = s_year
                 s_year = ""
-                
             s_date = parse_education_date_to_date_obj(s_year)
             e_date = parse_education_date_to_date_obj(e_year)
-            
-            Education.objects.create(
+            edu_objs.append(Education(
                 profile=profile,
                 institution=inst[:255],
                 degree=deg[:255],
                 field_of_study=field[:255],
-                percentage_or_cgpa=cgpa[:20],
+                percentage_or_cgpa=str(cgpa)[:20],
                 start_date=s_date,
                 end_date=e_date
-            )
+            ))
+        if edu_objs:
+            Education.objects.bulk_create(edu_objs)
 
-    # 6. Sync Projects
+    # 6. Sync Projects using bulk_create
     profile.projects.all().delete()
     projects = validated_data.get("projects", {})
     if projects and isinstance(projects.get("value"), list):
+        from services.resume_intelligence import ResumeIntelligenceService
+        proj_objs = []
         for item in projects["value"]:
             title = _flatten(item.get("title")) or "Project"
             desc = _flatten(item.get("description")) or ""
-            
-            from services.resume_intelligence import ResumeIntelligenceService
             desc_html = ResumeIntelligenceService.parse_experience_description_to_html(desc)
-            
-            Project.objects.create(
+            proj_objs.append(Project(
                 profile=profile,
                 title=title[:255],
                 description=desc_html
-            )
+            ))
+        if proj_objs:
+            Project.objects.bulk_create(proj_objs)
 
-    # 7. Sync Certifications
+    # 7. Sync Certifications using bulk_create
     profile.certifications.all().delete()
     certifications = validated_data.get("certifications", {})
     if certifications and isinstance(certifications.get("value"), list):
+        from services.resume_intelligence import ResumeIntelligenceService
+        cert_objs = []
         for item in certifications["value"]:
             name = _flatten(item.get("name")) or "Certification"
             org = _flatten(item.get("issuing_organization")) or "Accredited Body"
             i_date = parse_date_robust(_flatten(item.get("issue_date")))
-            
-            from services.resume_intelligence import ResumeIntelligenceService
             name_html = ResumeIntelligenceService.parse_experience_description_to_html(name)
-            
-            Certification.objects.create(
+            cert_objs.append(Certification(
                 profile=profile,
                 name=name_html[:255],
                 issuing_organization=org[:255],
                 issue_date=i_date
-            )
+            ))
+        if cert_objs:
+            Certification.objects.bulk_create(cert_objs)
 
     return profile

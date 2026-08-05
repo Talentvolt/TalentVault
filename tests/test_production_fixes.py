@@ -395,31 +395,32 @@ def test_profile_photo_extraction_face_detection_and_heuristics():
 
 
 @pytest.mark.django_db
-@patch('cv2.CascadeClassifier.detectMultiScale')
-def test_profile_photo_extraction_with_mocked_face(mock_detect):
+def test_profile_photo_extraction_with_mocked_face():
     import numpy as np
     import cv2
+    from unittest.mock import patch, MagicMock
     from apps.candidates.utils import select_best_profile_photo
 
-    # Mock frontal face detection to return exactly one face, and profile face to return empty
-    mock_detect.side_effect = [
+    mock_cascade = MagicMock()
+    mock_cascade.empty.return_value = False
+    mock_cascade.detectMultiScale.side_effect = [
         np.array([[20, 20, 80, 80]]), # frontal faces
         []                            # profile faces
     ]
 
-    # Create a 120x150 portrait image
-    portrait_img = np.ones((150, 120, 3), dtype=np.uint8) * 200
-    # Add texture/gradients so it's not mostly white
-    portrait_img[10:140, 10:110] = 120
-    _, portrait_bytes = cv2.imencode(".png", portrait_img)
-    portrait_bytes = portrait_bytes.tobytes()
+    with patch('cv2.CascadeClassifier', return_value=mock_cascade, create=True):
+        # Create a 120x150 portrait image
+        portrait_img = np.ones((150, 120, 3), dtype=np.uint8) * 200
+        portrait_img[10:140, 10:110] = 120
+        _, portrait_bytes = cv2.imencode(".png", portrait_img)
+        portrait_bytes = portrait_bytes.tobytes()
 
-    best_data, best_ext = select_best_profile_photo([
-        (portrait_bytes, "png")
-    ])
+        best_data, best_ext = select_best_profile_photo([
+            (portrait_bytes, "png")
+        ])
 
-    assert best_data == portrait_bytes
-    assert best_ext == "png"
+        assert best_data == portrait_bytes
+        assert best_ext == "png"
 
 
 def test_education_date_parsing():

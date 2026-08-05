@@ -120,8 +120,8 @@ class CandidateMatchingService:
             }
             
         # 1. Skills Match (40% Weight)
-        job_skills = {s.strip().lower() for s in job.skills.values_list('skill_name', flat=True) if s.strip()}
-        candidate_skills = {s.strip().lower() for s in candidate.skills.values_list('skill_name', flat=True) if s.strip()}
+        job_skills = {s.skill_name.strip().lower() for s in job.skills.all() if s.skill_name and s.skill_name.strip()}
+        candidate_skills = {s.skill_name.strip().lower() for s in candidate.skills.all() if s.skill_name and s.skill_name.strip()}
         
         if job_skills:
             # Substring / partial match of skills
@@ -163,9 +163,9 @@ class CandidateMatchingService:
             exp_score = min(ratio * 20, 20)
             
         # 3. Education Match (10% Weight)
-        educations = candidate.educations.all()
-        if educations.exists():
-            degrees = [e.degree.lower().replace('.', '').strip() for e in educations if e.degree]
+        educations_list = list(candidate.educations.all())
+        if educations_list:
+            degrees = [e.degree.lower().replace('.', '').strip() for e in educations_list if e.degree]
             if any(any(x in deg for x in ['phd', 'doctorate', 'master', 'mba', 'mtech', 'ms', 'pg', 'post graduate']) for deg in degrees):
                 edu_score = 10
             elif any(any(x in deg for x in ['bachelor', 'btech', 'be', 'bs', 'bca', 'bba', 'bcom', 'bsc', 'graduate', 'degree']) for deg in degrees):
@@ -196,13 +196,18 @@ class CandidateMatchingService:
         job_words = job_words - stop_words
         
         candidate_text = f"{(candidate.summary or '')} {(candidate.current_designation or '')} {(candidate.current_company or '')}".lower()
-        for exp in candidate.experiences.all():
+        experiences_list = list(candidate.experiences.all())
+        projects_list = list(candidate.projects.all())
+        certifications_list = list(candidate.certifications.all())
+        candidate_skills_list = list(candidate.skills.all())
+
+        for exp in experiences_list:
             candidate_text += f" {(exp.designation or '')} {(exp.company_name or '')} {(exp.description or '')}".lower()
-        for proj in candidate.projects.all():
+        for proj in projects_list:
             candidate_text += f" {(proj.title or '')} {(proj.description or '')}".lower()
-        for cert in candidate.certifications.all():
+        for cert in certifications_list:
             candidate_text += f" {(cert.name or '')}".lower()
-        for skill in candidate.skills.all():
+        for skill in candidate_skills_list:
             candidate_text += f" {skill.skill_name.lower()}"
             
         if job_words:
@@ -227,7 +232,7 @@ class CandidateMatchingService:
             loc_score = 0
             
         # 6. Certifications Match (5% Weight)
-        cert_count = candidate.certifications.count()
+        cert_count = len(certifications_list)
         if cert_count >= 2:
             cert_score = 5
         elif cert_count == 1:
@@ -241,11 +246,11 @@ class CandidateMatchingService:
             completeness += 1
         if candidate.summary and candidate.summary.strip():
             completeness += 1
-        if candidate.experiences.exists():
+        if experiences_list:
             completeness += 1
-        if candidate.educations.exists():
+        if educations_list:
             completeness += 1
-        if candidate.skills.exists():
+        if candidate_skills_list:
             completeness += 1
             
         completeness_score = completeness
@@ -304,7 +309,7 @@ class CandidateMatchingService:
         from apps.candidates.models import CandidateProfile
         
         # 1. Sync Application match_score values
-        apps = Application.objects.all()
+        apps = Application.objects.select_related('candidate', 'job').all()
         if candidate_id:
             apps = apps.filter(candidate_id=candidate_id)
         if job_id:
@@ -313,7 +318,7 @@ class CandidateMatchingService:
         for app in apps:
             analysis = CandidateMatchingService.calculate_job_ats_score(app.candidate, app.job)
             app.match_score = analysis['total_score']
-            app.save()
+            app.save(update_fields=['match_score'])
             
         # 2. Sync CandidateProfile.ats_score to be the highest matching application or 0
         candidates = CandidateProfile.objects.all()
@@ -327,22 +332,29 @@ class CandidateMatchingService:
                 candidate.ats_score = highest_score
             else:
                 candidate.ats_score = CandidateMatchingService.calculate_ats_score(candidate, None)
-            candidate.save()
+            candidate.save(update_fields=['ats_score'])
 
     @staticmethod
     def get_recommended_jobs(candidate, limit=5):
+        from django.core.cache import cache
+        cache_key = f"candidate_recommended_jobs_{candidate.id}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
         from apps.jobs.models import Job
-        jobs = Job.objects.filter(status='ACTIVE')
+        jobs = Job.objects.filter(status='ACTIVE').select_related('company').prefetch_related('skills').order_by('-created_at')[:20]
         
         recommended = []
+        c_skills_list = [s.skill_name.strip() for s in candidate.skills.all() if s.skill_name and s.skill_name.strip()]
+        c_skills_lower = {s.lower() for s in c_skills_list}
+
         for job in jobs:
             analysis = CandidateMatchingService.calculate_job_ats_score(candidate, job)
             score = analysis['total_score']
             
-            # Find missing skills
-            job_skills = {s.strip().lower() for s in job.skills.values_list('skill_name', flat=True) if s.strip()}
-            candidate_skills = {s.strip().lower() for s in candidate.skills.values_list('skill_name', flat=True) if s.strip()}
-            missing_skills = [s for s in job.skills.values_list('skill_name', flat=True) if s.strip().lower() not in candidate_skills]
+            job_skills_list = [s.skill_name.strip() for s in job.skills.all() if s.skill_name and s.skill_name.strip()]
+            missing_skills = [s for s in job_skills_list if s.lower() not in c_skills_lower]
             
             recommended.append({
                 'job': job,
@@ -353,4 +365,6 @@ class CandidateMatchingService:
             })
             
         recommended.sort(key=lambda x: x['match_score'], reverse=True)
-        return recommended[:limit]
+        final_result = recommended[:limit]
+        cache.set(cache_key, final_result, 60)
+        return final_result
