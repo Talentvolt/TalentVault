@@ -168,26 +168,14 @@ db_from_env = dj_database_url.config(conn_max_age=600)
 if db_from_env:
     DATABASES['default'] = db_from_env
 
-# Fallback to SQLite if running tests and PostgreSQL is not accessible
+# Use SQLite when running tests or when explicitly requested
 if 'test' in sys.argv or 'pytest' in sys.modules or os.environ.get('USE_SQLITE') == '1':
-    try:
-        import psycopg2
-        conn = psycopg2.connect(
-            dbname=DATABASES['default'].get('NAME', 'talentvault_db'),
-            user=DATABASES['default'].get('USER', 'postgres'),
-            password=DATABASES['default'].get('PASSWORD', 'password'),
-            host=DATABASES['default'].get('HOST', 'localhost'),
-            port=DATABASES['default'].get('PORT', '5432'),
-            connect_timeout=1
-        )
-        conn.close()
-    except Exception:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
+    }
 
 
 
@@ -209,16 +197,38 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
-AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_KEY")
+AWS_STORAGE_BUCKET_NAME = (
+    os.getenv("AWS_STORAGE_BUCKET_NAME")
+    or os.getenv("AWS_S3_BUCKET_NAME")
+    or os.getenv("AWS_S3_BUCKET")
+    or os.getenv("S3_BUCKET_NAME")
+    or os.getenv("AWS_BUCKET_NAME")
+    or os.getenv("AWS_BUCKET")
+    or "talentvault-files-india"
+)
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME") or os.getenv("AWS_REGION") or "ap-south-1"
+AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN")
 
 AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = False
 AWS_S3_FILE_OVERWRITE = False
 AWS_S3_SIGNATURE_VERSION = "s3v4"
 
-if not DEBUG and AWS_STORAGE_BUCKET_NAME:
+if os.getenv("USE_LOCAL_STORAGE") == "1":
+    DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+else:
+    DEFAULT_FILE_STORAGE = "storages.backends.s3.S3Storage"
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.s3.S3Storage",
@@ -228,22 +238,13 @@ if not DEBUG and AWS_STORAGE_BUCKET_NAME:
         },
     }
 
-    MEDIA_URL = (
-        f"https://{AWS_STORAGE_BUCKET_NAME}.s3."
-        f"{AWS_S3_REGION_NAME}.amazonaws.com/"
-    )
-else:
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
-    }
-
-    MEDIA_URL = "/media/"
-    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+    if AWS_S3_CUSTOM_DOMAIN:
+        MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+    else:
+        MEDIA_URL = (
+            f"https://{AWS_STORAGE_BUCKET_NAME}.s3."
+            f"{AWS_S3_REGION_NAME}.amazonaws.com/"
+        )
 
 # Cache configuration (Fast in-memory cache)
 CACHES = {
