@@ -4,6 +4,7 @@ from apps.accounts.models import User
 PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt'})
 PUBLIC_PREFIXES = (
     '/accounts/',
+    '/admin/',
     '/jobs/share/',
     '/share/job/',
     '/share/candidate/',
