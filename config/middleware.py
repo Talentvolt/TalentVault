@@ -5,6 +5,8 @@ PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml'
 PUBLIC_PREFIXES = (
     '/accounts/',
     '/admin/',
+    '/jobs/',
+    '/location-search/',
     '/jobs/share/',
     '/share/job/',
     '/share/candidate/',

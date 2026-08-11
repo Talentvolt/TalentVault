@@ -382,6 +382,23 @@
             box-shadow: 0 12px 28px -5px rgba(124, 58, 237, 0.12);
             transform: translateY(-4px);
         }
+        .employer-cat-pill {
+            background: rgba(124, 58, 237, 0.06);
+            color: var(--text-muted);
+            border: 1px solid rgba(124, 58, 237, 0.1);
+            border-radius: 30px;
+            padding: 8px 18px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .employer-cat-pill:hover, .employer-cat-pill.active {
+            background: var(--primary-purple);
+            color: white !important;
+            border-color: var(--primary-purple);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+        }
 
         /* --- SECTION HEADING STYLING --- */
         .section-title {
@@ -714,14 +731,11 @@
                     <!-- Popular chips -->
                     <div class="popular-chips">
                         <span class="text-secondary small fw-semibold">Popular Searches:</span>
-                        <a href="{% url 'frontend:jobs' %}?search=Frontend+Developer" class="chip">Frontend Developer</a>
-                        <a href="{% url 'frontend:jobs' %}?search=Backend+Developer" class="chip">Backend Developer</a>
-                        <a href="{% url 'frontend:jobs' %}?search=Python" class="chip">Python</a>
-                        <a href="{% url 'frontend:jobs' %}?search=React" class="chip">React</a>
-                        <a href="{% url 'frontend:jobs' %}?search=Data+Analyst" class="chip">Data Analyst</a>
-                        <a href="{% url 'frontend:jobs' %}?search=UI%2FUX+Designer" class="chip">UI/UX Designer</a>
-                        <a href="{% url 'frontend:jobs' %}?search=DevOps" class="chip">DevOps</a>
-                        <a href="{% url 'frontend:jobs' %}?search=Remote+Jobs" class="chip">Remote Jobs</a>
+                        {% for chip in popular_searches %}
+                        <a href="{% url 'frontend:jobs' %}?search={{ chip.query|urlencode }}" class="chip">{{ chip.label }}</a>
+                        {% empty %}
+                        <span class="text-muted small">No popular searches available</span>
+                        {% endfor %}
                     </div>
                 </div>
 
@@ -865,31 +879,38 @@
     </section>
 
     <!-- COMPANIES SECTION -->
-    <section class="companies-section">
+    <section class="companies-section" id="employers-section">
         <div class="container text-center">
-            <p class="text-secondary fw-bold small text-uppercase mb-5" style="letter-spacing: 1.5px;">Trusted by India's Leading Employers</p>
-            <div class="row row-cols-2 row-cols-md-4 row-cols-lg-7 g-4 justify-content-center">
-                <div class="col">
-                    <div class="company-logo-card">TCS</div>
+            <p class="text-secondary fw-bold small text-uppercase mb-2" style="letter-spacing: 1.5px;">Trusted by India's Leading Employers</p>
+            <h2 class="section-title mb-4" style="font-size: 2.25rem;">Partnered With Leading Companies Across Industries</h2>
+            
+            <!-- Category Filter Pills -->
+            <div class="d-flex flex-wrap justify-content-center gap-2 mb-4" id="employer-category-pills">
+                <button type="button" class="btn employer-cat-pill active" onclick="filterEmployers('All', this)">All Industries</button>
+                {% for cat in trusted_categories %}
+                <button type="button" class="btn employer-cat-pill" onclick="filterEmployers('{{ cat|escapejs }}', this)">{{ cat }}</button>
+                {% endfor %}
+            </div>
+
+            <!-- Company Cards Grid -->
+            <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3 justify-content-center" id="company-cards-grid">
+                {% for company in trusted_employers %}
+                <div class="col company-card-wrapper" data-industry="{{ company.industry }}">
+                    <div class="company-logo-card d-flex flex-column justify-content-center align-items-center p-3 text-center" style="height: 105px;">
+                        <span class="fw-bold text-dark mb-1" style="font-size: 1.05rem; line-height: 1.2;">{{ company.name }}</span>
+                        <span class="badge bg-purple bg-opacity-10 text-purple" style="font-size: 0.7rem; font-weight: 600; color: var(--primary-purple); background: rgba(124, 58, 237, 0.08); padding: 3px 8px; border-radius: 6px;">{{ company.industry }}</span>
+                    </div>
                 </div>
-                <div class="col">
-                    <div class="company-logo-card">Infosys</div>
-                </div>
-                <div class="col">
-                    <div class="company-logo-card">Wipro</div>
-                </div>
-                <div class="col">
-                    <div class="company-logo-card">Accenture</div>
-                </div>
-                <div class="col">
-                    <div class="company-logo-card">HCL</div>
-                </div>
-                <div class="col">
-                    <div class="company-logo-card">IBM</div>
-                </div>
-                <div class="col">
-                    <div class="company-logo-card">TechM</div>
-                </div>
+                {% empty %}
+                <div class="col"><div class="company-logo-card">No Companies Available</div></div>
+                {% endfor %}
+            </div>
+
+            <!-- View More / Toggle Control -->
+            <div class="mt-4" id="company-cards-controls">
+                <button type="button" id="toggle-companies-btn" onclick="toggleShowAllCompanies()" class="btn btn-outline-purple px-4 py-2" style="font-size: 0.95rem; border-radius: 14px;">
+                    Show More Companies (<span id="hidden-count">0</span>)
+                </button>
             </div>
         </div>
     </section>
@@ -1170,9 +1191,8 @@
                     </a>
                     <p class="mb-4 text-secondary">Connecting Exceptional Talent With Exceptional Companies.</p>
                     <div class="d-flex gap-3">
-                        <a href="#" class="social-btn"><i class="bi bi-twitter-x"></i></a>
-                        <a href="#" class="social-btn"><i class="bi bi-linkedin"></i></a>
-                        <a href="#" class="social-btn"><i class="bi bi-github"></i></a>
+                        <a href="https://www.linkedin.com/company/talent-vault-tech/about/?viewAsMember=true" target="_blank" rel="noopener noreferrer" class="social-btn" title="LinkedIn" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                        <a href="https://www.instagram.com/talentvault2020?igsh=OWsydm1wMXdmZGtq" target="_blank" rel="noopener noreferrer" class="social-btn" title="Instagram" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
                     </div>
                 </div>
                 <div class="col-sm-6 col-md-4 col-lg-2 offset-lg-1">
@@ -1285,6 +1305,64 @@
                 }
             });
         }
+
+        // Employer Category Filtering & Page Limiting
+        let currentEmployerFilter = 'All';
+        let isShowingAllEmployers = false;
+        const EMPLOYER_PER_PAGE = 12;
+
+        function updateCompanyCardsVisibility() {
+            const wrappers = document.querySelectorAll('.company-card-wrapper');
+            let matching = [];
+
+            wrappers.forEach(el => {
+                const ind = el.getAttribute('data-industry');
+                if (currentEmployerFilter === 'All' || ind === currentEmployerFilter) {
+                    matching.push(el);
+                } else {
+                    el.style.display = 'none';
+                }
+            });
+
+            matching.forEach((el, index) => {
+                if (!isShowingAllEmployers && index >= EMPLOYER_PER_PAGE) {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = 'block';
+                }
+            });
+
+            const toggleBtn = document.getElementById('toggle-companies-btn');
+            const hiddenCountSpan = document.getElementById('hidden-count');
+
+            if (matching.length > EMPLOYER_PER_PAGE) {
+                if (toggleBtn) toggleBtn.style.display = 'inline-block';
+                const remaining = matching.length - EMPLOYER_PER_PAGE;
+                if (isShowingAllEmployers) {
+                    if (toggleBtn) toggleBtn.innerText = 'Show Less';
+                } else {
+                    if (hiddenCountSpan) hiddenCountSpan.innerText = remaining;
+                    if (toggleBtn) toggleBtn.innerHTML = `Show More Companies (${remaining})`;
+                }
+            } else {
+                if (toggleBtn) toggleBtn.style.display = 'none';
+            }
+        }
+
+        function filterEmployers(category, btn) {
+            currentEmployerFilter = category;
+            isShowingAllEmployers = false;
+            document.querySelectorAll('.employer-cat-pill').forEach(p => p.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            updateCompanyCardsVisibility();
+        }
+
+        function toggleShowAllCompanies() {
+            isShowingAllEmployers = !isShowingAllEmployers;
+            updateCompanyCardsVisibility();
+        }
+
+        document.addEventListener('DOMContentLoaded', updateCompanyCardsVisibility);
     </script>
 </body>
 </html>

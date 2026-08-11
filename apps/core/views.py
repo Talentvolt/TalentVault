@@ -45,20 +45,38 @@ logger = logging.getLogger(__name__)
 
 class LocationSearchView(View):
     def get(self, request, *args, **kwargs):
-        q = request.GET.get('q', '')
-        matches = LocationService.search_locations(q, limit=40)
+        q = request.GET.get('q', '').strip()
         
-        results = []
-        for item in matches:
-            results.append({
-                'id': item['name'],
-                'name': item['name'],
-                'city': item['city'],
-                'state': item['state'],
-                'tier': item['tier'],
-                'text': f"{item['name']}{', ' + item['state'] if item['state'] and item['state'] != item['name'] else ''} ({item['tier']})"
-            })
+        # Fetch real distinct locations from published/active jobs in database
+        db_locations = Job.objects.filter(status='ACTIVE') \
+            .exclude(location__isnull=True) \
+            .exclude(location='') \
+            .values_list('location', flat=True) \
+            .distinct()
             
+        results = []
+        seen = set()
+        
+        for loc in db_locations:
+            clean_loc = loc.strip()
+            if not clean_loc:
+                continue
+                
+            if clean_loc.islower():
+                clean_loc = clean_loc.title()
+                
+            base_city = clean_loc.split(',')[0].strip()
+            
+            if not q or q.lower() in clean_loc.lower() or q.lower() in base_city.lower():
+                norm_key = base_city.lower()
+                if norm_key not in seen:
+                    seen.add(norm_key)
+                    results.append({
+                        'id': clean_loc,
+                        'name': clean_loc,
+                        'text': clean_loc
+                    })
+                    
         return JsonResponse({'results': results})
 
 class DashboardView(TemplateView):
@@ -83,6 +101,152 @@ class LandingPageView(TemplateView):
             elif request.user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
                 return redirect('frontend:recruiter_dashboard')
         return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from collections import Counter
+        
+        # Generate Popular Searches dynamically from REAL active jobs in database
+        active_jobs = Job.objects.filter(status='ACTIVE').prefetch_related('skills')
+        terms_counter = Counter()
+        
+        for job in active_jobs:
+            if job.title and job.title.strip():
+                t = job.title.strip()
+                terms_counter[t.title() if t.islower() else t] += 3
+            if job.department and job.department.strip():
+                d = job.department.strip()
+                terms_counter[d.title() if d.islower() else d] += 2
+            for sk in job.skills.all():
+                if sk.skill_name and sk.skill_name.strip():
+                    s = sk.skill_name.strip()
+                    terms_counter[s.title() if s.islower() else s] += 2
+                    
+        popular_chips = []
+        for term, _count in terms_counter.most_common(8):
+            popular_chips.append({
+                'label': term,
+                'query': term
+            })
+            
+        context['popular_searches'] = popular_chips
+        
+        # Company dataset extracted directly from client spreadsheet image organized by industry
+        trusted_dataset = [
+            # Logistics
+            {"name": "Shipglobal", "industry": "Logistics"},
+            {"name": "Freight System", "industry": "Logistics"},
+            {"name": "Vanguard", "industry": "Logistics"},
+            {"name": "Quickshift", "industry": "Logistics"},
+            {"name": "Wheelseye", "industry": "Logistics"},
+            {"name": "Fleetx.io", "industry": "Logistics"},
+
+            # Automotive
+            {"name": "Lumax Group", "industry": "Automotive"},
+            {"name": "Cars24", "industry": "Automotive"},
+            {"name": "Spinny", "industry": "Automotive"},
+            {"name": "Rane Group", "industry": "Automotive"},
+            {"name": "DriveX", "industry": "Automotive"},
+            {"name": "Hero Group", "industry": "Automotive"},
+            {"name": "TVS Group", "industry": "Automotive"},
+            {"name": "Vutto", "industry": "Automotive"},
+            {"name": "91 Trucks", "industry": "Automotive"},
+            {"name": "ATI Motors", "industry": "Automotive"},
+
+            # Fintech
+            {"name": "Cars24 Financial", "industry": "Fintech"},
+            {"name": "Ambak", "industry": "Fintech"},
+            {"name": "Ayefinance", "industry": "Fintech"},
+            {"name": "Truck Loans", "industry": "Fintech"},
+            {"name": "Indusind Bank", "industry": "Fintech"},
+            {"name": "Motilal oswal", "industry": "Fintech"},
+            {"name": "Bonanza", "industry": "Fintech"},
+            {"name": "Onsurity", "industry": "Fintech"},
+            {"name": "Spinny", "industry": "Fintech"},
+
+            # Internet
+            {"name": "Expertpanel", "industry": "Internet"},
+            {"name": "ACT Fibernet", "industry": "Internet"},
+            {"name": "Zingbus", "industry": "Internet"},
+            {"name": "Apna", "industry": "Internet"},
+            {"name": "Justdail", "industry": "Internet"},
+            {"name": "Unicorn Denmart", "industry": "Internet"},
+            {"name": "Redbus", "industry": "Internet"},
+            {"name": "TechXR", "industry": "Internet"},
+            {"name": "EchoVME", "industry": "Internet"},
+
+            # Manufacturing
+            {"name": "Murugappa Group", "industry": "Manufacturing"},
+            {"name": "Lumax Group", "industry": "Manufacturing"},
+            {"name": "Hero Group", "industry": "Manufacturing"},
+            {"name": "Rane Group", "industry": "Manufacturing"},
+            {"name": "Buy Commodity", "industry": "Manufacturing"},
+            {"name": "CUMI", "industry": "Manufacturing"},
+
+            # Internationally
+            {"name": "Vame", "industry": "Internationally"},
+            {"name": "Cars24 Australia", "industry": "Internationally"},
+
+            # Edtech
+            {"name": "Scaler Academy", "industry": "Edtech"},
+            {"name": "Entri", "industry": "Edtech"},
+            {"name": "Suraasa", "industry": "Edtech"},
+            {"name": "Hero Vired", "industry": "Edtech"},
+
+            # Hospitality
+            {"name": "OYO", "industry": "Hospitality"},
+            {"name": "Zingbus", "industry": "Hospitality"},
+            {"name": "Redbus", "industry": "Hospitality"},
+
+            # SaaS
+            {"name": "Gumlet", "industry": "SaaS"},
+            {"name": "Magicpin", "industry": "SaaS"},
+            {"name": "Apna", "industry": "SaaS"},
+            {"name": "CloudFuze", "industry": "SaaS"},
+            {"name": "Netcore Software", "industry": "SaaS"},
+            {"name": "Smartwinnr", "industry": "SaaS"},
+
+            # FMCG
+            {"name": "Meshr", "industry": "FMCG"},
+
+            # Real Estate
+            {"name": "Alyf", "industry": "Real Estate"},
+            {"name": "Nobroker", "industry": "Real Estate"},
+        ]
+        
+        context['trusted_employers'] = trusted_dataset
+        
+        # Unique ordered list of categories for UI filters
+        categories = []
+        seen_cats = set()
+        for item in trusted_dataset:
+            cat = item['industry']
+            if cat not in seen_cats:
+                seen_cats.add(cat)
+                categories.append(cat)
+        context['trusted_categories'] = categories
+        
+        # Guarantee records exist in Company and Client models
+        from apps.clients.models import Client
+        for item in trusted_dataset:
+            cname = item['name']
+            ind = item['industry']
+            Company.objects.get_or_create(
+                name=cname,
+                defaults={
+                    'slug': cname.lower().replace(' ', '-').replace('.', '-'),
+                    'description': f'{cname} ({ind})',
+                    'location': 'India',
+                    'industry': ind
+                }
+            )
+            Client.objects.get_or_create(
+                company_name=cname,
+                defaults={'spoc_name': f'{cname} HR', 'industry': 'OTHERS'}
+            )
+            
+        return context
+
 
 
 class EmployerLandingView(TemplateView):
@@ -814,54 +978,55 @@ class JobActionView(RecruiterRequiredMixin, View):
         job.save()
         return redirect('frontend:jobs')
 
-class JobsView(LoginRequiredMixin, ListView):
+class JobsView(ListView):
     model = Job
     context_object_name = 'jobs'
     paginate_by = 10
 
     def get_template_names(self):
-        if self.request.user.role == 'CANDIDATE':
+        if not self.request.user.is_authenticated or getattr(self.request.user, 'role', None) == 'CANDIDATE':
             return ['candidate_jobs.html']
         return ['jobs.html']
 
     def get_queryset(self):
-        if self.request.user.role == 'CANDIDATE':
-            queryset = Job.objects.filter(status='ACTIVE').select_related('company').prefetch_related('skills')
+        is_candidate_or_guest = not self.request.user.is_authenticated or getattr(self.request.user, 'role', None) == 'CANDIDATE'
+        
+        if is_candidate_or_guest:
+            queryset = Job.objects.filter(status='ACTIVE').select_related('company', 'client').prefetch_related('skills')
             
-            # 1. Search by Keyword (title, description)
-            q = self.request.GET.get('q', '')
+            # 1. Search by Keyword (q, search, keyword)
+            q = self.request.GET.get('q', '') or self.request.GET.get('search', '') or self.request.GET.get('keyword', '')
+            q = q.strip()
             if q:
                 queryset = queryset.filter(
                     Q(title__icontains=q) |
-                    Q(description__icontains=q)
+                    Q(description__icontains=q) |
+                    Q(department__icontains=q) |
+                    Q(required_skills_text__icontains=q) |
+                    Q(preferred_skills_text__icontains=q) |
+                    Q(company__name__icontains=q) |
+                    Q(client__company_name__icontains=q) |
+                    Q(location__icontains=q) |
+                    Q(skills__skill_name__icontains=q)
                 )
             
-            # 2. Search by Company
-            company = self.request.GET.get('company', '')
-            if company:
-                queryset = queryset.filter(company__name__icontains=company)
+            # 2. Search by Location (location, city, preferred_location, state)
+            loc = self.request.GET.get('location', '') or self.request.GET.get('preferred_location', '') or self.request.GET.get('city', '') or self.request.GET.get('state', '')
+            loc = loc.strip()
+            if loc:
+                queryset = queryset.filter(location__icontains=loc)
                 
-            # 3. Search by Skills
-            skills = self.request.GET.get('skills', '')
+            # 3. Search by Company
+            company = self.request.GET.get('company', '').strip()
+            if company:
+                queryset = queryset.filter(Q(company__name__icontains=company) | Q(client__company_name__icontains=company))
+                
+            # 4. Search by Skills
+            skills = self.request.GET.get('skills', '').strip()
             if skills:
                 queryset = queryset.filter(skills__skill_name__icontains=skills)
                 
-            # 4. Search by City
-            city = self.request.GET.get('city', '')
-            if city:
-                queryset = queryset.filter(location__icontains=city)
-                
-            # 5. Search by State
-            state = self.request.GET.get('state', '')
-            if state:
-                queryset = queryset.filter(location__icontains=state)
-                
-            # 6. Search by Preferred Location (Dropdown)
-            preferred_location = self.request.GET.get('preferred_location', '')
-            if preferred_location:
-                queryset = queryset.filter(location__icontains=preferred_location)
-                
-            # 7. Experience Filter
+            # 5. Experience Filter
             experience = self.request.GET.get('experience', '')
             if experience:
                 try:
@@ -870,7 +1035,7 @@ class JobsView(LoginRequiredMixin, ListView):
                 except ValueError:
                     pass
                     
-            # 8. Salary Filter
+            # 6. Salary Filter
             salary = self.request.GET.get('salary', '')
             if salary:
                 try:
@@ -880,19 +1045,19 @@ class JobsView(LoginRequiredMixin, ListView):
                 except ValueError:
                     pass
                     
-            # 9. Job Type Filter
+            # 7. Job Type Filter
             job_type = self.request.GET.get('job_type', '')
             if job_type:
                 queryset = queryset.filter(job_type=job_type)
                 
-            # 10. Remote / Hybrid / Onsite Filter
+            # 8. Work Mode Filter
             work_mode = self.request.GET.get('work_mode', '')
             if work_mode:
                 queryset = queryset.filter(work_mode=work_mode)
 
             queryset = queryset.distinct()
                 
-            # 11. Sorting
+            # 9. Sorting
             sort_by = self.request.GET.get('sort_by', 'newest')
             if sort_by == 'relevance' and q:
                 from django.db.models import Case, When, Value, IntegerField
@@ -915,7 +1080,7 @@ class JobsView(LoginRequiredMixin, ListView):
             )
             
             # Search
-            q = self.request.GET.get('q', '')
+            q = self.request.GET.get('q', '') or self.request.GET.get('search', '') or self.request.GET.get('keyword', '')
             if q:
                 queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q))
                 
@@ -954,8 +1119,9 @@ class JobsView(LoginRequiredMixin, ListView):
                 reverse('frontend:public_job_share', kwargs={'pk': job.pk})
             )
             
-        if self.request.user.role == 'CANDIDATE':
-            candidate_profile = getattr(self.request.user, 'candidate_profile', None)
+        is_candidate_or_guest = not self.request.user.is_authenticated or getattr(self.request.user, 'role', None) == 'CANDIDATE'
+        if is_candidate_or_guest:
+            candidate_profile = getattr(self.request.user, 'candidate_profile', None) if self.request.user.is_authenticated else None
             if candidate_profile:
                 context['applied_job_ids'] = list(candidate_profile.job_applications.values_list('job_id', flat=True))
                 context['saved_job_ids'] = list(candidate_profile.saved_jobs.values_list('job_id', flat=True))
@@ -963,12 +1129,17 @@ class JobsView(LoginRequiredMixin, ListView):
                 context['applied_job_ids'] = []
                 context['saved_job_ids'] = []
                 
-            context['q'] = self.request.GET.get('q', '')
+            q_val = self.request.GET.get('q', '') or self.request.GET.get('search', '') or self.request.GET.get('keyword', '')
+            loc_val = self.request.GET.get('location', '') or self.request.GET.get('preferred_location', '') or self.request.GET.get('city', '') or self.request.GET.get('state', '')
+            
+            context['q'] = q_val
+            context['search'] = q_val
             context['company'] = self.request.GET.get('company', '')
             context['skills'] = self.request.GET.get('skills', '')
             context['city'] = self.request.GET.get('city', '')
             context['state'] = self.request.GET.get('state', '')
-            context['preferred_location'] = self.request.GET.get('preferred_location', '')
+            context['preferred_location'] = loc_val
+            context['location'] = loc_val
             context['experience'] = self.request.GET.get('experience', '')
             context['salary'] = self.request.GET.get('salary', '')
             context['selected_job_type'] = self.request.GET.get('job_type', '')
