@@ -100,7 +100,8 @@ urlpatterns = [
     path('accounts/login/google/callback/', google_allauth_callback, name='google_callback'),
     path('accounts/login/google/callback/alias/', google_allauth_callback, name='google_login_callback'),
     
-    # Employer Auth
+    # Employer & Recruiter Auth
+    path('accounts/login/recruiter/', EmployerLoginView.as_view(), name='recruiter_login'),
     path('accounts/login/employer/', EmployerLoginView.as_view(), name='employer_login'),
     path('accounts/signup/employer/', EmployerSignupView.as_view(), name='employer_signup'),
     path('accounts/registration-pending/', RegistrationPendingView.as_view(), name='registration_pending'),

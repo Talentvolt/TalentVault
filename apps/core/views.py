@@ -1947,8 +1947,6 @@ class PublicCandidateProfileView(DetailView):
             try:
                 if candidate.resume.name and candidate.resume.storage.exists(candidate.resume.name):
                     file_physically_exists = True
-                elif hasattr(candidate.resume.storage, 'url') and not hasattr(candidate.resume.storage, 'path'):
-                    file_physically_exists = True
             except Exception:
                 pass
                 
@@ -2179,9 +2177,14 @@ class PublicJobApplyView(View):
 
             # 4. Save Resume File (No OCR/parsing - purely manual entry)
             if resume_file:
-                profile.resume = resume_file
-                profile.original_file = resume_file
-                profile.original_filename = getattr(resume_file, 'name', '')
+                from services.resume_storage_service import upload_and_verify_resume, copy_and_verify_original_resume
+                orig_fn = getattr(resume_file, 'name', 'resume.pdf')
+                saved_key, _ = upload_and_verify_resume(resume_file, orig_fn)
+                profile.resume.name = saved_key
+                profile.original_filename = orig_fn
+                orig_key = copy_and_verify_original_resume(saved_key, orig_fn)
+                if orig_key:
+                    profile.original_file.name = orig_key
             profile.save()
 
             # 5. Save Skills
@@ -3258,6 +3261,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                         profile.portfolio_url = form.cleaned_data.get('portfolio_url', '')
                         profile.summary = form.cleaned_data.get('summary', '') or ""
                         profile.created_by = request.user
+                        profile.uploaded_by = request.user
                         
                         # Store customized parsing payload in parsed_json
                         parsed_json = profile.parsed_json or {}
@@ -3286,12 +3290,16 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                         
                         resume_file = request.FILES.get('resume')
                         if resume_file:
-                            profile.resume = resume_file
-                            profile.original_file = resume_file
+                            from services.resume_storage_service import upload_and_verify_resume, copy_and_verify_original_resume
+                            saved_key, _ = upload_and_verify_resume(resume_file, resume_file.name)
+                            profile.resume.name = saved_key
                             profile.original_filename = resume_file.name
                             profile.secure_filename = resume_file.name
                             profile.parser_status = "SUCCESS"
                             profile.preview_status = "READY"
+                            orig_key = copy_and_verify_original_resume(saved_key, resume_file.name)
+                            if orig_key:
+                                profile.original_file.name = orig_key
                             
                         profile.save()
                         
@@ -3565,11 +3573,12 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                             "duplicate_candidate": dup_data
                         })
                     else:
-                        reason = error_reasons[0] if error_reasons else "No valid resumes were found in the upload."
-                        q.put({"stage": "error", "message": f"Parsing failed: {reason}"})
+                        reason = error_reasons[0] if error_reasons else "Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details."
+                        q.put({"stage": "error", "message": reason})
             except Exception as e:
                 logger.error(f"[BACKGROUND PARSER THREAD ERROR] Exception: {str(e)}", exc_info=True)
-                q.put({"stage": "error", "message": str(e)})
+                logger.info(f"[RESUME PARSER] Automatic parsing failed — manual parsing available")
+                q.put({"stage": "error", "message": "Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details."})
             finally:
                 connection.close()
                 q.put(None)
@@ -3586,11 +3595,8 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
             
             while True:
                 if time.time() - stream_start_time > max_stream_duration:
-                    import traceback
-                    stack_info = "".join(traceback.format_stack())
-                    logger.error(f"HANG DETECTED: ResumeParserView streaming response exceeded 90s max limit.\nStack:\n{stack_info}")
-                    print(f"HANG DETECTED: ResumeParserView streaming response exceeded 90s max limit.\nStack:\n{stack_info}")
-                    yield json.dumps({"stage": "error", "message": "Parsing operation timed out. Please try again."}) + " " * 1024 + "\n"
+                    logger.warning("[RESUME PARSER] Automatic parsing failed — manual parsing available")
+                    yield json.dumps({"stage": "error", "message": "Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details."}) + " " * 1024 + "\n"
                     break
 
                 try:
@@ -4274,30 +4280,26 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
         import mimetypes
         try:
             candidate = get_object_or_404(CandidateProfile, pk=pk)
-            if not candidate.resume:
+            if not candidate.resume or not candidate.resume.name:
                 return HttpResponse("No resume file found.", status=404)
                 
             resume_file = candidate.resume
-            try:
-                if hasattr(resume_file.storage, 'url') and not hasattr(resume_file.storage, 'path'):
-                    return redirect(resume_file.url)
-            except Exception:
-                pass
-
-            if resume_file and resume_file.storage.exists(resume_file.name):
-                filename = candidate.original_filename or os.path.basename(resume_file.name)
-                f = resume_file.open('rb')
-                content_type, _ = mimetypes.guess_type(resume_file.name)
-                if not content_type:
-                    content_type = 'application/octet-stream'
-                response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
-                return response
-            elif hasattr(resume_file, 'url') and resume_file.url:
+            if resume_file.storage.exists(resume_file.name):
+                try:
+                    if hasattr(resume_file.storage, 'path'):
+                        filename = candidate.original_filename or os.path.basename(resume_file.name)
+                        f = resume_file.open('rb')
+                        content_type, _ = mimetypes.guess_type(resume_file.name)
+                        if not content_type:
+                            content_type = 'application/octet-stream'
+                        return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+                except NotImplementedError:
+                    pass
                 return redirect(resume_file.url)
         except Exception as e:
             logger.error(f"Error downloading candidate resume {pk}: {e}")
             
-        return HttpResponse("No resume file found.", status=404)
+        return HttpResponse("Resume file is not available.", status=404)
 
 
 @method_decorator(xframe_options_sameorigin, name='dispatch')
@@ -4331,43 +4333,19 @@ class PublicCandidateResumeDownloadView(View):
     supporting both local media storage and AWS S3 media storage gracefully without error.
     """
     def get(self, request, pk, *args, **kwargs):
-        import os
-        import mimetypes
         try:
             candidate = CandidateProfile.objects.filter(pk=pk).first()
-            if not candidate:
-                return render(request, '404.html', {'message': 'Candidate profile no longer available.'}, status=404)
-            
-            if not candidate.resume:
+            if not candidate or not candidate.resume or not candidate.resume.name:
                 return render(request, '404.html', {'message': 'Resume file no longer available.'}, status=404)
             
             resume_file = candidate.resume
-            # Support AWS S3 / Remote Storage
-            try:
-                if hasattr(resume_file.storage, 'url') and not hasattr(resume_file.storage, 'path'):
-                    return redirect(resume_file.url)
-            except Exception:
-                pass
-
-            try:
-                if resume_file.storage.exists(resume_file.name):
-                    filename = candidate.original_filename or os.path.basename(resume_file.name)
-                    f = resume_file.open('rb')
-                    content_type, _ = mimetypes.guess_type(resume_file.name)
-                    if not content_type:
-                        content_type = 'application/pdf' if filename.lower().endswith('.pdf') else 'application/octet-stream'
-                    response = FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
-                    return response
-            except Exception as e:
-                logger.error(f"Error opening candidate resume file {pk}: {e}")
-
-            if hasattr(resume_file, 'url') and resume_file.url:
+            if resume_file.storage.exists(resume_file.name):
                 return redirect(resume_file.url)
 
         except Exception as e:
             logger.error(f"Error downloading candidate resume {pk}: {e}")
             
-        return render(request, '404.html', {'message': 'Resume file no longer available.'}, status=404)
+        return render(request, '404.html', {'message': 'Resume file is no longer available in cloud storage.'}, status=404)
 
 
 # --- NEW CANDIDATE PORTAL VIEWS ---
@@ -4421,17 +4399,18 @@ class CandidateResumeUploadView(CandidateRequiredMixin, View):
         uploaded_file = request.FILES['resume']
         try:
             profile = request.user.candidate_profile
-            profile.resume = uploaded_file
-            profile.original_filename = uploaded_file.name
-            profile.save()
+            from services.resume_storage_service import save_candidate_resume_atomic, ResumeUploadError
+            save_candidate_resume_atomic(profile, uploaded_file, uploaded_file.name, is_replacement=True, user=request.user)
             
             return JsonResponse({
                 'success': True, 
                 'message': 'Resume uploaded successfully!',
                 'filename': profile.original_filename or uploaded_file.name
             })
-        except Exception as e:
+        except ResumeUploadError as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f'Resume upload failed: {str(e)}'}, status=400)
 
 class CandidateResumeDeleteView(CandidateRequiredMixin, View):
     def post(self, request, *args, **kwargs):

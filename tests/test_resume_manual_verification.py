@@ -49,7 +49,8 @@ def test_manual_resume_actions_preview_download_replace_delete():
 
     profile.refresh_from_db()
     assert profile.has_resume is True
-    assert "replaced_resume" in profile.resume.name
+    assert profile.original_filename == "replaced_resume.pdf"
+    assert profile.resume.name.startswith("resumes/")
     print("[VERIFIED] 3. Resume Replace returned HTTP 200 & updated Database record")
 
     # 4. VERIFY RESUME DELETE (HTTP 200 & Database deletion)

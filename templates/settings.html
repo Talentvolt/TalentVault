@@ -35,7 +35,7 @@
                         <!-- Profile Photo Header -->
                         <div class="d-flex align-items-center gap-4 mb-4 pb-4 border-bottom">
                             <div class="position-relative">
-                                <img id="profileAvatarPreview" src="{{ request.user.profile_picture|default:'https://ui-avatars.com/api/?name='|add:request.user.email|add:'&background=2563eb&color=fff' }}" class="rounded-circle border border-2 border-primary border-opacity-25 shadow-xs" width="84" height="84" alt="Avatar" style="object-fit: cover;">
+                                <img id="profileAvatarPreview" src="{% if request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={{ request.user.get_full_name|default:request.user.email|urlencode }}{% endif %}" class="rounded-circle border border-2 border-primary border-opacity-25 shadow-xs" width="84" height="84" alt="Avatar" style="object-fit: cover;">
                                 <label for="profilePhotoInput" class="position-absolute bottom-0 end-0 bg-primary text-white rounded-circle p-1.5 cursor-pointer shadow-sm" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;" title="Change Profile Photo">
                                     <i class="bi bi-camera-fill" style="font-size: 0.75rem;"></i>
                                 </label>

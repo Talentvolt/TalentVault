@@ -26,7 +26,7 @@
 <!-- Welcome Header -->
 <div class="d-flex justify-content-between align-items-center mb-4 fade-in">
     <div>
-        <h2 class="fw-bold m-0 text-dark" style="font-size: 1.75rem; letter-spacing: -0.5px;" id="dashboardDynamicGreeting">{{ dynamic_greeting|default:"Good Morning 👋" }}</h2>
+        <h2 class="fw-bold m-0 text-dark" style="font-size: 1.75rem; letter-spacing: -0.5px;" id="dashboardDynamicGreeting">Welcome, {{ request.user.first_name|default:request.user.get_full_name|default:request.user.email }} 👋</h2>
         <p class="text-secondary small m-0 mt-1">Here's what's happening with your recruitment today.</p>
     </div>
     <div>

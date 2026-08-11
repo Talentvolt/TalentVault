@@ -94,7 +94,7 @@ class CandidateProfile(BaseAppModel):
         try:
             return bool(self.resume and self.resume.name and self.resume.storage.exists(self.resume.name))
         except Exception:
-            return bool(self.resume and self.resume.name)
+            return False
 
     @property
     def resume_exists(self):
@@ -141,6 +141,17 @@ class CandidateProfile(BaseAppModel):
     audit_logs = models.JSONField(default=list, blank=True)
     edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='edited_profiles')
     edited_at = models.DateTimeField(null=True, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_candidates')
+
+    @property
+    def uploader_name(self):
+        user_obj = self.uploaded_by or self.created_by
+        if not user_obj:
+            return None
+        full_name = user_obj.get_full_name().strip()
+        if full_name:
+            return full_name
+        return user_obj.email
 
     # Security and File Processing Audit fields
     original_filename = models.CharField(max_length=255, blank=True, null=True)

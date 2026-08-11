@@ -85,7 +85,7 @@
                 {% endfor %}
             </div>
         </div>
-        <span class="badge bg-purple text-white">{{ candidates|length }} Matches Found</span>
+        <span class="badge bg-purple text-white">{{ page_obj.paginator.count|default:candidates|length }} Matches Found</span>
     </div>
     {% endif %}
 
@@ -120,6 +120,9 @@
                                 <span><i class="bi bi-cash-stack me-1 text-purple"></i>Expected: <strong>{{ match.candidate.expected_salary|default:"N/A" }} LPA</strong></span>
                                 <span><i class="bi bi-clock-history me-1 text-purple"></i>Notice: <strong>{{ match.candidate.notice_period }} Days</strong></span>
                                 <span><i class="bi bi-file-earmark-check me-1 text-purple"></i>ATS Score: <strong>{{ match.candidate.ats_score }}/100</strong></span>
+                                {% if match.candidate.uploader_name %}
+                                    <span><i class="bi bi-person-up me-1 text-purple"></i>Uploaded By: <strong>{{ match.candidate.uploader_name }}</strong></span>
+                                {% endif %}
                             </div>
 
                             <!-- Matched Skills Badges -->

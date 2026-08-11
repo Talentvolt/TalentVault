@@ -51,7 +51,7 @@ class SuperAdminRequiredMixin(RoleRequiredMixin):
 
 class RecruiterRequiredMixin(RoleRequiredMixin):
     allowed_roles = [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]
-    login_url = reverse_lazy('employer_login')
+    login_url = reverse_lazy('recruiter_login')
 
     def dispatch(self, request, *args, **kwargs):
         user = getattr(request, 'user', None)

@@ -643,50 +643,40 @@ class EmployerLoginView(View):
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
-            try:
-                user_check = User.objects.get(email=email)
-                if user_check.role == User.Role.CANDIDATE:
-                    form.add_error(None, "This workspace is reserved for Recruiters/Employers. Please use the Candidate Portal to sign in.")
+            user_target = User.objects.filter(email=email).first()
+            if not user_target or not user_target.check_password(password):
+                form.add_error(None, "Invalid email or password.")
+                return render(request, self.template_name, {'form': form})
+
+            if user_target.role == User.Role.CANDIDATE:
+                form.add_error(None, "This workspace is reserved for Recruiters/Employers. Please use the Candidate Portal to sign in.")
+                return render(request, self.template_name, {'form': form})
+
+            if not user_target.is_active:
+                form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
+                return render(request, self.template_name, {'form': form})
+
+            if user_target.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+                rec_status = getattr(user_target, 'recruiter_status', User.RecruiterStatus.ACTIVE)
+                if rec_status == User.RecruiterStatus.PENDING:
+                    form.add_error(None, "Your account is currently under verification. Please wait until TalentVault approves your company.")
+                    return render(request, self.template_name, {'form': form})
+                elif rec_status == User.RecruiterStatus.REJECTED:
+                    form.add_error(None, "Your company verification was rejected. Please contact TalentVault Support.")
+                    return render(request, self.template_name, {'form': form})
+                elif rec_status == User.RecruiterStatus.SUSPENDED:
+                    form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
                     return render(request, self.template_name, {'form': form})
 
-                if user_check.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
-                    rec_status = getattr(user_check, 'recruiter_status', User.RecruiterStatus.ACTIVE)
-                    if rec_status == User.RecruiterStatus.PENDING:
-                        form.add_error(None, "Your account is currently under verification. Please wait until TalentVault approves your company.")
-                        return render(request, self.template_name, {'form': form})
-                    elif rec_status == User.RecruiterStatus.REJECTED:
-                        form.add_error(None, "Your company verification was rejected. Please contact TalentVault Support.")
-                        return render(request, self.template_name, {'form': form})
-                    elif rec_status == User.RecruiterStatus.SUSPENDED or not user_check.is_active:
-                        form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
-                        return render(request, self.template_name, {'form': form})
-            except User.DoesNotExist:
-                pass
-
-            user = authenticate(request, username=email, password=password)
-            if user is not None:
-                if user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
-                    rec_status = getattr(user, 'recruiter_status', User.RecruiterStatus.ACTIVE)
-                    if user.role == User.Role.SUPER_ADMIN or rec_status == User.RecruiterStatus.ACTIVE:
-                        if user.is_active:
-                            login(request, user)
-                            if remember_me:
-                                request.session.set_expiry(1209600)  # 2 weeks
-                            else:
-                                request.session.set_expiry(0)
-                            return redirect('frontend:recruiter_dashboard')
-                        else:
-                            form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
-                    elif rec_status == User.RecruiterStatus.PENDING:
-                        form.add_error(None, "Your account is currently under verification. Please wait until TalentVault approves your company.")
-                    elif rec_status == User.RecruiterStatus.REJECTED:
-                        form.add_error(None, "Your company verification was rejected. Please contact TalentVault Support.")
-                    elif rec_status == User.RecruiterStatus.SUSPENDED:
-                        form.add_error(None, "Your recruiter account has been suspended. Please contact the administrator.")
+            if user_target.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN, User.Role.SUPER_ADMIN]:
+                login(request, user_target, backend='django.contrib.auth.backends.ModelBackend')
+                if remember_me:
+                    request.session.set_expiry(1209600)  # 2 weeks
                 else:
-                    form.add_error(None, "This workspace is reserved for Recruiters/Employers.")
+                    request.session.set_expiry(0)
+                return redirect('frontend:recruiter_dashboard')
             else:
-                form.add_error(None, "Invalid email or password.")
+                form.add_error(None, "This workspace is reserved for Recruiters/Employers.")
 
         return render(request, self.template_name, {'form': form})
 
@@ -798,6 +788,9 @@ class RegistrationPendingView(View):
         return render(request, self.template_name, {'email': email})
 
 
+RecruiterLoginView = EmployerLoginView
+
+
 class AdminLoginView(View):
     template_name = 'registration/admin_login.html'
 
@@ -819,23 +812,27 @@ class AdminLoginView(View):
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
-            user = authenticate(request, username=email, password=password)
-            if user is not None:
-                if user.role == User.Role.SUPER_ADMIN or user.is_superuser or user.is_staff:
-                    if user.is_active:
-                        login(request, user)
-                        if remember_me:
-                            request.session.set_expiry(1209600)  # 2 weeks
-                        else:
-                            request.session.set_expiry(0)
-                        return redirect('frontend:recruiter_dashboard')
-                    else:
-                        form.add_error(None, "This administrator account is disabled.")
-                else:
-                    form.add_error(None, "Access denied. Only system administrators can log in here.")
-            else:
+            user_target = User.objects.filter(email=email).first()
+            if not user_target or not user_target.check_password(password):
                 form.add_error(None, "Invalid email or password.")
-        
+                return render(request, self.template_name, {'form': form})
+
+            if not user_target.is_active:
+                form.add_error(None, "This administrator account is disabled.")
+                return render(request, self.template_name, {'form': form})
+
+            if user_target.role in [User.Role.SUPER_ADMIN, User.Role.COMPANY_ADMIN] or user_target.is_superuser or user_target.is_staff:
+                login(request, user_target, backend='django.contrib.auth.backends.ModelBackend')
+                if remember_me:
+                    request.session.set_expiry(1209600)  # 2 weeks
+                else:
+                    request.session.set_expiry(0)
+                return redirect('frontend:recruiter_dashboard')
+            elif user_target.role == User.Role.RECRUITER:
+                form.add_error(None, "This is the Administrator Login. Please use the Recruiter Login.")
+            else:
+                form.add_error(None, "Access denied. Only authorized company administrators can log in here.")
+
         return render(request, self.template_name, {'form': form})
 
 

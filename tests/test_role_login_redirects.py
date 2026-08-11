@@ -58,20 +58,41 @@ def test_candidate_login_redirects_strictly_to_candidate_dashboard():
 @pytest.mark.django_db
 def test_cross_login_prevention():
     client = Client()
-    recruiter = User.objects.create_user(
-        email='rec_user@company.com',
+    candidate = User.objects.create_user(
+        email='cand_user@example.com',
         password='Password123!',
-        role=User.Role.RECRUITER,
-        recruiter_status=User.RecruiterStatus.ACTIVE
+        role=User.Role.CANDIDATE,
+        is_verified=True
     )
 
-    # Recruiter attempting Admin login page -> rejected
+    # Candidate attempting Admin login page -> rejected
     admin_login_res = client.post('/accounts/login/admin/', {
-        'email': 'rec_user@company.com',
+        'email': 'cand_user@example.com',
         'password': 'Password123!'
     })
     assert admin_login_res.status_code == 200
-    assert "Access denied. Only system administrators can log in here." in admin_login_res.content.decode('utf-8')
+    assert "Access denied" in admin_login_res.content.decode('utf-8') or "Invalid" in admin_login_res.content.decode('utf-8')
+
+
+@pytest.mark.django_db
+def test_external_recruiter_blocked_from_admin_login():
+    client = Client()
+    external_recruiter = User.objects.create_user(
+        email='ext_recruiter@company.com',
+        password='Password123!',
+        role=User.Role.RECRUITER,
+        is_staff=False,
+        is_superuser=False,
+        recruiter_status=User.RecruiterStatus.ACTIVE
+    )
+
+    # External recruiter attempting Admin login page -> rejected
+    res = client.post('/accounts/login/admin/', {
+        'email': 'ext_recruiter@company.com',
+        'password': 'Password123!'
+    })
+    assert res.status_code == 200
+    assert "This is the Administrator Login. Please use the Recruiter Login." in res.content.decode('utf-8')
 
 
 @pytest.mark.django_db

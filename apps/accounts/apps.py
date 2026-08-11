@@ -4,6 +4,22 @@ from django.db.models.signals import post_migrate
 
 logger = logging.getLogger(__name__)
 
+COMPANY_RECRUITERS = [
+    {"email": "snehal.2020technologies@gmail.com", "first_name": "Snehal", "last_name": "Patil", "role": "SUPER_ADMIN"},
+    {"email": "chhayajoshi.2020technologies.in@gmail.com", "first_name": "Chhaya", "last_name": "Joshi", "role": "SUPER_ADMIN"},
+    {"email": "rahul.2020technologies@gmail.com", "first_name": "Rahul", "last_name": "Nishad", "role": "SUPER_ADMIN"},
+    {"email": "anamikashkla.2020technologies@gmail.com", "first_name": "Anamika", "last_name": "", "role": "SUPER_ADMIN"},
+    {"email": "deepak.kumar@2020technologies.in", "first_name": "Deepak", "last_name": "Kumar", "role": "SUPER_ADMIN"},
+    {"email": "nikhil@2020technologies.in", "first_name": "Nikhil", "last_name": "Mittal", "role": "SUPER_ADMIN"},
+    {"email": "harshita.2020technologies@gmail.com", "first_name": "Harshita", "last_name": "", "role": "SUPER_ADMIN"},
+    {"email": "deepanshu.verma@2020technologies.in", "first_name": "Deepanshu", "last_name": "Verma", "role": "SUPER_ADMIN"},
+    {"email": "rajeevkumar9801456p@gmail.com", "first_name": "Rajeev", "last_name": "Kumar", "role": "SUPER_ADMIN"},
+]
+
+ADMIN_ACCOUNTS = [
+    {"email": "admin@talentvault.in", "first_name": "System", "last_name": "Administrator", "role": "SUPER_ADMIN"},
+]
+
 def create_default_recruiter(sender, **kwargs):
     from django.db import connection
     try:
@@ -12,25 +28,8 @@ def create_default_recruiter(sender, **kwargs):
             from apps.accounts.models import User
             from apps.companies.models import Company, CompanyMember
             
-            user, created = User.objects.get_or_create(
-                email="growfluencestudio@gmail.com",
-                defaults={
-                    "is_staff": True,
-                    "is_superuser": True,
-                    "role": User.Role.RECRUITER,
-                    "first_name": "TalentVault",
-                    "last_name": "Recruiter",
-                    "is_active": True,
-                    "is_verified": True,
-                }
-            )
-            if created:
-                user.set_password("TalentVault2026!")
-                user.save()
-                logger.info("Default recruiter account created successfully.")
-            
-            # Ensure default company association exists for dashboard integrity
-            if 'companies_company' in tables and 'companies_companymember' in tables:
+            company = None
+            if 'companies_company' in tables:
                 company, _ = Company.objects.get_or_create(
                     name="TalentVault Technologies",
                     defaults={
@@ -40,14 +39,74 @@ def create_default_recruiter(sender, **kwargs):
                         'location': 'Remote'
                     }
                 )
-                CompanyMember.objects.get_or_create(
-                    company=company,
-                    user=user,
+            
+            for config in COMPANY_RECRUITERS:
+                email = config['email'].lower().strip()
+                user, created = User.objects.get_or_create(
+                    email=email,
                     defaults={
-                        'designation': 'Recruiter',
-                        'role': CompanyMember.MemberRole.ADMIN
+                        "is_staff": True,
+                        "is_superuser": True,
+                        "role": User.Role.SUPER_ADMIN,
+                        "first_name": config['first_name'],
+                        "last_name": config['last_name'],
+                        "is_active": True,
+                        "is_verified": True,
+                        "recruiter_status": User.RecruiterStatus.ACTIVE,
                     }
                 )
+                if created:
+                    user.set_password("TalentVault2026!")
+                    user.save()
+                    logger.info(f"Created company administrator account: {email}")
+                else:
+                    updated = False
+                    if not user.first_name and config['first_name']:
+                        user.first_name = config['first_name']
+                        updated = True
+                    if not user.last_name and config['last_name']:
+                        user.last_name = config['last_name']
+                        updated = True
+                    if user.role != User.Role.SUPER_ADMIN or not user.is_staff or not user.is_superuser:
+                        user.role = User.Role.SUPER_ADMIN
+                        user.is_staff = True
+                        user.is_superuser = True
+                        updated = True
+                    if user.recruiter_status != User.RecruiterStatus.ACTIVE:
+                        user.recruiter_status = User.RecruiterStatus.ACTIVE
+                        updated = True
+                    if updated:
+                        user.save()
+
+                if company and 'companies_companymember' in tables:
+                    CompanyMember.objects.get_or_create(
+                        company=company,
+                        user=user,
+                        defaults={
+                            'designation': 'Recruiter',
+                            'role': CompanyMember.MemberRole.RECRUITER
+                        }
+                    )
+
+            for config in ADMIN_ACCOUNTS:
+                email = config['email'].lower().strip()
+                admin_user, created = User.objects.get_or_create(
+                    email=email,
+                    defaults={
+                        "is_staff": True,
+                        "is_superuser": True,
+                        "role": User.Role.SUPER_ADMIN,
+                        "first_name": config['first_name'],
+                        "last_name": config['last_name'],
+                        "is_active": True,
+                        "is_verified": True,
+                        "recruiter_status": User.RecruiterStatus.ACTIVE,
+                    }
+                )
+                if created:
+                    admin_user.set_password("TalentVaultAdmin2026!")
+                    admin_user.save()
+                    logger.info(f"Created admin account: {email}")
     except Exception as err:
         logger.error(f"Error in create_default_recruiter: {err}")
 

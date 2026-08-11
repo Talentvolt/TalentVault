@@ -76,7 +76,7 @@
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-ai_parsing">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
-                        <span>AI Parsing...</span>
+                        <span>Automatic Parsing...</span>
                     </li>
                     <li class="list-group-item d-flex align-items-center py-3 text-muted" id="stage-saving_candidate">
                         <span class="stage-icon me-3"><i class="bi bi-circle"></i></span>
@@ -117,9 +117,12 @@
                 
                 <!-- Error Card -->
                 <div id="errorCard" class="alert alert-danger border-danger d-none" role="alert">
-                    <h5 class="alert-heading fw-bold mb-2 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Parsing Failed</h5>
-                    <p class="mb-0 text-dark" id="errorMessage">-</p>
-                    <button type="button" id="resetParserErrorBtn" class="btn btn-outline-danger fw-bold mt-3 px-4">Try Again</button>
+                    <h5 class="alert-heading fw-bold mb-2 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Automatic Parsing Failed</h5>
+                    <p class="mb-0 text-dark" id="errorMessage">Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details.</p>
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" id="manualParseFallbackBtn" class="btn btn-primary fw-bold px-4"><i class="bi bi-pencil-square me-2"></i>Manual Parsing</button>
+                        <button type="button" id="resetParserErrorBtn" class="btn btn-outline-secondary fw-bold px-4">Try Again</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -387,6 +390,18 @@ document.addEventListener("DOMContentLoaded", function() {
     
     resetParserBtn.addEventListener("click", resetFormState);
     resetParserErrorBtn.addEventListener("click", resetFormState);
+    
+    const manualParseFallbackBtn = document.getElementById("manualParseFallbackBtn");
+    if (manualParseFallbackBtn) {
+        manualParseFallbackBtn.addEventListener("click", function() {
+            const manualForm = document.getElementById("manualSaveForm");
+            if (manualForm) {
+                manualForm.scrollIntoView({ behavior: 'smooth' });
+                const nameField = document.getElementById("id_full_name");
+                if (nameField) nameField.focus();
+            }
+        });
+    }
     
     function updateStage(stageName, status) {
         const el = document.getElementById(`stage-${stageName}`);

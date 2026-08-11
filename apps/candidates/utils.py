@@ -765,7 +765,7 @@ def copy_storage_file(source_field, target_path):
 
     return False
 
-def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None, user=None):
+def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None, user=None, uploaded_by=None):
     import time
     import uuid
     import traceback
@@ -773,6 +773,11 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
     t_process_start = time.time()
     request_id = str(uuid.uuid4())[:8]
     filename = sanitize_text(filename, "filename")
+
+    if user and not uploaded_by:
+        if getattr(user, 'role', '') != User.Role.CANDIDATE:
+            uploaded_by = user
+            user = None
     
     logger.info(f"[TIMING] [{request_id}] START Upload: {filename}")
     print(f"[TIMING] [{request_id}] START Upload: {filename}")
@@ -855,10 +860,10 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 progress_callback("reading_pdf")
                 progress_callback("extracting_text")
             
-            # Execute with 45s total OCR timeout guard
+            # Execute with 12s total OCR timeout guard
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 fut = pool.submit(ResumeIntelligenceService.run_ocr_pipeline, file_bytes, filename)
-                ocr_result = fut.result(timeout=45.0)
+                ocr_result = fut.result(timeout=12.0)
                 
             text = ocr_result["text"]
             t_ocr = time.time() - t_ocr_start
@@ -867,21 +872,16 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             print(f"[TIMING] [{request_id}] END OCR / Extract Text: {filename} (took {t_ocr:.4f}s)")
         except concurrent.futures.TimeoutError:
             t_ocr = time.time() - t_ocr_start
-            stack_info = "".join(traceback.format_stack())
-            logger.error(f"HANG DETECTED: [{request_id}] Step: Extract Text | File: {filename} | OCR pipeline exceeded 45s timeout.\nStack:\n{stack_info}")
-            print(f"HANG DETECTED: [{request_id}] Step: Extract Text | File: {filename} | OCR pipeline exceeded 45s timeout.")
-            print(stack_info)
-            # Fallback to empty text structure instead of failing
+            logger.warning(f"[RESUME PARSER] OCR timeout for {filename}")
+            logger.info(f"[RESUME PARSER] Automatic parsing failed — manual parsing available for {filename}")
             ocr_result = {"text": "", "engine": "Timeout Fallback", "confidence": 0.0, "resume_type": "UNKNOWN", "largest_bold_name": None}
             text = ""
         except Exception as e:
             t_ocr = time.time() - t_ocr_start
             tb = traceback.format_exc()
             logger.error(f"[PARSER OCR FAILURE] [{request_id}] Step: Extract Text | File: {filename} | Type: {type(e).__name__} | Error: {str(e)}\n{tb}")
-            print(f"=== PARSER ERROR AT Extract Text ===")
-            print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
-            print(tb)
-            return None, "OCR_FAILED"
+            logger.info(f"[RESUME PARSER] Automatic parsing failed — manual parsing available for {filename}")
+            return None, "AUTOMATIC_PARSING_FAILED"
         
         # Check overall timing guard
         if time.time() - t_process_start > 60.0:
@@ -1462,18 +1462,17 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                 profile.preview_status = "READY"
 
             try:
+                from services.resume_storage_service import upload_and_verify_resume, copy_and_verify_original_resume
                 save_filename = security_data.get("secure_filename") if (security_data and security_data.get("secure_filename")) else filename
-                profile.resume.save(save_filename, ContentFile(file_bytes), save=False)
+                saved_key, _ = upload_and_verify_resume(file_bytes, save_filename)
+                profile.resume.name = saved_key
                 
-                # Copy file inside storage instead of duplicate upload
-                target_key = "resumes/original/original_" + os.path.basename(profile.resume.name)
-                if copy_storage_file(profile.resume, target_key):
-                    profile.original_file.name = target_key
-                else:
-                    profile.original_file.save("original_" + save_filename, ContentFile(file_bytes), save=False)
-                    
-                logger.info(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {save_filename}")
-                print(f"[PARSER FILE SAVE SUCCESS] Physical files saved: {save_filename}")
+                original_key = copy_and_verify_original_resume(saved_key, save_filename)
+                if original_key:
+                    profile.original_file.name = original_key
+                
+                logger.info(f"[PARSER FILE SAVE SUCCESS] Verified S3 object: {saved_key}")
+                print(f"[PARSER FILE SAVE SUCCESS] Verified S3 object: {saved_key}")
                 
                 if photo_bytes is None:
                     logger.info("[PHOTO] No valid candidate portrait found.")
@@ -1484,8 +1483,14 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                     logger.info(f"[PARSER PHOTO SAVE SUCCESS] Extracted and saved profile photo for {profile.full_name}")
                     print(f"[PARSER PHOTO SAVE SUCCESS] Extracted and saved profile photo for {profile.full_name}")
             except Exception as e:
-                logger.error(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}", exc_info=True)
-                print(f"[PARSER FILE SAVE ERROR] Error saving resume file to disk: {str(e)}")
+                logger.error(f"[PARSER FILE SAVE ERROR] Error saving resume file to S3: {str(e)}", exc_info=True)
+                print(f"[PARSER FILE SAVE ERROR] Error saving resume file to S3: {str(e)}")
+                return None, "SAVE_FAILED"
+            
+            if uploaded_by:
+                profile.uploaded_by = uploaded_by
+                if not profile.created_by:
+                    profile.created_by = uploaded_by
             
             profile.save()
             t_profile = time.time() - t_profile_start
@@ -1624,9 +1629,14 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         print(f"[PARSER DATABASE SAVE FAILURE] Exception Traceback in process_resume_file:\n{tb}")
         return None, "SAVE_FAILED"
 
-def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None, user=None):
+def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None, user=None, uploaded_by=None):
     from utils.security import perform_all_security_validations, log_upload_attempt, SecurityValidationError
     
+    if user and not uploaded_by:
+        if getattr(user, 'role', '') != User.Role.CANDIDATE:
+            uploaded_by = user
+            user = None
+
     results = {'created': [], 'duplicates': 0, 'duplicate_profiles': [], 'errors': 0, 'error_reasons': []}
     
     try:
@@ -1634,7 +1644,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
             uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
     except Exception as e:
-        log_upload_attempt(uploaded_file.name, None, user, "ERROR", "ERROR", f"Read error: {str(e)}")
+        log_upload_attempt(uploaded_file.name, None, uploaded_by or user, "ERROR", "ERROR", f"Read error: {str(e)}")
         raise ValueError("Error reading file bytes.")
 
     sha256 = hashlib.sha256(file_bytes).hexdigest()
@@ -1643,13 +1653,13 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
         # Perform all security validations
         security_data = perform_all_security_validations(file_bytes, uploaded_file.name)
         # Log successful upload scan
-        log_upload_attempt(uploaded_file.name, sha256, user, "CLEAN", "CLEAN")
+        log_upload_attempt(uploaded_file.name, sha256, uploaded_by or user, "CLEAN", "CLEAN")
     except SecurityValidationError as e:
         # Log rejected attempt
-        log_upload_attempt(uploaded_file.name, sha256, user, "INFECTED" if "Virus" in str(e) else "CLEAN", "INFECTED" if "Malware" in str(e) else "CLEAN", str(e))
+        log_upload_attempt(uploaded_file.name, sha256, uploaded_by or user, "INFECTED" if "Virus" in str(e) else "CLEAN", "INFECTED" if "Malware" in str(e) else "CLEAN", str(e))
         raise ValueError(str(e))
     except Exception as e:
-        log_upload_attempt(uploaded_file.name, sha256, user, "ERROR", "ERROR", str(e))
+        log_upload_attempt(uploaded_file.name, sha256, uploaded_by or user, "ERROR", "ERROR", str(e))
         raise ValueError(str(e))
 
     ext = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
@@ -1657,8 +1667,9 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
     reason_map = {
         "INVALID_FORMAT": "Invalid file format. Supported: PDF, DOC, DOCX, RTF, TXT.",
         "READ_ERROR": "Error reading file bytes.",
-        "OCR_FAILED": "OCR engine extraction failed.",
-        "NLP_FAILED": "NLP parsing/extraction failed.",
+        "OCR_FAILED": "Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details.",
+        "AUTOMATIC_PARSING_FAILED": "Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details.",
+        "NLP_FAILED": "Resume could not be parsed automatically. Please use Manual Parsing to enter the candidate details.",
         "SAVE_FAILED": "Database save failed.",
         "SECURITY_FAILED": "Security validation failed."
     }
@@ -1691,7 +1702,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
                         
                         file_obj = io.BytesIO(sub_bytes)
                         profile, status = process_resume_file(
-                            file_obj, filename, overwrite, progress_callback, security_data=sub_security_data, user=user
+                            file_obj, filename, overwrite, progress_callback, security_data=sub_security_data, user=user, uploaded_by=uploaded_by
                         )
                         
                         if status == "SUCCESS":
@@ -1709,7 +1720,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
     else:
         file_obj = io.BytesIO(file_bytes)
         profile, status = process_resume_file(
-            file_obj, uploaded_file.name, overwrite, progress_callback, security_data=security_data, user=user
+            file_obj, uploaded_file.name, overwrite, progress_callback, security_data=security_data, user=user, uploaded_by=uploaded_by
         )
         if status == "SUCCESS":
             results['created'].append(profile)

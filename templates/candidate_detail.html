@@ -233,6 +233,10 @@ ul.resume-bullets li, ol.resume-ordered li {
                                 <span><strong>Current CTC:</strong> {{ candidate.current_salary_lpa }}</span>
                                 <span><strong>Expected CTC:</strong> {{ candidate.expected_salary_lpa }}</span>
                                 <span><strong>Notice Period:</strong> {{ candidate.notice_period }} Days</span>
+                                {% if candidate.uploader_name %}
+                                    <span><strong>Added By:</strong> {{ candidate.uploader_name }}</span>
+                                {% endif %}
+                                <span><strong>Added On:</strong> {{ candidate.created_at|date:"d M Y" }}</span>
                             </div>
                         </div>
                         

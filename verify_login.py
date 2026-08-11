@@ -21,7 +21,7 @@ def run_verification():
     print("GET login page: SUCCESS (200 OK)")
 
     # 2. Test POST request with default recruiter credentials
-    email = "growfluencestudio@gmail.com"
+    email = "snehal.2020technologies@gmail.com"
     password = "TalentVault2026!"
     
     # Let's verify user exists

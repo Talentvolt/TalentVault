@@ -35,7 +35,7 @@ _PADDLE_AVAILABLE_CACHE = None
 _PADDLE_LOCK = threading.Lock()
 _OCR_CACHE = {}
 
-def get_paddle_ocr_instance(timeout_seconds=15):
+def get_paddle_ocr_instance(timeout_seconds=8):
     global GLOBAL_PADDLE_OCR, _PADDLE_AVAILABLE_CACHE
     if _PADDLE_AVAILABLE_CACHE is False:
         return None
@@ -49,6 +49,7 @@ def get_paddle_ocr_instance(timeout_seconds=15):
             return None
 
         if importlib.util.find_spec("paddleocr") is None:
+            logger.info("[RESUME PARSER] OCR skipped")
             _PADDLE_AVAILABLE_CACHE = False
             return None
 
@@ -75,7 +76,7 @@ def get_paddle_ocr_instance(timeout_seconds=15):
             )
 
         t0 = time.time()
-        logger.info("[PADDLEOCR INIT] Initializing singleton PaddleOCR instance...")
+        logger.info("[RESUME PARSER] Initializing PaddleOCR")
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_init_paddle)
@@ -85,15 +86,13 @@ def get_paddle_ocr_instance(timeout_seconds=15):
                 logger.info(f"[PADDLEOCR INIT SUCCESS] PaddleOCR initialized in {time.time() - t0:.2f}s.")
                 return GLOBAL_PADDLE_OCR
         except concurrent.futures.TimeoutError:
-            import traceback
-            stack_info = "".join(traceback.format_stack())
-            logger.error(f"HANG DETECTED: PaddleOCR initialization timed out (> {timeout_seconds}s).\nStack:\n{stack_info}")
-            print(f"HANG DETECTED: PaddleOCR initialization timed out (> {timeout_seconds}s).\nStack:\n{stack_info}")
+            logger.warning(f"[RESUME PARSER] OCR initialization timeout")
+            logger.warning("[RESUME PARSER] OCR skipped")
             _PADDLE_AVAILABLE_CACHE = False
             GLOBAL_PADDLE_OCR = None
             return None
         except Exception as e:
-            logger.info(f"PaddleOCR C++ runtime unavailable ({e}). Fallbacks active.")
+            logger.warning(f"[RESUME PARSER] OCR skipped ({e})")
             _PADDLE_AVAILABLE_CACHE = False
             GLOBAL_PADDLE_OCR = None
             return None
@@ -1540,7 +1539,7 @@ class ResumeIntelligenceService:
                 logger.error(f"PyMuPDF direct extraction failed: {e}")
 
             # Optimization 1: Conditional PDF text extraction fallbacks
-            if len(text_pymupdf.strip()) > 100:
+            if len(text_pymupdf.strip()) >= 50:
                 merged_text = text_pymupdf
             else:
                 text_pdfplumber = ""
@@ -1552,7 +1551,7 @@ class ResumeIntelligenceService:
                             if page_text: text_pdfplumber += page_text + "\n"
                 except Exception as e: logger.error(f"pdfplumber extraction failed: {e}")
 
-                if len(text_pdfplumber.strip()) > 100:
+                if len(text_pdfplumber.strip()) >= 50:
                     merged_text = ResumeIntelligenceService.merge_extracted_texts(text_pdfplumber, "", "")
                 else:
                     text_pdfminer = ""
@@ -1562,9 +1561,11 @@ class ResumeIntelligenceService:
                     except Exception as e: logger.error(f"pdfminer.six extraction failed: {e}")
                     merged_text = ResumeIntelligenceService.merge_extracted_texts(text_pdfplumber, text_pdfminer, "")
 
-            if len(merged_text.strip()) > 100:
+            if len(merged_text.strip()) >= 50:
+                logger.info(f"[RESUME PARSER] Text extraction successful for {filename}")
                 return {"text": merged_text, "engine": "pymupdf+pdfplumber+pdfminer", "confidence": 99.0, "resume_type": "EDITABLE_PDF", "largest_bold_name": largest_bold_name}
             else:
+                logger.info(f"[RESUME PARSER] OCR required for {filename}")
                 resume_type, used_engine = 'IMAGE', "Scanned PDF (OCR Required)"
 
         image_list = []

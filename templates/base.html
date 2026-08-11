@@ -194,7 +194,7 @@
         <div class="sidebar-footer">
             <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-2.5 overflow-hidden">
-                    <img src="{% if request.user.is_authenticated and request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={% if request.user.is_authenticated %}{{ request.user.email|urlencode }}{% else %}Guest{% endif %}{% endif %}" class="rounded-circle border border-2 border-primary border-opacity-50 flex-shrink-0" width="40" height="40" alt="Avatar">
+                    <img src="{% if request.user.is_authenticated and request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email|urlencode }}{% else %}Guest{% endif %}{% endif %}" class="rounded-circle border border-2 border-primary border-opacity-50 flex-shrink-0" width="40" height="40" alt="Avatar">
                     <div class="d-flex flex-column text-start overflow-hidden">
                         <span class="fw-bold text-white lh-sm text-truncate" style="font-size: 0.85rem;">{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email }}{% else %}Guest{% endif %}</span>
                         <span class="text-secondary small text-truncate" style="font-size: 0.72rem; color: #94a3b8 !important;">{% if request.user.is_authenticated %}{{ request.user.company_affiliations.first.company.name|default:"TalentVault Technologies" }}{% else %}TalentVault{% endif %}</span>
@@ -206,7 +206,7 @@
                         <i class="bi bi-three-dots-vertical text-white-50 fs-6"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0" style="background: #1e293b; border: 1px solid rgba(255,255,255,0.1) !important;">
-                        <li><a class="dropdown-item text-white-50" href="#"><i class="bi bi-person me-2"></i> My Profile</a></li>
+                        <li><a class="dropdown-item text-white-50" href="{% url 'frontend:settings' %}"><i class="bi bi-person me-2"></i> My Profile</a></li>
                         <li><a class="dropdown-item text-white-50" href="{% url 'frontend:settings' %}"><i class="bi bi-gear me-2"></i> Settings</a></li>
                         <li><hr class="dropdown-divider border-secondary opacity-25"></li>
                         <li>
@@ -248,7 +248,7 @@
                 
                 <div class="dropdown">
                     <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" data-bs-toggle="dropdown">
-                        <img src="{% if request.user.is_authenticated and request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={% if request.user.is_authenticated %}{{ request.user.email|urlencode }}{% else %}Guest{% endif %}{% endif %}" class="rounded-circle me-3" width="38" height="38" alt="Avatar">
+                        <img src="{% if request.user.is_authenticated and request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email|urlencode }}{% else %}Guest{% endif %}{% endif %}" class="rounded-circle me-3" width="38" height="38" alt="Avatar">
                         <div class="d-flex flex-column text-start me-2">
                             <span class="fw-bold text-dark lh-sm" style="font-size: 0.85rem;">{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email }}{% else %}Guest{% endif %}</span>
                             <span class="text-muted small" style="font-size: 0.72rem;">{% if request.user.is_authenticated %}{{ request.user.company_affiliations.first.company.name|default:"TalentVault Technologies" }}{% else %}TalentVault{% endif %}</span>
