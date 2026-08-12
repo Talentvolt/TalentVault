@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="100%" height="100%">
+    <g>
+        <polygon points="28,12 33,23 44,24 36,32 39,44 28,37 17,44 20,32 12,24 23,23" fill="#d97706"/>
+        <text x="56" y="27" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="17" fill="#0f172a">BONANZA</text>
+        <text x="56" y="42" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="8" fill="#64748b" letter-spacing="0.8">PORTFOLIO</text>
+    </g>
+</svg>

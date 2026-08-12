@@ -131,87 +131,58 @@ class LandingPageView(TemplateView):
             
         context['popular_searches'] = popular_chips
         
-        # Company dataset extracted directly from client spreadsheet image organized by industry
+        # Deduplicated company dataset with 1 card per company identity
         trusted_dataset = [
-            # Logistics
-            {"name": "Shipglobal", "industry": "Logistics"},
-            {"name": "Freight System", "industry": "Logistics"},
-            {"name": "Vanguard", "industry": "Logistics"},
-            {"name": "Quickshift", "industry": "Logistics"},
-            {"name": "Wheelseye", "industry": "Logistics"},
-            {"name": "Fleetx.io", "industry": "Logistics"},
-
-            # Automotive
-            {"name": "Lumax Group", "industry": "Automotive"},
-            {"name": "Cars24", "industry": "Automotive"},
-            {"name": "Spinny", "industry": "Automotive"},
-            {"name": "Rane Group", "industry": "Automotive"},
-            {"name": "DriveX", "industry": "Automotive"},
-            {"name": "Hero Group", "industry": "Automotive"},
-            {"name": "TVS Group", "industry": "Automotive"},
-            {"name": "Vutto", "industry": "Automotive"},
-            {"name": "91 Trucks", "industry": "Automotive"},
-            {"name": "ATI Motors", "industry": "Automotive"},
-
-            # Fintech
-            {"name": "Cars24 Financial", "industry": "Fintech"},
-            {"name": "Ambak", "industry": "Fintech"},
-            {"name": "Ayefinance", "industry": "Fintech"},
-            {"name": "Truck Loans", "industry": "Fintech"},
-            {"name": "Indusind Bank", "industry": "Fintech"},
-            {"name": "Motilal oswal", "industry": "Fintech"},
-            {"name": "Bonanza", "industry": "Fintech"},
-            {"name": "Onsurity", "industry": "Fintech"},
-            {"name": "Spinny", "industry": "Fintech"},
-
-            # Internet
-            {"name": "Expertpanel", "industry": "Internet"},
-            {"name": "ACT Fibernet", "industry": "Internet"},
-            {"name": "Zingbus", "industry": "Internet"},
-            {"name": "Apna", "industry": "Internet"},
-            {"name": "Justdail", "industry": "Internet"},
-            {"name": "Unicorn Denmart", "industry": "Internet"},
-            {"name": "Redbus", "industry": "Internet"},
-            {"name": "TechXR", "industry": "Internet"},
-            {"name": "EchoVME", "industry": "Internet"},
-
-            # Manufacturing
-            {"name": "Murugappa Group", "industry": "Manufacturing"},
-            {"name": "Lumax Group", "industry": "Manufacturing"},
-            {"name": "Hero Group", "industry": "Manufacturing"},
-            {"name": "Rane Group", "industry": "Manufacturing"},
-            {"name": "Buy Commodity", "industry": "Manufacturing"},
-            {"name": "CUMI", "industry": "Manufacturing"},
-
-            # Internationally
-            {"name": "Vame", "industry": "Internationally"},
-            {"name": "Cars24 Australia", "industry": "Internationally"},
-
-            # Edtech
-            {"name": "Scaler Academy", "industry": "Edtech"},
-            {"name": "Entri", "industry": "Edtech"},
-            {"name": "Suraasa", "industry": "Edtech"},
-            {"name": "Hero Vired", "industry": "Edtech"},
-
-            # Hospitality
-            {"name": "OYO", "industry": "Hospitality"},
-            {"name": "Zingbus", "industry": "Hospitality"},
-            {"name": "Redbus", "industry": "Hospitality"},
-
-            # SaaS
-            {"name": "Gumlet", "industry": "SaaS"},
-            {"name": "Magicpin", "industry": "SaaS"},
-            {"name": "Apna", "industry": "SaaS"},
-            {"name": "CloudFuze", "industry": "SaaS"},
-            {"name": "Netcore Software", "industry": "SaaS"},
-            {"name": "Smartwinnr", "industry": "SaaS"},
-
-            # FMCG
-            {"name": "Meshr", "industry": "FMCG"},
-
-            # Real Estate
-            {"name": "Alyf", "industry": "Real Estate"},
-            {"name": "Nobroker", "industry": "Real Estate"},
+            {"name": "ShipGlobal", "industry": "Logistics", "logo": "images/client_logos/shipglobal.png", "website": "https://shipglobal.in/"},
+            {"name": "Lumax", "industry": "Automotive", "logo": "images/client_logos/lumax-group.png", "website": "https://www.lumaxworld.in/"},
+            {"name": "CARS24", "industry": "Automotive", "logo": "images/client_logos/cars24.png", "website": "https://www.cars24.com/", "sub_label": "FINANCIAL"},
+            {"name": "CARS24 Australia", "industry": "Internationally", "logo": "images/client_logos/cars24.png", "website": "https://www.cars24.com/au/", "sub_label": "AUSTRALIA"},
+            {"name": "ExpertPanel", "industry": "Internet", "logo": "images/client_logos/expertpanel.svg", "website": "https://www.expertpanel.in/"},
+            {"name": "Murugappa", "industry": "Manufacturing", "logo": "images/client_logos/murugappa-group.svg", "website": "https://www.murugappa.com/"},
+            {"name": "Vame", "industry": "Internationally", "logo": "images/client_logos/vame.svg", "website": "https://www.vame.in/"},
+            {"name": "Scaler Academy", "industry": "Edtech", "logo": "images/client_logos/scaler-academy.svg", "website": "https://www.scaler.com/"},
+            {"name": "OYO", "industry": "Hospitality", "logo": "images/client_logos/oyo.png", "website": "https://www.oyorooms.com/"},
+            {"name": "Gumlet", "industry": "SaaS", "logo": "images/client_logos/gumlet.svg", "website": "https://www.gumlet.com/"},
+            {"name": "Meshr", "industry": "FMCG", "logo": "images/client_logos/meshr.png", "website": "https://www.meshr.in/"},
+            {"name": "Alyfy Freight System", "industry": "Logistics", "logo": "images/client_logos/alyf.svg", "website": "https://alyfy.com/"},
+            {"name": "Ambak", "industry": "Fintech", "logo": "images/client_logos/ambak.png", "website": "https://ambak.com/"},
+            {"name": "ACT Fibernet", "industry": "Internet", "logo": "images/client_logos/act-fibernet.svg", "website": "https://www.actcorp.in/"},
+            {"name": "Entri", "industry": "Edtech", "logo": "images/client_logos/entri.svg", "website": "https://entri.app/"},
+            {"name": "Zingbus", "industry": "Internet", "logo": "images/client_logos/zingbus.svg", "website": "https://www.zingbus.com/"},
+            {"name": "magicpin", "industry": "SaaS", "logo": "images/client_logos/magicpin.svg", "website": "https://magicpin.in/"},
+            {"name": "NoBroker Vanguard", "industry": "Real Estate", "logo": "images/client_logos/nobroker.svg", "website": "https://www.nobroker.in/"},
+            {"name": "Spinny", "industry": "Automotive", "logo": "images/client_logos/spinny.svg", "website": "https://www.spinny.com/"},
+            {"name": "Aye Finance", "industry": "Fintech", "logo": "images/client_logos/ayefinance.svg", "website": "https://www.ayefin.com/"},
+            {"name": "Hero Group", "industry": "Automotive", "logo": "images/client_logos/hero-group.svg", "website": "https://www.herogroup.com/"},
+            {"name": "Suraasa", "industry": "Edtech", "logo": "images/client_logos/suraasa.svg", "website": "https://www.suraasa.com/"},
+            {"name": "redBus", "industry": "Internet", "logo": "images/client_logos/redbus.svg", "website": "https://www.redbus.in/"},
+            {"name": "apna", "industry": "Internet", "logo": "images/client_logos/apna.svg", "website": "https://apna.co/"},
+            {"name": "QuickShift", "industry": "Logistics", "logo": "images/client_logos/quickshift.svg", "website": "https://quickshift.in/"},
+            {"name": "Rane", "industry": "Automotive", "logo": "images/client_logos/rane-group.svg", "website": "https://www.rane.co.in/"},
+            {"name": "Truck Loans", "industry": "Fintech", "logo": "images/client_logos/truck-loans.svg", "website": "https://www.truckloans.in/"},
+            {"name": "Wired", "industry": "Internet", "logo": "images/client_logos/wired.svg", "website": "https://www.wired.com/"},
+            {"name": "CloudFuze", "industry": "SaaS", "logo": "images/client_logos/cloudfuze.svg", "website": "https://www.cloudfuze.com/"},
+            {"name": "WheelsEye", "industry": "Logistics", "logo": "images/client_logos/wheelseye.svg", "website": "https://wheelseye.com/"},
+            {"name": "DriveX", "industry": "Automotive", "logo": "images/client_logos/drivex.svg", "website": "https://www.drivex.in/"},
+            {"name": "IndusInd Bank", "industry": "Fintech", "logo": "images/client_logos/indusind-bank.jpg", "website": "https://www.indusind.com/"},
+            {"name": "Justdial", "industry": "Internet", "logo": "images/client_logos/justdial.svg", "website": "https://www.justdial.com/"},
+            {"name": "BuyY Commodity", "industry": "Manufacturing", "logo": "images/client_logos/buy-commodity.svg", "website": "https://buyy.com/"},
+            {"name": "Netcore", "industry": "SaaS", "logo": "images/client_logos/netcore-software.svg", "website": "https://netcorecloud.com/"},
+            {"name": "FleetX.io", "industry": "Logistics", "logo": "images/client_logos/fleetx-io.svg", "website": "https://fleetx.com/"},
+            {"name": "Motilal Oswal", "industry": "Fintech", "logo": "images/client_logos/motilal-oswal.svg", "website": "https://www.motilaloswal.com/"},
+            {"name": "Unicorn DenMart", "industry": "Internet", "logo": "images/client_logos/unicorn-denmart.svg", "website": "https://unicorndenmart.com/"},
+            {"name": "CUMI", "industry": "Manufacturing", "logo": "images/client_logos/cumi.svg", "website": "https://www.cumi-murugappa.com/"},
+            {"name": "SmartWinnr", "industry": "SaaS", "logo": "images/client_logos/smartwinnr.svg", "website": "https://smartwinnr.com/"},
+            {"name": "TVS", "industry": "Automotive", "logo": "images/client_logos/tvs-group.png", "website": "https://www.tvsmotor.com/"},
+            {"name": "Bonanza", "industry": "Fintech", "logo": "images/client_logos/bonanza.svg", "website": "https://www.bonanzaonline.com/"},
+            {"name": "Vutto", "industry": "Automotive", "logo": "images/client_logos/vutto.svg", "website": "https://vutto.in/"},
+            {"name": "Insurity", "industry": "Fintech", "logo": "images/client_logos/onsurity.svg", "website": "https://insurity.com/"},
+            {"name": "TECHXR", "industry": "Internet", "logo": "images/client_logos/techxr.png", "website": "https://techxr.co/"},
+            {"name": "91TRUCKS", "industry": "Automotive", "logo": "images/client_logos/91-trucks.svg", "website": "https://www.91trucks.com/"},
+            {"name": "EchoVME", "industry": "Internet", "logo": "images/client_logos/echovme.svg", "website": "https://echovme.in/"},
+            {"name": "ATI Motors", "industry": "Automotive", "logo": "images/client_logos/ati-motors.svg", "website": "https://atimotors.com/"},
+            {"name": "MG / Morris Garages", "industry": "Automotive", "logo": "images/client_logos/mg.svg", "website": "https://www.mgmotor.co.in/"},
+            {"name": "Lenskart", "industry": "Retail", "logo": "images/client_logos/lenskart.jpg", "website": "https://www.lenskart.com/"}
         ]
         
         context['trusted_employers'] = trusted_dataset
@@ -228,22 +199,31 @@ class LandingPageView(TemplateView):
         
         # Guarantee records exist in Company and Client models
         from apps.clients.models import Client
+        from django.utils.text import slugify
         for item in trusted_dataset:
             cname = item['name']
             ind = item['industry']
-            Company.objects.get_or_create(
-                name=cname,
-                defaults={
-                    'slug': cname.lower().replace(' ', '-').replace('.', '-'),
-                    'description': f'{cname} ({ind})',
-                    'location': 'India',
-                    'industry': ind
-                }
-            )
-            Client.objects.get_or_create(
-                company_name=cname,
-                defaults={'spoc_name': f'{cname} HR', 'industry': 'OTHERS'}
-            )
+            c_slug = slugify(cname) or cname.lower().replace(' ', '-').replace('.', '-')
+            if not Company.objects.filter(slug=c_slug).exists() and not Company.objects.filter(name=cname).exists():
+                try:
+                    Company.objects.create(
+                        name=cname,
+                        slug=c_slug,
+                        description=f'{cname} ({ind})',
+                        location='India',
+                        industry=ind
+                    )
+                except Exception:
+                    pass
+            if not Client.objects.filter(company_name=cname).exists():
+                try:
+                    Client.objects.create(
+                        company_name=cname,
+                        spoc_name=f'{cname} HR',
+                        industry='OTHERS'
+                    )
+                except Exception:
+                    pass
             
         return context
 

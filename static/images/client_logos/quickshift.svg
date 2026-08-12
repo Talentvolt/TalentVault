@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="100%" height="100%">
+    <g>
+        <path d="M28 10L14 30H26L20 50L40 26H26L34 10Z" fill="#e11d48"/>
+        <text x="56" y="27" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="14" fill="#1e293b">QuickShift</text>
+        <text x="56" y="42" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="8" fill="#64748b" letter-spacing="0.8">LOGISTICS</text>
+    </g>
+</svg>

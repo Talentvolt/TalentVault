@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="100%" height="100%">
+    <g>
+        <path d="M14 14L42 22L28 32L44 44L14 34V14Z" fill="#1d4ed8"/><path d="M22 18L36 22L26 28L36 36L20 30V18Z" fill="#dc2626"/>
+        <text x="56" y="27" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="17" fill="#dc2626">TVS</text>
+        <text x="56" y="42" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="8" fill="#64748b" letter-spacing="0.8">GROUP</text>
+    </g>
+</svg>

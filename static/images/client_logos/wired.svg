@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="100%" height="100%">
+    <g>
+        <rect x="12" y="16" width="32" height="28" rx="4" fill="#0f172a"/><line x1="18" y1="24" x2="38" y2="24" stroke="#ffffff" stroke-width="3"/><line x1="18" y1="30" x2="34" y2="30" stroke="#ffffff" stroke-width="3"/><line x1="18" y1="36" x2="38" y2="36" stroke="#ffffff" stroke-width="3"/>
+        <text x="56" y="27" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="17" fill="#2563eb">WIRED</text>
+        <text x="56" y="42" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="8" fill="#64748b" letter-spacing="0.8">ENTERPRISE</text>
+    </g>
+</svg>

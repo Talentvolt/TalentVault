@@ -55,26 +55,27 @@ class LandingPageRealDataTest(TestCase):
         
         # Verify spreadsheet image companies exist in trusted_employers context
         trusted = [item['name'] for item in response.context['trusted_employers']]
-        self.assertIn('Shipglobal', trusted)
-        self.assertIn('Cars24', trusted)
+        self.assertIn('ShipGlobal', trusted)
+        self.assertIn('CARS24', trusted)
         self.assertIn('OYO', trusted)
-        self.assertIn('Apna', trusted)
-        self.assertIn('Nobroker', trusted)
+        self.assertIn('apna', trusted)
+        self.assertIn('NoBroker Vanguard', trusted)
         self.assertIn('CUMI', trusted)
         self.assertIn('Meshr', trusted)
+        self.assertIn('Ambak', trusted)
+        self.assertIn('Lenskart', trusted)
         
-        # Verify old 7-company list and TCS/Infosys/Lenskart/Prince Pipes are NOT in the dataset
+        # Verify old 7-company list and TCS/Infosys/Prince Pipes are NOT in the dataset
         self.assertNotIn('TCS', trusted)
         self.assertNotIn('Infosys', trusted)
         self.assertNotIn('Wipro', trusted)
         self.assertNotIn('Accenture', trusted)
-        self.assertNotIn('Lenskart', trusted)
         self.assertNotIn('Prince Pipes', trusted)
         
         # Verify response HTML content
         content = response.content.decode('utf-8')
-        self.assertIn('Shipglobal', content)
-        self.assertIn('Cars24', content)
+        self.assertIn('ShipGlobal', content)
+        self.assertIn('CARS24', content)
         self.assertIn('https://www.linkedin.com/company/talent-vault-tech/about/?viewAsMember=true', content)
         self.assertIn('https://www.instagram.com/talentvault2020?igsh=OWsydm1wMXdmZGtq', content)
         self.assertNotIn('twitter-x', content)
@@ -120,3 +121,19 @@ class LandingPageRealDataTest(TestCase):
         content = response.content.decode('utf-8')
         self.assertNotIn('password', content)
         self.assertNotIn('SECRET_KEY', content)
+
+    def test_client_logos_http_200(self):
+        """Verify every client logo image rendered on landing page returns 200 OK"""
+        import re
+        response = self.client.get(reverse('frontend:dashboard'))
+        content = response.content.decode('utf-8')
+        img_srcs = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', content)
+        logo_srcs = [src for src in img_srcs if 'client_logos' in src]
+        self.assertGreater(len(logo_srcs), 0, "No client logo images found in HTML")
+        
+        for src in logo_srcs:
+            self.assertNotIn('png.svg', src, f"Malformed logo URL: {src}")
+            self.assertNotIn('svg.svg', src, f"Malformed logo URL: {src}")
+            res = self.client.get(src)
+            self.assertEqual(res.status_code, 200, f"Client logo image failed to load (404): {src}")
+

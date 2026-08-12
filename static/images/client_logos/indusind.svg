@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="100%" height="100%">
+    <g>
+        <path d="M16 20C16 16 24 14 32 14C40 14 44 20 44 28V42H38V34H32V42H26V34H20V42H16V20Z" fill="#991b1b"/><path d="M38 28C40 28 44 30 44 36" stroke="#d97706" stroke-width="4" fill="none"/>
+        <text x="56" y="30" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="12" fill="#d97706">IndusInd Bank</text>
+        
+    </g>
+</svg>
