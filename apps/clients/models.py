@@ -69,3 +69,12 @@ class Client(BaseAppModel):
 
     def __str__(self):
         return self.company_name
+
+    @property
+    def created_by_display(self):
+        if not self.created_by:
+            return "—"
+        full_name = self.created_by.get_full_name()
+        if full_name and full_name.strip():
+            return full_name.strip()
+        return self.created_by.email

@@ -43,9 +43,10 @@ def get_tenant_clients_qs(user):
         return Client.objects.filter(
             Q(created_by__company_affiliations__company=company) |
             Q(jobs__company=company) |
-            Q(created_by=user)
+            Q(created_by=user) |
+            Q(created_by__isnull=True)
         ).distinct()
-    return Client.objects.filter(created_by=user)
+    return Client.objects.filter(Q(created_by=user) | Q(created_by__isnull=True))
 
 def get_tenant_applications_qs(user):
     """Returns tenant-scoped Application queryset."""

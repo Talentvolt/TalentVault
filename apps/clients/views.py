@@ -1,4 +1,6 @@
 import logging
+from django.shortcuts import redirect
+from django.core.paginator import InvalidPage
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from apps.core.permissions import RecruiterRequiredMixin
 from django.urls import reverse_lazy
@@ -37,13 +39,69 @@ class ClientListView(RecruiterRequiredMixin, ListView):
             
         return queryset.order_by('company_name')
 
+    def get(self, request, *args, **kwargs):
+        self.object_list = self.get_queryset()
+        paginator = self.get_paginator(self.object_list, self.paginate_by)
+
+        page_kwarg = self.page_kwarg
+        page_raw = request.GET.get(page_kwarg)
+
+        if page_raw is not None:
+            try:
+                page_num = int(page_raw)
+            except (TypeError, ValueError):
+                params = request.GET.copy()
+                params[page_kwarg] = 1
+                return redirect(f"{request.path}?{params.urlencode()}")
+
+            max_pages = paginator.num_pages if paginator.num_pages > 0 else 1
+            if page_num < 1:
+                params = request.GET.copy()
+                params[page_kwarg] = 1
+                return redirect(f"{request.path}?{params.urlencode()}")
+            elif page_num > max_pages:
+                params = request.GET.copy()
+                params[page_kwarg] = max_pages
+                return redirect(f"{request.path}?{params.urlencode()}")
+
+        context = self.get_context_data(object_list=self.object_list)
+        return self.render_to_response(context)
+
+    def paginate_queryset(self, queryset, page_size):
+        paginator = self.get_paginator(queryset, page_size)
+        page_kwarg = self.page_kwarg
+        page = self.kwargs.get(page_kwarg) or self.request.GET.get(page_kwarg) or 1
+        try:
+            page_number = int(page)
+        except (TypeError, ValueError):
+            page_number = 1
+        
+        try:
+            page_obj = paginator.page(page_number)
+        except InvalidPage:
+            target_page = paginator.num_pages if paginator.num_pages > 0 else 1
+            page_obj = paginator.page(target_page)
+
+        return (paginator, page_obj, page_obj.object_list, page_obj.has_other_pages())
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Add search/filter selections back to template context
-        context['company_name'] = self.request.GET.get('company_name', '')
-        context['selected_industry'] = self.request.GET.get('industry', '')
-        context['selected_status'] = self.request.GET.get('status', '')
-        
+        # Search & Filter parameters
+        company_name = self.request.GET.get('company_name', '')
+        industry = self.request.GET.get('industry', '')
+        status = self.request.GET.get('status', '')
+
+        context['company_name'] = company_name
+        context['selected_industry'] = industry
+        context['selected_status'] = status
+
+        # Build encoded filter parameters query string (excluding 'page') for pagination links
+        get_params = self.request.GET.copy()
+        if 'page' in get_params:
+            del get_params['page']
+        encoded_filters = get_params.urlencode()
+        context['filter_params'] = f"&{encoded_filters}" if encoded_filters else ""
+
         # Add lists for the dropdown filter options
         context['industries'] = Client.Industry.choices
         context['statuses'] = Client.Status.choices

@@ -103,6 +103,10 @@
                             <td class="text-dark py-2">{{ client.get_company_size_display }} employees</td>
                         </tr>
                         <tr>
+                            <td class="text-secondary fw-medium py-2">Created By:</td>
+                            <td class="text-dark fw-semibold py-2">{{ client.created_by_display }}</td>
+                        </tr>
+                        <tr>
                             <td class="text-secondary fw-medium py-2">Date Added:</td>
                             <td class="text-dark py-2">{{ client.created_at|date:"M d, Y, g:i a" }}</td>
                         </tr>

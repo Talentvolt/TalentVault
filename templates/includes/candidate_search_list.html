@@ -184,7 +184,7 @@
             <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Add to Pipeline</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}">
+          <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}" onsubmit="return handleSingleAddToPipeline(event, '{{ candidate.id }}')">
             {% csrf_token %}
             <div class="modal-body text-dark">
                 <p class="small text-secondary mb-3">Shortlist candidate <strong>{{ candidate.full_name|default:candidate.user.email }}</strong> to an active role.</p>

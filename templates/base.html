@@ -386,6 +386,43 @@
                 closeAllDropdowns();
             });
         });
+
+        // Global Toast Notification Utility
+        function showToast(message, type = 'success') {
+            let container = document.getElementById('toast-container-global');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container-global';
+                container.className = 'position-fixed bottom-0 end-0 p-3';
+                container.style.zIndex = '9999';
+                document.body.appendChild(container);
+            }
+
+            const toastEl = document.createElement('div');
+            const bgClass = (type === 'danger' || type === 'error') ? 'bg-danger' : (type === 'warning' ? 'bg-warning text-dark' : 'bg-success');
+            toastEl.className = `toast align-items-center text-white ${bgClass} border-0 show shadow-lg mb-2`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            const icon = (type === 'danger' || type === 'error') ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill';
+
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body d-flex align-items-center gap-2 font-semibold">
+                        <i class="bi ${icon} fs-5"></i>
+                        <span>${message}</span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" aria-label="Close" onclick="this.closest('.toast').remove()"></button>
+                </div>
+            `;
+
+            container.appendChild(toastEl);
+            setTimeout(() => {
+                toastEl.classList.remove('show');
+                setTimeout(() => toastEl.remove(), 400);
+            }, 4000);
+        }
     </script>
     {% include "includes/candidate_messaging_modal.html" %}
     {% block extra_js %}{% endblock %}

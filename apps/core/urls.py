@@ -23,6 +23,7 @@ from .views import (
     CandidateDeleteView,
     CandidateRejectView,
     AddToPipelineView,
+    BulkAddToPipelineView,
     RemoveFromPipelineView,
     JobCandidatesView,
     SaveCandidateNotesView,
@@ -114,6 +115,7 @@ urlpatterns = [
     path('candidates/<uuid:id>/delete/', CandidateDeleteView.as_view(), name='candidate_delete'),
     path('candidates/<uuid:pk>/reject/', CandidateRejectView.as_view(), name='candidate_reject'),
     path('candidates/<uuid:pk>/add-to-pipeline/', AddToPipelineView.as_view(), name='add_to_pipeline'),
+    path('candidates/bulk-add-to-pipeline/', BulkAddToPipelineView.as_view(), name='bulk_add_to_pipeline'),
     path('remove-from-pipeline/<uuid:pk>/', RemoveFromPipelineView.as_view(), name='remove_from_pipeline'),
     path('candidates/<uuid:pk>/save-notes/', SaveCandidateNotesView.as_view(), name='save_candidate_notes'),
     

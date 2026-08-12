@@ -165,10 +165,10 @@
             <!-- Client Filter -->
             <div class="col-md-2">
                 <label for="client" class="form-label small fw-bold text-secondary">Client</label>
-                <select name="client" id="client" class="form-select form-select-sm fw-medium">
+                <select name="client" id="client" class="form-select form-select-sm fw-medium" onchange="this.form.submit()">
                     <option value="">All Clients</option>
                     {% for c in clients %}
-                        <option value="{{ c.id }}" {% if selected_client == c.id|stringformat:"s" %}selected{% endif %}>{{ c.company_name }}</option>
+                        <option value="{{ c.id }}" {% if selected_client == c.id|stringformat:"s" or selected_client|lower == c.company_name|lower or selected_client|slugify == c.company_name|slugify %}selected{% endif %}>{{ c.company_name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -197,7 +197,7 @@
             <!-- Job Type Filter -->
             <div class="col-md-2">
                 <label for="job_type" class="form-label small fw-bold text-secondary">Job Type</label>
-                <select name="job_type" id="job_type" class="form-select form-select-sm fw-medium">
+                <select name="job_type" id="job_type" class="form-select form-select-sm fw-medium" onchange="this.form.submit()">
                     <option value="">All Types</option>
                     {% for value, name in job_types %}
                         <option value="{{ value }}" {% if selected_job_type == value %}selected{% endif %}>{{ name }}</option>
@@ -208,7 +208,7 @@
             <!-- Sort By -->
             <div class="col-md-2">
                 <label for="sort_by" class="form-label small fw-bold text-secondary">Sort By</label>
-                <select name="sort_by" id="sort_by" class="form-select form-select-sm fw-medium">
+                <select name="sort_by" id="sort_by" class="form-select form-select-sm fw-medium" onchange="this.form.submit()">
                     <option value="-created_at" {% if selected_sort == '-created_at' %}selected{% endif %}>Newest First</option>
                     <option value="created_at" {% if selected_sort == 'created_at' %}selected{% endif %}>Oldest First</option>
                     <option value="title" {% if selected_sort == 'title' %}selected{% endif %}>Title A-Z</option>
@@ -350,7 +350,7 @@
             <nav>
                 <ul class="pagination pagination-sm m-0">
                     {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_job_type %}&job_type={{ selected_job_type }}{% endif %}{% if selected_sort %}&sort_by={{ selected_sort }}{% endif %}">Previous</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{{ filter_params }}">Previous</a></li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">Previous</span></li>
                     {% endif %}
@@ -359,12 +359,12 @@
                         {% if page_obj.number == num %}
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_job_type %}&job_type={{ selected_job_type }}{% endif %}{% if selected_sort %}&sort_by={{ selected_sort }}{% endif %}">{{ num }}</a></li>
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{{ filter_params }}">{{ num }}</a></li>
                         {% endif %}
                     {% endfor %}
                     
                     {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_job_type %}&job_type={{ selected_job_type }}{% endif %}{% if selected_sort %}&sort_by={{ selected_sort }}{% endif %}">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{{ filter_params }}">Next</a></li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">Next</span></li>
                     {% endif %}

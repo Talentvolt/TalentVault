@@ -199,34 +199,7 @@ class LandingPageView(TemplateView):
                 categories.append(cat)
         context['trusted_categories'] = categories
         
-        # Guarantee records exist in Company and Client models
-        from apps.clients.models import Client
-        from django.utils.text import slugify
-        for item in trusted_dataset:
-            cname = item['name']
-            ind = item['industry']
-            c_slug = slugify(cname) or cname.lower().replace(' ', '-').replace('.', '-')
-            if not Company.objects.filter(slug=c_slug).exists() and not Company.objects.filter(name=cname).exists():
-                try:
-                    Company.objects.create(
-                        name=cname,
-                        slug=c_slug,
-                        description=f'{cname} ({ind})',
-                        location='India',
-                        industry=ind
-                    )
-                except Exception:
-                    pass
-            if not Client.objects.filter(company_name=cname).exists():
-                try:
-                    Client.objects.create(
-                        company_name=cname,
-                        spoc_name=f'{cname} HR',
-                        industry='OTHERS'
-                    )
-                except Exception:
-                    pass
-            
+
         return context
 
 
@@ -739,9 +712,6 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
             job_title_words = set(re.findall(r'\w+', (selected_job.title or '').lower())) - TITLE_STOP_WORDS
 
             for cand in all_candidates:
-                analysis = CandidateMatchingService.calculate_job_ats_score(cand, selected_job)
-                score = analysis['total_score']
-
                 cand_skills = {s.skill_name.strip().lower() for s in cand.skills.all() if s.skill_name and s.skill_name.strip()}
                 matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
                 missing_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() not in cand_skills]
@@ -750,7 +720,7 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
                 title_overlap = bool(job_title_words.intersection(cand_title_words))
 
                 # Exclude unrelated candidates: candidate must have at least 1 matching skill OR title overlap
-                if len(matched_skill_names) == 0 and not title_overlap:
+                if len(matched_skill_names) == 0 and not title_overlap and selected_job.get_required_skills_list:
                     continue
 
                 if search_query:
@@ -768,14 +738,31 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
                 if location_param and location_param not in (cand.location or '').lower():
                     continue
 
+                total_req = len(selected_job.get_required_skills_list)
+                if total_req > 0:
+                    base_calc = int((len(matched_skill_names) / total_req) * 80)
+                    score = min(100, base_calc + (20 if title_overlap else 0))
+                else:
+                    score = cand.ats_score or 75
+
+                if score >= 80:
+                    match_label = 'Excellent Match'
+                    badge_class = 'bg-success text-white'
+                elif score >= 60:
+                    match_label = 'Good Match'
+                    badge_class = 'bg-warning text-dark'
+                else:
+                    match_label = 'Moderate Match'
+                    badge_class = 'bg-secondary text-white'
+
                 matched_candidates.append({
                     'candidate': cand,
                     'job': selected_job,
                     'match_score': score,
                     'matched_skills': matched_skill_names,
                     'missing_skills': missing_skill_names,
-                    'match_label': analysis['match_label'],
-                    'badge_class': analysis['badge_class'],
+                    'match_label': match_label,
+                    'badge_class': badge_class,
                 })
 
         if sort_by == 'match_desc':
@@ -970,6 +957,31 @@ class JobsView(ListView):
             return ['candidate_jobs.html']
         return ['jobs.html']
 
+    def get(self, request, *args, **kwargs):
+        # Handle invalid page numbers gracefully (Redirect instead of 404)
+        page_raw = request.GET.get(self.page_kwarg)
+        if page_raw is not None:
+            try:
+                page_num = int(page_raw)
+                if page_num < 1:
+                    params = request.GET.copy()
+                    params[self.page_kwarg] = 1
+                    return redirect(f"{request.path}?{params.urlencode()}")
+            except (TypeError, ValueError):
+                params = request.GET.copy()
+                params[self.page_kwarg] = 1
+                return redirect(f"{request.path}?{params.urlencode()}")
+
+        try:
+            return super().get(request, *args, **kwargs)
+        except Http404:
+            self.object_list = self.get_queryset()
+            paginator = self.get_paginator(self.object_list, self.paginate_by)
+            max_pages = paginator.num_pages if paginator.num_pages > 0 else 1
+            params = request.GET.copy()
+            params[self.page_kwarg] = max_pages
+            return redirect(f"{request.path}?{params.urlencode()}")
+
     def get_queryset(self):
         is_candidate_or_guest = not self.request.user.is_authenticated or getattr(self.request.user, 'role', None) == 'CANDIDATE'
         
@@ -1063,37 +1075,63 @@ class JobsView(ListView):
             
             # Search
             q = self.request.GET.get('q', '') or self.request.GET.get('search', '') or self.request.GET.get('keyword', '')
+            q = q.strip()
             if q:
-                queryset = queryset.filter(Q(title__icontains=q) | Q(description__icontains=q))
+                queryset = queryset.filter(
+                    Q(title__icontains=q) |
+                    Q(description__icontains=q) |
+                    Q(department__icontains=q) |
+                    Q(location__icontains=q) |
+                    Q(company__name__icontains=q) |
+                    Q(client__company_name__icontains=q)
+                )
                 
             # Filters
-            status = self.request.GET.get('status', '')
+            status = self.request.GET.get('status', '').strip()
             if status:
                 queryset = queryset.filter(status=status)
             else:
                 queryset = queryset.exclude(status='CLOSED')
                 
-            job_type = self.request.GET.get('job_type', '')
+            job_type = self.request.GET.get('job_type', '').strip()
             if job_type:
                 queryset = queryset.filter(job_type=job_type)
                 
-            # Client filter
-            client_id = self.request.GET.get('client', '')
-            if client_id:
-                queryset = queryset.filter(client_id=client_id)
+            # Client filter (Supports UUID, company_name, and slugified name)
+            client_filter = self.request.GET.get('client', '').strip()
+            if client_filter:
+                import uuid
+                try:
+                    client_uuid = uuid.UUID(client_filter)
+                    queryset = queryset.filter(client_id=client_uuid)
+                except ValueError:
+                    clean_name = client_filter.replace('-', ' ').strip()
+                    queryset = queryset.filter(
+                        Q(client__company_name__icontains=client_filter) |
+                        Q(client__company_name__icontains=clean_name) |
+                        Q(company__name__icontains=client_filter) |
+                        Q(company__name__icontains=clean_name)
+                    )
                 
             # Sorting
-            sort_by = self.request.GET.get('sort_by', '-created_at')
+            sort_by = self.request.GET.get('sort_by', '-created_at').strip()
             if sort_by in ['title', '-title', 'created_at', '-created_at', 'app_count', '-app_count']:
                 queryset = queryset.order_by(sort_by)
             else:
                 queryset = queryset.order_by('-created_at')
                 
-            return queryset
+            return queryset.distinct()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
+        # Build encoded filter parameters query string (excluding 'page') for pagination links
+        get_params = self.request.GET.copy()
+        if 'page' in get_params:
+            del get_params['page']
+        encoded_filters = get_params.urlencode()
+        context['filter_params'] = f"&{encoded_filters}" if encoded_filters else ""
+
         # Pre-generate absolute share URLs using request.build_absolute_uri()
         jobs_list = context.get('jobs', [])
         for job in jobs_list:
@@ -1466,10 +1504,14 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             candidate.latest_application = apps_list[0] if apps_list else None
             
             if selected_job:
-                try:
-                    candidate.match_details = CandidateMatchingService.calculate_job_ats_score(candidate, selected_job)
-                except Exception:
-                    candidate.match_details = None
+                cand_skills = {s.skill_name.strip().lower() for s in candidate.skills.all() if s.skill_name and s.skill_name.strip()}
+                matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
+                total_req = len(selected_job.get_required_skills_list)
+                if total_req > 0:
+                    score = min(100, int((len(matched_skill_names) / total_req) * 100))
+                else:
+                    score = candidate.ats_score or 75
+                candidate.match_details = {'total_score': score, 'matched_skills': matched_skill_names}
             else:
                 candidate.match_details = None
                 
@@ -2634,6 +2676,80 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
         if next_url:
             return redirect(next_url)
         return redirect('frontend:ats_pipeline')
+
+
+class BulkAddToPipelineView(RecruiterRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        import json
+        candidate_ids = request.POST.getlist('candidate_ids') or request.POST.getlist('candidate_ids[]')
+        job_id = request.POST.get('job_id')
+
+        if not candidate_ids and request.POST.get('candidate_ids'):
+            candidate_ids = [c.strip() for c in request.POST.get('candidate_ids').split(',') if c.strip()]
+
+        if not candidate_ids and request.content_type == 'application/json':
+            try:
+                body = json.loads(request.body)
+                job_id = job_id or body.get('job_id')
+                candidate_ids = body.get('candidate_ids', [])
+            except Exception:
+                pass
+
+        if not candidate_ids:
+            return JsonResponse({
+                "success": False,
+                "message": "Please select at least one candidate."
+            }, status=400)
+
+        if not job_id:
+            return JsonResponse({
+                "success": False,
+                "message": "Please select a job opening."
+            }, status=400)
+
+        job = get_object_or_404(Job, id=job_id)
+
+        from django.db import transaction
+        added_count = 0
+        skipped_count = 0
+
+        with transaction.atomic():
+            candidates = CandidateProfile.objects.filter(id__in=candidate_ids)
+            for candidate in candidates:
+                application, created = Application.objects.get_or_create(
+                    candidate=candidate,
+                    job=job,
+                    defaults={'stage': 'OPEN', 'in_pipeline': True}
+                )
+                if created:
+                    added_count += 1
+                    Notification.objects.create(
+                        recipient=request.user,
+                        title="Candidate Added to Pipeline",
+                        message=f"Candidate {candidate.full_name or candidate.user.email} was added to the {job.title} pipeline.",
+                        notification_type='APPLICATION_STATUS'
+                    )
+                else:
+                    if not application.in_pipeline:
+                        application.in_pipeline = True
+                        application.save(update_fields=['in_pipeline'])
+                        added_count += 1
+                    else:
+                        skipped_count += 1
+
+        if added_count > 0 and skipped_count == 0:
+            msg = f"{added_count} candidate{'s' if added_count > 1 else ''} added to pipeline successfully."
+        elif added_count > 0 and skipped_count > 0:
+            msg = f"{added_count} candidate{'s' if added_count > 1 else ''} added ({skipped_count} candidate{'s' if skipped_count > 1 else ''} already in pipeline)."
+        else:
+            msg = "Candidate is already in this pipeline."
+
+        return JsonResponse({
+            "success": True,
+            "added_count": added_count,
+            "skipped_count": skipped_count,
+            "message": msg
+        })
 
 
 class RemoveFromPipelineView(RecruiterRequiredMixin, View):

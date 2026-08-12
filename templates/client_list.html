@@ -55,6 +55,7 @@
                         <th class="ps-4 py-3">Company Name</th>
                         <th class="py-3">SPOC / HR</th>
                         <th class="py-3">Industry</th>
+                        <th class="py-3">Created By</th>
                         <th class="py-3">Email & Phone</th>
                         <th class="py-3 text-center">Open Jobs</th>
                         <th class="py-3">Status</th>
@@ -79,6 +80,9 @@
                         </td>
                         <td>
                             <span class="badge bg-light text-dark border">{{ client.get_industry_display }}</span>
+                        </td>
+                        <td>
+                            <span class="small text-dark fw-medium">{{ client.created_by_display }}</span>
                         </td>
                         <td>
                             <div class="small"><i class="bi bi-envelope me-1 text-secondary"></i>{{ client.email|default:"N/A" }}</div>
@@ -119,7 +123,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center py-5 text-secondary">
+                        <td colspan="9" class="text-center py-5 text-secondary">
                             <i class="bi bi-building fs-1 d-block mb-3 text-secondary-50"></i>
                             No clients found matching the search criteria.
                         </td>
@@ -130,13 +134,14 @@
         </div>
         
         <!-- Pagination -->
-        {% if is_paginated %}
+        {% if paginator.count > 0 %}
         <div class="d-flex justify-content-between align-items-center p-3 border-top">
-            <span class="small text-secondary">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} clients</span>
+            <span class="small text-secondary">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} client{% if page_obj.paginator.count != 1 %}s{% endif %}</span>
+            {% if is_paginated %}
             <nav>
                 <ul class="pagination pagination-sm m-0">
                     {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if company_name %}&company_name={{ company_name }}{% endif %}{% if selected_industry %}&industry={{ selected_industry }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Previous</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{{ filter_params }}">Previous</a></li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">Previous</span></li>
                     {% endif %}
@@ -145,17 +150,18 @@
                         {% if page_obj.number == num %}
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if company_name %}&company_name={{ company_name }}{% endif %}{% if selected_industry %}&industry={{ selected_industry }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">{{ num }}</a></li>
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{{ filter_params }}">{{ num }}</a></li>
                         {% endif %}
                     {% endfor %}
                     
                     {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if company_name %}&company_name={{ company_name }}{% endif %}{% if selected_industry %}&industry={{ selected_industry }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{{ filter_params }}">Next</a></li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">Next</span></li>
                     {% endif %}
                 </ul>
             </nav>
+            {% endif %}
         </div>
         {% endif %}
     </div>
