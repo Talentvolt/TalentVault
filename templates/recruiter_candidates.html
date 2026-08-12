@@ -44,12 +44,33 @@
                 </select>
             </div>
 
-            <!-- Search Input -->
+            <!-- Search Input with Autocomplete -->
             <div class="col-lg-3">
                 <label class="form-label fw-bold small text-muted mb-1">Search Candidates</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-secondary"></i></span>
-                    <input type="text" name="q" value="{{ search_query }}" class="form-control border-start-0" placeholder="Skills, title, candidate name...">
+                <div class="position-relative w-100">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-secondary"></i></span>
+                        <input type="text" 
+                               name="q" 
+                               id="recruiter-candidate-search-input"
+                               value="{{ search_query }}" 
+                               class="form-control border-start-0 border-end-0" 
+                               placeholder="Skills, title, candidate name..."
+                               autocomplete="off">
+                        <button type="button" 
+                                id="recruiter-clear-search-btn" 
+                                class="input-group-text bg-light border-start-0 text-muted {% if not search_query %}d-none{% endif %}" 
+                                title="Clear Search"
+                                style="cursor: pointer;">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                    </div>
+
+                    <!-- Autocomplete Suggestions Dropdown -->
+                    <div id="recruiter-autocomplete-dropdown" 
+                         class="dropdown-menu shadow-lg border border-light-subtle rounded-3 w-100 mt-1 py-1 d-none" 
+                         style="max-height: 360px; overflow-y: auto; z-index: 1050; position: absolute; left: 0; right: 0;">
+                    </div>
                 </div>
             </div>
 
@@ -197,4 +218,160 @@
         {% endfor %}
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('recruiter-candidate-search-input');
+        const clearBtn = document.getElementById('recruiter-clear-search-btn');
+        const dropdown = document.getElementById('recruiter-autocomplete-dropdown');
+
+        if (!input || !dropdown) return;
+
+        let debounceTimer = null;
+        let activeIndex = -1;
+
+        function closeAutocomplete() {
+            dropdown.classList.add('d-none');
+            dropdown.innerHTML = '';
+            activeIndex = -1;
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        function renderAutocompleteResults(results, query) {
+            if (!results || results.length === 0) {
+                dropdown.innerHTML = `
+                    <div class="p-3 text-center text-muted x-small">
+                        <i class="bi bi-search me-1"></i> No candidates found for "<strong>${escapeHtml(query)}</strong>"
+                    </div>`;
+                dropdown.classList.remove('d-none');
+                activeIndex = -1;
+                return;
+            }
+
+            let html = '';
+            results.forEach((item, idx) => {
+                let skillBadges = (item.matched_skills || []).map(s => `<span class="badge bg-light text-secondary border border-light-subtle x-small me-1">${escapeHtml(s)}</span>`).join('');
+                html += `
+                    <div class="autocomplete-item p-2 border-bottom d-flex align-items-center justify-content-between" style="cursor: pointer;" data-index="${idx}" data-url="${item.url}" data-name="${escapeHtml(item.name)}">
+                        <div class="d-flex align-items-center gap-2 overflow-hidden me-2">
+                            <div class="rounded-circle bg-primary bg-opacity-10 text-primary fw-bold small d-flex align-items-center justify-content-center flex-shrink-0" style="width: 32px; height: 32px;">${escapeHtml(item.avatar)}</div>
+                            <div class="overflow-hidden">
+                                <div class="fw-bold text-dark x-small text-truncate m-0">${escapeHtml(item.name)}</div>
+                                <div class="text-secondary x-small text-truncate">${escapeHtml(item.title)}${item.location ? ' &bull; ' + escapeHtml(item.location) : ''}</div>
+                                ${skillBadges ? '<div class="mt-0.5">' + skillBadges + '</div>' : ''}
+                            </div>
+                        </div>
+                        <i class="bi bi-arrow-return-left text-muted x-small"></i>
+                    </div>`;
+            });
+
+            dropdown.innerHTML = html;
+            dropdown.classList.remove('d-none');
+            activeIndex = -1;
+
+            dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+                el.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    const name = this.getAttribute('data-name');
+                    if (name) input.value = name;
+                    closeAutocomplete();
+                    if (url) {
+                        window.location.href = url;
+                    }
+                });
+            });
+        }
+
+        function fetchAutocompleteSuggestions(query) {
+            fetch(`/api/candidates/autocomplete/?q=${encodeURIComponent(query)}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                renderAutocompleteResults(data.results, query);
+            })
+            .catch(err => {
+                dropdown.innerHTML = '<div class="p-2 text-center text-danger x-small">Unable to search candidates. Please try again.</div>';
+                dropdown.classList.remove('d-none');
+            });
+        }
+
+        input.addEventListener('input', function() {
+            const val = this.value.trim();
+            
+            if (val.length > 0) {
+                if (clearBtn) clearBtn.classList.remove('d-none');
+            } else {
+                if (clearBtn) clearBtn.classList.add('d-none');
+                closeAutocomplete();
+                return;
+            }
+
+            if (val.length < 2) {
+                closeAutocomplete();
+                return;
+            }
+
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchAutocompleteSuggestions(val);
+            }, 300);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (!items || items.length === 0 || dropdown.classList.contains('d-none')) {
+                if (e.key === 'Escape') {
+                    closeAutocomplete();
+                }
+                return;
+            }
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'Enter') {
+                if (activeIndex >= 0 && items[activeIndex]) {
+                    e.preventDefault();
+                    items[activeIndex].click();
+                }
+            } else if (e.key === 'Escape') {
+                closeAutocomplete();
+            }
+        });
+
+        function updateActiveItem(items) {
+            items.forEach((item, idx) => {
+                if (idx === activeIndex) {
+                    item.classList.add('bg-light');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('bg-light');
+                }
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                input.value = '';
+                clearBtn.classList.add('d-none');
+                closeAutocomplete();
+            });
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                closeAutocomplete();
+            }
+        });
+    });
+</script>
 {% endblock %}

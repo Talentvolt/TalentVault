@@ -396,42 +396,112 @@
                 max-width: 40px;
             }
         }
+        /* Infinite Horizontal Client Marquee Styling */
+        .client-marquee-container {
+            overflow: hidden;
+            position: relative;
+            width: 100%;
+            padding: 8px 0;
+            -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+            mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+        }
+
+        .client-marquee-row {
+            display: flex;
+            white-space: nowrap;
+            overflow: hidden;
+            width: 100%;
+            margin-bottom: 16px;
+        }
+        .client-marquee-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .client-marquee-track {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: max-content;
+            will-change: transform;
+        }
+
+        @keyframes marqueeLeft {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        @keyframes marqueeRight {
+            0% {
+                transform: translateX(-50%);
+            }
+            100% {
+                transform: translateX(0);
+            }
+        }
+
+        .slide-left .client-marquee-track {
+            animation: marqueeLeft 32s linear infinite;
+        }
+
+        .slide-right .client-marquee-track {
+            animation: marqueeRight 38s linear infinite;
+        }
+
+        /* Pause row animation when user hovers over a row or track */
+        .client-marquee-row:hover .client-marquee-track,
+        .client-marquee-track:hover {
+            animation-play-state: paused !important;
+        }
+
+        .client-marquee-item {
+            flex: 0 0 auto;
+            width: 175px;
+        }
+
         .company-logo-card {
             background: #ffffff;
             border: 1px solid #e2e8f0;
-            padding: 16px 20px;
+            padding: 14px 18px;
             border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 95px;
+            height: 92px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
             position: relative;
             overflow: hidden;
             text-decoration: none;
             color: inherit;
             cursor: pointer;
         }
+
         .company-logo-card:hover, .company-logo-card:focus {
             border-color: #cbd5e1;
-            box-shadow: 0 10px 22px -4px rgba(0, 0, 0, 0.08);
-            transform: translateY(-3px);
+            box-shadow: 0 10px 22px -4px rgba(0, 0, 0, 0.1);
+            transform: translateY(-4px) scale(1.03);
             outline: none;
             text-decoration: none;
             color: inherit;
         }
+
         .company-logo-img {
             max-width: 85%;
-            max-height: 52px;
+            max-height: 48px;
             width: auto;
             height: auto;
             object-fit: contain;
             transition: transform 0.25s ease;
         }
+
         .company-logo-card:hover .company-logo-img {
             transform: scale(1.04);
         }
+
         .company-sub-label {
             font-size: 8px;
             font-weight: 500;
@@ -442,6 +512,22 @@
             text-transform: uppercase;
             line-height: 1;
             display: block;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .client-marquee-track {
+                animation: none !important;
+                transform: none !important;
+            }
+            .client-marquee-row {
+                flex-wrap: wrap;
+                justify-content: center;
+                overflow: visible;
+            }
+            .client-marquee-container {
+                mask-image: none;
+                -webkit-mask-image: none;
+            }
         }
         .employer-cat-pill {
             background: rgba(124, 58, 237, 0.06);
@@ -957,37 +1043,111 @@
                 {% endfor %}
             </div>
 
-            <!-- Company Logo Cards Grid -->
-            <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3 justify-content-center" id="company-cards-grid">
-                {% for company in trusted_employers %}
-                <div class="col company-card-wrapper" data-industry="{{ company.industry }}">
-                    <a href="{{ company.website|default:'#' }}" 
-                       target="_blank" 
-                       rel="noopener noreferrer" 
-                       class="company-logo-card text-decoration-none" 
-                       title="{{ company.name }}">
-                        <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
-                            <img src="{% static company.logo %}" 
-                                 alt="{{ company.name }} Logo" 
-                                 class="company-logo-img"
-                                 loading="lazy">
-                            {% if company.sub_label %}
-                            <span class="company-sub-label">{{ company.sub_label }}</span>
+            <!-- Infinite Multi-Row Marquee Container -->
+            <div class="client-marquee-container overflow-hidden position-relative py-2" id="client-marquee-viewport">
+                <div class="client-marquee-rows" id="client-marquee-rows">
+                    <!-- Row 1: Left Slide -->
+                    <div class="client-marquee-row slide-left">
+                        <div class="client-marquee-track" style="animation-duration: 30s;">
+                            {% for company in trusted_employers %}
+                            {% if forloop.counter0|divisibleby:3 %}
+                            <div class="client-marquee-item">
+                                <a href="{{ company.website|default:'#' }}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="{{ company.name }}">
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                        <img src="{% static company.logo %}" alt="{{ company.name }} Logo" class="company-logo-img" loading="lazy">
+                                        {% if company.sub_label %}
+                                        <span class="company-sub-label">{{ company.sub_label }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
                             {% endif %}
+                            {% endfor %}
+                            {% for company in trusted_employers %}
+                            {% if forloop.counter0|divisibleby:3 %}
+                            <div class="client-marquee-item">
+                                <a href="{{ company.website|default:'#' }}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="{{ company.name }}">
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                        <img src="{% static company.logo %}" alt="{{ company.name }} Logo" class="company-logo-img" loading="lazy">
+                                        {% if company.sub_label %}
+                                        <span class="company-sub-label">{{ company.sub_label }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
                         </div>
-                        <span class="company-logo-fallback fw-bold text-dark" style="display:none; font-size: 0.95rem; line-height: 1.2;">{{ company.name }}</span>
-                    </a>
-                </div>
-                {% empty %}
-                <div class="col"><div class="company-logo-card"><span class="fw-bold text-muted">No Companies Available</span></div></div>
-                {% endfor %}
-            </div>
+                    </div>
 
-            <!-- View More / Toggle Control -->
-            <div class="mt-4" id="company-cards-controls">
-                <button type="button" id="toggle-companies-btn" onclick="toggleShowAllCompanies()" class="btn btn-outline-purple px-4 py-2" style="font-size: 0.95rem; border-radius: 14px;">
-                    Show More Companies (<span id="hidden-count">0</span>)
-                </button>
+                    <!-- Row 2: Right Slide -->
+                    <div class="client-marquee-row slide-right">
+                        <div class="client-marquee-track" style="animation-duration: 36s;">
+                            {% for company in trusted_employers %}
+                            {% if forloop.counter0|add:"-1"|divisibleby:3 %}
+                            <div class="client-marquee-item">
+                                <a href="{{ company.website|default:'#' }}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="{{ company.name }}">
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                        <img src="{% static company.logo %}" alt="{{ company.name }} Logo" class="company-logo-img" loading="lazy">
+                                        {% if company.sub_label %}
+                                        <span class="company-sub-label">{{ company.sub_label }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                            {% for company in trusted_employers %}
+                            {% if forloop.counter0|add:"-1"|divisibleby:3 %}
+                            <div class="client-marquee-item">
+                                <a href="{{ company.website|default:'#' }}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="{{ company.name }}">
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                        <img src="{% static company.logo %}" alt="{{ company.name }} Logo" class="company-logo-img" loading="lazy">
+                                        {% if company.sub_label %}
+                                        <span class="company-sub-label">{{ company.sub_label }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Left Slide -->
+                    <div class="client-marquee-row slide-left">
+                        <div class="client-marquee-track" style="animation-duration: 32s;">
+                            {% for company in trusted_employers %}
+                            {% if forloop.counter0|add:"-2"|divisibleby:3 %}
+                            <div class="client-marquee-item">
+                                <a href="{{ company.website|default:'#' }}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="{{ company.name }}">
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                        <img src="{% static company.logo %}" alt="{{ company.name }} Logo" class="company-logo-img" loading="lazy">
+                                        {% if company.sub_label %}
+                                        <span class="company-sub-label">{{ company.sub_label }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                            {% for company in trusted_employers %}
+                            {% if forloop.counter0|add:"-2"|divisibleby:3 %}
+                            <div class="client-marquee-item">
+                                <a href="{{ company.website|default:'#' }}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="{{ company.name }}">
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                        <img src="{% static company.logo %}" alt="{{ company.name }} Logo" class="company-logo-img" loading="lazy">
+                                        {% if company.sub_label %}
+                                        <span class="company-sub-label">{{ company.sub_label }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -1383,63 +1543,83 @@
             });
         }
 
-        // Employer Category Filtering & Page Limiting
+        // Infinite Horizontal Client Marquee
+        const ALL_CLIENTS = {% if trusted_employers_json %}{{ trusted_employers_json|safe }}{% else %}[]{% endif %};
         let currentEmployerFilter = 'All';
-        let isShowingAllEmployers = false;
-        const EMPLOYER_PER_PAGE = 18;
 
-        function updateCompanyCardsVisibility() {
-            const wrappers = document.querySelectorAll('.company-card-wrapper');
-            let matching = [];
-
-            wrappers.forEach(el => {
-                const ind = el.getAttribute('data-industry');
-                if (currentEmployerFilter === 'All' || ind === currentEmployerFilter) {
-                    matching.push(el);
-                } else {
-                    el.style.display = 'none';
-                }
-            });
-
-            matching.forEach((el, index) => {
-                if (!isShowingAllEmployers && index >= EMPLOYER_PER_PAGE) {
-                    el.style.display = 'none';
-                } else {
-                    el.style.display = 'block';
-                }
-            });
-
-            const toggleBtn = document.getElementById('toggle-companies-btn');
-            const hiddenCountSpan = document.getElementById('hidden-count');
-
-            if (matching.length > EMPLOYER_PER_PAGE) {
-                if (toggleBtn) toggleBtn.style.display = 'inline-block';
-                const remaining = matching.length - EMPLOYER_PER_PAGE;
-                if (isShowingAllEmployers) {
-                    if (toggleBtn) toggleBtn.innerText = 'Show Less';
-                } else {
-                    if (hiddenCountSpan) hiddenCountSpan.innerText = remaining;
-                    if (toggleBtn) toggleBtn.innerHTML = `Show More Companies (${remaining})`;
-                }
-            } else {
-                if (toggleBtn) toggleBtn.style.display = 'none';
+        function buildClientMarquee(filterCategory) {
+            const rowsContainer = document.getElementById('client-marquee-rows');
+            if (!rowsContainer) return;
+            
+            let category = filterCategory || currentEmployerFilter || 'All';
+            let matching = ALL_CLIENTS.filter(c => category === 'All' || c.industry === category);
+            
+            if (matching.length === 0) {
+                rowsContainer.innerHTML = '<div class="text-muted py-4 fw-semibold">No companies available for this category</div>';
+                return;
             }
+
+            // Distribute companies across 3 rows for 'All' or appropriate rows for filtered categories
+            let numRows = matching.length >= 9 ? 3 : (matching.length >= 4 ? 2 : 1);
+            let rowChunks = Array.from({ length: numRows }, () => []);
+            
+            matching.forEach((comp, idx) => {
+                rowChunks[idx % numRows].push(comp);
+            });
+
+            let html = '';
+            const rowDurations = ['30s', '36s', '32s'];
+            const directions = ['slide-left', 'slide-right', 'slide-left'];
+
+            rowChunks.forEach((chunk, rIdx) => {
+                if (chunk.length === 0) return;
+                const dirClass = directions[rIdx % directions.length];
+                const dur = rowDurations[rIdx % rowDurations.length];
+                
+                const renderCard = (c) => `
+                    <div class="client-marquee-item">
+                        <a href="${c.website || '#'}" target="_blank" rel="noopener noreferrer" class="company-logo-card text-decoration-none" title="${c.name}">
+                            <div class="d-flex flex-column align-items-center justify-content-center w-100 h-100">
+                                <img src="/static/${c.logo}" alt="${c.name} Logo" class="company-logo-img" loading="lazy">
+                                ${c.sub_label ? `<span class="company-sub-label">${c.sub_label}</span>` : ''}
+                            </div>
+                        </a>
+                    </div>
+                `;
+                
+                let chunkCards = chunk.map(renderCard).join('');
+                let trackItemsHtml = chunkCards;
+                
+                // Ensure track has enough items to span wide viewports smoothly before doubling
+                while ((trackItemsHtml.match(/client-marquee-item/g) || []).length < 14) {
+                    trackItemsHtml += chunkCards;
+                }
+                
+                // Double the track for 100% seamless infinite scroll: translateX(0) -> translateX(-50%)
+                const fullTrackHtml = trackItemsHtml + trackItemsHtml;
+
+                html += `
+                    <div class="client-marquee-row ${dirClass}">
+                        <div class="client-marquee-track" style="animation-duration: ${dur};">
+                            ${fullTrackHtml}
+                        </div>
+                    </div>
+                `;
+            });
+
+            rowsContainer.innerHTML = html;
         }
 
         function filterEmployers(category, btn) {
             currentEmployerFilter = category;
-            isShowingAllEmployers = false;
             document.querySelectorAll('.employer-cat-pill').forEach(p => p.classList.remove('active'));
             if (btn) btn.classList.add('active');
-            updateCompanyCardsVisibility();
+            buildClientMarquee(category);
         }
 
-        function toggleShowAllCompanies() {
-            isShowingAllEmployers = !isShowingAllEmployers;
-            updateCompanyCardsVisibility();
-        }
-
-        document.addEventListener('DOMContentLoaded', updateCompanyCardsVisibility);
+        document.addEventListener('DOMContentLoaded', function() {
+            buildClientMarquee('All');
+        });
     </script>
 </body>
 </html>

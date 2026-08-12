@@ -17,6 +17,7 @@ from .views import (
     JobDeleteView,
     LocationSearchView,
     CandidateSearchView,
+    CandidateAutocompleteView,
     CandidateDetailView,
     CandidateUpdateView,
     CandidateDeleteView,
@@ -107,6 +108,7 @@ urlpatterns = [
     path('location-search/', LocationSearchView.as_view(), name='location_search'),
     
     path('candidates/', CandidateSearchView.as_view(), name='candidate_search'),
+    path('api/candidates/autocomplete/', CandidateAutocompleteView.as_view(), name='candidate_autocomplete'),
     path('candidates/<uuid:pk>/', CandidateDetailView.as_view(), name='candidate_detail'),
     path('candidates/<uuid:pk>/edit/', CandidateUpdateView.as_view(), name='candidate_edit'),
     path('candidates/<uuid:id>/delete/', CandidateDeleteView.as_view(), name='candidate_delete'),

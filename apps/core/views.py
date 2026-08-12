@@ -185,7 +185,9 @@ class LandingPageView(TemplateView):
             {"name": "Lenskart", "industry": "Retail", "logo": "images/client_logos/lenskart.jpg", "website": "https://www.lenskart.com/"}
         ]
         
+        import json
         context['trusted_employers'] = trusted_dataset
+        context['trusted_employers_json'] = json.dumps(trusted_dataset)
         
         # Unique ordered list of categories for UI filters
         categories = []
@@ -1287,29 +1289,40 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             )
         )
         
-        # 1. Search Filter (q)
-        q = self.request.GET.get('q')
-        if q and q.strip():
-            q_clean = q.strip()
+        # 1. Candidate Name Filter (name or q)
+        name = self.request.GET.get('name') or self.request.GET.get('q')
+        has_name_rank = False
+        if name and name.strip():
+            n_clean = name.strip()
+            has_name_rank = True
+            from django.db.models import Case, When, Value, IntegerField
             queryset = queryset.filter(
-                Q(full_name__icontains=q_clean) |
-                Q(user__first_name__icontains=q_clean) |
-                Q(user__last_name__icontains=q_clean) |
-                Q(user__email__icontains=q_clean) |
-                Q(user__phone_number__icontains=q_clean) |
-                Q(current_company__icontains=q_clean) |
-                Q(current_designation__icontains=q_clean) |
-                Q(location__icontains=q_clean) |
-                Q(preferred_location__icontains=q_clean) |
-                Q(summary__icontains=q_clean) |
-                Q(raw_resume_text__icontains=q_clean) |
-                Q(original_summary__icontains=q_clean) |
-                Q(ai_summary__icontains=q_clean) |
-                Q(skills__skill_name__icontains=q_clean) |
-                Q(experiences__company_name__icontains=q_clean) |
-                Q(experiences__designation__icontains=q_clean) |
-                Q(job_applications__job__title__icontains=q_clean) |
-                Q(job_applications__mobile_number__icontains=q_clean)
+                Q(full_name__icontains=n_clean) |
+                Q(user__first_name__icontains=n_clean) |
+                Q(user__last_name__icontains=n_clean) |
+                Q(user__email__icontains=n_clean) |
+                Q(user__phone_number__icontains=n_clean)
+            ).annotate(
+                name_match_rank=Case(
+                    When(full_name__iexact=n_clean, then=Value(1)),
+                    When(user__first_name__iexact=n_clean, then=Value(1)),
+                    When(full_name__istartswith=n_clean, then=Value(2)),
+                    When(user__first_name__istartswith=n_clean, then=Value(2)),
+                    When(user__last_name__istartswith=n_clean, then=Value(2)),
+                    default=Value(3),
+                    output_field=IntegerField()
+                )
+            )
+
+        # 1b. Job Title Filter (title or designation)
+        title = self.request.GET.get('title') or self.request.GET.get('designation')
+        if title and title.strip():
+            t_clean = title.strip()
+            queryset = queryset.filter(
+                Q(current_designation__icontains=t_clean) |
+                Q(experiences__designation__icontains=t_clean) |
+                Q(job_applications__job__title__icontains=t_clean) |
+                Q(preferred_job_role__icontains=t_clean)
             )
 
         # 2. Department Filter
@@ -1326,8 +1339,13 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         selected_job = None
         if job_id and job_id.strip():
             job_id_clean = job_id.strip()
-            queryset = queryset.filter(job_applications__job_id=job_id_clean)
-            selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id_clean).first()
+            try:
+                import uuid
+                uuid.UUID(job_id_clean)
+                queryset = queryset.filter(job_applications__job_id=job_id_clean)
+                selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id_clean).first()
+            except (ValueError, TypeError):
+                pass
 
         # 4. Pipeline Stage Filter
         stage = self.request.GET.get('stage')
@@ -1411,103 +1429,10 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
                     Q(job_applications__preferred_location__icontains=loc)
                 )
 
-        # 8. Experience Filter
-        min_exp = self.request.GET.get('min_exp')
-        max_exp = self.request.GET.get('max_exp')
-        if min_exp and min_exp.strip():
-            try:
-                queryset = queryset.filter(total_experience__gte=float(min_exp))
-            except ValueError:
-                pass
-        if max_exp and max_exp.strip():
-            try:
-                queryset = queryset.filter(total_experience__lte=float(max_exp))
-            except ValueError:
-                pass
-
-        # 9. Current Company Filter
-        company = self.request.GET.get('company')
-        if company and company.strip():
-            comp = company.strip()
-            queryset = queryset.filter(
-                Q(current_company__icontains=comp) |
-                Q(experiences__company_name__icontains=comp) |
-                Q(job_applications__current_company__icontains=comp)
-            )
-
-        designation = self.request.GET.get('designation')
-        if designation and designation.strip():
-            desig = designation.strip()
-            queryset = queryset.filter(
-                Q(current_designation__icontains=desig) |
-                Q(experiences__designation__icontains=desig)
-            )
-
-        max_ctc = self.request.GET.get('max_ctc')
-        if max_ctc and max_ctc.strip():
-            try:
-                queryset = queryset.filter(current_salary__lte=float(max_ctc))
-            except ValueError:
-                pass
-
-        max_np = self.request.GET.get('max_np')
-        if max_np and max_np.strip():
-            try:
-                queryset = queryset.filter(notice_period__lte=int(max_np))
-            except ValueError:
-                pass
-
-        # 10. ATS Suitability Score Filter
-        min_ats = self.request.GET.get('min_ats')
-        max_ats = self.request.GET.get('max_ats')
-        if min_ats and min_ats.strip():
-            try:
-                min_v = int(min_ats)
-                if selected_job:
-                    queryset = queryset.filter(
-                        Q(job_applications__job=selected_job, job_applications__match_score__gte=min_v) |
-                        Q(ats_score__gte=min_v)
-                    )
-                else:
-                    queryset = queryset.filter(ats_score__gte=min_v)
-            except ValueError:
-                pass
-
-        if max_ats and max_ats.strip():
-            try:
-                max_v = int(max_ats)
-                if selected_job:
-                    queryset = queryset.filter(
-                        Q(job_applications__job=selected_job, job_applications__match_score__lte=max_v) |
-                        Q(ats_score__lte=max_v)
-                    )
-                else:
-                    queryset = queryset.filter(ats_score__lte=max_v)
-            except ValueError:
-                pass
-
         queryset = queryset.distinct()
 
-        # 11. Sorting
-        sort_by = self.request.GET.get('sort_by')
-        if sort_by in ['ats_desc', 'highest_ats']:
-            if selected_job:
-                queryset = queryset.order_by('-job_applications__match_score', '-ats_score', '-created_at')
-            else:
-                queryset = queryset.order_by('-ats_score', '-created_at')
-        elif sort_by in ['ats_asc', 'lowest_ats']:
-            if selected_job:
-                queryset = queryset.order_by('job_applications__match_score', 'ats_score', 'created_at')
-            else:
-                queryset = queryset.order_by('ats_score', 'created_at')
-        elif sort_by in ['oldest', 'created_at_asc']:
-            queryset = queryset.order_by('created_at')
-        elif sort_by in ['most_experience', 'exp_desc']:
-            queryset = queryset.order_by('-total_experience', '-created_at')
-        elif sort_by in ['least_experience', 'exp_asc']:
-            queryset = queryset.order_by('total_experience', '-created_at')
-        elif sort_by in ['recently_updated', 'updated']:
-            queryset = queryset.order_by('-updated_at')
+        if has_name_rank:
+            queryset = queryset.order_by('name_match_rank', '-created_at')
         else:
             queryset = queryset.order_by('-created_at')
 
@@ -1521,7 +1446,16 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id.strip()).first()
             
         context['selected_job'] = selected_job
-        context['filters'] = self.request.GET
+        context['filters'] = {
+            'name': (self.request.GET.get('name') or self.request.GET.get('q') or '').strip(),
+            'title': (self.request.GET.get('title') or self.request.GET.get('designation') or '').strip(),
+            'location': (self.request.GET.get('location') or '').strip(),
+            'skills': (self.request.GET.get('skills') or '').strip(),
+            'department': (self.request.GET.get('department') or '').strip(),
+            'job_id': (self.request.GET.get('job_id') or '').strip(),
+            'stage': (self.request.GET.get('stage') or '').strip(),
+            'tags': (self.request.GET.get('tags') or '').strip(),
+        }
         context['active_jobs'] = get_tenant_jobs_qs(self.request.user).filter(status='ACTIVE')
         
         # Compute match details only for current paginated page slice
@@ -1542,6 +1476,180 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         context['candidates'] = candidates_list
         context['object_list'] = candidates_list
         return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest' or self.request.GET.get('ajax') == '1':
+            from django.template.loader import render_to_string
+            html = render_to_string('includes/candidate_search_list.html', context, request=self.request)
+            count = context['page_obj'].paginator.count if context.get('page_obj') else len(context.get('candidates', []))
+            return JsonResponse({
+                'html': html,
+                'count': count
+            })
+        return super().render_to_response(context, **response_kwargs)
+
+
+class CandidateAutocompleteView(RecruiterRequiredMixin, View):
+    """
+    Lightweight, fast API endpoint for field-specific live candidate search autocomplete suggestions.
+    Supports type='name' | 'title' | 'location' | 'skill'
+    Returns max 5-8 suggestions per field ranked by relevance.
+    """
+    def get(self, request, *args, **kwargs):
+        stype = request.GET.get('type', 'name').strip().lower()
+        q = request.GET.get('q', '').strip()
+
+        if not q or (stype not in ['name', 'candidate_name'] and len(q) < 2) or (stype in ['name', 'candidate_name'] and len(q) < 1):
+            return JsonResponse({'results': []})
+
+        user = request.user
+        q_lower = q.lower()
+        results = []
+        seen = set()
+        from django.db.models import Q
+        from apps.candidates.models import CandidateSkill
+
+        if stype in ['name', 'candidate_name']:
+            candidates_qs = get_tenant_candidates_qs(user).select_related('user').filter(
+                Q(full_name__icontains=q) |
+                Q(user__first_name__icontains=q) |
+                Q(user__last_name__icontains=q) |
+                Q(user__email__icontains=q)
+            ).distinct()[:20]
+
+            for cand in candidates_qs:
+                cand_name = cand.full_name or cand.user.get_full_name() or cand.user.email
+                if not cand_name or cand_name in seen:
+                    continue
+                seen.add(cand_name)
+
+                name_lower = cand_name.lower()
+                if name_lower == q_lower:
+                    rank = 1
+                elif name_lower.startswith(q_lower):
+                    rank = 2
+                else:
+                    rank = 3
+
+                results.append({
+                    'value': cand_name,
+                    'title': cand.current_designation or "Candidate",
+                    'subtitle': cand.location or "",
+                    'avatar': cand_name[0].upper() if cand_name else "C",
+                    'rank': rank,
+                    'url': reverse('frontend:candidate_detail', kwargs={'pk': cand.id})
+                })
+
+            results.sort(key=lambda x: (x['rank'], x['value']))
+
+        elif stype in ['title', 'job_title']:
+            candidates_qs = get_tenant_candidates_qs(user).filter(
+                Q(current_designation__icontains=q) |
+                Q(experiences__designation__icontains=q) |
+                Q(preferred_job_role__icontains=q)
+            ).distinct()[:25]
+
+            for cand in candidates_qs:
+                for t in [cand.current_designation, cand.preferred_job_role]:
+                    if t and t.strip():
+                        t_clean = t.strip()
+                        if t_clean not in seen and q_lower in t_clean.lower():
+                            seen.add(t_clean)
+                            t_lower = t_clean.lower()
+                            if t_lower == q_lower:
+                                rank = 1
+                            elif t_lower.startswith(q_lower):
+                                rank = 2
+                            else:
+                                rank = 3
+                            results.append({
+                                'value': t_clean,
+                                'title': t_clean,
+                                'subtitle': 'Job Title',
+                                'avatar': 'T',
+                                'rank': rank
+                            })
+
+                for exp in cand.experiences.all():
+                    if exp.designation and exp.designation.strip():
+                        e_clean = exp.designation.strip()
+                        if e_clean not in seen and q_lower in e_clean.lower():
+                            seen.add(e_clean)
+                            e_lower = e_clean.lower()
+                            if e_lower == q_lower:
+                                rank = 1
+                            elif e_lower.startswith(q_lower):
+                                rank = 2
+                            else:
+                                rank = 3
+                            results.append({
+                                'value': e_clean,
+                                'title': e_clean,
+                                'subtitle': 'Job Title',
+                                'avatar': 'T',
+                                'rank': rank
+                            })
+
+            results.sort(key=lambda x: (x['rank'], x['value']))
+
+        elif stype == 'location':
+            candidates_qs = get_tenant_candidates_qs(user).filter(
+                Q(location__icontains=q) |
+                Q(preferred_location__icontains=q)
+            ).distinct()[:25]
+
+            for cand in candidates_qs:
+                for loc in [cand.location, cand.preferred_location]:
+                    if loc and loc.strip():
+                        l_clean = loc.strip()
+                        if l_clean not in seen and q_lower in l_clean.lower():
+                            seen.add(l_clean)
+                            l_lower = l_clean.lower()
+                            if l_lower == q_lower:
+                                rank = 1
+                            elif l_lower.startswith(q_lower):
+                                rank = 2
+                            else:
+                                rank = 3
+                            results.append({
+                                'value': l_clean,
+                                'title': l_clean,
+                                'subtitle': 'Location',
+                                'avatar': 'L',
+                                'rank': rank
+                            })
+
+            results.sort(key=lambda x: (x['rank'], x['value']))
+
+        elif stype in ['skill', 'skills']:
+            skills_qs = CandidateSkill.objects.filter(
+                profile__in=get_tenant_candidates_qs(user),
+                skill_name__icontains=q
+            ).values_list('skill_name', flat=True).distinct()[:25]
+
+            for sk in skills_qs:
+                if sk and sk.strip():
+                    s_clean = sk.strip()
+                    if s_clean not in seen:
+                        seen.add(s_clean)
+                        s_lower = s_clean.lower()
+                        if s_lower == q_lower:
+                            rank = 1
+                        elif s_lower.startswith(q_lower):
+                            rank = 2
+                        else:
+                            rank = 3
+                        results.append({
+                            'value': s_clean,
+                            'title': s_clean,
+                            'subtitle': 'Skill',
+                            'avatar': 'S',
+                            'rank': rank
+                        })
+
+            results.sort(key=lambda x: (x['rank'], x['value']))
+
+        return JsonResponse({'results': results[:8]})
 
 
 class JobCandidatesView(RecruiterRequiredMixin, ListView):

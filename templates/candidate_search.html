@@ -70,31 +70,198 @@
         font-size: 0.72rem;
         border-radius: 6px;
     }
+    
+    /* Dedicated Field Autocomplete Styling */
+    .field-autocomplete-dropdown {
+        max-height: 320px;
+        overflow-y: auto;
+        z-index: 1050;
+        position: absolute;
+        left: 0;
+        right: 0;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+    .field-autocomplete-dropdown .autocomplete-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background-color 0.12s ease;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .field-autocomplete-dropdown .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .field-autocomplete-dropdown .autocomplete-item:hover,
+    .field-autocomplete-dropdown .autocomplete-item.active {
+        background-color: #f1f5f9 !important;
+    }
+    .field-autocomplete-dropdown .avatar-circle {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #4f46e5;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-apply-filters {
+        background-color: #4f46e5;
+        color: #ffffff;
+        font-weight: 600;
+        border: none;
+        transition: all 0.2s ease;
+    }
+    .btn-apply-filters:hover {
+        background-color: #4338ca;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 fade-in">
+<div class="d-flex justify-content-between align-items-center mb-3 fade-in">
     <div>
         <h3 class="fw-bold m-0"><i class="bi bi-people me-2 text-primary"></i>TalentVault</h3>
         <p class="text-secondary small m-0">Search and filter your verified database of candidate profiles.</p>
     </div>
-    <div class="text-secondary small fw-medium">Found {{ page_obj.paginator.count|default:candidates|length }} candidate{{ page_obj.paginator.count|default:candidates|length|pluralize }}</div>
+    <div class="text-secondary small fw-medium" id="candidate-count-badge">Found {{ page_obj.paginator.count|default:candidates|length }} candidate{{ page_obj.paginator.count|default:candidates|length|pluralize }}</div>
 </div>
 
-<!-- Horizontal Filter Bar -->
+<!-- Compact Clean Filter Panel -->
 <div class="filters-bar bg-white border border-light-subtle rounded-3 p-3 mb-4 shadow-sm sticky-top-filters">
-    <form method="GET" id="candidate-filters-form">
-        <!-- Main Filters Line -->
-        <div class="row g-2 align-items-center">
-            <div class="col-md-3">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-search"></i></span>
-                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search candidates..." value="{{ filters.q|default:'' }}">
+    <form method="GET" id="candidate-filters-form" action="{% url 'frontend:candidate_search' %}" onsubmit="handleApplyFilters(event);">
+        
+        <!-- ROW 1: Dedicated Live Search Fields (Candidate Name, Job Title, Location) -->
+        <div class="row g-2 align-items-center mb-2">
+            <!-- FIELD 1: Candidate Name -->
+            <div class="col-md-4">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Candidate Name</label>
+                <div class="position-relative w-100">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-person"></i></span>
+                        <input type="text" 
+                               name="name" 
+                               id="field-search-name"
+                               class="form-control border-start-0 border-end-0 search-field-input" 
+                               placeholder="Search candidate name..." 
+                               value="{{ filters.name|default:'' }}"
+                               data-autocomplete-type="name"
+                               data-min-length="1"
+                               autocomplete="off">
+                        <button type="button" 
+                                class="input-group-text bg-transparent border-start-0 text-muted border-end-0 clear-field-btn {% if not filters.name %}d-none{% endif %}" 
+                                title="Clear Candidate Name"
+                                style="cursor: pointer;">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                        <span class="input-group-text bg-transparent border-start-0 text-muted d-none field-spinner">
+                            <span class="spinner-border spinner-border-sm text-primary" role="status" style="width: 12px; height: 12px;"></span>
+                        </span>
+                    </div>
+                    <div id="dropdown-search-name" class="dropdown-menu field-autocomplete-dropdown border border-light-subtle rounded-3 w-100 mt-1 py-1 d-none"></div>
                 </div>
             </div>
-            <div class="col-md-2">
-                <select name="department" class="form-select form-select-sm" onchange="this.form.submit()">
+
+            <!-- FIELD 2: Job Title -->
+            <div class="col-md-4">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Job Title</label>
+                <div class="position-relative w-100">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-briefcase"></i></span>
+                        <input type="text" 
+                               name="title" 
+                               id="field-search-title"
+                               class="form-control border-start-0 border-end-0 search-field-input" 
+                               placeholder="Search job title..." 
+                               value="{{ filters.title|default:'' }}"
+                               data-autocomplete-type="title"
+                               data-min-length="2"
+                               autocomplete="off">
+                        <button type="button" 
+                                class="input-group-text bg-transparent border-start-0 text-muted border-end-0 clear-field-btn {% if not filters.title %}d-none{% endif %}" 
+                                title="Clear Job Title"
+                                style="cursor: pointer;">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                        <span class="input-group-text bg-transparent border-start-0 text-muted d-none field-spinner">
+                            <span class="spinner-border spinner-border-sm text-primary" role="status" style="width: 12px; height: 12px;"></span>
+                        </span>
+                    </div>
+                    <div id="dropdown-search-title" class="dropdown-menu field-autocomplete-dropdown border border-light-subtle rounded-3 w-100 mt-1 py-1 d-none"></div>
+                </div>
+            </div>
+
+            <!-- FIELD 3: Location -->
+            <div class="col-md-4">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Location</label>
+                <div class="position-relative w-100">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-geo-alt"></i></span>
+                        <input type="text" 
+                               name="location" 
+                               id="field-search-location"
+                               class="form-control border-start-0 border-end-0 search-field-input" 
+                               placeholder="Search location..." 
+                               value="{{ filters.location|default:'' }}"
+                               data-autocomplete-type="location"
+                               data-min-length="2"
+                               autocomplete="off">
+                        <button type="button" 
+                                class="input-group-text bg-transparent border-start-0 text-muted border-end-0 clear-field-btn {% if not filters.location %}d-none{% endif %}" 
+                                title="Clear Location"
+                                style="cursor: pointer;">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                        <span class="input-group-text bg-transparent border-start-0 text-muted d-none field-spinner">
+                            <span class="spinner-border spinner-border-sm text-primary" role="status" style="width: 12px; height: 12px;"></span>
+                        </span>
+                    </div>
+                    <div id="dropdown-search-location" class="dropdown-menu field-autocomplete-dropdown border border-light-subtle rounded-3 w-100 mt-1 py-1 d-none"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2: Skills, Department, Active Job, Pipeline Stage -->
+        <div class="row g-2 align-items-center mb-2">
+            <!-- FIELD 4: Skills -->
+            <div class="col-md-3">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Skills</label>
+                <div class="position-relative w-100">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-code-slash"></i></span>
+                        <input type="text" 
+                               name="skills" 
+                               id="field-search-skills"
+                               class="form-control border-start-0 border-end-0 search-field-input" 
+                               placeholder="Search skills..." 
+                               value="{{ filters.skills|default:'' }}"
+                               data-autocomplete-type="skill"
+                               data-min-length="2"
+                               autocomplete="off">
+                        <button type="button" 
+                                class="input-group-text bg-transparent border-start-0 text-muted border-end-0 clear-field-btn {% if not filters.skills %}d-none{% endif %}" 
+                                title="Clear Skills"
+                                style="cursor: pointer;">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                        <span class="input-group-text bg-transparent border-start-0 text-muted d-none field-spinner">
+                            <span class="spinner-border spinner-border-sm text-primary" role="status" style="width: 12px; height: 12px;"></span>
+                        </span>
+                    </div>
+                    <div id="dropdown-search-skills" class="dropdown-menu field-autocomplete-dropdown border border-light-subtle rounded-3 w-100 mt-1 py-1 d-none"></div>
+                </div>
+            </div>
+
+            <!-- Department Filter -->
+            <div class="col-md-3">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Department</label>
+                <select name="department" class="form-select form-select-sm" onchange="triggerLiveSearch()">
                     <option value="">All Departments</option>
                     <option value="engineering" {% if filters.department == 'engineering' %}selected{% endif %}>Engineering</option>
                     <option value="sales" {% if filters.department == 'sales' %}selected{% endif %}>Sales</option>
@@ -103,16 +270,22 @@
                     <option value="hr" {% if filters.department == 'hr' %}selected{% endif %}>HR</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <select name="job_id" class="form-select form-select-sm" onchange="this.form.submit()">
+
+            <!-- Active Job Filter -->
+            <div class="col-md-3">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Active Job</label>
+                <select name="job_id" class="form-select form-select-sm" onchange="triggerLiveSearch()">
                     <option value="">All Jobs</option>
                     {% for j in active_jobs %}
                         <option value="{{ j.id }}" {% if selected_job.id == j.id %}selected{% endif %}>{{ j.title }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
-                <select name="stage" class="form-select form-select-sm" onchange="this.form.submit()">
+
+            <!-- Pipeline Stage Filter -->
+            <div class="col-md-3">
+                <label class="form-label text-secondary x-small fw-semibold mb-1">Pipeline Stage</label>
+                <select name="stage" class="form-select form-select-sm" onchange="triggerLiveSearch()">
                     <option value="">All Stages</option>
                     <option value="SOURCED" {% if filters.stage == 'SOURCED' %}selected{% endif %}>Sourced</option>
                     <option value="OPEN" {% if filters.stage == 'OPEN' %}selected{% endif %}>Applied</option>
@@ -122,298 +295,30 @@
                     <option value="ACCEPTED" {% if filters.stage == 'ACCEPTED' %}selected{% endif %}>Hired</option>
                 </select>
             </div>
-            <div class="col-md-1.5 col-sm-6">
-                <select name="tags" class="form-select form-select-sm" onchange="this.form.submit()">
+        </div>
+
+        <!-- ROW 3: Tags (Left) & Reset / Apply Filters Buttons (Right) -->
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3 col-sm-6">
+                <select name="tags" class="form-select form-select-sm" onchange="triggerLiveSearch()">
                     <option value="">All Tags</option>
                     <option value="immediate" {% if filters.tags == 'immediate' %}selected{% endif %}>Immediate Joiner</option>
                     <option value="referral" {% if filters.tags == 'referral' %}selected{% endif %}>Referral</option>
                 </select>
             </div>
-            <div class="col-md-1.5 col-sm-6">
-                <button type="button" class="btn btn-sm btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-1" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false">
-                    <i class="bi bi-sliders"></i> Filters
+            <div class="col-md-9 col-sm-6 d-flex justify-content-end align-items-center gap-2">
+                <button type="button" class="btn btn-xs btn-outline-secondary px-3 py-1.5 rounded-2" onclick="resetAllFilters()">Reset All Filters</button>
+                <button type="submit" id="btn-apply-filters" class="btn btn-xs btn-apply-filters px-4 py-1.5 rounded-2 d-flex align-items-center gap-1.5">
+                    <i class="bi bi-funnel-fill"></i> <span id="btn-apply-text">Apply Filters</span>
                 </button>
-            </div>
-        </div>
-
-        <!-- Collapsible Advanced Filters -->
-        <div class="collapse {% if filters.skills or filters.location or filters.min_exp or filters.max_exp or filters.company or filters.max_ctc or filters.min_ats or filters.max_ats or filters.sort_by %}show{% endif %}" id="advancedFilters">
-            <div class="border-top mt-3 pt-3">
-                <div class="row g-3">
-                    <div class="col-md-2">
-                        <label class="form-label text-secondary x-small fw-semibold mb-1">Skills</label>
-                        <input type="text" name="skills" class="form-control form-control-sm" placeholder="Java, Python..." value="{{ filters.skills|default:'' }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label text-secondary x-small fw-semibold mb-1">Location</label>
-                        <input type="text" name="location" class="form-control form-control-sm" placeholder="City..." value="{{ filters.location|default:'' }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label text-secondary x-small fw-semibold mb-1">Experience (Min - Max Yrs)</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="min_exp" class="form-control" placeholder="Min" value="{{ filters.min_exp|default:'' }}">
-                            <input type="number" name="max_exp" class="form-control" placeholder="Max" value="{{ filters.max_exp|default:'' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label text-secondary x-small fw-semibold mb-1">Current Company</label>
-                        <input type="text" name="company" class="form-control form-control-sm" placeholder="Google..." value="{{ filters.company|default:'' }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label text-secondary x-small fw-semibold mb-1">ATS Suitability Score</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="min_ats" class="form-control" min="0" max="100" placeholder="0" value="{{ filters.min_ats|default:'' }}">
-                            <input type="number" name="max_ats" class="form-control" min="0" max="100" placeholder="100" value="{{ filters.max_ats|default:'' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label text-secondary x-small fw-semibold mb-1">Sort By</label>
-                        <select name="sort_by" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">Newest First</option>
-                            <option value="ats_desc" {% if filters.sort_by == 'ats_desc' %}selected{% endif %}>ATS Score (High to Low)</option>
-                            <option value="ats_asc" {% if filters.sort_by == 'ats_asc' %}selected{% endif %}>ATS Score (Low to High)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-end gap-2 mt-3">
-                    <a href="{% url 'frontend:candidate_search' %}" class="btn btn-xs btn-outline-secondary px-3 py-1.5 rounded-2">Reset All</a>
-                    <button type="submit" class="btn btn-xs btn-primary px-4 py-1.5 rounded-2">Apply Filters</button>
-                </div>
             </div>
         </div>
     </form>
 </div>
 
 <!-- List Container -->
-<div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
-    <!-- Bulk actions bar (hidden by default) -->
-    <div id="bulk-actions-bar" class="bg-light border-bottom px-4 py-2.5 d-none align-items-center justify-content-between transition">
-        <div class="d-flex align-items-center gap-3">
-            <span class="text-secondary small fw-semibold" id="selected-count">0 candidates selected</span>
-            <button class="btn btn-xs btn-outline-primary rounded-2 py-1"><i class="bi bi-envelope me-1"></i>Email</button>
-            <button class="btn btn-xs btn-outline-success rounded-2 py-1" data-bs-toggle="modal" data-bs-target="#bulkPipelineModal"><i class="bi bi-plus-circle me-1"></i>Shortlist</button>
-            <button class="btn btn-xs btn-outline-danger rounded-2 py-1"><i class="bi bi-x-circle me-1"></i>Reject</button>
-        </div>
-        <div>
-            <button class="btn btn-xs btn-link text-secondary text-decoration-none" onclick="clearSelection()">Clear Selection</button>
-        </div>
-    </div>
-
-    <!-- Table Header Row -->
-    <div class="bg-light border-bottom px-3 py-2 d-flex align-items-center justify-content-between text-secondary x-small fw-semibold">
-        <div class="d-flex align-items-center gap-3 w-100">
-            <div class="form-check m-0">
-                <input class="form-check-input" type="checkbox" id="select-all-candidates" onchange="toggleSelectAll(this)">
-            </div>
-            <div class="row w-100 g-3">
-                <div class="col-md-6" style="padding-left: 12px;">Candidate Information</div>
-                <div class="col-md-6" style="padding-left: 12px;">Applied Details</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Candidate Rows List -->
-    <div class="candidate-list">
-        {% for candidate in candidates %}
-        <div class="candidate-row p-3 border-bottom d-flex align-items-center justify-content-between position-relative" data-candidate-id="{{ candidate.id }}">
-            <div class="d-flex align-items-center gap-3 w-100">
-                <!-- Checkbox -->
-                <div class="form-check m-0">
-                    <input class="form-check-input candidate-checkbox" type="checkbox" value="{{ candidate.id }}" onchange="updateBulkBar()">
-                </div>
-
-                <!-- Profile Photo / Neutral Icon -->
-                <div class="candidate-avatar flex-shrink-0">
-                    {% if candidate.has_profile_photo %}
-                        <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover" style="width: 40px; height: 40px; border: 1px solid #dee2e6;" alt="Photo">
-                    {% else %}
-                        <div class="bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; border: 1px solid #dee2e6;">
-                            <i class="bi bi-person" style="font-size: 22px; line-height: 1;"></i>
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="row w-100 g-3 align-items-start">
-                    <!-- LEFT SECTION -->
-                    <div class="col-md-6">
-                        <div class="d-flex flex-column gap-1 overflow-hidden">
-                            <div class="d-flex align-items-center gap-2">
-                                <h6 class="fw-bold text-dark m-0"><a href="{% url 'frontend:candidate_detail' candidate.id %}{% if selected_job %}?job_id={{ selected_job.id }}{% endif %}" class="text-dark text-decoration-none candidate-name-link">{{ candidate.full_name|default:candidate.user.email }}</a></h6>
-                                {% if candidate.is_immediate_joiner %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill x-small">Immediate</span>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="text-secondary small fw-medium text-truncate">
-                                {{ candidate.current_designation|default:"Designation: N/A" }} {% if candidate.current_company %}at <span class="text-dark">{{ candidate.current_company }}</span>{% endif %}
-                            </div>
-                            
-                            <div class="text-secondary x-small d-flex align-items-center gap-1">
-                                <i class="bi bi-mortarboard text-muted"></i>
-                                <span>
-                                    {% if candidate.educations.all %}
-                                        {% with edu=candidate.educations.first %}
-                                            {{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %} from {{ edu.institution }}
-                                        {% endwith %}
-                                    {% else %}
-                                        B.A Economics
-                                    {% endif %}
-                                </span>
-                            </div>
-                            
-                            <div class="text-secondary x-small d-flex align-items-center gap-1">
-                                <i class="bi bi-geo-alt text-muted"></i>
-                                <span>{{ candidate.location|default:"New Delhi, India" }}</span>
-                            </div>
-
-                            <div class="text-secondary x-small fw-semibold">
-                                Exp: {{ candidate.total_experience|floatformat:1 }} Years
-                                {% if candidate.uploader_name %}
-                                    &bull; Uploaded By: <span class="text-dark fw-bold">{{ candidate.uploader_name }}</span>
-                                {% endif %}
-                            </div>
-                            
-                            <!-- Skills tags -->
-                            <div class="d-flex flex-wrap gap-1 mt-1 align-items-center">
-                                <span class="x-small text-muted me-1">Skills:</span>
-                                {% for s in candidate.skills.all|slice:":4" %}
-                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">{{ s.skill_name }}</span>
-                                {% empty %}
-                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">Sales</span>
-                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">CRM</span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- RIGHT SECTION -->
-                    <div class="col-md-6">
-                        <div class="row w-100 g-1">
-                            <div class="col-12 d-flex justify-content-between align-items-start">
-                                <div class="d-flex flex-column gap-1 overflow-hidden" style="max-width: 75%;">
-                                    <span class="fw-semibold text-dark text-truncate small">
-                                        {% if candidate.latest_application %}
-                                            {{ candidate.latest_application.job.title }}
-                                        {% else %}
-                                            Talent Pool
-                                        {% endif %}
-                                    </span>
-                                    <span class="text-secondary x-small">
-                                        {% if candidate.latest_application %}
-                                            {% if candidate.latest_application.job.client %}
-                                                {{ candidate.latest_application.job.client.company_name }}
-                                            {% else %}
-                                                {{ candidate.latest_application.job.company.name }}
-                                            {% endif %}
-                                        {% else %}
-                                            Unassigned
-                                        {% endif %}
-                                    </span>
-                                    <span class="text-secondary x-small">
-                                        {% if candidate.latest_application %}
-                                            {{ candidate.latest_application.job.location }} &bull; {{ candidate.latest_application.job.get_work_mode_display }}
-                                        {% else %}
-                                            N/A
-                                        {% endif %}
-                                    </span>
-                                </div>
-                                <div class="d-flex flex-column align-items-end gap-1.5" style="min-width: 25%;">
-                                    <!-- Stage Badge -->
-                                    <span class="badge {% if candidate.latest_application %}{{ candidate.latest_application.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-1 rounded-pill small fw-medium">
-                                        Stage: {% if candidate.latest_application %}{{ candidate.latest_application.get_stage_display }}{% else %}Unassigned{% endif %}
-                                    </span>
-                                    
-                                    <!-- ATS Score Badge -->
-                                    <div class="d-flex align-items-center gap-1.5 mt-1">
-                                        {% if selected_job and candidate.match_details %}
-                                            {% with score=candidate.match_details.total_score %}
-                                                <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
-                                                    {{ score }}% ATS
-                                                </span>
-                                            {% endwith %}
-                                        {% else %}
-                                            {% with score=candidate.ats_score %}
-                                                <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
-                                                    {{ score }}% ATS
-                                                </span>
-                                            {% endwith %}
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-between text-secondary x-small">
-                                <span>Source: <span class="fw-medium text-dark">{% if candidate.linkedin_url %}LinkedIn{% else %}Resume Upload{% endif %}</span></span>
-                                <span>Applied: <span class="fw-medium text-dark">{{ candidate.created_at|timesince }} ago</span></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Candidate Action overlay/menu displayed on hover -->
-            <div class="candidate-actions bg-white border border-light-subtle rounded-3 py-1.5 px-2 shadow-sm d-flex gap-1 align-items-center justify-content-end">
-                <a href="{% url 'frontend:candidate_detail' candidate.id %}" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" title="View Profile">
-                    <i class="bi bi-eye"></i> View Profile
-                </a>
-                {% if candidate.has_resume %}
-                    <a href="{{ candidate.resume_file_url }}" target="_blank" class="btn btn-xs btn-outline-secondary d-flex align-items-center gap-1" title="Download Resume">
-                        <i class="bi bi-download"></i> Resume
-                    </a>
-                {% endif %}
-                <button class="btn btn-xs btn-outline-success d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#addToPipelineModal{{ candidate.id }}" title="Add to Pipeline">
-                    <i class="bi bi-plus-circle"></i> Add to Pipeline
-                </button>
-                <a href="{% url 'frontend:interviews' %}?candidate_id={{ candidate.id }}" class="btn btn-xs btn-outline-info d-flex align-items-center gap-1" title="Schedule Interview">
-                    <i class="bi bi-calendar-event"></i> Schedule
-                </a>
-                <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="m-0 d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-xs btn-outline-danger d-flex align-items-center gap-1" title="Reject Candidate">
-                        <i class="bi bi-x-circle"></i> Reject
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Add to Pipeline Modal for this Candidate -->
-        <div class="modal fade" id="addToPipelineModal{{ candidate.id }}" tabindex="-1" aria-hidden="true">
-          <div class="modal-dialog text-start">
-            <div class="modal-content border-0 shadow-lg">
-              <div class="modal-header bg-light">
-                <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Add to Pipeline</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-              </div>
-              <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}">
-                {% csrf_token %}
-                <div class="modal-body text-dark">
-                    <p class="small text-secondary mb-3">Shortlist candidate <strong>{{ candidate.full_name|default:candidate.user.email }}</strong> to an active role.</p>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Select Job Opening</label>
-                        <select name="job_id" class="form-select" required>
-                            <option value="">-- Choose Job --</option>
-                            {% for job in active_jobs %}
-                                <option value="{{ job.id }}">{{ job.title }} ({{ job.location }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                  <button type="submit" class="btn btn-success btn-sm px-4">Confirm Shortlist</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-        {% empty %}
-        <div class="w-100 text-center py-5 text-secondary">
-            <i class="bi bi-people fs-1 text-secondary-50 mb-3 d-block"></i>
-            <h5>No candidates found matching your criteria.</h5>
-            <p class="text-secondary">Try adjusting your filters or search keywords.</p>
-        </div>
-        {% endfor %}
-    </div>
+<div class="card border-0 shadow-sm rounded-3 bg-white mb-4" id="candidate-list-container">
+    {% include "includes/candidate_search_list.html" %}
 </div>
 
 <!-- Bulk Shortlist Modal -->
@@ -444,49 +349,6 @@
   </div>
 </div>
 
-<!-- Pagination -->
-{% if is_paginated %}
-<nav class="mt-4">
-    <ul class="pagination justify-content-center pagination-sm">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link border-light-subtle text-secondary" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                <i class="bi bi-chevron-left"></i> Previous
-            </a>
-        </li>
-        {% else %}
-        <li class="page-item disabled">
-            <span class="page-link border-light-subtle text-muted">
-                <i class="bi bi-chevron-left"></i> Previous
-            </span>
-        </li>
-        {% endif %}
-
-        {% for num in page_obj.paginator.page_range %}
-            {% if page_obj.number == num %}
-                <li class="page-item active"><span class="page-link bg-primary border-primary text-white">{{ num }}</span></li>
-            {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
-                <li class="page-item"><a class="page-link border-light-subtle text-secondary" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
-            {% endif %}
-        {% endfor %}
-
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link border-light-subtle text-secondary" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Next <i class="bi bi-chevron-right"></i>
-            </a>
-        </li>
-        {% else %}
-        <li class="page-item disabled">
-            <span class="page-link border-light-subtle text-muted">
-                Next <i class="bi bi-chevron-right"></i>
-            </span>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
-
 <script>
     function updateBulkBar() {
         const checkboxes = document.querySelectorAll('.candidate-checkbox:checked');
@@ -496,7 +358,8 @@
         const selectAllCb = document.getElementById('select-all-candidates');
         const totalCbs = document.querySelectorAll('.candidate-checkbox').length;
         
-        // Update master select-all checkbox state
+        if (!bar || !countSpan || !selectAllCb) return;
+
         if (count === totalCbs && totalCbs > 0) {
             selectAllCb.checked = true;
             selectAllCb.indeterminate = false;
@@ -558,5 +421,291 @@
             alert('Error shortlisting some candidates.');
         });
     }
+
+    // Global Controller with 180ms Debounce & AbortController Race Condition Protection
+    let liveSearchDebounceTimer = null;
+    let activeFetchController = null;
+    const DEBOUNCE_MS = 180;
+
+    function handleApplyFilters(e) {
+        if (e) e.preventDefault();
+        const btn = document.getElementById('btn-apply-filters');
+        const btnText = document.getElementById('btn-apply-text');
+        if (btn) btn.disabled = true;
+        if (btnText) btnText.textContent = 'Applying...';
+
+        triggerLiveSearch(() => {
+            if (btn) btn.disabled = false;
+            if (btnText) btnText.textContent = 'Apply Filters';
+        });
+        return false;
+    }
+
+    function triggerLiveSearch(callback) {
+        const filterForm = document.getElementById('candidate-filters-form');
+        const listContainer = document.getElementById('candidate-list-container');
+        const countBadge = document.getElementById('candidate-count-badge');
+        if (!filterForm || !listContainer) return;
+
+        // Abort any in-flight search request
+        if (activeFetchController) {
+            activeFetchController.abort();
+        }
+        activeFetchController = new AbortController();
+
+        const formData = new FormData(filterForm);
+        const params = new URLSearchParams();
+
+        for (const [key, value] of formData.entries()) {
+            if (value && value.trim() !== '') {
+                params.append(key, value.trim());
+            }
+        }
+
+        // Update browser URL cleanly
+        const newRelativePathQuery = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState(null, '', newRelativePathQuery);
+
+        // Add ajax parameter for list fragment rendering
+        params.set('ajax', '1');
+
+        fetch(`${filterForm.action || window.location.pathname}?${params.toString()}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            signal: activeFetchController.signal
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.html) {
+                listContainer.innerHTML = data.html;
+            }
+            if (countBadge && data.count !== undefined) {
+                countBadge.textContent = `Found ${data.count} candidate${data.count === 1 ? '' : 's'}`;
+            }
+            if (callback) callback();
+        })
+        .catch(err => {
+            if (err.name !== 'AbortError') {
+                console.error('Live search error:', err);
+            }
+            if (callback) callback();
+        });
+    }
+
+    function debounceLiveSearch() {
+        clearTimeout(liveSearchDebounceTimer);
+        liveSearchDebounceTimer = setTimeout(triggerLiveSearch, DEBOUNCE_MS);
+    }
+
+    function resetAllFilters() {
+        const form = document.getElementById('candidate-filters-form');
+        if (!form) return;
+
+        // Clear search inputs
+        form.querySelectorAll('.search-field-input').forEach(input => {
+            input.value = '';
+            const container = input.closest('.position-relative');
+            const clearBtn = container.querySelector('.clear-field-btn');
+            if (clearBtn) clearBtn.classList.add('d-none');
+            const dropdown = container.querySelector('.field-autocomplete-dropdown');
+            if (dropdown) dropdown.classList.add('d-none');
+        });
+
+        // Reset all selects
+        form.querySelectorAll('select').forEach(select => {
+            select.selectedIndex = 0;
+        });
+
+        // Reset URL & trigger fresh search
+        window.history.replaceState(null, '', window.location.pathname);
+        triggerLiveSearch();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInputs = document.querySelectorAll('.search-field-input');
+
+        searchInputs.forEach(input => {
+            const container = input.closest('.position-relative');
+            const clearBtn = container.querySelector('.clear-field-btn');
+            const spinner = container.querySelector('.field-spinner');
+            const dropdown = container.querySelector('.field-autocomplete-dropdown');
+            const fieldType = input.getAttribute('data-autocomplete-type');
+            const minLength = parseInt(input.getAttribute('data-min-length') || '2', 10);
+
+            let debounceTimer = null;
+            let activeIndex = -1;
+            let autocompleteController = null;
+
+            function showSpinner(show) {
+                if (spinner) {
+                    if (show) spinner.classList.remove('d-none');
+                    else spinner.classList.add('d-none');
+                }
+            }
+
+            function closeAutocomplete() {
+                if (dropdown) {
+                    dropdown.classList.add('d-none');
+                    dropdown.innerHTML = '';
+                }
+                activeIndex = -1;
+            }
+
+            function escapeHtml(str) {
+                return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+            }
+
+            function renderSuggestions(results, query) {
+                if (!dropdown) return;
+
+                if (!results || results.length === 0) {
+                    dropdown.innerHTML = `
+                        <div class="p-2 text-center text-muted x-small">
+                            No suggestions found for "<strong>${escapeHtml(query)}</strong>"
+                        </div>`;
+                    dropdown.classList.remove('d-none');
+                    activeIndex = -1;
+                    return;
+                }
+
+                let html = '';
+                results.forEach((item, idx) => {
+                    html += `
+                        <div class="autocomplete-item" data-index="${idx}" data-value="${escapeHtml(item.value)}" data-url="${item.url || ''}">
+                            <div class="d-flex align-items-center gap-2 overflow-hidden me-2">
+                                <div class="avatar-circle flex-shrink-0">${escapeHtml(item.avatar || 'S')}</div>
+                                <div class="overflow-hidden">
+                                    <div class="fw-bold text-dark x-small text-truncate m-0">${escapeHtml(item.value)}</div>
+                                    <div class="text-secondary x-small text-truncate">${escapeHtml(item.title || item.subtitle || '')}</div>
+                                </div>
+                            </div>
+                            <i class="bi bi-arrow-return-left text-muted x-small"></i>
+                        </div>`;
+                });
+
+                dropdown.innerHTML = html;
+                dropdown.classList.remove('d-none');
+                activeIndex = -1;
+
+                dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+                    el.addEventListener('click', function() {
+                        const val = this.getAttribute('data-value');
+                        if (val) input.value = val;
+                        if (clearBtn) clearBtn.classList.remove('d-none');
+                        closeAutocomplete();
+                        triggerLiveSearch();
+                    });
+                });
+            }
+
+            function fetchAutocomplete(query) {
+                if (autocompleteController) {
+                    autocompleteController.abort();
+                }
+                autocompleteController = new AbortController();
+
+                fetch(`/api/candidates/autocomplete/?type=${encodeURIComponent(fieldType)}&q=${encodeURIComponent(query)}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    signal: autocompleteController.signal
+                })
+                .then(res => res.json())
+                .then(data => {
+                    showSpinner(false);
+                    renderSuggestions(data.results, query);
+                })
+                .catch(err => {
+                    if (err.name !== 'AbortError') {
+                        showSpinner(false);
+                        if (dropdown) {
+                            dropdown.innerHTML = '<div class="p-2 text-center text-danger x-small">Error fetching suggestions</div>';
+                            dropdown.classList.remove('d-none');
+                        }
+                    }
+                });
+            }
+
+            input.addEventListener('input', function() {
+                const val = this.value.trim();
+
+                if (val.length > 0) {
+                    if (clearBtn) clearBtn.classList.remove('d-none');
+                } else {
+                    if (clearBtn) clearBtn.classList.add('d-none');
+                    closeAutocomplete();
+                    triggerLiveSearch();
+                    return;
+                }
+
+                if (val.length < minLength) {
+                    closeAutocomplete();
+                    debounceLiveSearch();
+                    return;
+                }
+
+                showSpinner(true);
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    fetchAutocomplete(val);
+                }, DEBOUNCE_MS);
+
+                debounceLiveSearch();
+            });
+
+            input.addEventListener('keydown', function(e) {
+                if (!dropdown || dropdown.classList.contains('d-none')) {
+                    if (e.key === 'Escape') closeAutocomplete();
+                    return;
+                }
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+                if (!items || items.length === 0) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    activeIndex = (activeIndex + 1) % items.length;
+                    updateActive(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    activeIndex = (activeIndex - 1 + items.length) % items.length;
+                    updateActive(items);
+                } else if (e.key === 'Enter') {
+                    if (activeIndex >= 0 && items[activeIndex]) {
+                        e.preventDefault();
+                        items[activeIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    closeAutocomplete();
+                }
+            });
+
+            function updateActive(items) {
+                items.forEach((item, idx) => {
+                    if (idx === activeIndex) {
+                        item.classList.add('active');
+                        item.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    input.value = '';
+                    clearBtn.classList.add('d-none');
+                    closeAutocomplete();
+                    triggerLiveSearch();
+                });
+            }
+        });
+
+        // Close dropdowns on click outside
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll('.position-relative').forEach(container => {
+                if (!container.contains(e.target)) {
+                    const dropdown = container.querySelector('.field-autocomplete-dropdown');
+                    if (dropdown) dropdown.classList.add('d-none');
+                }
+            });
+        });
+    });
 </script>
 {% endblock %}
