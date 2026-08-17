@@ -1097,20 +1097,20 @@ class JobsView(ListView):
             if job_type:
                 queryset = queryset.filter(job_type=job_type)
                 
-            # Client filter (Supports UUID, company_name, and slugified name)
-            client_filter = self.request.GET.get('client', '').strip()
-            if client_filter:
+            # Company / Client filter (Supports UUID, name, and slugified name)
+            company_filter = self.request.GET.get('company', '').strip() or self.request.GET.get('client', '').strip()
+            if company_filter:
                 import uuid
                 try:
-                    client_uuid = uuid.UUID(client_filter)
-                    queryset = queryset.filter(client_id=client_uuid)
+                    comp_uuid = uuid.UUID(company_filter)
+                    queryset = queryset.filter(Q(company_id=comp_uuid) | Q(client_id=comp_uuid))
                 except ValueError:
-                    clean_name = client_filter.replace('-', ' ').strip()
+                    clean_name = company_filter.replace('-', ' ').strip()
                     queryset = queryset.filter(
-                        Q(client__company_name__icontains=client_filter) |
-                        Q(client__company_name__icontains=clean_name) |
-                        Q(company__name__icontains=client_filter) |
-                        Q(company__name__icontains=clean_name)
+                        Q(company__name__icontains=company_filter) |
+                        Q(company__name__icontains=clean_name) |
+                        Q(client__company_name__icontains=company_filter) |
+                        Q(client__company_name__icontains=clean_name)
                     )
                 
             # Sorting
@@ -1187,9 +1187,31 @@ class JobsView(ListView):
             context['selected_job_type'] = self.request.GET.get('job_type', '')
             context['selected_sort'] = self.request.GET.get('sort_by', '-created_at')
             
+            from apps.companies.models import Company
             from apps.clients.models import Client
+
+            active_companies = list(Company.objects.filter(jobs__status='ACTIVE').distinct())
+            if not active_companies:
+                active_companies = list(Company.objects.filter(is_active=True).order_by('name'))
+
+            client_list = list(Client.objects.filter(status='ACTIVE'))
+
+            company_options = []
+            seen_names = set()
+            for c in active_companies:
+                if c.name and c.name not in seen_names:
+                    company_options.append({'id': str(c.id), 'name': c.name})
+                    seen_names.add(c.name)
+            for cl in client_list:
+                if cl.company_name and cl.company_name not in seen_names:
+                    company_options.append({'id': str(cl.id), 'name': cl.company_name})
+                    seen_names.add(cl.company_name)
+
+            context['companies'] = company_options
+            context['selected_company'] = self.request.GET.get('company', '') or self.request.GET.get('client', '')
+
             context['clients'] = Client.objects.filter(status='ACTIVE')
-            context['selected_client'] = self.request.GET.get('client', '')
+            context['selected_client'] = self.request.GET.get('client', '') or self.request.GET.get('company', '')
             
             context['job_types'] = [
                 ('FULL_TIME', 'Full Time'),

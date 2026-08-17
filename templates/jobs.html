@@ -162,13 +162,13 @@
 <div class="card shadow-sm border-0 mb-4 fade-in" style="border-radius: 16px;">
     <div class="card-body p-4">
         <form method="GET" class="row g-3 align-items-end">
-            <!-- Client Filter -->
+            <!-- Company Filter -->
             <div class="col-md-2">
-                <label for="client" class="form-label small fw-bold text-secondary">Client</label>
-                <select name="client" id="client" class="form-select form-select-sm fw-medium" onchange="this.form.submit()">
-                    <option value="">All Clients</option>
-                    {% for c in clients %}
-                        <option value="{{ c.id }}" {% if selected_client == c.id|stringformat:"s" or selected_client|lower == c.company_name|lower or selected_client|slugify == c.company_name|slugify %}selected{% endif %}>{{ c.company_name }}</option>
+                <label for="company" class="form-label small fw-bold text-secondary">Company</label>
+                <select name="company" id="company" class="form-select form-select-sm fw-medium" onchange="this.form.submit()">
+                    <option value="">All Companies</option>
+                    {% for c in companies %}
+                        <option value="{{ c.id }}" {% if selected_company == c.id|stringformat:"s" or selected_company|lower == c.name|lower or selected_company|slugify == c.name|slugify or selected_client == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -235,7 +235,7 @@
                 <thead class="table-light">
                     <tr>
                         <th class="ps-4 py-3 text-secondary fw-bold" style="font-size: 0.78rem;">JOB TITLE</th>
-                        <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">CLIENT / COMPANY</th>
+                        <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">COMPANY</th>
                         <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">SALARY RANGE</th>
                         <th class="py-3 text-center text-secondary fw-bold" style="font-size: 0.78rem;">APPLICATIONS</th>
                         <th class="py-3 text-secondary fw-bold" style="font-size: 0.78rem;">STATUS</th>
@@ -250,7 +250,7 @@
                             <div class="text-secondary small mt-0.5"><i class="bi bi-geo-alt-fill me-1 text-secondary opacity-75"></i>{{ job.location }} &bull; {{ job.get_job_type_display }} &bull; {{ job.get_work_mode_display }}</div>
                         </td>
                         <td>
-                            <div class="fw-semibold text-secondary small">{{ job.company.name }}{% if job.client %} <span class="text-secondary opacity-75">(Client: {{ job.client.company_name }})</span>{% endif %}</div>
+                            <div class="fw-semibold text-secondary small">{{ job.company.name }}</div>
                         </td>
                         <td>
                             <span class="fw-bold text-success small">{{ job.salary_range_lpa }}</span>
