@@ -1246,12 +1246,34 @@ class JobCreateView(RecruiterRequiredMixin, CreateView):
         return context
 
     def form_valid(self, form):
-        member = CompanyMember.objects.filter(user=self.request.user).first()
-        if member:
-            form.instance.company = member.company
-        else:
-            company, _ = Company.objects.get_or_create(name="Default Company", slug="default-company")
+        client = form.cleaned_data.get('client') or getattr(form.instance, 'client', None)
+        if client:
+            from apps.companies.models import Company
+            from django.utils.text import slugify
+            comp_name = client.company_name.strip()
+            company = Company.objects.filter(name__iexact=comp_name).first()
+            if not company:
+                base_slug = slugify(comp_name) or 'company'
+                slug = base_slug
+                counter = 1
+                while Company.objects.filter(slug=slug).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+                company = Company.objects.create(
+                    name=comp_name,
+                    slug=slug,
+                    industry=getattr(client, 'industry', '') or 'General',
+                    location=client.city or 'India'
+                )
             form.instance.company = company
+            form.instance.client = client
+        else:
+            member = CompanyMember.objects.filter(user=self.request.user).first()
+            if member and member.company:
+                form.instance.company = member.company
+            else:
+                company, _ = Company.objects.get_or_create(name="Default Company", slug="default-company")
+                form.instance.company = company
             
         if 'draft' in self.request.POST:
             form.instance.status = 'DRAFT'
@@ -1296,6 +1318,28 @@ class JobUpdateView(RecruiterRequiredMixin, UpdateView):
         return context
 
     def form_valid(self, form):
+        client = form.cleaned_data.get('client') or getattr(form.instance, 'client', None)
+        if client:
+            from apps.companies.models import Company
+            from django.utils.text import slugify
+            comp_name = client.company_name.strip()
+            company = Company.objects.filter(name__iexact=comp_name).first()
+            if not company:
+                base_slug = slugify(comp_name) or 'company'
+                slug = base_slug
+                counter = 1
+                while Company.objects.filter(slug=slug).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+                company = Company.objects.create(
+                    name=comp_name,
+                    slug=slug,
+                    industry=getattr(client, 'industry', '') or 'General',
+                    location=client.city or 'India'
+                )
+            form.instance.company = company
+            form.instance.client = client
+
         if 'draft' in self.request.POST:
             form.instance.status = 'DRAFT'
         else:

@@ -43,7 +43,7 @@
                     <div class="flex items-start justify-between flex-wrap gap-2">
                         <div class="flex gap-3">
                             <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">
-                                {{ rec.job.company.name|slice:":1"|upper }}
+                                {{ rec.job.display_company|slice:":1"|upper }}
                             </div>
                             <div>
                                 <h3 class="font-extrabold text-slate-950 dark:text-white text-base">
@@ -51,7 +51,7 @@
                                         {{ rec.job.title }}
                                     </a>
                                 </h3>
-                                <p class="text-xs text-slate-550 font-semibold mt-0.5">{{ rec.job.company.name }} • {{ rec.job.location }}</p>
+                                <p class="text-xs text-slate-550 font-semibold mt-0.5">{{ rec.job.display_company }} • {{ rec.job.location }}</p>
                             </div>
                         </div>
                         <span class="text-xs {{ rec.badge_class }} px-2.5 py-1 rounded-full font-bold">{{ rec.match_score }}% Match</span>

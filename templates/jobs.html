@@ -250,7 +250,7 @@
                             <div class="text-secondary small mt-0.5"><i class="bi bi-geo-alt-fill me-1 text-secondary opacity-75"></i>{{ job.location }} &bull; {{ job.get_job_type_display }} &bull; {{ job.get_work_mode_display }}</div>
                         </td>
                         <td>
-                            <div class="fw-semibold text-secondary small">{{ job.company.name }}</div>
+                            <div class="fw-semibold text-secondary small">{{ job.display_company }}</div>
                         </td>
                         <td>
                             <span class="fw-bold text-success small">{{ job.salary_range_lpa }}</span>
@@ -303,7 +303,7 @@
                                             </a>
                                         </li>
                                         <li>
-                                            <button class="dropdown-item py-2 fw-medium" type="button" data-bs-toggle="modal" data-bs-target="#shareJobModal" data-job-title="{{ job.title }}" data-company-name="{{ job.company.name }}" data-share-url="{{ job.share_url }}">
+                                            <button class="dropdown-item py-2 fw-medium" type="button" data-bs-toggle="modal" data-bs-target="#shareJobModal" data-job-title="{{ job.title }}" data-company-name="{{ job.display_company }}" data-share-url="{{ job.share_url }}">
                                                 <i class="bi bi-share text-secondary me-2"></i> Share Job
                                             </button>
                                         </li>

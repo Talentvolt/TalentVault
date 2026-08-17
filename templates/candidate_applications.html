@@ -56,7 +56,7 @@
             <div class="flex justify-between items-start gap-4 flex-wrap">
                 <div class="flex gap-3">
                     <div class="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center text-lg font-black uppercase">
-                        {{ app.job.company.name|slice:":1" }}
+                        {{ app.job.display_company|slice:":1" }}
                     </div>
                     <div>
                         <h3 class="font-extrabold text-slate-950 dark:text-white text-sm">
@@ -64,7 +64,7 @@
                                 {{ app.job.title }}
                             </a>
                         </h3>
-                        <p class="text-xs text-slate-450 font-semibold mt-0.5">{{ app.job.company.name }} • {{ app.job.location }}</p>
+                        <p class="text-xs text-slate-450 font-semibold mt-0.5">{{ app.job.display_company }} • {{ app.job.location }}</p>
                     </div>
                 </div>
                 <div class="text-right">

@@ -11,7 +11,7 @@
     <link rel="icon" type="image/png" sizes="48x48" href="{% static 'images/logo/favicon-48x48.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'images/logo/apple-touch-icon.png' %}">
     <link rel="manifest" href="{% static 'images/logo/site.webmanifest' %}">
-    <title>{{ job.title }} at {{ job.company.name }} | TalentVault</title>
+    <title>{{ job.title }} at {{ job.display_company }} | TalentVault</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -187,7 +187,7 @@
                             {% endif %}
                         </div>
                         <h2 class="fw-bold mb-2" style="font-family: 'Outfit', sans-serif; font-size: 2.2rem; letter-spacing: -0.5px;">{{ job.title }}</h2>
-                        <h4 class="text-primary fw-semibold mb-4">{{ job.company.name }}</h4>
+                        <h4 class="text-primary fw-semibold mb-4">{{ job.display_company }}</h4>
                         
                         <div class="row g-3">
                             <div class="col-sm-4">
@@ -324,12 +324,12 @@
                         </button>
                         
                         <!-- WhatsApp -->
-                        <a href="https://api.whatsapp.com/send?text=Check%20out%20this%20job%20opening%20for%20{{ job.title|urlencode }}%20at%20{{ job.company.name|urlencode }}%3A%20{{ share_url|urlencode }}" target="_blank" class="btn btn-share btn-whatsapp w-100">
+                        <a href="https://api.whatsapp.com/send?text=Check%20out%20this%20job%20opening%20for%20{{ job.title|urlencode }}%20at%20{{ job.display_company|urlencode }}%3A%20{{ share_url|urlencode }}" target="_blank" class="btn btn-share btn-whatsapp w-100">
                             <i class="bi bi-whatsapp fs-5"></i> Share on WhatsApp
                         </a>
                         
                         <!-- Email -->
-                        <a href="mailto:?subject=Job%20Opportunity%3A%20{{ job.title|urlencode }}%20at%20{{ job.company.name|urlencode }}&body=Hi%2C%0A%0AI%20found%20this%20interesting%20job%20opening%20for%20{{ job.title|urlencode }}%20at%20{{ job.company.name|urlencode }}.%0A%0ALink%3A%20{{ share_url|urlencode }}" class="btn btn-share btn-email w-100">
+                        <a href="mailto:?subject=Job%20Opportunity%3A%20{{ job.title|urlencode }}%20at%20{{ job.display_company|urlencode }}&body=Hi%2C%0A%0AI%20found%20this%20interesting%20job%20opening%20for%20{{ job.title|urlencode }}%20at%20{{ job.display_company|urlencode }}.%0A%0ALink%3A%20{{ share_url|urlencode }}" class="btn btn-share btn-email w-100">
                             <i class="bi bi-envelope fs-5"></i> Share via Email
                         </a>
 
@@ -360,7 +360,7 @@
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                             <div>
                                 <h5 class="fw-bold text-dark mb-1" style="font-family: 'Outfit', sans-serif;">{{ job.title }}</h5>
-                                <div class="text-primary fw-semibold small"><i class="bi bi-building me-1"></i> {{ job.company.name }}</div>
+                                <div class="text-primary fw-semibold small"><i class="bi bi-building me-1"></i> {{ job.display_company }}</div>
                             </div>
                             <a href="#job-description-section" id="btn_view_jd_from_modal" class="btn btn-sm btn-outline-primary fw-semibold rounded-2">
                                 <i class="bi bi-file-text me-1"></i> View Job Description

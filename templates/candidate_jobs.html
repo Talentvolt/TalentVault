@@ -190,10 +190,10 @@
                 <div class="flex items-start justify-between flex-wrap gap-3">
                     <div class="flex gap-3">
                         {% if job.company.logo %}
-                            <img src="{{ job.company.logo.url }}" alt="{{ job.company.name }} logo" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0">
+                            <img src="{{ job.company.logo.url }}" alt="{{ job.display_company }} logo" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0">
                         {% else %}
                             <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black flex-shrink-0">
-                                {{ job.company.name|slice:":1"|upper }}
+                                {{ job.display_company|slice:":1"|upper }}
                             </div>
                         {% endif %}
                         <div>
@@ -202,7 +202,7 @@
                                     {{ job.title }}
                                 </a>
                             </h3>
-                            <p class="text-xs text-slate-500 font-semibold mt-0.5">{{ job.company.name }} • {{ job.location }} • {{ job.created_at|date:"M d, Y" }}</p>
+                            <p class="text-xs text-slate-500 font-semibold mt-0.5">{{ job.display_company }} • {{ job.location }} • {{ job.created_at|date:"M d, Y" }}</p>
                         </div>
                     </div>
                 </div>
@@ -245,7 +245,7 @@
                     {% endif %}
                 </button>
                 
-                <button onclick="shareJob('{{ job.title|escapejs }} at {{ job.company.name|escapejs }}', '{{ job.share_url|escapejs }}')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+                <button onclick="shareJob('{{ job.title|escapejs }} at {{ job.display_company|escapejs }}', '{{ job.share_url|escapejs }}')" class="w-12 h-12 border border-slate-200 dark:border-slate-700 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <i class="bi bi-share text-base"></i>
                 </button>
             </div>

@@ -99,12 +99,16 @@ class Job(BaseAppModel):
         return "Not Specified"
 
     @property
-    def client_name(self):
+    def display_company(self):
         if self.client and getattr(self.client, 'company_name', None):
             return self.client.company_name
         if self.company and getattr(self.company, 'name', None):
             return self.company.name
         return "N/A"
+
+    @property
+    def client_name(self):
+        return self.display_company
     
     class Meta:
         verbose_name = _('job')
@@ -112,7 +116,7 @@ class Job(BaseAppModel):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.title} @ {self.company.name}"
+        return f"{self.title} @ {self.display_company}"
 
 class JobSkill(BaseAppModel):
     """

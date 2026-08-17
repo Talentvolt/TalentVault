@@ -38,9 +38,30 @@ class JobViewSet(viewsets.ModelViewSet):
         return get_tenant_jobs_qs(self.request.user)
 
     def perform_create(self, serializer):
-        from utils.tenant import get_user_company
-        company = get_user_company(self.request.user)
-        serializer.save(created_by=self.request.user, company=company or serializer.validated_data.get('company'))
+        client = serializer.validated_data.get('client')
+        if client:
+            from apps.companies.models import Company
+            from django.utils.text import slugify
+            comp_name = client.company_name.strip()
+            company = Company.objects.filter(name__iexact=comp_name).first()
+            if not company:
+                base_slug = slugify(comp_name) or 'company'
+                slug = base_slug
+                counter = 1
+                while Company.objects.filter(slug=slug).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+                company = Company.objects.create(
+                    name=comp_name,
+                    slug=slug,
+                    industry=getattr(client, 'industry', '') or 'General',
+                    location=client.city or 'India'
+                )
+            serializer.save(created_by=self.request.user, company=company, client=client)
+        else:
+            from utils.tenant import get_user_company
+            company = get_user_company(self.request.user)
+            serializer.save(created_by=self.request.user, company=company or serializer.validated_data.get('company'))
 
     @action(detail=True, methods=['post'], url_path='publish')
     def publish_job(self, request, pk=None):

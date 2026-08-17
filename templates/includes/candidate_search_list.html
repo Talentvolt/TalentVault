@@ -100,11 +100,7 @@
                                 </span>
                                 <span class="text-secondary x-small">
                                     {% if candidate.latest_application %}
-                                        {% if candidate.latest_application.job.client %}
-                                            {{ candidate.latest_application.job.client.company_name }}
-                                        {% else %}
-                                            {{ candidate.latest_application.job.company.name }}
-                                        {% endif %}
+                                        {{ candidate.latest_application.job.display_company }}
                                     {% else %}
                                         Unassigned
                                     {% endif %}
