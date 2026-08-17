@@ -65,7 +65,9 @@ from .views import (
     CandidateResumeDeleteView,
     CandidateOnboardingUpdateView,
     ToggleSaveJobView,
-    JobApplyView
+    JobApplyView,
+    PublicJobJDPreviewView,
+    PublicJobJDDownloadView
 )
 
 app_name = 'frontend'
@@ -104,6 +106,10 @@ urlpatterns = [
     path('jobs/<uuid:pk>/<str:action>/', JobActionView.as_view(), name='job_action'),
     path('jobs/share/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share'),
     path('share/job/<uuid:pk>/', PublicJobShareView.as_view(), name='public_job_share_alt'),
+    path('jobs/share/<uuid:pk>/jd-preview/', PublicJobJDPreviewView.as_view(), name='share_job_jd_preview'),
+    path('jobs/share/<uuid:pk>/jd-download/', PublicJobJDDownloadView.as_view(), name='share_job_jd_download'),
+    path('jobs/<uuid:pk>/jd-preview/', PublicJobJDPreviewView.as_view(), name='job_jd_preview'),
+    path('jobs/<uuid:pk>/jd-download/', PublicJobJDDownloadView.as_view(), name='job_jd_download'),
     path('jobs/share/<uuid:job_id>/apply/', PublicJobApplyView.as_view(), name='public_job_apply'),
     path('jobs/<uuid:job_id>/apply/', JobApplyView.as_view(), name='job_apply'),
     path('location-search/', LocationSearchView.as_view(), name='location_search'),

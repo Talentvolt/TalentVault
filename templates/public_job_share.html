@@ -232,14 +232,17 @@
                                         <span class="fs-4">📄</span>
                                         <div>
                                             <div class="fw-bold text-dark mb-0">{{ jd_file_name|default:job.jd_file.name }}</div>
-                                            <small class="text-secondary">Uploaded Job Description File</small>
+                                            <small class="text-secondary">Uploaded Job Description Document</small>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="collapse" data-bs-target="#jd_file_preview_collapse" aria-expanded="true" aria-controls="jd_file_preview_collapse">
+                                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="collapse" data-bs-target="#jd_file_preview_collapse" aria-expanded="true" aria-controls="jd_file_preview_collapse" id="btn_toggle_jd_preview">
                                             <i class="bi bi-eye me-1"></i> Preview
                                         </button>
-                                        <a href="{{ job.jd_file.url }}" download target="_blank" class="btn btn-sm btn-primary fw-semibold">
+                                        <a href="{{ jd_preview_url|default:job.jd_file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary fw-semibold" id="btn_open_jd_new_tab" title="Open PDF in new window">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i> Open
+                                        </a>
+                                        <a href="{{ jd_download_url|default:job.jd_file.url }}" download="{{ jd_file_name|default:'Job_Description.pdf' }}" target="_blank" class="btn btn-sm btn-primary fw-semibold" id="btn_download_jd_file">
                                             <i class="bi bi-download me-1"></i> Download
                                         </a>
                                     </div>
@@ -248,9 +251,9 @@
                                 <!-- Preview Area -->
                                 <div class="collapse show mt-3" id="jd_file_preview_collapse">
                                     {% if is_pdf or job.jd_file.name|lower|slice:"-4:" == ".pdf" %}
-                                        <!-- PDF Embedded Viewer -->
-                                        <div class="ratio ratio-16x9 rounded overflow-hidden border shadow-sm" style="min-height: 550px;">
-                                            <iframe src="{{ job.jd_file.url }}" title="JD Preview" width="100%" height="100%" style="border: none;"></iframe>
+                                        <!-- PDF Embedded Viewer with Presigned URL -->
+                                        <div class="ratio ratio-16x9 rounded overflow-hidden border shadow-sm" style="min-height: 550px; background-color: #525659;">
+                                            <iframe src="{{ jd_preview_url|default:job.jd_file.url }}" title="JD Preview" width="100%" height="100%" style="border: none;" allowfullscreen></iframe>
                                         </div>
                                     {% elif is_docx or jd_docx_html %}
                                         <!-- DOCX Converted Preview -->
@@ -260,15 +263,15 @@
                                             </div>
                                         {% else %}
                                             <div class="p-3 bg-white rounded border text-center text-secondary">
-                                                <p class="mb-2 small">DOCX preview available via download.</p>
-                                                <a href="{{ job.jd_file.url }}" download class="btn btn-sm btn-outline-primary">
+                                                <p class="mb-2 small">DOCX preview available via download or open.</p>
+                                                <a href="{{ jd_download_url|default:job.jd_file.url }}" download class="btn btn-sm btn-outline-primary">
                                                     <i class="bi bi-download me-1"></i> Download {{ jd_file_name|default:"File" }}
                                                 </a>
                                             </div>
                                         {% endif %}
                                     {% else %}
                                         <div class="ratio ratio-16x9 rounded overflow-hidden border" style="min-height: 500px;">
-                                            <iframe src="{{ job.jd_file.url }}" width="100%" height="100%" style="border: none;"></iframe>
+                                            <iframe src="{{ jd_preview_url|default:job.jd_file.url }}" width="100%" height="100%" style="border: none;" allowfullscreen></iframe>
                                         </div>
                                     {% endif %}
                                 </div>

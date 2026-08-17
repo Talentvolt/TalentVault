@@ -2375,6 +2375,23 @@ class PublicJobShareView(DetailView):
             context['is_pdf'] = (ext == '.pdf')
             context['is_docx'] = (ext in ['.docx', '.doc'])
 
+            from utils.s3 import get_presigned_url
+            jd_preview_url = get_presigned_url(jd_file, expires_in=7200, as_attachment=False, filename=filename)
+            if not jd_preview_url:
+                try:
+                    jd_preview_url = reverse('frontend:share_job_jd_preview', kwargs={'pk': job.pk})
+                except Exception:
+                    jd_preview_url = ""
+            context['jd_preview_url'] = jd_preview_url
+
+            jd_download_url = get_presigned_url(jd_file, expires_in=7200, as_attachment=True, filename=filename)
+            if not jd_download_url:
+                try:
+                    jd_download_url = reverse('frontend:share_job_jd_download', kwargs={'pk': job.pk})
+                except Exception:
+                    jd_download_url = ""
+            context['jd_download_url'] = jd_download_url
+
             if ext in ['.docx', '.doc']:
                 try:
                     import mammoth
@@ -4725,10 +4742,16 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
                 return HttpResponse("No resume file found.", status=404)
                 
             resume_file = candidate.resume
+            filename = candidate.original_filename or os.path.basename(resume_file.name)
+            
+            from utils.s3 import get_presigned_url
+            presigned_url = get_presigned_url(resume_file, expires_in=3600, as_attachment=True, filename=filename)
+            if presigned_url and presigned_url.startswith('http'):
+                return redirect(presigned_url)
+
             if resume_file.storage.exists(resume_file.name):
                 try:
                     if hasattr(resume_file.storage, 'path'):
-                        filename = candidate.original_filename or os.path.basename(resume_file.name)
                         f = resume_file.open('rb')
                         content_type, _ = mimetypes.guess_type(resume_file.name)
                         if not content_type:
@@ -4774,12 +4797,20 @@ class PublicCandidateResumeDownloadView(View):
     supporting both local media storage and AWS S3 media storage gracefully without error.
     """
     def get(self, request, pk, *args, **kwargs):
+        import os
         try:
             candidate = CandidateProfile.objects.filter(pk=pk).first()
             if not candidate or not candidate.resume or not candidate.resume.name:
                 return render(request, '404.html', {'message': 'Resume file no longer available.'}, status=404)
             
             resume_file = candidate.resume
+            filename = candidate.original_filename or os.path.basename(resume_file.name)
+            
+            from utils.s3 import get_presigned_url
+            presigned_url = get_presigned_url(resume_file, expires_in=3600, as_attachment=True, filename=filename)
+            if presigned_url and presigned_url.startswith('http'):
+                return redirect(presigned_url)
+
             if resume_file.storage.exists(resume_file.name):
                 return redirect(resume_file.url)
 
@@ -4787,6 +4818,79 @@ class PublicCandidateResumeDownloadView(View):
             logger.error(f"Error downloading candidate resume {pk}: {e}")
             
         return render(request, '404.html', {'message': 'Resume file is no longer available in cloud storage.'}, status=404)
+
+
+@method_decorator(xframe_options_sameorigin, name='dispatch')
+class PublicJobJDPreviewView(View):
+    """
+    Renders/serves inline Job Description file publicly for preview in iframes or browser.
+    Generates a secure AWS S3 presigned URL with inline disposition (no AccessDenied) or serves locally.
+    """
+    def get(self, request, pk, *args, **kwargs):
+        import os
+        import mimetypes
+        try:
+            job = get_object_or_404(Job, pk=pk)
+            if not job.jd_file or not job.jd_file.name:
+                return render(request, '404.html', {'message': 'Job description document is not available.'}, status=404)
+            
+            jd_file = job.jd_file
+            filename = os.path.basename(jd_file.name)
+            content_type, _ = mimetypes.guess_type(filename)
+            if not content_type:
+                content_type = 'application/pdf' if filename.lower().endswith('.pdf') else 'application/octet-stream'
+
+            from utils.s3 import get_presigned_url
+            presigned_url = get_presigned_url(jd_file, expires_in=7200, as_attachment=False, filename=filename, content_type=content_type)
+            if presigned_url and presigned_url.startswith('http'):
+                return redirect(presigned_url)
+
+            # Local storage or streaming fallback
+            if jd_file.storage.exists(jd_file.name):
+                f = jd_file.open('rb')
+                response = FileResponse(f, content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+                return response
+
+        except Exception as e:
+            logger.error(f"Error serving JD preview for job {pk}: {e}")
+            
+        return render(request, '404.html', {'message': 'Job description preview is not available.'}, status=404)
+
+
+class PublicJobJDDownloadView(View):
+    """
+    Forces public download of Job Description document stored in Job.jd_file,
+    generating a secure temporary presigned S3 URL or direct stream without AccessDenied.
+    """
+    def get(self, request, pk, *args, **kwargs):
+        import os
+        import mimetypes
+        try:
+            job = get_object_or_404(Job, pk=pk)
+            if not job.jd_file or not job.jd_file.name:
+                return render(request, '404.html', {'message': 'Job description document is not available.'}, status=404)
+
+            jd_file = job.jd_file
+            filename = os.path.basename(jd_file.name)
+            content_type, _ = mimetypes.guess_type(filename)
+            if not content_type:
+                content_type = 'application/octet-stream'
+
+            from utils.s3 import get_presigned_url
+            presigned_url = get_presigned_url(jd_file, expires_in=7200, as_attachment=True, filename=filename, content_type=content_type)
+            if presigned_url and presigned_url.startswith('http'):
+                return redirect(presigned_url)
+
+            # Local storage or streaming fallback
+            if jd_file.storage.exists(jd_file.name):
+                f = jd_file.open('rb')
+                return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+
+        except Exception as e:
+            logger.error(f"Error downloading JD file for job {pk}: {e}")
+
+        return render(request, '404.html', {'message': 'Job description file is not available.'}, status=404)
 
 
 # --- NEW CANDIDATE PORTAL VIEWS ---
