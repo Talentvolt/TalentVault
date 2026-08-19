@@ -108,6 +108,7 @@ INSTALLED_APPS = [
     'apps.companies',
     'apps.jobs',
     'apps.candidates',
+    'apps.taxonomy',
     'apps.applications',
     'apps.interviews',
     'apps.notifications',

@@ -1382,193 +1382,340 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
     
     def get_queryset(self):
         from django.db.models import Prefetch, Q
+        from services.universal_candidate_search_service import UniversalCandidateSearchService
+        from apps.candidates.models import RecentCandidateSearch
         
-        queryset = get_tenant_candidates_qs(self.request.user).select_related('user').prefetch_related(
-            'skills',
-            'experiences',
-            'educations',
+        user = self.request.user
+        base_qs = get_tenant_candidates_qs(user).prefetch_related(
             Prefetch(
                 'job_applications',
-                queryset=get_tenant_applications_qs(self.request.user).select_related('job', 'job__company', 'job__client', 'created_by').order_by('-created_at')
+                queryset=get_tenant_applications_qs(user).select_related('job', 'job__company', 'job__client', 'created_by').order_by('-created_at')
             )
         )
         
-        # 1. Candidate Name Filter (name or q)
-        name = self.request.GET.get('name') or self.request.GET.get('q')
-        has_name_rank = False
-        if name and name.strip():
-            n_clean = name.strip()
-            has_name_rank = True
-            from django.db.models import Case, When, Value, IntegerField
-            queryset = queryset.filter(
-                Q(full_name__icontains=n_clean) |
-                Q(user__first_name__icontains=n_clean) |
-                Q(user__last_name__icontains=n_clean) |
-                Q(user__email__icontains=n_clean) |
-                Q(user__phone_number__icontains=n_clean)
-            ).annotate(
-                name_match_rank=Case(
-                    When(full_name__iexact=n_clean, then=Value(1)),
-                    When(user__first_name__iexact=n_clean, then=Value(1)),
-                    When(full_name__istartswith=n_clean, then=Value(2)),
-                    When(user__first_name__istartswith=n_clean, then=Value(2)),
-                    When(user__last_name__istartswith=n_clean, then=Value(2)),
-                    default=Value(3),
-                    output_field=IntegerField()
-                )
-            )
+        # 1. Extract query & tag inputs
+        q = (self.request.GET.get('q') or self.request.GET.get('name') or '').strip()
+        tags_raw = self.request.GET.getlist('tags')
+        if not tags_raw and self.request.GET.get('tags'):
+            tags_raw = [t.strip() for t in self.request.GET.get('tags').split(',') if t.strip()]
 
-        # 1b. Job Title Filter (title or designation)
-        title = self.request.GET.get('title') or self.request.GET.get('designation')
-        if title and title.strip():
-            t_clean = title.strip()
-            queryset = queryset.filter(
-                Q(current_designation__icontains=t_clean) |
-                Q(experiences__designation__icontains=t_clean) |
-                Q(job_applications__job__title__icontains=t_clean) |
-                Q(preferred_job_role__icontains=t_clean)
-            )
+        selected_tags = []
+        for t in tags_raw:
+            if t and t.strip():
+                selected_tags.append({"label": t.strip(), "type": "tag"})
 
-        # 2. Department Filter
-        department = self.request.GET.get('department')
-        if department and department.strip():
-            dept = department.strip()
-            queryset = queryset.filter(
-                Q(job_applications__job__department__icontains=dept) |
-                Q(preferred_job_role__icontains=dept)
-            )
+        exclude_keywords = self.request.GET.get('exclude_keywords') or self.request.GET.get('excluded_keywords') or ''
+        skills_param = (self.request.GET.get('skills') or '').strip()
+        it_skills_param = (self.request.GET.get('it_skills') or '').strip()
+        min_exp_param = self.request.GET.get('min_exp') or self.request.GET.get('min_experience')
+        max_exp_param = self.request.GET.get('max_exp') or self.request.GET.get('max_experience')
+        location_param = (self.request.GET.get('location') or '').strip()
+        preferred_location_param = (self.request.GET.get('preferred_location') or '').strip()
+        willing_to_relocate_param = True if self.request.GET.get('willing_to_relocate') in ['1', 'true', 'True', True] else (False if self.request.GET.get('willing_to_relocate') in ['0', 'false', 'False', False] else None)
+        work_mode_param = (self.request.GET.get('work_mode') or '').strip()
+        min_salary_param = self.request.GET.get('min_salary')
+        max_salary_param = self.request.GET.get('max_salary')
+        currency_param = self.request.GET.get('currency', 'INR')
+        department_param = (self.request.GET.get('department') or '').strip()
+        role_name_param = (self.request.GET.get('role') or self.request.GET.get('role_name') or '').strip()
+        title_param = (self.request.GET.get('title') or self.request.GET.get('designation') or '').strip()
+        prev_designation_param = (self.request.GET.get('previous_designation') or '').strip()
+        industry_param = (self.request.GET.get('industry') or '').strip()
+        company_param = (self.request.GET.get('company') or '').strip()
+        prev_company_param = (self.request.GET.get('previous_company') or '').strip()
+        excluded_company_param = (self.request.GET.get('excluded_company') or '').strip()
+        company_type_param = (self.request.GET.get('company_type') or '').strip()
+        employment_type_param = (self.request.GET.get('employment_type') or '').strip()
+        notice_period_param = self.request.GET.get('notice_period')
         
-        # 3. Job Filter
-        job_id = self.request.GET.get('job_id')
-        selected_job = None
-        if job_id and job_id.strip():
-            job_id_clean = job_id.strip()
+        # Education parameters
+        ug_degree = (self.request.GET.get('ug_degree') or '').strip()
+        ug_specialization = (self.request.GET.get('ug_specialization') or '').strip()
+        ug_education_type = (self.request.GET.get('ug_education_type') or '').strip()
+        ug_passing_year_from = self.request.GET.get('ug_passing_year_from')
+        ug_passing_year_to = self.request.GET.get('ug_passing_year_to')
+        ug_institute = (self.request.GET.get('ug_institute') or '').strip()
+        pg_degree = (self.request.GET.get('pg_degree') or '').strip()
+        pg_specialization = (self.request.GET.get('pg_specialization') or '').strip()
+        pg_education_type = (self.request.GET.get('pg_education_type') or '').strip()
+        pg_passing_year_from = self.request.GET.get('pg_passing_year_from')
+        pg_passing_year_to = self.request.GET.get('pg_passing_year_to')
+        pg_institute = (self.request.GET.get('pg_institute') or '').strip()
+        doctorate_degree = (self.request.GET.get('doctorate_degree') or '').strip()
+        doctorate_specialization = (self.request.GET.get('doctorate_specialization') or '').strip()
+        doctorate_institute = (self.request.GET.get('doctorate_institute') or '').strip()
+        education_type = (self.request.GET.get('education_type') or '').strip()
+        passing_year_from = self.request.GET.get('passing_year_from')
+        passing_year_to = self.request.GET.get('passing_year_to')
+        institute_param = (self.request.GET.get('institute') or '').strip()
+        is_pursuing = True if self.request.GET.get('is_pursuing') in ['1', 'true', 'True'] else None
+
+        # Diversity & Candidate attributes (explicit self-declared candidate data only)
+        cand_name_param = (self.request.GET.get('candidate_name') or '').strip()
+        cand_email_param = (self.request.GET.get('candidate_email') or '').strip()
+        cand_phone_param = (self.request.GET.get('candidate_phone') or '').strip()
+        gender_param = (self.request.GET.get('gender') or '').strip()
+        has_career_break = True if self.request.GET.get('has_career_break') in ['1', 'true', 'True'] else None
+        is_differently_abled = True if self.request.GET.get('is_differently_abled') in ['1', 'true', 'True'] else None
+        disability_category = (self.request.GET.get('disability_category') or '').strip()
+        has_defence_background = True if self.request.GET.get('has_defence_background') in ['1', 'true', 'True'] else None
+        defence_branch = (self.request.GET.get('defence_branch') or '').strip()
+        work_permit_country = (self.request.GET.get('work_permit_country') or '').strip()
+
+        # Status & Freshness
+        candidate_status_param = (self.request.GET.get('candidate_status') or self.request.GET.get('status') or '').strip()
+        freshness_days = self.request.GET.get('freshness_days') or self.request.GET.get('activity_days')
+        has_resume = True if self.request.GET.get('has_resume') in ['1', 'true', 'True'] else None
+        has_verified_mobile = True if self.request.GET.get('has_verified_mobile') in ['1', 'true', 'True'] else None
+        has_verified_email = True if self.request.GET.get('has_verified_email') in ['1', 'true', 'True'] else None
+        search_within_results = (self.request.GET.get('search_within_results') or '').strip()
+
+        job_id_param = (self.request.GET.get('job_id') or '').strip()
+        stage_param = (self.request.GET.get('stage') or '').strip()
+        mandatory_keywords_param = self.request.GET.getlist('mandatory_keywords')
+        if not mandatory_keywords_param and self.request.GET.get('mandatory_keywords'):
+            mandatory_keywords_param = [k.strip() for k in self.request.GET.get('mandatory_keywords').split(',') if k.strip()]
+        boolean_query_param = (self.request.GET.get('boolean_query') or '').strip()
+        sort_by = self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'relevance'
+
+        # Tab routing (e.g. shortlisted, saved_for_later, new, modified)
+        tab_param = self.request.GET.get('tab', '').strip().lower()
+        if tab_param == 'shortlisted':
+            candidate_status_param = 'SHORTLISTED'
+        elif tab_param == 'saved_for_later':
+            candidate_status_param = 'SAVED_FOR_LATER'
+        elif tab_param == 'new':
+            candidate_status_param = 'NEW_CANDIDATE'
+        elif tab_param == 'modified':
+            candidate_status_param = 'MODIFIED'
+
+        # Record Recent Search if any search term is entered
+        if q or selected_tags or title_param or skills_param or boolean_query_param:
             try:
-                import uuid
-                uuid.UUID(job_id_clean)
-                queryset = queryset.filter(job_applications__job_id=job_id_clean)
-                selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id_clean).first()
-            except (ValueError, TypeError):
+                RecentCandidateSearch.objects.create(
+                    user=user,
+                    search_query=q or title_param or boolean_query_param or (selected_tags[0]["label"] if selected_tags else "Filtered Search"),
+                    selected_tags=selected_tags,
+                    filters_payload={
+                        "title": title_param,
+                        "location": location_param,
+                        "skills": skills_param,
+                        "department": department_param,
+                        "industry": industry_param,
+                        "min_exp": min_exp_param,
+                        "max_exp": max_exp_param,
+                        "boolean_query": boolean_query_param
+                    }
+                )
+                rec_ids = list(RecentCandidateSearch.objects.filter(user=user).order_by('-created_at').values_list('id', flat=True)[:15])
+                RecentCandidateSearch.objects.filter(user=user).exclude(id__in=rec_ids).delete()
+            except Exception:
                 pass
 
-        # 4. Pipeline Stage Filter
-        stage = self.request.GET.get('stage')
-        if stage and stage.strip():
-            stg = stage.strip().upper()
-            if stg == 'OPEN':
-                queryset = queryset.filter(job_applications__stage='OPEN')
-            elif stg == 'APPLIED':
-                queryset = queryset.filter(job_applications__stage__in=['OPEN', 'SYSTEM_SUBMITTED'])
-            elif stg in ['UNDER_REVIEW', 'UNDER REVIEW', 'SCREENING']:
-                queryset = queryset.filter(job_applications__stage__in=['SCREENING_FEEDBACK_PENDING', 'SYSTEM_SELECTED', 'AUTOMATION_SKIPPED', 'SCREENING_SELECT'])
-            elif stg in ['SELECTED', 'SHORTLISTED', 'SCREENING_SELECT']:
-                queryset = queryset.filter(job_applications__stage__in=['SCREENING_SELECT', 'INTERVIEW_SELECT', 'ACCEPTED', 'JOINED', 'OFFER_STAGE', 'DOCUMENTATION_STAGE', 'NEGOTIATION_STAGE'])
-            elif stg in ['REJECTED', 'SCREENING_REJECT', 'INTERVIEW_REJECT', 'SYSTEM_REJECTED']:
-                queryset = queryset.filter(job_applications__stage__in=['SCREENING_REJECT', 'INTERVIEW_REJECT', 'SYSTEM_REJECTED', 'DROPOUT'])
-            elif stg in ['INTERVIEW', 'INTERVIEWING', 'INTERVIEW_SCHEDULE']:
-                queryset = queryset.filter(job_applications__stage__in=['INTERVIEW_SCHEDULE', 'INTERVIEW_IN_PROCESS', 'INTERVIEW_SELECT'])
-            elif stg in ['OFFER', 'OFFER_STAGE']:
-                queryset = queryset.filter(job_applications__stage__in=['OFFER_STAGE'])
-            elif stg in ['JOINED', 'ACCEPTED']:
-                queryset = queryset.filter(job_applications__stage__in=['JOINED', 'ACCEPTED', 'JOINING_CONFIRMATION_RECEIVED', 'JOINING_CONFIRMATION_REQUESTED'])
-            elif stg in ['TALENT_POOL', 'TALENT POOL', 'SOURCED', 'UNASSIGNED']:
-                queryset = queryset.filter(Q(job_applications__isnull=True) | Q(job_applications__stage='SOURCED'))
-            else:
-                queryset = queryset.filter(job_applications__stage=stg)
+        # Execute universal hybrid relevance search with 41 structured filters
+        scored_results = UniversalCandidateSearchService.search_candidates(
+            base_queryset=base_qs,
+            query=q,
+            selected_tags=selected_tags,
+            exclude_keywords=exclude_keywords,
+            skills=skills_param,
+            it_skills=it_skills_param,
+            min_experience=float(min_exp_param) if min_exp_param else None,
+            max_experience=float(max_exp_param) if max_exp_param else None,
+            location=location_param,
+            preferred_location=preferred_location_param,
+            willing_to_relocate=willing_to_relocate_param,
+            work_mode=work_mode_param,
+            min_salary=float(min_salary_param) if min_salary_param else None,
+            max_salary=float(max_salary_param) if max_salary_param else None,
+            currency=currency_param,
+            department=department_param,
+            role_name=role_name_param,
+            designation=title_param,
+            previous_designation=prev_designation_param,
+            industry=industry_param,
+            company=company_param,
+            previous_company=prev_company_param,
+            excluded_company=excluded_company_param,
+            company_type=company_type_param,
+            employment_type=employment_type_param,
+            notice_period=notice_period_param,
+            ug_degree=ug_degree,
+            ug_specialization=ug_specialization,
+            ug_education_type=ug_education_type,
+            ug_passing_year_from=int(ug_passing_year_from) if ug_passing_year_from else None,
+            ug_passing_year_to=int(ug_passing_year_to) if ug_passing_year_to else None,
+            ug_institute=ug_institute,
+            pg_degree=pg_degree,
+            pg_specialization=pg_specialization,
+            pg_education_type=pg_education_type,
+            pg_passing_year_from=int(pg_passing_year_from) if pg_passing_year_from else None,
+            pg_passing_year_to=int(pg_passing_year_to) if pg_passing_year_to else None,
+            pg_institute=pg_institute,
+            doctorate_degree=doctorate_degree,
+            doctorate_specialization=doctorate_specialization,
+            doctorate_institute=doctorate_institute,
+            education_type=education_type,
+            passing_year_from=int(passing_year_from) if passing_year_from else None,
+            passing_year_to=int(passing_year_to) if passing_year_to else None,
+            institute=institute_param,
+            is_pursuing=is_pursuing,
+            candidate_name=cand_name_param,
+            candidate_email=cand_email_param,
+            candidate_phone=cand_phone_param,
+            gender=gender_param,
+            has_career_break=has_career_break,
+            is_differently_abled=is_differently_abled,
+            disability_category=disability_category,
+            has_defence_background=has_defence_background,
+            defence_branch=defence_branch,
+            work_permit_country=work_permit_country,
+            candidate_status=candidate_status_param,
+            freshness_days=int(freshness_days) if freshness_days else None,
+            has_resume=has_resume,
+            has_verified_mobile=has_verified_mobile,
+            has_verified_email=has_verified_email,
+            search_within_results=search_within_results,
+            mandatory_keywords=mandatory_keywords_param,
+            boolean_query=boolean_query_param,
+            stage=stage_param,
+            job_id=job_id_param,
+            sort_by=sort_by
+        )
 
-        # 5. Tags Filter (support multiple)
-        tag_list = self.request.GET.getlist('tags')
-        if not tag_list and self.request.GET.get('tags'):
-            tag_list = [t.strip() for t in self.request.GET.get('tags').split(',') if t.strip()]
+        candidates_list = []
+        for item in scored_results:
+            cand = item["candidate"]
+            cand.relevance_score = item["relevance_score"]
+            cand.match_quality = item["match_quality"]
+            cand.matched_tags_list = item["matched_tags"]
+            cand.why_matched_reasons = item["why_matched"]
+            
+            # Application snapshot
+            apps_list = list(cand.job_applications.all())
+            cand.latest_application = apps_list[0] if apps_list else None
+            candidates_list.append(cand)
 
-        for tag in tag_list:
-            t_clean = tag.strip().lower()
-            if not t_clean:
-                continue
-            if t_clean in ['immediate', 'immediate joiner', 'immediate_joiner']:
-                queryset = queryset.filter(is_immediate_joiner=True)
-            elif t_clean in ['referral', 'referred']:
-                queryset = queryset.filter(
-                    Q(summary__icontains='referral') |
-                    Q(recruiter_notes__icontains='referral') |
-                    Q(job_applications__cover_letter__icontains='referral')
-                )
-            else:
-                queryset = queryset.filter(
-                    Q(summary__icontains=t_clean) |
-                    Q(recruiter_notes__icontains=t_clean) |
-                    Q(skills__skill_name__icontains=t_clean)
-                )
-
-        # 6. Skills Filter (support multi-skills)
-        skills = self.request.GET.get('skills')
-        if skills and skills.strip():
-            skill_items = [s.strip() for s in skills.split(',') if s.strip()]
-            for s in skill_items:
-                queryset = queryset.filter(
-                    Q(skills__skill_name__icontains=s) |
-                    Q(raw_resume_text__icontains=s) |
-                    Q(summary__icontains=s)
-                )
-
-        # 7. Location Filter (City, State, District, Remote)
-        location = self.request.GET.get('location')
-        if location and location.strip():
-            loc = location.strip()
-            if loc.lower() == 'remote':
-                queryset = queryset.filter(
-                    Q(location__icontains='remote') |
-                    Q(preferred_location__icontains='remote') |
-                    Q(job_applications__preferred_work_mode__icontains='remote') |
-                    Q(job_applications__job__work_mode='REMOTE') |
-                    Q(job_applications__job__is_remote=True)
-                )
-            else:
-                queryset = queryset.filter(
-                    Q(location__icontains=loc) |
-                    Q(preferred_location__icontains=loc) |
-                    Q(job_applications__current_location__icontains=loc) |
-                    Q(job_applications__current_location_city__icontains=loc) |
-                    Q(job_applications__current_location_state__icontains=loc) |
-                    Q(job_applications__preferred_location__icontains=loc)
-                )
-
-        queryset = queryset.distinct()
-
-        if has_name_rank:
-            queryset = queryset.order_by('name_match_rank', '-created_at')
-        else:
-            queryset = queryset.order_by('-created_at')
-
-        return queryset
+        return candidates_list
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        job_id = self.request.GET.get('job_id')
+        user = self.request.user
+        job_id = (self.request.GET.get('job_id') or '').strip()
         selected_job = None
-        if job_id and job_id.strip():
-            selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id.strip()).first()
+        if job_id:
+            selected_job = get_tenant_jobs_qs(user).filter(id=job_id).first()
             
         context['selected_job'] = selected_job
-        context['filters'] = {
-            'name': (self.request.GET.get('name') or self.request.GET.get('q') or '').strip(),
-            'title': (self.request.GET.get('title') or self.request.GET.get('designation') or '').strip(),
-            'location': (self.request.GET.get('location') or '').strip(),
-            'skills': (self.request.GET.get('skills') or '').strip(),
-            'department': (self.request.GET.get('department') or '').strip(),
-            'job_id': (self.request.GET.get('job_id') or '').strip(),
-            'stage': (self.request.GET.get('stage') or '').strip(),
-            'tags': (self.request.GET.get('tags') or '').strip(),
-        }
-        context['active_jobs'] = get_tenant_jobs_qs(self.request.user).filter(status='ACTIVE')
         
-        # Compute match details only for current paginated page slice
-        from services.candidate_matching_service import CandidateMatchingService
+        q = (self.request.GET.get('q') or self.request.GET.get('name') or '').strip()
+        tags_raw = self.request.GET.getlist('tags')
+        if not tags_raw and self.request.GET.get('tags'):
+            tags_raw = [t.strip() for t in self.request.GET.get('tags').split(',') if t.strip()]
+
+        selected_tags_list = [{"label": t.strip(), "type": "tag"} for t in tags_raw if t.strip()]
+
+        context['current_tab'] = self.request.GET.get('tab', 'search').strip().lower()
+        context['filters'] = {
+            'q': q,
+            'name': q,
+            'title': (self.request.GET.get('title') or self.request.GET.get('designation') or '').strip(),
+            'role': (self.request.GET.get('role') or self.request.GET.get('role_name') or '').strip(),
+            'location': (self.request.GET.get('location') or '').strip(),
+            'preferred_location': (self.request.GET.get('preferred_location') or '').strip(),
+            'willing_to_relocate': self.request.GET.get('willing_to_relocate', ''),
+            'work_mode': (self.request.GET.get('work_mode') or '').strip(),
+            'skills': (self.request.GET.get('skills') or '').strip(),
+            'it_skills': (self.request.GET.get('it_skills') or '').strip(),
+            'exclude_keywords': (self.request.GET.get('exclude_keywords') or '').strip(),
+            'department': (self.request.GET.get('department') or '').strip(),
+            'industry': (self.request.GET.get('industry') or '').strip(),
+            'company': (self.request.GET.get('company') or '').strip(),
+            'previous_company': (self.request.GET.get('previous_company') or '').strip(),
+            'excluded_company': (self.request.GET.get('excluded_company') or '').strip(),
+            'company_type': (self.request.GET.get('company_type') or '').strip(),
+            'employment_type': (self.request.GET.get('employment_type') or '').strip(),
+            'job_id': job_id,
+            'stage': (self.request.GET.get('stage') or '').strip(),
+            'tags': tags_raw,
+            'min_exp': (self.request.GET.get('min_exp') or '').strip(),
+            'max_exp': (self.request.GET.get('max_exp') or '').strip(),
+            'min_salary': (self.request.GET.get('min_salary') or '').strip(),
+            'max_salary': (self.request.GET.get('max_salary') or '').strip(),
+            'currency': (self.request.GET.get('currency') or 'INR').strip(),
+            'notice_period': (self.request.GET.get('notice_period') or '').strip(),
+            'ug_degree': (self.request.GET.get('ug_degree') or '').strip(),
+            'ug_specialization': (self.request.GET.get('ug_specialization') or '').strip(),
+            'ug_education_type': (self.request.GET.get('ug_education_type') or '').strip(),
+            'ug_passing_year_from': (self.request.GET.get('ug_passing_year_from') or '').strip(),
+            'ug_passing_year_to': (self.request.GET.get('ug_passing_year_to') or '').strip(),
+            'ug_institute': (self.request.GET.get('ug_institute') or '').strip(),
+            'pg_degree': (self.request.GET.get('pg_degree') or '').strip(),
+            'pg_specialization': (self.request.GET.get('pg_specialization') or '').strip(),
+            'pg_education_type': (self.request.GET.get('pg_education_type') or '').strip(),
+            'pg_passing_year_from': (self.request.GET.get('pg_passing_year_from') or '').strip(),
+            'pg_passing_year_to': (self.request.GET.get('pg_passing_year_to') or '').strip(),
+            'pg_institute': (self.request.GET.get('pg_institute') or '').strip(),
+            'doctorate_degree': (self.request.GET.get('doctorate_degree') or '').strip(),
+            'doctorate_specialization': (self.request.GET.get('doctorate_specialization') or '').strip(),
+            'doctorate_institute': (self.request.GET.get('doctorate_institute') or '').strip(),
+            'education_type': (self.request.GET.get('education_type') or '').strip(),
+            'passing_year_from': (self.request.GET.get('passing_year_from') or '').strip(),
+            'passing_year_to': (self.request.GET.get('passing_year_to') or '').strip(),
+            'institute': (self.request.GET.get('institute') or '').strip(),
+            'gender': (self.request.GET.get('gender') or '').strip(),
+            'has_career_break': (self.request.GET.get('has_career_break') or '').strip(),
+            'is_differently_abled': (self.request.GET.get('is_differently_abled') or '').strip(),
+            'disability_category': (self.request.GET.get('disability_category') or '').strip(),
+            'has_defence_background': (self.request.GET.get('has_defence_background') or '').strip(),
+            'defence_branch': (self.request.GET.get('defence_branch') or '').strip(),
+            'work_permit_country': (self.request.GET.get('work_permit_country') or '').strip(),
+            'candidate_status': (self.request.GET.get('candidate_status') or '').strip(),
+            'freshness_days': (self.request.GET.get('freshness_days') or '').strip(),
+            'has_resume': (self.request.GET.get('has_resume') or '').strip(),
+            'has_verified_email': (self.request.GET.get('has_verified_email') or '').strip(),
+            'search_within_results': (self.request.GET.get('search_within_results') or '').strip(),
+            'mandatory_keywords': (self.request.GET.get('mandatory_keywords') or '').strip(),
+            'boolean_query': (self.request.GET.get('boolean_query') or '').strip(),
+            'sort_by': (self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'relevance').strip(),
+        }
+        context['selected_tags'] = selected_tags_list
+        context['selected_tags_json'] = json.dumps([t["label"] for t in selected_tags_list])
+        context['active_jobs'] = get_tenant_jobs_qs(user).filter(status='ACTIVE')
+        
+        # Taxonomy Autocomplete & Smart Suggestions based on active search terms
+        if q or selected_tags_list or self.request.GET.get('title'):
+            from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
+            TaxonomyEngine.ensure_seeded()
+            suggestions_res = TaxonomyEngine.get_smart_suggestions(
+                query=q or (self.request.GET.get('title') or ''),
+                active_tags=[t["label"] for t in selected_tags_list],
+                limit=15
+            )
+            context['smart_suggestions'] = suggestions_res.get('suggestions', [])
+        else:
+            context['smart_suggestions'] = []
+
+        # User's Saved & Recent Searches
+        from apps.candidates.models import SavedCandidateSearch, RecentCandidateSearch
+        context['saved_searches'] = SavedCandidateSearch.objects.filter(user=user).order_by('-created_at')[:10]
+        context['recent_searches'] = RecentCandidateSearch.objects.filter(user=user).order_by('-created_at')[:8]
+
+        # Counts for tabs
+        base_all = get_tenant_candidates_qs(user)
+        from django.utils import timezone
+        import datetime
+        week_ago = timezone.now() - datetime.timedelta(days=7)
+        context['tab_counts'] = {
+            'all': base_all.count(),
+            'shortlisted': base_all.filter(Q(is_shortlisted=True) | Q(candidate_status='SHORTLISTED')).count(),
+            'saved_for_later': base_all.filter(Q(is_saved_for_later=True) | Q(candidate_status='SAVED_FOR_LATER')).count(),
+            'new': base_all.filter(created_at__gte=week_ago).count(),
+            'modified': base_all.filter(updated_at__gte=week_ago).count(),
+        }
+
         candidates_list = list(context.get('candidates') or context.get('object_list') or [])
         for candidate in candidates_list:
-            apps_list = list(candidate.job_applications.all())
-            candidate.latest_application = apps_list[0] if apps_list else None
-            
             if selected_job:
                 cand_skills = {s.skill_name.strip().lower() for s in candidate.skills.all() if s.skill_name and s.skill_name.strip()}
                 matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
@@ -1576,10 +1723,11 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
                 if total_req > 0:
                     score = min(100, int((len(matched_skill_names) / total_req) * 100))
                 else:
-                    score = candidate.ats_score or 75
+                    score = getattr(candidate, 'relevance_score', candidate.ats_score or 75)
                 candidate.match_details = {'total_score': score, 'matched_skills': matched_skill_names}
             else:
-                candidate.match_details = None
+                score = getattr(candidate, 'relevance_score', candidate.ats_score or 75)
+                candidate.match_details = {'total_score': score, 'matched_skills': getattr(candidate, 'matched_tags_list', [])}
                 
         context['candidates'] = candidates_list
         context['object_list'] = candidates_list
@@ -1592,30 +1740,136 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             count = context['page_obj'].paginator.count if context.get('page_obj') else len(context.get('candidates', []))
             return JsonResponse({
                 'html': html,
-                'count': count
+                'count': count,
+                'smart_suggestions': context.get('smart_suggestions', [])
             })
         return super().render_to_response(context, **response_kwargs)
 
 
-class CandidateAutocompleteView(RecruiterRequiredMixin, View):
+class CandidateSuggestionsAPIView(RecruiterRequiredMixin, View):
     """
-    Lightweight, fast API endpoint for field-specific live candidate search autocomplete suggestions.
-    Supports type='name' | 'title' | 'location' | 'skill'
-    Returns max 5-8 suggestions per field ranked by relevance.
+    API endpoint returning dynamic AI & Taxonomy suggested keywords.
     """
     def get(self, request, *args, **kwargs):
-        stype = request.GET.get('type', 'name').strip().lower()
+        from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
+        q = request.GET.get('q', '').strip()
+        tags_raw = request.GET.getlist('tags')
+        if not tags_raw and request.GET.get('tags'):
+            tags_raw = [t.strip() for t in request.GET.get('tags').split(',') if t.strip()]
+
+        data = TaxonomyEngine.get_smart_suggestions(query=q, active_tags=tags_raw, limit=15)
+        return JsonResponse(data)
+
+
+class CandidateSavedSearchesAPIView(RecruiterRequiredMixin, View):
+    """
+    CRUD API for recruiter Saved Searches.
+    """
+    def get(self, request, *args, **kwargs):
+        from apps.candidates.models import SavedCandidateSearch
+        searches = SavedCandidateSearch.objects.filter(user=request.user).order_by('-created_at')[:20]
+        results = []
+        for s in searches:
+            results.append({
+                "id": str(s.id),
+                "name": s.name,
+                "search_query": s.search_query,
+                "selected_tags": s.selected_tags,
+                "filters": s.filters_payload,
+                "results_count": s.results_count,
+                "created_at": s.created_at.strftime("%b %d, %Y")
+            })
+        return JsonResponse({"saved_searches": results})
+
+    def post(self, request, *args, **kwargs):
+        from apps.candidates.models import SavedCandidateSearch
+        try:
+            body = json.loads(request.body)
+        except Exception:
+            body = request.POST
+
+        name = body.get('name', '').strip()
+        if not name:
+            name = f"Search - {timezone.now().strftime('%b %d, %H:%M')}"
+
+        search_query = body.get('q', '').strip()
+        selected_tags = body.get('tags', [])
+        if isinstance(selected_tags, str):
+            selected_tags = [t.strip() for t in selected_tags.split(',') if t.strip()]
+
+        filters_payload = body.get('filters', {})
+        results_count = int(body.get('count', 0))
+
+        saved = SavedCandidateSearch.objects.create(
+            user=request.user,
+            name=name,
+            search_query=search_query,
+            selected_tags=selected_tags,
+            filters_payload=filters_payload,
+            results_count=results_count
+        )
+
+        return JsonResponse({
+            "status": "success",
+            "success": True,
+            "message": "Search criteria saved successfully.",
+            "saved_search": {
+                "id": str(saved.id),
+                "name": saved.name,
+                "search_query": saved.search_query,
+                "selected_tags": saved.selected_tags,
+                "filters": saved.filters_payload,
+                "results_count": saved.results_count
+            }
+        })
+
+    def delete(self, request, *args, **kwargs):
+        from apps.candidates.models import SavedCandidateSearch
+        search_id = kwargs.get('pk') or request.GET.get('id')
+        if not search_id:
+            return JsonResponse({"status": "error", "message": "Search ID required."}, status=400)
+
+        deleted, _ = SavedCandidateSearch.objects.filter(user=request.user, id=search_id).delete()
+        return JsonResponse({"status": "success", "deleted": bool(deleted)})
+
+
+class CandidateRecentSearchesAPIView(RecruiterRequiredMixin, View):
+    """
+    API endpoint returning recent searches for recruiter.
+    """
+    def get(self, request, *args, **kwargs):
+        from apps.candidates.models import RecentCandidateSearch
+        recent = RecentCandidateSearch.objects.filter(user=request.user).order_by('-created_at')[:10]
+        results = []
+        for r in recent:
+            results.append({
+                "id": str(r.id),
+                "search_query": r.search_query,
+                "selected_tags": r.selected_tags,
+                "filters": r.filters_payload,
+                "results_count": r.results_count,
+                "created_at": r.created_at.strftime("%b %d, %H:%M")
+            })
+        return JsonResponse({"recent_searches": results})
+
+
+class CandidateAutocompleteView(RecruiterRequiredMixin, View):
+    """
+    Universal Dynamic candidate & taxonomy autocomplete suggestions.
+    Fast, debounced, ranked by exact match > prefix > substring.
+    """
+    def get(self, request, *args, **kwargs):
+        from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
+        stype = request.GET.get('type', 'all').strip().lower()
         q = request.GET.get('q', '').strip()
 
-        if not q or (stype not in ['name', 'candidate_name'] and len(q) < 2) or (stype in ['name', 'candidate_name'] and len(q) < 1):
-            return JsonResponse({'results': []})
+        if not q or (stype not in ['name', 'candidate_name'] and len(q) < 1):
+            return JsonResponse({'results': [], 'suggestions': []})
 
         user = request.user
         q_lower = q.lower()
         results = []
         seen = set()
-        from django.db.models import Q
-        from apps.candidates.models import CandidateSkill
 
         if stype in ['name', 'candidate_name']:
             candidates_qs = get_tenant_candidates_qs(user).select_related('user').filter(
@@ -1632,13 +1886,7 @@ class CandidateAutocompleteView(RecruiterRequiredMixin, View):
                 seen.add(cand_name)
 
                 name_lower = cand_name.lower()
-                if name_lower == q_lower:
-                    rank = 1
-                elif name_lower.startswith(q_lower):
-                    rank = 2
-                else:
-                    rank = 3
-
+                rank = 1 if name_lower == q_lower else (2 if name_lower.startswith(q_lower) else 3)
                 results.append({
                     'value': cand_name,
                     'title': cand.current_designation or "Candidate",
@@ -1647,117 +1895,25 @@ class CandidateAutocompleteView(RecruiterRequiredMixin, View):
                     'rank': rank,
                     'url': reverse('frontend:candidate_detail', kwargs={'pk': cand.id})
                 })
-
             results.sort(key=lambda x: (x['rank'], x['value']))
 
-        elif stype in ['title', 'job_title']:
-            candidates_qs = get_tenant_candidates_qs(user).filter(
-                Q(current_designation__icontains=q) |
-                Q(experiences__designation__icontains=q) |
-                Q(preferred_job_role__icontains=q)
-            ).distinct()[:25]
+        else:
+            # Universal Taxonomy Autocomplete
+            taxonomy_data = TaxonomyEngine.get_smart_suggestions(query=q, limit=15)
+            for s in taxonomy_data.get('results', []):
+                results.append({
+                    'id': s.get('id', ''),
+                    'value': s['label'],
+                    'name': s['label'],
+                    'label': s['label'],
+                    'title': s['label'],
+                    'type': s.get('type', 'designation'),
+                    'category': s.get('category', ''),
+                    'score': s.get('score', 0.8),
+                    'subtitle': f"{s.get('type', 'Keyword').title()} &bull; {s.get('category', '')}"
+                })
 
-            for cand in candidates_qs:
-                for t in [cand.current_designation, cand.preferred_job_role]:
-                    if t and t.strip():
-                        t_clean = t.strip()
-                        if t_clean not in seen and q_lower in t_clean.lower():
-                            seen.add(t_clean)
-                            t_lower = t_clean.lower()
-                            if t_lower == q_lower:
-                                rank = 1
-                            elif t_lower.startswith(q_lower):
-                                rank = 2
-                            else:
-                                rank = 3
-                            results.append({
-                                'value': t_clean,
-                                'title': t_clean,
-                                'subtitle': 'Job Title',
-                                'avatar': 'T',
-                                'rank': rank
-                            })
-
-                for exp in cand.experiences.all():
-                    if exp.designation and exp.designation.strip():
-                        e_clean = exp.designation.strip()
-                        if e_clean not in seen and q_lower in e_clean.lower():
-                            seen.add(e_clean)
-                            e_lower = e_clean.lower()
-                            if e_lower == q_lower:
-                                rank = 1
-                            elif e_lower.startswith(q_lower):
-                                rank = 2
-                            else:
-                                rank = 3
-                            results.append({
-                                'value': e_clean,
-                                'title': e_clean,
-                                'subtitle': 'Job Title',
-                                'avatar': 'T',
-                                'rank': rank
-                            })
-
-            results.sort(key=lambda x: (x['rank'], x['value']))
-
-        elif stype == 'location':
-            candidates_qs = get_tenant_candidates_qs(user).filter(
-                Q(location__icontains=q) |
-                Q(preferred_location__icontains=q)
-            ).distinct()[:25]
-
-            for cand in candidates_qs:
-                for loc in [cand.location, cand.preferred_location]:
-                    if loc and loc.strip():
-                        l_clean = loc.strip()
-                        if l_clean not in seen and q_lower in l_clean.lower():
-                            seen.add(l_clean)
-                            l_lower = l_clean.lower()
-                            if l_lower == q_lower:
-                                rank = 1
-                            elif l_lower.startswith(q_lower):
-                                rank = 2
-                            else:
-                                rank = 3
-                            results.append({
-                                'value': l_clean,
-                                'title': l_clean,
-                                'subtitle': 'Location',
-                                'avatar': 'L',
-                                'rank': rank
-                            })
-
-            results.sort(key=lambda x: (x['rank'], x['value']))
-
-        elif stype in ['skill', 'skills']:
-            skills_qs = CandidateSkill.objects.filter(
-                profile__in=get_tenant_candidates_qs(user),
-                skill_name__icontains=q
-            ).values_list('skill_name', flat=True).distinct()[:25]
-
-            for sk in skills_qs:
-                if sk and sk.strip():
-                    s_clean = sk.strip()
-                    if s_clean not in seen:
-                        seen.add(s_clean)
-                        s_lower = s_clean.lower()
-                        if s_lower == q_lower:
-                            rank = 1
-                        elif s_lower.startswith(q_lower):
-                            rank = 2
-                        else:
-                            rank = 3
-                        results.append({
-                            'value': s_clean,
-                            'title': s_clean,
-                            'subtitle': 'Skill',
-                            'avatar': 'S',
-                            'rank': rank
-                        })
-
-            results.sort(key=lambda x: (x['rank'], x['value']))
-
-        return JsonResponse({'results': results[:8]})
+        return JsonResponse({'query': q, 'count': len(results), 'results': results, 'suggestions': results})
 
 
 class JobCandidatesView(RecruiterRequiredMixin, ListView):
@@ -4255,8 +4411,13 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
                 issue_date=i_date
             )
             
-        # Recalculate ATS Scores
+        # Recalculate ATS Scores & Refresh Candidate Tags
         CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
+        try:
+            from services.candidate_tagging_service import CandidateTaggingService
+            CandidateTaggingService.tag_candidate_profile(profile, source='manual')
+        except Exception as e:
+            logger.error(f"[TAGGING ERROR] Failed to update candidate tags on manual edit: {e}")
         
         return JsonResponse({'status': 'success', 'current_version': new_ver_num})
 

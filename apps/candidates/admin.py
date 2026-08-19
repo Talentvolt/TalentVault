@@ -1,5 +1,9 @@
 from django.contrib import admin
-from .models import CandidateProfile, CandidateSkill, Experience, Education, Project, Certification, DuplicateResumeLog, SavedJob
+from .models import (
+    CandidateProfile, CandidateSkill, Experience, Education, Project, Certification,
+    DuplicateResumeLog, SavedJob, TaxonomySkill, TaxonomyDesignation, RoleRelation,
+    RoleSkillRelation, CandidateTag, SavedCandidateSearch, RecentCandidateSearch
+)
 
 @admin.register(CandidateProfile)
 class CandidateProfileAdmin(admin.ModelAdmin):
@@ -45,3 +49,54 @@ class DuplicateResumeLogAdmin(admin.ModelAdmin):
 class SavedJobAdmin(admin.ModelAdmin):
     list_display = ('candidate', 'job', 'created_at')
     search_fields = ('candidate__full_name', 'job__title')
+
+class RoleRelationInline(admin.TabularInline):
+    model = RoleRelation
+    fk_name = 'source_role'
+    extra = 1
+
+class RoleSkillRelationInline(admin.TabularInline):
+    model = RoleSkillRelation
+    extra = 1
+
+@admin.register(TaxonomyDesignation)
+class TaxonomyDesignationAdmin(admin.ModelAdmin):
+    list_display = ('canonical_name', 'department', 'industry', 'seniority', 'is_active', 'weight')
+    list_filter = ('seniority', 'department', 'industry', 'is_active')
+    search_fields = ('name', 'canonical_name', 'normalized_name', 'department', 'industry')
+    inlines = [RoleRelationInline, RoleSkillRelationInline]
+
+@admin.register(TaxonomySkill)
+class TaxonomySkillAdmin(admin.ModelAdmin):
+    list_display = ('canonical_name', 'category', 'domain', 'is_active', 'weight')
+    list_filter = ('category', 'domain', 'is_active')
+    search_fields = ('name', 'canonical_name', 'normalized_name', 'domain')
+
+@admin.register(RoleRelation)
+class RoleRelationAdmin(admin.ModelAdmin):
+    list_display = ('source_role', 'target_role', 'relation_type', 'weight', 'is_bidirectional')
+    list_filter = ('relation_type', 'is_bidirectional')
+    search_fields = ('source_role__canonical_name', 'target_role__canonical_name')
+
+@admin.register(RoleSkillRelation)
+class RoleSkillRelationAdmin(admin.ModelAdmin):
+    list_display = ('role', 'skill', 'relation_type', 'weight')
+    list_filter = ('relation_type',)
+    search_fields = ('role__canonical_name', 'skill__canonical_name')
+
+@admin.register(CandidateTag)
+class CandidateTagAdmin(admin.ModelAdmin):
+    list_display = ('profile', 'name', 'canonical_name', 'tag_type', 'confidence', 'source', 'is_current')
+    list_filter = ('tag_type', 'source', 'is_current')
+    search_fields = ('profile__full_name', 'name', 'canonical_name')
+
+@admin.register(SavedCandidateSearch)
+class SavedCandidateSearchAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'search_query', 'results_count', 'created_at')
+    search_fields = ('name', 'user__email', 'search_query')
+
+@admin.register(RecentCandidateSearch)
+class RecentCandidateSearchAdmin(admin.ModelAdmin):
+    list_display = ('user', 'search_query', 'created_at')
+    search_fields = ('user__email', 'search_query')
+

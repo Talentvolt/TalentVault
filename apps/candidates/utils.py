@@ -1576,6 +1576,13 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
             t_cert = time.time() - t_cert_start
             logger.info(f"[TIMING] Certifications DB save took: {t_cert:.4f}s")
                 
+            # Dynamic Universal Tagging & Indexing
+            try:
+                from services.candidate_tagging_service import CandidateTaggingService
+                CandidateTaggingService.tag_candidate_profile(profile, source='resume_parser')
+            except Exception as e:
+                logger.error(f"[TAGGING ERROR] Failed to tag candidate {profile.id}: {e}", exc_info=True)
+
             # Calculate and save ATS suitability score
             t_ats_start = time.time()
             logger.info(f"[TIMING] [{request_id}] START ATS: {filename}")

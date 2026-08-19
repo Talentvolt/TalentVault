@@ -6,9 +6,11 @@ from apps.companies.models import Company, CompanyMember
 from apps.candidates.models import CandidateProfile, CandidateSkill
 from apps.jobs.models import Job
 from apps.applications.models import Application
+from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
 
 class CandidatePipelineAndSpeedTest(TestCase):
     def setUp(self):
+        TaxonomyEngine.ensure_seeded()
         self.company = Company.objects.create(name='Tech Recruiter Co', slug='tech-recruiter')
         self.user = User.objects.create_user(
             email='recruiter_cand@talentvault.in',

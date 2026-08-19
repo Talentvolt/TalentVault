@@ -114,6 +114,7 @@ urlpatterns = [
     # API Version 1
     path('api/v1/auth/', include('apps.accounts.urls')),
     path('api/v1/', include(router.urls)),
+    path('', include('apps.taxonomy.urls')),
     
     # Nested routes for companies -> members
     path('api/v1/companies/<uuid:company_pk>/members/', CompanyMemberViewSet.as_view({'get': 'list', 'post': 'create'}), name='company-members'),

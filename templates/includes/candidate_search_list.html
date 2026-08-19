@@ -6,8 +6,8 @@
             <input class="form-check-input" type="checkbox" id="select-all-candidates" onchange="toggleSelectAll(this)">
         </div>
         <div class="row w-100 g-3">
-            <div class="col-md-6" style="padding-left: 12px;">Candidate Information</div>
-            <div class="col-md-6" style="padding-left: 12px;">Applied Details</div>
+            <div class="col-md-6" style="padding-left: 12px;">Candidate Profile & Relevance</div>
+            <div class="col-md-6" style="padding-left: 12px;">Application & Match Breakdown</div>
         </div>
     </div>
 </div>
@@ -16,36 +16,43 @@
 <div class="candidate-list">
     {% for candidate in candidates %}
     <div class="candidate-row p-3 border-bottom d-flex align-items-center justify-content-between position-relative" data-candidate-id="{{ candidate.id }}">
-        <div class="d-flex align-items-center gap-3 w-100">
+        <div class="d-flex align-items-start gap-3 w-100">
             <!-- Checkbox -->
-            <div class="form-check m-0">
+            <div class="form-check m-0 pt-1">
                 <input class="form-check-input candidate-checkbox" type="checkbox" value="{{ candidate.id }}" onchange="updateBulkBar()">
             </div>
 
             <!-- Profile Photo / Neutral Icon -->
-            <div class="candidate-avatar flex-shrink-0">
+            <div class="candidate-avatar flex-shrink-0 pt-1">
                 {% if candidate.has_profile_photo %}
-                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover" style="width: 40px; height: 40px; border: 1px solid #dee2e6;" alt="Photo">
+                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover" style="width: 42px; height: 42px; border: 1px solid #dee2e6;" alt="Photo">
                 {% else %}
-                    <div class="bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; border: 1px solid #dee2e6;">
+                    <div class="bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; border: 1px solid #dee2e6;">
                         <i class="bi bi-person" style="font-size: 22px; line-height: 1;"></i>
                     </div>
                 {% endif %}
             </div>
 
             <div class="row w-100 g-3 align-items-start">
-                <!-- LEFT SECTION -->
+                <!-- LEFT SECTION: Candidate Profile -->
                 <div class="col-md-6">
                     <div class="d-flex flex-column gap-1 overflow-hidden">
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
                             <h6 class="fw-bold text-dark m-0"><a href="{% url 'frontend:candidate_detail' candidate.id %}{% if selected_job %}?job_id={{ selected_job.id }}{% endif %}" class="text-dark text-decoration-none candidate-name-link">{{ candidate.full_name|default:candidate.user.email }}</a></h6>
                             {% if candidate.is_immediate_joiner %}
-                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill x-small">Immediate</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill x-small">Immediate Joiner</span>
+                            {% endif %}
+                            <!-- Match Quality Tier Badge -->
+                            {% if candidate.match_quality %}
+                                <span class="match-quality-badge {% if candidate.match_quality == 'EXACT MATCH' %}match-exact{% elif candidate.match_quality == 'STRONG MATCH' %}match-strong{% elif candidate.match_quality == 'RELATED MATCH' %}match-related{% else %}match-weak{% endif %}">
+                                    {{ candidate.match_quality }}
+                                </span>
                             {% endif %}
                         </div>
                         
                         <div class="text-secondary small fw-medium text-truncate">
-                            {{ candidate.current_designation|default:"Designation: N/A" }} {% if candidate.current_company %}at <span class="text-dark">{{ candidate.current_company }}</span>{% endif %}
+                            <span class="text-dark fw-semibold">{{ candidate.current_designation|default:"Designation: N/A" }}</span>
+                            {% if candidate.current_company %} at <span class="text-dark">{{ candidate.current_company }}</span>{% endif %}
                         </div>
                         
                         <div class="text-secondary x-small d-flex align-items-center gap-1">
@@ -56,101 +63,114 @@
                                         {{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %} from {{ edu.institution }}
                                     {% endwith %}
                                 {% else %}
-                                    B.A Economics
+                                    B.A / B.Tech / Degree
                                 {% endif %}
                             </span>
                         </div>
                         
-                        <div class="text-secondary x-small d-flex align-items-center gap-1">
-                            <i class="bi bi-geo-alt text-muted"></i>
-                            <span>{{ candidate.location|default:"New Delhi, India" }}</span>
-                        </div>
-
-                        <div class="text-secondary x-small fw-semibold">
-                            Exp: {{ candidate.total_experience|floatformat:1 }} Years
-                            {% if candidate.uploader_name %}
-                                &bull; Uploaded By: <span class="text-dark fw-bold">{{ candidate.uploader_name }}</span>
+                        <div class="text-secondary x-small d-flex align-items-center gap-2 flex-wrap">
+                            <span><i class="bi bi-geo-alt text-muted me-0.5"></i> {{ candidate.location|default:"Location N/A" }}</span>
+                            <span>&bull;</span>
+                            <span class="fw-semibold text-dark">Exp: {{ candidate.total_experience|floatformat:1 }} Yrs</span>
+                            {% if candidate.current_salary %}
+                                <span>&bull;</span>
+                                <span>CTC: {{ candidate.current_salary|floatformat:1 }}</span>
                             {% endif %}
                         </div>
                         
-                        <!-- Skills tags -->
+                        <!-- Matched Tags / Skills pills -->
                         <div class="d-flex flex-wrap gap-1 mt-1 align-items-center">
-                            <span class="x-small text-muted me-1">Skills:</span>
-                            {% for s in candidate.skills.all|slice:":4" %}
+                            <span class="x-small text-muted me-1">Key Skills:</span>
+                            {% for s in candidate.skills.all|slice:":5" %}
                                 <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">{{ s.skill_name }}</span>
                             {% empty %}
-                                <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">Sales</span>
-                                <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">CRM</span>
+                                {% for t in candidate.matched_tags_list|slice:":3" %}
+                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">{{ t }}</span>
+                                {% empty %}
+                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">Profile Verified</span>
+                                {% endfor %}
                             {% endfor %}
                         </div>
+
+                        <!-- System Inferred / Related Skills -->
+                        {% if candidate.ai_skills %}
+                        <div class="d-flex flex-wrap gap-1 mt-1 align-items-center">
+                            <span class="x-small text-info me-1"><i class="bi bi-stars"></i> Related Skills:</span>
+                            {% for sk in candidate.ai_skills|slice:":3" %}
+                                <span class="badge bg-info-subtle text-info border border-info-subtle rounded-1 x-small px-1.5 py-0.5">{{ sk }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
-                <!-- RIGHT SECTION -->
+                <!-- RIGHT SECTION: Application, ATS & Why Matched Accordion -->
                 <div class="col-md-6">
                     <div class="row w-100 g-1">
                         <div class="col-12 d-flex justify-content-between align-items-start">
-                            <div class="d-flex flex-column gap-1 overflow-hidden" style="max-width: 75%;">
+                            <div class="d-flex flex-column gap-1 overflow-hidden" style="max-width: 70%;">
                                 <span class="fw-semibold text-dark text-truncate small">
                                     {% if candidate.latest_application %}
                                         {{ candidate.latest_application.job.title }}
                                     {% else %}
-                                        Talent Pool
+                                        Talent Pool (Sourced)
                                     {% endif %}
                                 </span>
                                 <span class="text-secondary x-small">
                                     {% if candidate.latest_application %}
-                                        {{ candidate.latest_application.job.display_company }}
+                                        {{ candidate.latest_application.job.display_company }} &bull; {{ candidate.latest_application.job.location }}
                                     {% else %}
-                                        Unassigned
-                                    {% endif %}
-                                </span>
-                                <span class="text-secondary x-small">
-                                    {% if candidate.latest_application %}
-                                        {{ candidate.latest_application.job.location }} &bull; {{ candidate.latest_application.job.get_work_mode_display }}
-                                    {% else %}
-                                        N/A
+                                        Unassigned Candidate
                                     {% endif %}
                                 </span>
                             </div>
-                            <div class="d-flex flex-column align-items-end gap-1.5" style="min-width: 25%;">
+                            <div class="d-flex flex-column align-items-end gap-1" style="min-width: 30%;">
                                 <!-- Stage Badge -->
-                                <span class="badge {% if candidate.latest_application %}{{ candidate.latest_application.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-1 rounded-pill small fw-medium">
-                                    Stage: {% if candidate.latest_application %}{{ candidate.latest_application.get_stage_display }}{% else %}Unassigned{% endif %}
+                                <span class="badge {% if candidate.latest_application %}{{ candidate.latest_application.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-0.5 rounded-pill small fw-medium">
+                                    {% if candidate.latest_application %}{{ candidate.latest_application.get_stage_display }}{% else %}Talent Pool{% endif %}
                                 </span>
                                 
-                                <!-- ATS Score Badge -->
-                                <div class="d-flex align-items-center gap-1.5 mt-1">
-                                    {% if selected_job and candidate.match_details %}
-                                        {% with score=candidate.match_details.total_score %}
-                                            <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
-                                                {{ score }}% ATS
-                                            </span>
-                                        {% endwith %}
-                                    {% else %}
-                                        {% with score=candidate.ats_score %}
-                                            <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
-                                                {{ score }}% ATS
-                                            </span>
-                                        {% endwith %}
-                                    {% endif %}
+                                <!-- ATS & Relevance Score Badges -->
+                                <div class="d-flex align-items-center gap-1.5 mt-0.5">
+                                    {% with score=candidate.relevance_score|default:candidate.ats_score|default:75 %}
+                                        <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
+                                            {{ score }}% Fit
+                                        </span>
+                                    {% endwith %}
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Why Matched Details Dropdown -->
+                        {% if candidate.why_matched_reasons %}
+                        <div class="col-12 mt-2">
+                            <details class="why-matched-box">
+                                <summary class="fw-bold text-primary cursor-pointer d-flex align-items-center justify-content-between" style="cursor: pointer;">
+                                    <span><i class="bi bi-info-circle me-1"></i> Why this candidate matches</span>
+                                    <span class="x-small text-muted">View breakdown &dtrif;</span>
+                                </summary>
+                                <ul class="mt-2 mb-0">
+                                    {% for r in candidate.why_matched_reasons %}
+                                        <li>{{ r }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        </div>
+                        {% endif %}
                         
                         <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-between text-secondary x-small">
                             <span>Source: <span class="fw-medium text-dark">{% if candidate.linkedin_url %}LinkedIn{% else %}Resume Upload{% endif %}</span></span>
-                            <span>Applied: <span class="fw-medium text-dark">{{ candidate.created_at|timesince }} ago</span></span>
+                            <span>Added: <span class="fw-medium text-dark">{{ candidate.created_at|timesince }} ago</span></span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Candidate Action overlay/menu displayed on hover -->
+        <!-- Candidate Action overlay displayed on hover -->
         <div class="candidate-actions bg-white border border-light-subtle rounded-3 py-1.5 px-2 shadow-sm d-flex gap-1 align-items-center justify-content-end">
             <a href="{% url 'frontend:candidate_detail' candidate.id %}" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" title="View Profile">
-                <i class="bi bi-eye"></i> View Profile
+                <i class="bi bi-eye"></i> View
             </a>
             {% if candidate.has_resume %}
                 <a href="{{ candidate.resume_file_url }}" target="_blank" class="btn btn-xs btn-outline-secondary d-flex align-items-center gap-1" title="Download Resume">
@@ -158,7 +178,7 @@
                 </a>
             {% endif %}
             <button class="btn btn-xs btn-outline-success d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#addToPipelineModal{{ candidate.id }}" title="Add to Pipeline">
-                <i class="bi bi-plus-circle"></i> Add to Pipeline
+                <i class="bi bi-plus-circle"></i> Pipeline
             </button>
             <a href="{% url 'frontend:interviews' %}?candidate_id={{ candidate.id }}" class="btn btn-xs btn-outline-info d-flex align-items-center gap-1" title="Schedule Interview">
                 <i class="bi bi-calendar-event"></i> Schedule

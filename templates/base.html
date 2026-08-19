@@ -161,17 +161,21 @@
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
-                <a href="{% url 'frontend:recruiter_jobs' %}" class="sidebar-link {% if request.resolver_match.url_name == 'recruiter_jobs' %}active{% endif %}">
-                    <i class="bi bi-briefcase-fill"></i>
-                    <span>Jobs</span>
-                </a>
-                <a href="{% url 'frontend:recruiter_candidates' %}" class="sidebar-link {% if request.resolver_match.url_name == 'recruiter_candidates' %}active{% endif %}">
+                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,recruiter_candidates' and not request.GET.pool %}active{% endif %}">
                     <i class="bi bi-people-fill"></i>
                     <span>Candidates</span>
+                </a>
+                <a href="{% url 'frontend:recruiter_jobs' %}" class="sidebar-link {% if request.resolver_match.url_name in 'recruiter_jobs,jobs' %}active{% endif %}">
+                    <i class="bi bi-briefcase-fill"></i>
+                    <span>Jobs</span>
                 </a>
                 <a href="{% url 'clients:client_list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'clients' %}active{% endif %}">
                     <i class="bi bi-building-fill"></i>
                     <span>Clients</span>
+                </a>
+                <a href="{% url 'frontend:candidate_search' %}?pool=true" class="sidebar-link {% if request.GET.pool %}active{% endif %}">
+                    <i class="bi bi-database-fill"></i>
+                    <span>Talent Pool</span>
                 </a>
                 <a href="{% url 'frontend:ats_pipeline' %}" class="sidebar-link {% if request.resolver_match.url_name == 'ats_pipeline' %}active{% endif %}">
                     <i class="bi bi-kanban-fill"></i>
