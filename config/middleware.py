@@ -33,7 +33,8 @@ CANDIDATE_FORBIDDEN_PREFIXES = (
     '/export/',
     '/jobs/new/',
     '/clients/',
-    '/employers/'
+    '/employers/',
+    '/taxonomy/',
 )
 
 RECRUITER_FORBIDDEN_PREFIXES = (
@@ -68,7 +69,7 @@ class RoleAccessMiddleware:
         path = request.path
 
         # Bypass static, media and API
-        if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/')):
+        if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/') or '/api/' in path):
             if not request.user.is_authenticated:
                 is_public = path in PUBLIC_EXACT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES) or '/public-apply/' in path
                 if not is_public:
@@ -87,7 +88,7 @@ class RoleAccessMiddleware:
                 # Restrict Candidate Access
                 elif role == User.Role.CANDIDATE:
                     is_forbidden = any(path.startswith(prefix) for prefix in CANDIDATE_FORBIDDEN_PREFIXES)
-                    if path.endswith('/resume/preview/') or path.endswith('/resume/download/'):
+                    if path.endswith('/resume/preview/') or path.endswith('/resume/download/') or '/api/' in path:
                         is_forbidden = False
                     if not is_forbidden and path.startswith('/jobs/'):
                         is_forbidden = any(suffix in path for suffix in JOB_FORBIDDEN_SUFFIXES)

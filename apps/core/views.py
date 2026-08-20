@@ -1379,6 +1379,51 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
     template_name = 'candidate_search.html'
     context_object_name = 'candidates'
     paginate_by = 20
+
+    def paginate_queryset(self, queryset, page_size):
+        """
+        Safe pagination that gracefully falls back to the nearest valid page
+        or page 1 (with empty list) instead of raising a Django Http404 on invalid/out-of-range pages.
+        """
+        from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage, InvalidPage
+
+        paginator = self.get_paginator(
+            queryset,
+            page_size,
+            orphans=self.get_paginate_orphans(),
+            allow_empty_first_page=self.get_allow_empty(),
+        )
+        page_kwarg = self.page_kwarg
+        page = self.kwargs.get(page_kwarg) or self.request.GET.get(page_kwarg) or 1
+
+        if paginator.count == 0:
+            page_obj = paginator.page(1)
+            return (paginator, page_obj, page_obj.object_list, False)
+
+        try:
+            page_number = int(page)
+        except (ValueError, TypeError):
+            if str(page).lower() == "last":
+                page_number = paginator.num_pages
+            else:
+                page_number = 1
+
+        if page_number < 1:
+            page_number = 1
+
+        try:
+            page_obj = paginator.page(page_number)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            if page_number > paginator.num_pages:
+                page_obj = paginator.page(paginator.num_pages)
+            else:
+                page_obj = paginator.page(1)
+        except InvalidPage:
+            page_obj = paginator.page(1)
+
+        return (paginator, page_obj, page_obj.object_list, page_obj.has_other_pages())
     
     def get_queryset(self):
         from django.db.models import Prefetch, Q
@@ -1583,6 +1628,15 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             sort_by=sort_by
         )
 
+        user_display_name = ""
+        if user and user.is_authenticated:
+            user_display_name = user.get_full_name().strip()
+            if not user_display_name and user.email:
+                email_name = user.email.split('@')[0]
+                import re as re_mod
+                clean_name = re_mod.sub(r'[._\d+]+', ' ', email_name).strip().title()
+                user_display_name = clean_name if len(clean_name) >= 3 else user.email
+
         candidates_list = []
         for item in scored_results:
             cand = item["candidate"]
@@ -1594,6 +1648,13 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             # Application snapshot
             apps_list = list(cand.job_applications.all())
             cand.latest_application = apps_list[0] if apps_list else None
+
+            # Resolve effective uploader user name
+            cand_uploader = cand.uploader_name
+            if not cand_uploader and user_display_name:
+                cand_uploader = user_display_name
+            cand.effective_uploader_name = cand_uploader
+
             candidates_list.append(cand)
 
         return candidates_list
@@ -1744,6 +1805,14 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
                 'smart_suggestions': context.get('smart_suggestions', [])
             })
         return super().render_to_response(context, **response_kwargs)
+
+
+class TalentSearchView(CandidateSearchView):
+    """
+    Dedicated Talent Search workspace for recruiter talent discovery, multi-domain taxonomy filters, 
+    deterministic matching, and relevance ranking.
+    """
+    template_name = 'talent_search.html'
 
 
 class CandidateSuggestionsAPIView(RecruiterRequiredMixin, View):
@@ -4228,6 +4297,145 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         response['X-Accel-Buffering'] = 'no'
         response['Cache-Control'] = 'no-cache'
         return response
+
+
+class BulkResumeValidateAPIView(RecruiterRequiredMixin, View):
+    """
+    Validates ZIP containing resumes (.pdf, .doc, .docx) and optional Excel sheet.
+    Safely stages files and returns validation summary without blocking the web server.
+    """
+    def post(self, request, *args, **kwargs):
+        from services.bulk_resume_parser_service import BulkResumeParserService
+        from apps.jobs.models import Job
+
+        zip_file = request.FILES.get('resumes_zip')
+        if not zip_file:
+            return JsonResponse({"success": False, "message": "Please upload a ZIP file containing resumes."}, status=400)
+
+        excel_file = request.FILES.get('candidates_excel')
+        overwrite = request.POST.get('overwrite') in ['true', '1', 'on', True]
+        
+        job_target = None
+        job_id = request.POST.get('job_id') or request.GET.get('job_id')
+        if job_id:
+            try:
+                job_target = Job.objects.get(id=job_id)
+            except Exception:
+                pass
+
+        try:
+            summary = BulkResumeParserService.validate_and_stage_upload(
+                zip_file=zip_file,
+                excel_file=excel_file,
+                user=request.user,
+                job=job_target,
+                overwrite=overwrite
+            )
+            return JsonResponse(summary)
+        except ValueError as ve:
+            return JsonResponse({"success": False, "message": str(ve)}, status=400)
+        except Exception as e:
+            logger.error(f"[BULK VALIDATE ERROR] Exception: {e}", exc_info=True)
+            return JsonResponse({"success": False, "message": f"Validation error: {str(e)}"}, status=500)
+
+
+class BulkResumeStartAPIView(RecruiterRequiredMixin, View):
+    """
+    Starts asynchronous background parsing for a staged bulk job.
+    """
+    def post(self, request, *args, **kwargs):
+        from services.bulk_resume_parser_service import BulkResumeParserService
+        import json
+
+        job_id = request.POST.get('job_id')
+        if not job_id and request.body:
+            try:
+                payload = json.loads(request.body.decode('utf-8'))
+                job_id = payload.get('job_id')
+                overwrite = payload.get('overwrite')
+            except Exception:
+                overwrite = None
+        else:
+            overwrite = request.POST.get('overwrite') in ['true', '1', 'on', True] if request.POST.get('overwrite') is not None else None
+
+        if not job_id:
+            return JsonResponse({"success": False, "message": "Missing job_id parameter."}, status=400)
+
+        sync = request.POST.get('sync') in ['true', '1', True] or (request.headers.get('X-Test-Sync') == '1')
+
+        try:
+            BulkResumeParserService.start_background_processing(job_id, overwrite=overwrite, sync=sync)
+            return JsonResponse({
+                "success": True,
+                "job_id": job_id,
+                "message": "Bulk Parsing Started"
+            })
+        except Exception as e:
+            logger.error(f"[BULK START ERROR] Exception: {e}", exc_info=True)
+            return JsonResponse({"success": False, "message": str(e)}, status=400)
+
+
+class BulkResumeStatusAPIView(RecruiterRequiredMixin, View):
+    """
+    Polls real-time progress and item statistics for an active or completed bulk job.
+    """
+    def get(self, request, job_number, *args, **kwargs):
+        from apps.candidates.models import BulkResumeJob, BulkResumeItem
+        from services.bulk_resume_parser_service import BulkResumeParserService
+        job = BulkResumeParserService.get_job(job_number)
+        if not job:
+            return JsonResponse({"success": False, "message": "Job not found."}, status=404)
+
+        items_qs = job.items.all().order_by('id')
+        items_data = []
+        for it in items_qs[:200]:  # Limit payload size
+            items_data.append({
+                "id": str(it.id),
+                "filename": it.filename,
+                "status": it.status,
+                "action": it.action_taken,
+                "candidate_id": str(it.candidate_id) if it.candidate_id else "",
+                "candidate_name": it.candidate_name,
+                "candidate_email": it.candidate_email,
+                "candidate_phone": it.candidate_phone,
+                "reason": it.reason
+            })
+
+        return JsonResponse({
+            "success": True,
+            "job_number": job.job_number,
+            "status": job.status,
+            "total_files": job.total_files,
+            "processed_files": job.processed_files,
+            "percent": job.progress_percentage,
+            "successful_count": job.successful_count,
+            "updated_count": job.updated_count,
+            "skipped_count": job.skipped_count,
+            "failed_count": job.failed_count,
+            "current_file": job.current_file,
+            "validation_summary": job.validation_summary,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "items": items_data
+        })
+
+
+class BulkResumeReportAPIView(RecruiterRequiredMixin, View):
+    """
+    Generates and downloads a CSV report for a bulk resume parsing job.
+    """
+    def get(self, request, job_number, *args, **kwargs):
+        from django.http import HttpResponse
+        from services.bulk_resume_parser_service import BulkResumeParserService
+
+        try:
+            csv_content = BulkResumeParserService.generate_csv_report(job_number)
+            response = HttpResponse(csv_content, content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="bulk_parsing_report_{job_number}.csv"'
+            return response
+        except Exception as e:
+            return JsonResponse({"success": False, "message": str(e)}, status=400)
+
 
 from django.core.mail import send_mail
 from django.conf import settings

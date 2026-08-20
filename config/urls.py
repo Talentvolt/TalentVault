@@ -21,6 +21,13 @@ from apps.candidates.views import (
 )
 from apps.applications.views import ApplicationViewSet
 from apps.interviews.views import InterviewViewSet
+from apps.taxonomy.views import (
+    TaxonomySuggestionsAPIView,
+    TaxonomyRolesAPIView,
+    TaxonomySkillsAPIView,
+    TaxonomyJobSuggestionsAPIView,
+    TaxonomyStatsAPIView
+)
 
 # Create a router and register our viewsets with it.
 router = DefaultRouter()
@@ -114,7 +121,14 @@ urlpatterns = [
     # API Version 1
     path('api/v1/auth/', include('apps.accounts.urls')),
     path('api/v1/', include(router.urls)),
-    path('', include('apps.taxonomy.urls')),
+    path('taxonomy/', include('apps.taxonomy.urls', namespace='taxonomy')),
+    
+    # Global Taxonomy APIs
+    path('api/taxonomy/suggestions/', TaxonomySuggestionsAPIView.as_view(), name='api_taxonomy_suggestions_root'),
+    path('api/taxonomy/roles/', TaxonomyRolesAPIView.as_view(), name='api_taxonomy_roles_root'),
+    path('api/taxonomy/skills/', TaxonomySkillsAPIView.as_view(), name='api_taxonomy_skills_root'),
+    path('api/taxonomy/job-suggestions/', TaxonomyJobSuggestionsAPIView.as_view(), name='api_taxonomy_job_suggestions_root'),
+    path('api/taxonomy/stats/', TaxonomyStatsAPIView.as_view(), name='api_taxonomy_stats_root'),
     
     # Nested routes for companies -> members
     path('api/v1/companies/<uuid:company_pk>/members/', CompanyMemberViewSet.as_view({'get': 'list', 'post': 'create'}), name='company-members'),

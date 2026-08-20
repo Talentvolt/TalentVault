@@ -123,46 +123,47 @@ ul.resume-bullets li, ol.resume-ordered li {
 </style>
 
 <!-- Sticky Action Bar -->
-<div class="mb-4 d-flex justify-content-between align-items-center sticky-action-bar">
+<div class="mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2 sticky-action-bar">
     {% if selected_job %}
         <a href="{% url 'frontend:job_candidates' selected_job.id %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to Job Candidates</a>
     {% else %}
         <a href="{% url 'frontend:candidate_search' %}" class="text-secondary text-decoration-none fw-medium"><i class="bi bi-arrow-left"></i> Back to TalentVault</a>
     {% endif %}
-    <div class="d-flex gap-2">
-        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
-        <button class="btn btn-outline-info" onclick="previewAIImprovement()"><i class="bi bi-stars me-1"></i> AI Assist</button>
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editResumeJSONModal" onclick="loadResumeForm()"><i class="bi bi-braces me-1"></i> Structured Editor</button>
-        <a href="{% url 'frontend:candidate_edit' candidate.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit Profile</a>
+    <div class="d-flex gap-1.5 flex-wrap align-items-center">
+        <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
+        <button class="btn btn-sm btn-outline-info" onclick="previewAIImprovement()"><i class="bi bi-stars me-1"></i> AI Assist</button>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editResumeJSONModal" onclick="loadResumeForm()"><i class="bi bi-braces me-1"></i> Structured Editor</button>
+        <a href="{% url 'frontend:candidate_edit' candidate.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit Profile</a>
         {% if selected_job %}
             <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to reject this candidate for this job?');">
                 {% csrf_token %}
                 <input type="hidden" name="job_id" value="{{ selected_job.id }}">
                 <input type="hidden" name="next" value="{% url 'frontend:job_candidates' selected_job.id %}">
-                <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i> Reject</button>
+                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i> Reject</button>
             </form>
         {% else %}
             <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to reject this candidate?');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i> Reject</button>
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i> Reject</button>
             </form>
         {% endif %}
-        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCandidateModal"><i class="bi bi-trash me-1"></i> Delete Candidate</button>
+        <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCandidateModal"><i class="bi bi-trash me-1"></i> Delete Candidate</button>
         {% if selected_job %}
             {% if is_in_pipeline %}
-                <button class="btn btn-success text-white" disabled><i class="bi bi-check-circle-fill me-1"></i> In Pipeline</button>
+                <button class="btn btn-sm btn-success text-white" disabled><i class="bi bi-check-circle-fill me-1"></i> In Pipeline</button>
             {% else %}
                 <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}" class="d-inline">
                     {% csrf_token %}
                     <input type="hidden" name="job_id" value="{{ selected_job.id }}">
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                    <button type="submit" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
                 </form>
             {% endif %}
         {% else %}
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addToPipelineModal"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
+            <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addToPipelineModal"><i class="bi bi-plus-circle me-1"></i> Add to Pipeline</button>
         {% endif %}
-        <a href="{% url 'frontend:interviews' %}{% if selected_job %}?job_id={{ selected_job.id }}&candidate_id={{ candidate.id }}{% endif %}" class="btn btn-primary text-white"><i class="bi bi-calendar-event me-1"></i> Schedule Interview</a>
+        <a href="{% url 'frontend:interviews' %}{% if selected_job %}?job_id={{ selected_job.id }}&candidate_id={{ candidate.id }}{% endif %}" class="btn btn-sm btn-primary text-white"><i class="bi bi-calendar-event me-1"></i> Schedule Interview</a>
     </div>
 </div>
 

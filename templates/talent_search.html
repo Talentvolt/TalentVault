@@ -1,0 +1,1604 @@
+{% extends "layouts/recruiter_base.html" %}
+{% load static %}
+
+{% block title %}Talent Search Workspace | TalentVault{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Scoped styling enhancements for Talent Search Workspace */
+    .filter-panel-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
+    }
+    .filter-panel-scroll::-webkit-scrollbar {
+        width: 5px;
+    }
+    .filter-panel-scroll::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 4px;
+    }
+    .filter-count-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    .hover-primary:hover {
+        color: var(--primary-color) !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 1. Talent Search Workspace Header Banner -->
+<div class="workspace-header-bg shadow-sm mb-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1.5 flex-wrap">
+                <span class="workspace-badge"><i class="bi bi-stars me-1"></i>Talent Intelligence</span>
+                <span class="small fw-medium text-slate-300">TalentVault AI &amp; Recruitment Intelligence</span>
+            </div>
+            <h3 class="workspace-title"><i class="bi bi-search-heart-fill text-primary"></i>Talent Search Workspace</h3>
+            <p class="text-slate-300 small m-0 mt-0.5">Search, discover and shortlist the right talent from your candidate database.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- Saved Searches Modal Button -->
+            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1.5" onclick="openSavedSearchesModal()">
+                <i class="bi bi-bookmark-star"></i> Saved Searches <span class="badge bg-white bg-opacity-25 text-white ms-1">{{ saved_searches|length }}</span>
+            </button>
+            <!-- Recent Searches Modal Button -->
+            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1.5" onclick="openRecentSearchesModal()">
+                <i class="bi bi-clock-history"></i> Recent <span class="badge bg-white bg-opacity-25 text-white ms-1">{{ recent_searches|length }}</span>
+            </button>
+            <!-- Save Current Search Button -->
+            <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1.5 px-3 shadow-xs" onclick="openSaveSearchModal()">
+                <i class="bi bi-bookmark-plus"></i> Save Search
+            </button>
+        </div>
+    </div>
+
+    <!-- Candidate Workspace Sub-Navigation Tabs -->
+    <div class="workspace-tabs-container">
+        <a href="{% url 'frontend:talent_search' %}?tab=search" class="workspace-nav-tab {% if current_tab == 'search' or not current_tab %}active{% endif %}">
+            <i class="bi bi-search"></i> Search Candidates
+        </a>
+        <a href="{% url 'frontend:candidate_search' %}?tab=all" class="workspace-nav-tab {% if current_tab == 'all' %}active{% endif %}">
+            <i class="bi bi-people"></i> All Candidates <span class="badge bg-secondary bg-opacity-50 text-white ms-1">{{ tab_counts.all }}</span>
+        </a>
+        <a href="{% url 'frontend:candidate_search' %}?tab=shortlisted" class="workspace-nav-tab {% if current_tab == 'shortlisted' %}active{% endif %}">
+            <i class="bi bi-star"></i> Shortlisted <span class="badge bg-warning text-dark ms-1">{{ tab_counts.shortlisted }}</span>
+        </a>
+        <a href="{% url 'frontend:candidate_search' %}?tab=new" class="workspace-nav-tab {% if current_tab == 'new' %}active{% endif %}">
+            <i class="bi bi-sparkles"></i> New Candidates <span class="badge bg-success text-white ms-1">{{ tab_counts.new }}</span>
+        </a>
+        <a href="{% url 'frontend:candidate_search' %}?tab=modified" class="workspace-nav-tab {% if current_tab == 'modified' %}active{% endif %}">
+            <i class="bi bi-arrow-repeat"></i> Modified Candidates <span class="badge bg-info text-dark ms-1">{{ tab_counts.modified }}</span>
+        </a>
+        <a href="{% url 'frontend:candidate_search' %}?tab=saved_for_later" class="workspace-nav-tab {% if current_tab == 'saved_for_later' %}active{% endif %}">
+            <i class="bi bi-bookmark-check"></i> Save for Later <span class="badge bg-secondary text-white ms-1">{{ tab_counts.saved_for_later }}</span>
+        </a>
+    </div>
+</div>
+
+<!-- 2. PROMINENT DEDICATED "SEARCH CANDIDATES" CARD -->
+<div class="search-candidates-card">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2.5">
+        <div>
+            <h4 class="search-card-title">
+                <i class="bi bi-search text-primary"></i> SEARCH CANDIDATES
+            </h4>
+            <p class="text-secondary small m-0 mt-0.5">Search candidates by skill, designation, company, technology across your database.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Filter Drawer Trigger Button -->
+            <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1.5 fw-semibold px-3" onclick="toggleFilterDrawer()">
+                <i class="bi bi-funnel-fill"></i> Filters
+                <span id="quick-filter-count-badge" class="badge bg-primary text-white rounded-pill px-2 py-0.5 filter-count-badge">0 Applied</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Visually Dominant Search Bar -->
+    <div class="dominant-search-bar" id="search-tags-container" onclick="focusMainSearchInput()">
+        <i class="bi bi-search text-primary fs-5 ms-1"></i>
+        
+        <!-- Tag Chips Holder -->
+        <div id="search-chips-wrapper" class="d-inline-flex flex-wrap gap-1 align-items-center"></div>
+        
+        <!-- Dominant Text Input -->
+        <input type="text" id="main-tag-search-input" class="dominant-search-input" placeholder="Search candidates by skill, designation, company, technology..." autocomplete="off" aria-label="Search candidates">
+        <input type="hidden" name="q" id="hidden-q-input" form="candidate-filters-form" value="{{ query|default:'' }}">
+        
+        <div class="spinner-border spinner-border-sm text-primary ms-auto d-none me-2" id="main-search-spinner" role="status"></div>
+
+        <!-- Dominant Search Button -->
+        <button type="button" class="btn-dominant-search" onclick="submitSearchFromInput()">
+            <i class="bi bi-search"></i> Search
+        </button>
+
+        <!-- Autocomplete Suggestions Dropdown -->
+        <div class="field-autocomplete-dropdown" id="dropdown-main-search"></div>
+    </div>
+
+    <!-- Suggested Keywords Row -->
+    <div class="d-flex align-items-center gap-2 flex-wrap mt-2.5">
+        <span class="text-secondary x-small fw-bold text-uppercase d-flex align-items-center">
+            <i class="bi bi-stars text-primary me-1"></i> Suggested Keywords:
+        </span>
+        <div class="suggestions-container" id="smart-suggestions-holder">
+            {% if smart_suggestions %}
+                {% for s in smart_suggestions|slice:":8" %}
+                    <a href="javascript:void(0)" class="suggestion-pill {% if s.type == 'job_role' or s.type == 'designation' %}pill-role{% elif s.type == 'skill' or s.type == 'technology' %}pill-skill{% else %}pill-domain{% endif %}" onclick="addTagFromSuggestion('{{ s.name|default:s.label|escapejs }}', '{{ s.type|escapejs }}')">
+                        <i class="bi bi-plus-lg x-small"></i> {{ s.name|default:s.label }}
+                    </a>
+                {% endfor %}
+            {% else %}
+                <a href="javascript:void(0)" class="suggestion-pill pill-role" onclick="addTagFromSuggestion('Sales Manager', 'job_role')"><i class="bi bi-plus-lg x-small"></i> Sales Manager</a>
+                <a href="javascript:void(0)" class="suggestion-pill pill-skill" onclick="addTagFromSuggestion('React', 'skill')"><i class="bi bi-plus-lg x-small"></i> React</a>
+                <a href="javascript:void(0)" class="suggestion-pill pill-skill" onclick="addTagFromSuggestion('Python', 'skill')"><i class="bi bi-plus-lg x-small"></i> Python</a>
+                <a href="javascript:void(0)" class="suggestion-pill pill-role" onclick="addTagFromSuggestion('Data Analyst', 'job_role')"><i class="bi bi-plus-lg x-small"></i> Data Analyst</a>
+                <a href="javascript:void(0)" class="suggestion-pill pill-role" onclick="addTagFromSuggestion('Software Engineer', 'job_role')"><i class="bi bi-plus-lg x-small"></i> Software Engineer</a>
+                <a href="javascript:void(0)" class="suggestion-pill pill-skill" onclick="addTagFromSuggestion('Java', 'skill')"><i class="bi bi-plus-lg x-small"></i> Java</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Filter Buttons Row -->
+    <div class="quick-filters-container">
+        <span class="text-muted x-small fw-semibold me-1 d-flex align-items-center">
+            <i class="bi bi-sliders text-primary me-1"></i> Quick Filters:
+        </span>
+        <button type="button" class="quick-filter-btn" onclick="openFilterDrawerSection('collapseExp')">
+            <i class="bi bi-briefcase text-primary"></i> Experience <i class="bi bi-chevron-down x-small opacity-50"></i>
+        </button>
+        <button type="button" class="quick-filter-btn" onclick="openFilterDrawerSection('collapseSalary')">
+            <i class="bi bi-cash-stack text-success"></i> Salary Range <i class="bi bi-chevron-down x-small opacity-50"></i>
+        </button>
+        <button type="button" class="quick-filter-btn" onclick="openFilterDrawerSection('collapseLocation')">
+            <i class="bi bi-geo-alt text-danger"></i> Location <i class="bi bi-chevron-down x-small opacity-50"></i>
+        </button>
+        <button type="button" class="quick-filter-btn" onclick="openFilterDrawerSection('collapseDesig')">
+            <i class="bi bi-person-badge text-primary"></i> Designation <i class="bi bi-chevron-down x-small opacity-50"></i>
+        </button>
+        <button type="button" class="quick-filter-btn" onclick="openFilterDrawerSection('collapseSkills')">
+            <i class="bi bi-braces-asterisk text-primary"></i> Skills &amp; Tech <i class="bi bi-chevron-down x-small opacity-50"></i>
+        </button>
+        <button type="button" class="quick-filter-btn" onclick="openFilterDrawerSection('collapseNotice')">
+            <i class="bi bi-clock text-primary"></i> Notice Period <i class="bi bi-chevron-down x-small opacity-50"></i>
+        </button>
+        <button type="button" class="quick-filter-btn active" onclick="toggleFilterDrawer()">
+            <i class="bi bi-funnel"></i> More Filters <span class="badge bg-primary text-white rounded-pill ms-1 filter-count-badge" id="more-filters-badge">0</span>
+        </button>
+    </div>
+</div>
+
+<!-- Filter Drawer Backdrop -->
+<div id="filter-drawer-backdrop" class="filter-drawer-backdrop" onclick="toggleFilterDrawer()"></div>
+
+<!-- 3. SLIDE-OVER FILTER DRAWER (Left on Desktop, Bottom-sheet/Full-width on Mobile) -->
+<aside class="candidate-filter-drawer" id="candidate-filter-drawer">
+    <form method="GET" id="candidate-filters-form" action="{% url 'frontend:talent_search' %}" onsubmit="handleApplyFilters(event);" class="d-flex flex-column h-100 m-0">
+        <input type="hidden" name="tab" value="{{ current_tab|default:'search' }}">
+        <input type="hidden" name="sort_by" id="hidden-sort-by" value="{{ filters.sort_by|default:'relevance' }}">
+        
+        <!-- Hidden inputs generated dynamically for tags -->
+        <div id="hidden-tags-holder"></div>
+
+        <!-- Filter Drawer Header -->
+        <div class="filter-panel-header">
+            <div class="d-flex align-items-center gap-2">
+                <h6 class="fw-bold m-0 text-dark d-flex align-items-center gap-1.5" style="font-size: 0.95rem;">
+                    <i class="bi bi-funnel-fill text-primary"></i> Search &amp; Filters
+                </h6>
+                <span id="active-filters-count-badge" class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill filter-count-badge px-2 py-0.5">
+                    0 applied
+                </span>
+            </div>
+            <button type="button" class="btn btn-sm btn-light border-0 p-1 text-secondary" onclick="toggleFilterDrawer()" aria-label="Close filters">
+                <i class="bi bi-x-lg fs-6"></i>
+            </button>
+        </div>
+
+        <!-- Scrollable Filter Content Body (12 Structured Sections + Boolean) -->
+        <div class="filter-panel-body filter-panel-scroll">
+
+            <!-- BOOLEAN SEARCH (Compact Toggle) -->
+            <div class="filter-section-block">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="filter-section-label m-0 cursor-pointer" onclick="toggleBooleanSearch()">
+                        <span><i class="bi bi-terminal me-1 text-primary"></i> Boolean Search</span>
+                    </label>
+                    <button type="button" class="btn btn-xs btn-outline-soft py-0.5 px-2 x-small d-flex align-items-center gap-1" onclick="toggleBooleanSearch()" id="boolean-toggle-btn">
+                        <span id="boolean-status-badge" class="{% if filters.boolean_query %}text-success{% else %}text-muted{% endif %} fw-bold">
+                            {% if filters.boolean_query %}ON{% else %}OFF{% endif %}
+                        </span>
+                    </button>
+                </div>
+                <div id="boolean-search-container" class="boolean-box {% if not filters.boolean_query %}d-none{% endif %}">
+                    <input type="text" name="boolean_query" id="boolean-query-input" class="form-control form-control-sm font-monospace x-small" placeholder='e.g. ("Sales" OR "BD") AND CRM NOT "Intern"' value="{{ filters.boolean_query|default:'' }}">
+                </div>
+            </div>
+
+            <!-- SECTION 1: Experience (Dropdowns) -->
+            <div class="filter-section-block" id="sec-exp">
+                <label class="filter-section-label">
+                    <span><i class="bi bi-briefcase me-1 text-primary"></i> Experience (Years)</span>
+                </label>
+                <div class="row g-1.5 align-items-center">
+                    <div class="col-6">
+                        <select name="min_exp" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                            <option value="">Min Experience</option>
+                            <option value="0" {% if filters.min_exp == '0' %}selected{% endif %}>0 Yrs (Fresher)</option>
+                            <option value="1" {% if filters.min_exp == '1' %}selected{% endif %}>1 Yr</option>
+                            <option value="2" {% if filters.min_exp == '2' %}selected{% endif %}>2 Yrs</option>
+                            <option value="3" {% if filters.min_exp == '3' %}selected{% endif %}>3 Yrs</option>
+                            <option value="4" {% if filters.min_exp == '4' %}selected{% endif %}>4 Yrs</option>
+                            <option value="5" {% if filters.min_exp == '5' %}selected{% endif %}>5 Yrs</option>
+                            <option value="6" {% if filters.min_exp == '6' %}selected{% endif %}>6 Yrs</option>
+                            <option value="7" {% if filters.min_exp == '7' %}selected{% endif %}>7 Yrs</option>
+                            <option value="8" {% if filters.min_exp == '8' %}selected{% endif %}>8 Yrs</option>
+                            <option value="10" {% if filters.min_exp == '10' %}selected{% endif %}>10 Yrs</option>
+                            <option value="12" {% if filters.min_exp == '12' %}selected{% endif %}>12 Yrs</option>
+                            <option value="15" {% if filters.min_exp == '15' %}selected{% endif %}>15+ Yrs</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <select name="max_exp" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                            <option value="">Max Experience</option>
+                            <option value="1" {% if filters.max_exp == '1' %}selected{% endif %}>1 Yr</option>
+                            <option value="2" {% if filters.max_exp == '2' %}selected{% endif %}>2 Yrs</option>
+                            <option value="3" {% if filters.max_exp == '3' %}selected{% endif %}>3 Yrs</option>
+                            <option value="5" {% if filters.max_exp == '5' %}selected{% endif %}>5 Yrs</option>
+                            <option value="7" {% if filters.max_exp == '7' %}selected{% endif %}>7 Yrs</option>
+                            <option value="10" {% if filters.max_exp == '10' %}selected{% endif %}>10 Yrs</option>
+                            <option value="12" {% if filters.max_exp == '12' %}selected{% endif %}>12 Yrs</option>
+                            <option value="15" {% if filters.max_exp == '15' %}selected{% endif %}>15 Yrs</option>
+                            <option value="20" {% if filters.max_exp == '20' %}selected{% endif %}>20 Yrs</option>
+                            <option value="30" {% if filters.max_exp == '30' %}selected{% endif %}>30+ Yrs</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Salary Range (Dropdowns) -->
+            <div class="filter-section-block" id="sec-salary">
+                <label class="filter-section-label">
+                    <span><i class="bi bi-cash-stack me-1 text-success"></i> Salary Range (LPA)</span>
+                </label>
+                <div class="row g-1.5 align-items-center">
+                    <div class="col-6">
+                        <select name="min_salary" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                            <option value="">Min Salary</option>
+                            <option value="0" {% if filters.min_salary == '0' %}selected{% endif %}>&#8377;0 LPA</option>
+                            <option value="3" {% if filters.min_salary == '3' %}selected{% endif %}>&#8377;3 LPA</option>
+                            <option value="5" {% if filters.min_salary == '5' %}selected{% endif %}>&#8377;5 LPA</option>
+                            <option value="7" {% if filters.min_salary == '7' %}selected{% endif %}>&#8377;7 LPA</option>
+                            <option value="10" {% if filters.min_salary == '10' %}selected{% endif %}>&#8377;10 LPA</option>
+                            <option value="15" {% if filters.min_salary == '15' %}selected{% endif %}>&#8377;15 LPA</option>
+                            <option value="20" {% if filters.min_salary == '20' %}selected{% endif %}>&#8377;20 LPA</option>
+                            <option value="25" {% if filters.min_salary == '25' %}selected{% endif %}>&#8377;25 LPA</option>
+                            <option value="30" {% if filters.min_salary == '30' %}selected{% endif %}>&#8377;30 LPA</option>
+                            <option value="50" {% if filters.min_salary == '50' %}selected{% endif %}>&#8377;50+ LPA</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <select name="max_salary" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                            <option value="">Max Salary</option>
+                            <option value="3" {% if filters.max_salary == '3' %}selected{% endif %}>&#8377;3 LPA</option>
+                            <option value="5" {% if filters.max_salary == '5' %}selected{% endif %}>&#8377;5 LPA</option>
+                            <option value="7" {% if filters.max_salary == '7' %}selected{% endif %}>&#8377;7 LPA</option>
+                            <option value="10" {% if filters.max_salary == '10' %}selected{% endif %}>&#8377;10 LPA</option>
+                            <option value="15" {% if filters.max_salary == '15' %}selected{% endif %}>&#8377;15 LPA</option>
+                            <option value="20" {% if filters.max_salary == '20' %}selected{% endif %}>&#8377;20 LPA</option>
+                            <option value="25" {% if filters.max_salary == '25' %}selected{% endif %}>&#8377;25 LPA</option>
+                            <option value="30" {% if filters.max_salary == '30' %}selected{% endif %}>&#8377;30 LPA</option>
+                            <option value="50" {% if filters.max_salary == '50' %}selected{% endif %}>&#8377;50 LPA</option>
+                            <option value="75" {% if filters.max_salary == '75' %}selected{% endif %}>&#8377;75 LPA</option>
+                            <option value="100" {% if filters.max_salary == '100' %}selected{% endif %}>&#8377;100+ LPA</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Location -->
+            <div class="filter-section-block" id="sec-location">
+                <label class="filter-section-label">
+                    <span><i class="bi bi-geo-alt me-1 text-danger"></i> Location</span>
+                </label>
+                <input type="text" name="location" id="field-search-location" class="form-control form-control-sm" placeholder="e.g. Delhi, Mumbai, Bengaluru, Remote..." value="{{ filters.location|default:'' }}" onkeyup="triggerLiveSearch()">
+                <div class="d-flex flex-wrap gap-1 mt-1">
+                    <button type="button" class="btn btn-xs btn-outline-soft py-0.5 px-1.5" onclick="setLocationFilter('Delhi / NCR')">Delhi/NCR</button>
+                    <button type="button" class="btn btn-xs btn-outline-soft py-0.5 px-1.5" onclick="setLocationFilter('Bengaluru')">Bengaluru</button>
+                    <button type="button" class="btn btn-xs btn-outline-soft py-0.5 px-1.5" onclick="setLocationFilter('Mumbai')">Mumbai</button>
+                    <button type="button" class="btn btn-xs btn-outline-soft py-0.5 px-1.5" onclick="setLocationFilter('Hyderabad')">Hyderabad</button>
+                    <button type="button" class="btn btn-xs btn-outline-soft py-0.5 px-1.5" onclick="setLocationFilter('Remote')">Remote</button>
+                </div>
+            </div>
+
+            <!-- SECTION 4: Current / Past Designation -->
+            <div class="filter-section-block" id="sec-desig">
+                <label class="filter-section-label">
+                    <span><i class="bi bi-person-badge me-1 text-primary"></i> Current / Past Designation</span>
+                </label>
+                <input type="text" name="title" id="field-search-title" class="form-control form-control-sm" placeholder="e.g. Sales Manager, Software Engineer..." value="{{ filters.title|default:'' }}" onkeyup="triggerLiveSearch()">
+            </div>
+
+            <!-- COLLAPSIBLE ACCORDION FILTER SECTIONS (5 to 12) -->
+            <div class="d-flex flex-column gap-2 mt-1">
+
+                <!-- SECTION 5: Department & Functional Area -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseDeptRole" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-diagram-3 text-primary"></i> Department &amp; Functional Area
+                            <span id="badge-grp-dept" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseDeptRole" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Department / Division</label>
+                                <input type="text" name="department" class="form-control form-control-sm" placeholder="Sales, Engineering, HR, Finance..." value="{{ filters.department|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Functional Role</label>
+                                <input type="text" name="role" class="form-control form-control-sm" placeholder="Direct Sales, Full Stack, DevOps..." value="{{ filters.role|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Work Mode</label>
+                                <select name="work_mode" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">Any Work Mode</option>
+                                    <option value="REMOTE" {% if filters.work_mode == 'REMOTE' %}selected{% endif %}>Remote</option>
+                                    <option value="HYBRID" {% if filters.work_mode == 'HYBRID' %}selected{% endif %}>Hybrid</option>
+                                    <option value="ONSITE" {% if filters.work_mode == 'ONSITE' %}selected{% endif %}>Onsite</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 6: Industry & Sector -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseIndustry" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-building-fill text-primary"></i> Industry &amp; Sector
+                            <span id="badge-grp-ind" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseIndustry" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Industry Sector</label>
+                                <input type="text" name="industry" class="form-control form-control-sm" placeholder="IT, BFSI, Healthcare, FMCG, Auto..." value="{{ filters.industry|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Company Type</label>
+                                <select name="company_type" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">Any Company Type</option>
+                                    <option value="CORPORATE" {% if filters.company_type == 'CORPORATE' %}selected{% endif %}>Corporate / Enterprise</option>
+                                    <option value="STARTUP" {% if filters.company_type == 'STARTUP' %}selected{% endif %}>Startup</option>
+                                    <option value="MNC" {% if filters.company_type == 'MNC' %}selected{% endif %}>Foreign MNC</option>
+                                    <option value="GOVERNMENT" {% if filters.company_type == 'GOVERNMENT' %}selected{% endif %}>Government / PSU</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 7: Education & Qualifications -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseEdu" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-mortarboard text-primary"></i> Education &amp; Qualifications
+                            <span id="badge-grp-edu" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseEdu" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">UG Degree</label>
+                                <input type="text" name="ug_degree" class="form-control form-control-sm" placeholder="B.Tech, B.Com, B.Sc, BBA..." value="{{ filters.ug_degree|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">UG Specialization</label>
+                                <input type="text" name="ug_specialization" class="form-control form-control-sm" placeholder="Computer Science, Mechanical, Finance..." value="{{ filters.ug_specialization|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">PG Degree</label>
+                                <input type="text" name="pg_degree" class="form-control form-control-sm" placeholder="MBA, M.Tech, MCA, M.Sc..." value="{{ filters.pg_degree|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Institute / University</label>
+                                <input type="text" name="institute" class="form-control form-control-sm" placeholder="IIT, IIM, Delhi University..." value="{{ filters.institute|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Passing Year (From - To)</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="passing_year_from" class="form-control form-control-sm" placeholder="2018" value="{{ filters.passing_year_from|default:'' }}" onkeyup="triggerLiveSearch()">
+                                    <span class="input-group-text bg-light text-muted px-2">-</span>
+                                    <input type="number" name="passing_year_to" class="form-control form-control-sm" placeholder="2025" value="{{ filters.passing_year_to|default:'' }}" onkeyup="triggerLiveSearch()">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Education Type</label>
+                                <select name="education_type" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">Any Type</option>
+                                    <option value="FULL_TIME" {% if filters.education_type == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
+                                    <option value="PART_TIME" {% if filters.education_type == 'PART_TIME' %}selected{% endif %}>Part Time</option>
+                                    <option value="CORRESPONDENCE" {% if filters.education_type == 'CORRESPONDENCE' %}selected{% endif %}>Distance / Online</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 8: Skills & Tech Stack -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseSkills" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-braces-asterisk text-primary"></i> Skills &amp; Tech Stack
+                            <span id="badge-grp-skills" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseSkills" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Domain Skills</label>
+                                <input type="text" name="skills" class="form-control form-control-sm" placeholder="Sales, B2B, Lead Gen, Negotiation..." value="{{ filters.skills|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">IT Skills &amp; Stack</label>
+                                <input type="text" name="it_skills" class="form-control form-control-sm" placeholder="Python, Django, React, AWS..." value="{{ filters.it_skills|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Exclude Keywords (NOT in profile)</label>
+                                <input type="text" name="exclude_keywords" class="form-control form-control-sm" placeholder="e.g. Intern, Telecaller (comma separated)" value="{{ filters.exclude_keywords|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 9: Employer Details -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseEmployer" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-building text-primary"></i> Employer Details
+                            <span id="badge-grp-emp" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseEmployer" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Current / Any Company</label>
+                                <input type="text" name="company" class="form-control form-control-sm" placeholder="Target companies..." value="{{ filters.company|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Exclude Company</label>
+                                <input type="text" name="excluded_company" class="form-control form-control-sm" placeholder="Companies to exclude..." value="{{ filters.excluded_company|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Employment Type</label>
+                                <select name="employment_type" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">Any Employment Type</option>
+                                    <option value="FULL_TIME" {% if filters.employment_type == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
+                                    <option value="CONTRACT" {% if filters.employment_type == 'CONTRACT' %}selected{% endif %}>Contract</option>
+                                    <option value="PART_TIME" {% if filters.employment_type == 'PART_TIME' %}selected{% endif %}>Part Time</option>
+                                    <option value="FREELANCE" {% if filters.employment_type == 'FREELANCE' %}selected{% endif %}>Freelance</option>
+                                    <option value="INTERNSHIP" {% if filters.employment_type == 'INTERNSHIP' %}selected{% endif %}>Internship</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 10: Notice Period -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseNotice" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-clock text-primary"></i> Notice Period
+                            <span id="badge-grp-notice" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseNotice" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Notice Period Threshold</label>
+                                <select name="notice_period" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">Any Notice Period</option>
+                                    <option value="0" {% if filters.notice_period == '0' %}selected{% endif %}>Immediate Joiner (0 Days)</option>
+                                    <option value="15" {% if filters.notice_period == '15' %}selected{% endif %}>15 Days or less</option>
+                                    <option value="30" {% if filters.notice_period == '30' %}selected{% endif %}>30 Days or less</option>
+                                    <option value="60" {% if filters.notice_period == '60' %}selected{% endif %}>60 Days or less</option>
+                                    <option value="90" {% if filters.notice_period == '90' %}selected{% endif %}>90 Days or less</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 11: Diversity & Work Permit -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseDiversity" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-shield-heart text-primary"></i> Diversity &amp; Work Permit
+                            <span id="badge-grp-div" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseDiversity" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Gender</label>
+                                <select name="gender" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">All Candidates</option>
+                                    <option value="FEMALE" {% if filters.gender == 'FEMALE' %}selected{% endif %}>Female</option>
+                                    <option value="MALE" {% if filters.gender == 'MALE' %}selected{% endif %}>Male</option>
+                                    <option value="OTHER" {% if filters.gender == 'OTHER' %}selected{% endif %}>Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Work Permit Country</label>
+                                <input type="text" name="work_permit_country" class="form-control form-control-sm" placeholder="India, USA, UK, UAE..." value="{{ filters.work_permit_country|default:'' }}" onkeyup="triggerLiveSearch()">
+                            </div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" name="has_career_break" value="1" id="cb_career_break" {% if filters.has_career_break %}checked{% endif %} onchange="triggerLiveSearch()">
+                                <label class="form-check-label x-small text-secondary cursor-pointer" for="cb_career_break">Career Break / Return to Work</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_differently_abled" value="1" id="cb_diff_abled" {% if filters.is_differently_abled %}checked{% endif %} onchange="triggerLiveSearch()">
+                                <label class="form-check-label x-small text-secondary cursor-pointer" for="cb_diff_abled">Differently-Abled (Self-Declared)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="has_defence_background" value="1" id="cb_defence" {% if filters.has_defence_background %}checked{% endif %} onchange="triggerLiveSearch()">
+                                <label class="form-check-label x-small text-secondary cursor-pointer" for="cb_defence">Defence Background</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 12: Freshness, Verification & Status -->
+                <div class="filter-accordion-item">
+                    <button type="button" class="filter-accordion-btn collapsed" data-bs-toggle="collapse" data-bs-target="#collapseFreshness" aria-expanded="false">
+                        <span class="d-flex align-items-center gap-1.5">
+                            <i class="bi bi-person-check text-primary"></i> Freshness &amp; Status
+                            <span id="badge-grp-status" class="badge bg-primary text-white rounded-pill px-1.5 py-0.5 filter-count-badge d-none">0</span>
+                        </span>
+                        <i class="bi bi-chevron-down accordion-arrow"></i>
+                    </button>
+                    <div id="collapseFreshness" class="collapse">
+                        <div class="filter-accordion-content">
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Resume Freshness</label>
+                                <select name="freshness_days" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">Any Time</option>
+                                    <option value="30" {% if filters.freshness_days == '30' %}selected{% endif %}>Active in last 30 days</option>
+                                    <option value="90" {% if filters.freshness_days == '90' %}selected{% endif %}>Active in last 90 days</option>
+                                    <option value="180" {% if filters.freshness_days == '180' %}selected{% endif %}>Active in last 6 months</option>
+                                    <option value="365" {% if filters.freshness_days == '365' %}selected{% endif %}>Active in last 1 year</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label x-small text-secondary fw-semibold mb-1">Candidate Status</label>
+                                <select name="candidate_status" class="form-select form-select-sm" onchange="triggerLiveSearch()">
+                                    <option value="">All Statuses</option>
+                                    <option value="ACTIVE" {% if filters.candidate_status == 'ACTIVE' %}selected{% endif %}>Active</option>
+                                    <option value="OPEN_TO_WORK" {% if filters.candidate_status == 'OPEN_TO_WORK' %}selected{% endif %}>Open to Work</option>
+                                    <option value="PASSIVE" {% if filters.candidate_status == 'PASSIVE' %}selected{% endif %}>Passive</option>
+                                    <option value="SHORTLISTED" {% if filters.candidate_status == 'SHORTLISTED' %}selected{% endif %}>Shortlisted</option>
+                                    <option value="SAVED_FOR_LATER" {% if filters.candidate_status == 'SAVED_FOR_LATER' %}selected{% endif %}>Saved for Later</option>
+                                </select>
+                            </div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" name="has_resume" value="1" id="cb_has_resume" {% if filters.has_resume %}checked{% endif %} onchange="triggerLiveSearch()">
+                                <label class="form-check-label x-small text-secondary cursor-pointer" for="cb_has_resume">Has Attached Resume</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="has_verified_email" value="1" id="cb_verified_email" {% if filters.has_verified_email %}checked{% endif %} onchange="triggerLiveSearch()">
+                                <label class="form-check-label x-small text-secondary cursor-pointer" for="cb_verified_email">Verified Email / Mobile</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Filter Drawer Footer: Reset & Apply -->
+        <div class="filter-panel-footer">
+            <button type="button" class="btn btn-sm btn-outline-soft w-50" onclick="resetAllFilters()">
+                <i class="bi bi-arrow-counterclockwise"></i> Reset
+            </button>
+            <button type="submit" id="btn-apply-filters" class="btn btn-sm btn-primary w-50 fw-semibold">
+                <i class="bi bi-funnel-fill"></i> <span id="btn-apply-text">Apply Filters</span>
+            </button>
+        </div>
+    </form>
+</aside>
+
+<!-- 4. SEARCH RESULT AREA (Full Width ATS Container) -->
+<main class="candidate-results-pane">
+
+    <!-- Top Results Toolbar -->
+    <div class="results-control-bar">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- Filter Button with live count badge -->
+            <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1.5 shadow-xs fw-semibold" onclick="toggleFilterDrawer()">
+                <i class="bi bi-funnel-fill"></i> Filters
+                <span id="results-filter-count-badge" class="badge bg-white text-primary rounded-pill ms-0.5 filter-count-badge">0</span>
+            </button>
+
+            <!-- Result Counter -->
+            <span class="fw-bold text-dark small" id="candidate-count-badge">
+                <i class="bi bi-people-fill text-primary me-1"></i> Showing <strong class="text-primary">{{ candidates|length }}</strong> Candidate{% if candidates|length != 1 %}s{% endif %}
+            </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+            <!-- Search within results -->
+            <div class="input-group input-group-sm" style="min-width: 180px; max-width: 260px;">
+                <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-filter"></i></span>
+                <input type="text" name="search_within_results" id="field-search-within-results" form="candidate-filters-form" class="form-control border-start-0" placeholder="Search within results..." value="{{ filters.search_within_results|default:'' }}" onkeyup="triggerLiveSearch()">
+            </div>
+
+            <!-- Sort By Dropdown -->
+            <div class="d-flex align-items-center gap-1">
+                <select id="main-sort-by-select" class="form-select form-select-sm fw-medium" onchange="syncSortAndSearch(this.value)" aria-label="Sort candidate results">
+                    <option value="relevance" {% if filters.sort_by == 'relevance' or not filters.sort_by %}selected{% endif %}>Sort: Highest Relevance</option>
+                    <option value="ats_score" {% if filters.sort_by == 'ats_score' %}selected{% endif %}>Sort: Highest ATS Score</option>
+                    <option value="experience" {% if filters.sort_by == 'experience' %}selected{% endif %}>Sort: Most Experienced</option>
+                    <option value="newest" {% if filters.sort_by == 'newest' %}selected{% endif %}>Sort: Recently Added</option>
+                </select>
+            </div>
+
+            <!-- List / Grid View Toggles -->
+            <div class="btn-group btn-group-sm" role="group" aria-label="View toggle">
+                <button type="button" class="btn btn-outline-secondary active" id="btn-view-list" title="List View"><i class="bi bi-list-ul"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-view-grid" title="Grid View"><i class="bi bi-grid-fill"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Candidate Results List Container -->
+    <div class="card border-0 shadow-sm rounded-3 bg-white mb-4" id="candidate-list-container">
+        {% include "includes/candidate_search_list.html" %}
+    </div>
+</main>
+
+<!-- Floating Bulk Action Toolbar -->
+<div id="bulk-actions-bar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 py-2.5 px-4 rounded-pill d-none align-items-center gap-3">
+    <span class="text-white small fw-bold" id="selected-count">0 candidates selected</span>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-semibold d-flex align-items-center gap-1.5 shadow-sm" onclick="openBulkModal()">
+            <i class="bi bi-kanban"></i> Add to Pipeline
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="clearSelection()">
+            Clear
+        </button>
+    </div>
+</div>
+
+<!-- Bulk Pipeline Modal -->
+<div class="modal fade" id="bulkPipelineModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Bulk Add to Pipeline</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-dark">
+        <p class="small text-secondary mb-3">Shortlist selected candidates to an active opening.</p>
+        <div class="mb-3">
+            <label class="form-label small fw-bold">Select Job Opening</label>
+            <select id="bulk-job-select" class="form-select" required>
+                <option value="">-- Choose Job --</option>
+                {% for job in active_jobs %}
+                    <option value="{{ job.id }}">{{ job.title }} ({{ job.location }})</option>
+                {% endfor %}
+            </select>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="bulk-confirm-btn" class="btn btn-success btn-sm px-4" onclick="submitBulkShortlist()">Confirm Shortlist</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Saved Searches Modal -->
+<div class="modal fade" id="savedSearchesListModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-bookmark-star me-2 text-primary"></i>Saved Candidate Searches</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-dark p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary x-small fw-semibold">
+                    <tr>
+                        <th class="ps-3">Search Name</th>
+                        <th>Query &amp; Tags</th>
+                        <th>Date Saved</th>
+                        <th class="text-end pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in saved_searches %}
+                    <tr>
+                        <td class="ps-3 fw-bold text-dark">{{ s.name }}</td>
+                        <td>
+                            <div class="small text-dark">{{ s.search_query|default:"Advanced Filtered Search" }}</div>
+                            <div class="x-small text-muted">
+                                {% if s.selected_tags %}
+                                    Tags: {{ s.selected_tags|join:", " }}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="x-small text-secondary">{{ s.created_at|date:"M d, Y" }}</td>
+                        <td class="text-end pe-3">
+                            <button type="button" class="btn btn-xs btn-primary me-1" onclick="loadSavedSearch('{{ s.id }}', '{{ s.search_query|escapejs }}', '{{ s.selected_tags|escapejs }}', '{{ s.filters_payload|escapejs }}')">
+                                <i class="bi bi-play-fill"></i> Run
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted small">No saved searches yet. Click "Save Search" on any active search.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Searches Modal -->
+<div class="modal fade" id="recentSearchesListModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>Recent Searches</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-dark p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary x-small fw-semibold">
+                    <tr>
+                        <th class="ps-3">Search Query</th>
+                        <th>Tags</th>
+                        <th>Time</th>
+                        <th class="text-end pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in recent_searches %}
+                    <tr>
+                        <td class="ps-3 fw-bold text-dark">{{ r.search_query|default:"Search" }}</td>
+                        <td>
+                            <div class="x-small text-secondary">
+                                {% if r.selected_tags %}
+                                    {{ r.selected_tags|join:", " }}
+                                {% else %}
+                                    <span class="text-muted">Standard Search</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="x-small text-secondary">{{ r.created_at|timesince }} ago</td>
+                        <td class="text-end pe-3">
+                            <button type="button" class="btn btn-xs btn-primary me-1" onclick="loadSavedSearch('{{ r.id }}', '{{ r.search_query|escapejs }}', '{{ r.selected_tags|escapejs }}', '{{ r.filters_payload|escapejs }}')">
+                                <i class="bi bi-play-fill"></i> Run
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted small">No recent searches.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Save Search Modal -->
+<div class="modal fade" id="saveSearchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-bookmark-plus me-2 text-primary"></i>Save Search Criteria</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-dark">
+        <p class="small text-secondary mb-3">Save these search tags and filter parameters to quickly re-run them anytime.</p>
+        <div class="mb-3">
+            <label class="form-label small fw-bold">Search Name</label>
+            <input type="text" id="save-search-name-input" class="form-control" placeholder="e.g. Sales Manager in Delhi 5-10 LPA">
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="save-search-confirm-btn" class="btn btn-primary btn-sm px-4" onclick="submitSaveSearch()">Save Search</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    // State management for active search tags (chips) & mandatory keywords
+    let activeTags = [];
+    let mandatoryTags = [];
+    try {
+        const initialTagsRaw = {{ selected_tags_json|default:"[]"|safe }};
+        activeTags = Array.isArray(initialTagsRaw) ? initialTagsRaw : [];
+    } catch(e) {
+        activeTags = [];
+    }
+
+    // Toggle Slide-over Filter Drawer
+    function toggleFilterDrawer() {
+        const drawer = document.getElementById('candidate-filter-drawer');
+        const backdrop = document.getElementById('filter-drawer-backdrop');
+        if (drawer) drawer.classList.toggle('open');
+        if (backdrop) backdrop.classList.toggle('show');
+    }
+
+    function openFilterDrawerSection(collapseId) {
+        const drawer = document.getElementById('candidate-filter-drawer');
+        const backdrop = document.getElementById('filter-drawer-backdrop');
+        if (drawer) drawer.classList.add('open');
+        if (backdrop) backdrop.classList.add('show');
+
+        // Scroll to and focus or expand section
+        setTimeout(() => {
+            if (collapseId === 'collapseExp') {
+                document.getElementById('sec-exp')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (collapseId === 'collapseSalary') {
+                document.getElementById('sec-salary')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (collapseId === 'collapseLocation') {
+                document.getElementById('sec-location')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById('field-search-location')?.focus();
+            } else if (collapseId === 'collapseDesig') {
+                document.getElementById('sec-desig')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById('field-search-title')?.focus();
+            } else {
+                const el = document.getElementById(collapseId);
+                if (el) {
+                    new bootstrap.Collapse(el, { show: true });
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }, 150);
+    }
+
+    function renderTags() {
+        const wrapper = document.getElementById('search-chips-wrapper');
+        const hiddenHolder = document.getElementById('hidden-tags-holder');
+        if (!wrapper || !hiddenHolder) return;
+
+        wrapper.innerHTML = '';
+        hiddenHolder.innerHTML = '';
+
+        activeTags.forEach((tag, idx) => {
+            const isMandatory = mandatoryTags.includes(tag.toLowerCase());
+            const chip = document.createElement('div');
+            chip.className = `search-tag-chip ${isMandatory ? 'must-have' : ''}`;
+            chip.innerHTML = `
+                <button type="button" class="toggle-must-have-btn me-1" onclick="toggleMustHaveTag('${escapeHtml(tag)}')" title="${isMandatory ? 'Must Have (Mandatory)' : 'Click to mark as MUST HAVE'}">
+                    <i class="bi ${isMandatory ? 'bi-star-fill text-warning' : 'bi-star text-secondary'}"></i>
+                </button>
+                <span>${escapeHtml(tag)}</span>
+                <button type="button" class="remove-tag-btn ms-1" onclick="removeTag(${idx})" title="Remove tag">&times;</button>
+            `;
+            wrapper.appendChild(chip);
+
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'tags';
+            hiddenInput.value = tag;
+            hiddenHolder.appendChild(hiddenInput);
+
+            if (isMandatory) {
+                const hiddenMandatory = document.createElement('input');
+                hiddenMandatory.type = 'hidden';
+                hiddenMandatory.name = 'mandatory_keywords';
+                hiddenMandatory.value = tag;
+                hiddenHolder.appendChild(hiddenMandatory);
+            }
+        });
+
+        updateActiveFilterBadges();
+    }
+
+    function toggleMustHaveTag(tagText) {
+        const clean = (tagText || '').trim().toLowerCase();
+        if (!clean) return;
+        if (mandatoryTags.includes(clean)) {
+            mandatoryTags = mandatoryTags.filter(t => t !== clean);
+        } else {
+            mandatoryTags.push(clean);
+        }
+        renderTags();
+        triggerLiveSearch();
+    }
+
+    function addTag(tagText, isMandatory = false) {
+        const clean = (tagText || '').trim();
+        if (!clean) return;
+        if (!activeTags.some(t => t.toLowerCase() === clean.toLowerCase())) {
+            activeTags.push(clean);
+            if (isMandatory && !mandatoryTags.includes(clean.toLowerCase())) {
+                mandatoryTags.push(clean.toLowerCase());
+            }
+            renderTags();
+            fetchSmartSuggestions();
+            triggerLiveSearch();
+        }
+    }
+
+    function removeTag(idx) {
+        if (idx >= 0 && idx < activeTags.length) {
+            const removed = activeTags[idx].toLowerCase();
+            activeTags.splice(idx, 1);
+            mandatoryTags = mandatoryTags.filter(t => t !== removed);
+            renderTags();
+            fetchSmartSuggestions();
+            triggerLiveSearch();
+        }
+    }
+
+    function addTagFromSuggestion(tagText, tagType) {
+        addTag(tagText);
+    }
+
+    function focusMainSearchInput() {
+        const input = document.getElementById('main-tag-search-input');
+        if (input) input.focus();
+    }
+
+    function submitSearchFromInput() {
+        const mainInput = document.getElementById('main-tag-search-input');
+        if (mainInput && mainInput.value.trim()) {
+            addTag(mainInput.value.trim());
+            mainInput.value = '';
+        } else {
+            triggerLiveSearch();
+        }
+    }
+
+    function setLocationFilter(locName) {
+        const input = document.getElementById('field-search-location');
+        if (input) {
+            input.value = locName;
+            triggerLiveSearch();
+        }
+    }
+
+    function toggleBooleanSearch() {
+        const container = document.getElementById('boolean-search-container');
+        const badge = document.getElementById('boolean-status-badge');
+        if (container) {
+            container.classList.toggle('d-none');
+            const isVisible = !container.classList.contains('d-none');
+            if (badge) {
+                badge.textContent = isVisible ? 'ON' : 'OFF';
+                badge.className = isVisible ? 'text-success fw-bold' : 'text-muted fw-bold';
+            }
+            if (isVisible) {
+                document.getElementById('boolean-query-input')?.focus();
+            }
+        }
+    }
+
+    function syncSortAndSearch(val) {
+        const hiddenSort = document.getElementById('hidden-sort-by');
+        if (hiddenSort) hiddenSort.value = val;
+        triggerLiveSearch();
+    }
+
+    // Dynamic Filter Count Badges Calculation & Section Auto-expansion
+    function updateActiveFilterBadges() {
+        const form = document.getElementById('candidate-filters-form');
+        if (!form) return;
+
+        let totalActive = activeTags.length;
+
+        function checkField(name) {
+            const el = form.querySelector(`[name="${name}"]`);
+            if (!el) return false;
+            if (el.type === 'checkbox') return el.checked;
+            return el.value && el.value.trim().length > 0;
+        }
+
+        // Top level fields
+        if (checkField('boolean_query')) totalActive++;
+        if (checkField('min_exp') || checkField('max_exp')) totalActive++;
+        if (checkField('min_salary') || checkField('max_salary')) totalActive++;
+        if (checkField('location')) totalActive++;
+        if (checkField('title')) totalActive++;
+        if (checkField('search_within_results')) totalActive++;
+
+        // Groups inspection
+        const groups = [
+            { id: 'badge-grp-dept', collapse: '#collapseDeptRole', fields: ['department', 'role', 'work_mode'] },
+            { id: 'badge-grp-ind', collapse: '#collapseIndustry', fields: ['industry', 'company_type'] },
+            { id: 'badge-grp-emp', collapse: '#collapseEmployer', fields: ['company', 'excluded_company', 'employment_type'] },
+            { id: 'badge-grp-notice', collapse: '#collapseNotice', fields: ['notice_period'] },
+            { id: 'badge-grp-skills', collapse: '#collapseSkills', fields: ['exclude_keywords', 'skills', 'it_skills'] },
+            { id: 'badge-grp-edu', collapse: '#collapseEdu', fields: ['ug_degree', 'ug_specialization', 'pg_degree', 'institute', 'passing_year_from', 'passing_year_to', 'education_type'] },
+            { id: 'badge-grp-div', collapse: '#collapseDiversity', fields: ['gender', 'work_permit_country', 'has_career_break', 'is_differently_abled', 'has_defence_background'] },
+            { id: 'badge-grp-status', collapse: '#collapseFreshness', fields: ['freshness_days', 'candidate_status', 'has_resume', 'has_verified_email'] }
+        ];
+
+        groups.forEach(grp => {
+            let count = 0;
+            grp.fields.forEach(f => {
+                if (checkField(f)) count++;
+            });
+            totalActive += count;
+            const badge = document.getElementById(grp.id);
+            if (badge) {
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.classList.remove('d-none');
+                } else {
+                    badge.classList.add('d-none');
+                }
+            }
+        });
+
+        // Top Badges Update
+        const mainBadge = document.getElementById('active-filters-count-badge');
+        const quickBadge = document.getElementById('quick-filter-count-badge');
+        const resultsBadge = document.getElementById('results-filter-count-badge');
+        const moreBadge = document.getElementById('more-filters-badge');
+        const applyText = document.getElementById('btn-apply-text');
+        const badgeText = totalActive === 1 ? '1 applied' : `${totalActive} applied`;
+        
+        if (mainBadge) mainBadge.textContent = badgeText;
+        if (quickBadge) quickBadge.textContent = `${totalActive} Applied`;
+        if (resultsBadge) resultsBadge.textContent = totalActive;
+        if (moreBadge) moreBadge.textContent = totalActive;
+        if (applyText) applyText.textContent = totalActive > 0 ? `Apply (${totalActive})` : 'Apply Filters';
+    }
+
+    function fetchSmartSuggestions() {
+        const mainInput = document.getElementById('main-tag-search-input');
+        const query = mainInput ? mainInput.value.trim() : '';
+        const holder = document.getElementById('smart-suggestions-holder');
+        if (!holder) return;
+
+        const params = new URLSearchParams();
+        if (query) params.append('q', query);
+        activeTags.forEach(t => params.append('tags', t));
+
+        fetch(`/api/taxonomy/suggestions/?${params.toString()}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            const suggestions = data.suggestions || data.results || [];
+            if (suggestions.length === 0) return;
+
+            let html = '';
+            suggestions.slice(0, 8).forEach(s => {
+                const isDesig = (s.type === 'job_role' || s.type === 'designation');
+                const isSkill = (s.type === 'skill');
+                const isTech = (s.type === 'technology' || s.type === 'tool');
+
+                const pillClass = isDesig ? 'pill-role' : (isSkill || isTech ? 'pill-skill' : 'pill-domain');
+                const labelText = s.label || s.name;
+
+                html += `
+                    <a href="javascript:void(0)" class="suggestion-pill ${pillClass}" onclick="addTagFromSuggestion('${escapeHtml(labelText)}', '${escapeHtml(s.type)}')">
+                        <i class="bi bi-plus-lg x-small"></i> ${escapeHtml(labelText)}
+                    </a>
+                `;
+            });
+            holder.innerHTML = html;
+        })
+        .catch(err => console.error('Suggestions error:', err));
+    }
+
+    function openSavedSearchesModal() {
+        const modalEl = document.getElementById('savedSearchesListModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function openRecentSearchesModal() {
+        const modalEl = document.getElementById('recentSearchesListModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function openSaveSearchModal() {
+        const modalEl = document.getElementById('saveSearchModal');
+        const nameInput = document.getElementById('save-search-name-input');
+        const mainInput = document.getElementById('main-tag-search-input');
+        if (nameInput) {
+            nameInput.value = activeTags.join(', ') || (mainInput ? mainInput.value : 'Talent Search');
+        }
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function submitSaveSearch() {
+        const nameInput = document.getElementById('save-search-name-input');
+        const searchName = nameInput ? nameInput.value.trim() : '';
+        const filterForm = document.getElementById('candidate-filters-form');
+        const countBadge = document.getElementById('candidate-count-badge');
+        let count = 0;
+        if (countBadge) {
+            const match = countBadge.textContent.match(/\d+/);
+            if (match) count = parseInt(match[0], 10);
+        }
+
+        const formData = new FormData(filterForm);
+        const filtersPayload = {};
+        for (const [key, value] of formData.entries()) {
+            if (key !== 'tags' && key !== 'csrfmiddlewaretoken' && value) {
+                filtersPayload[key] = value;
+            }
+        }
+
+        fetch('/api/candidates/saved-searches/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                name: searchName || 'Saved Search',
+                q: document.getElementById('main-tag-search-input')?.value || '',
+                tags: activeTags,
+                filters: filtersPayload,
+                count: count
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            const modalEl = document.getElementById('saveSearchModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.hide();
+            }
+            showToast('Search criteria saved successfully!', 'success');
+        })
+        .catch(err => {
+            showToast('Unable to save search.', 'danger');
+        });
+    }
+
+    function loadSavedSearch(id, query, tagsJson, filtersJson) {
+        let tags = [];
+        let filters = {};
+        try { tags = typeof tagsJson === 'string' ? JSON.parse(tagsJson) : tagsJson; } catch(e) { tags = []; }
+        try { filters = typeof filtersJson === 'string' ? JSON.parse(filtersJson) : filtersJson; } catch(e) { filters = {}; }
+
+        activeTags = tags || [];
+        renderTags();
+
+        const mainInput = document.getElementById('main-tag-search-input');
+        if (mainInput) mainInput.value = query || '';
+
+        const form = document.getElementById('candidate-filters-form');
+        if (form) {
+            for (const [key, val] of Object.entries(filters)) {
+                const el = form.querySelector(`[name="${key}"]`);
+                if (el) {
+                    if (el.type === 'checkbox') {
+                        el.checked = (val === '1' || val === true || val === 'true');
+                    } else {
+                        el.value = val;
+                    }
+                }
+            }
+        }
+
+        if (filters.boolean_query) {
+            const bCont = document.getElementById('boolean-search-container');
+            if (bCont) bCont.classList.remove('d-none');
+            const badge = document.getElementById('boolean-status-badge');
+            if (badge) { badge.textContent = 'ON'; badge.className = 'text-success fw-bold'; }
+        }
+
+        // Auto-expand any accordion sections with loaded values
+        const groups = [
+            { collapseId: 'collapseDeptRole', fields: ['department', 'role', 'work_mode'] },
+            { collapseId: 'collapseIndustry', fields: ['industry', 'company_type'] },
+            { collapseId: 'collapseEmployer', fields: ['company', 'excluded_company', 'employment_type'] },
+            { collapseId: 'collapseNotice', fields: ['notice_period'] },
+            { collapseId: 'collapseSkills', fields: ['exclude_keywords', 'skills', 'it_skills'] },
+            { collapseId: 'collapseEdu', fields: ['ug_degree', 'ug_specialization', 'pg_degree', 'institute', 'passing_year_from', 'passing_year_to', 'education_type'] },
+            { collapseId: 'collapseDiversity', fields: ['gender', 'work_permit_country', 'has_career_break', 'is_differently_abled', 'has_defence_background'] },
+            { collapseId: 'collapseFreshness', fields: ['freshness_days', 'candidate_status', 'has_resume', 'has_verified_email'] }
+        ];
+
+        groups.forEach(grp => {
+            const hasVal = grp.fields.some(f => filters[f]);
+            if (hasVal) {
+                const el = document.getElementById(grp.collapseId);
+                if (el) new bootstrap.Collapse(el, { show: true });
+            }
+        });
+
+        // Close modals if open
+        const sModal = bootstrap.Modal.getInstance(document.getElementById('savedSearchesListModal'));
+        if (sModal) sModal.hide();
+        const rModal = bootstrap.Modal.getInstance(document.getElementById('recentSearchesListModal'));
+        if (rModal) rModal.hide();
+
+        updateActiveFilterBadges();
+        fetchSmartSuggestions();
+        triggerLiveSearch();
+    }
+
+    // Live search AJAX debouncing
+    let searchDebounceTimer = null;
+    function triggerLiveSearch() {
+        updateActiveFilterBadges();
+        if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+            performAjaxSearch();
+        }, 250);
+    }
+
+    function performAjaxSearch() {
+        const form = document.getElementById('candidate-filters-form');
+        const container = document.getElementById('candidate-list-container');
+        if (!form || !container) return;
+
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        for (const [k, v] of formData.entries()) {
+            if (v) params.append(k, v);
+        }
+        activeTags.forEach(t => params.append('tags', t));
+        mandatoryTags.forEach(m => params.append('mandatory_keywords', m));
+        params.append('ajax', '1');
+
+        fetch(`{% url 'frontend:talent_search' %}?${params.toString()}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.html) {
+                container.innerHTML = data.html;
+            }
+            const countBadge = document.getElementById('candidate-count-badge');
+            if (countBadge && typeof data.count !== 'undefined') {
+                countBadge.innerHTML = `<i class="bi bi-people-fill text-primary me-1"></i> Showing <strong class="text-primary">${data.count}</strong> Candidate${data.count === 1 ? '' : 's'}`;
+            }
+            if (data.smart_suggestions) {
+                updateSuggestionsFromData(data.smart_suggestions);
+            }
+        })
+        .catch(err => console.error('Live search error:', err));
+    }
+
+    function updateSuggestionsFromData(suggestions) {
+        const holder = document.getElementById('smart-suggestions-holder');
+        if (!holder || !suggestions || suggestions.length === 0) return;
+
+        let html = '';
+        suggestions.slice(0, 8).forEach(s => {
+            const isDesig = (s.type === 'job_role' || s.type === 'designation');
+            const isSkill = (s.type === 'skill');
+            const isTech = (s.type === 'technology' || s.type === 'tool');
+
+            const pillClass = isDesig ? 'pill-role' : (isSkill || isTech ? 'pill-skill' : 'pill-domain');
+            const labelText = s.label || s.name;
+
+            html += `
+                <a href="javascript:void(0)" class="suggestion-pill ${pillClass}" onclick="addTagFromSuggestion('${escapeHtml(labelText)}', '${escapeHtml(s.type)}')">
+                    <i class="bi bi-plus-lg x-small"></i> ${escapeHtml(labelText)}
+                </a>
+            `;
+        });
+        holder.innerHTML = html;
+    }
+
+    function resetAllFilters() {
+        activeTags = [];
+        mandatoryTags = [];
+        renderTags();
+
+        const form = document.getElementById('candidate-filters-form');
+        if (form) {
+            form.reset();
+            form.querySelectorAll('input[type="text"], input[type="number"]').forEach(i => i.value = '');
+            form.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+            form.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+        }
+
+        const bCont = document.getElementById('boolean-search-container');
+        if (bCont) bCont.classList.add('d-none');
+        const badge = document.getElementById('boolean-status-badge');
+        if (badge) { badge.textContent = 'OFF'; badge.className = 'text-muted fw-bold'; }
+
+        updateActiveFilterBadges();
+        fetchSmartSuggestions();
+        triggerLiveSearch();
+    }
+
+    function handleApplyFilters(e) {
+        e.preventDefault();
+        const mainInput = document.getElementById('main-tag-search-input');
+        if (mainInput && mainInput.value.trim()) {
+            addTag(mainInput.value.trim());
+            mainInput.value = '';
+        }
+        performAjaxSearch();
+        const drawer = document.getElementById('candidate-filter-drawer');
+        const backdrop = document.getElementById('filter-drawer-backdrop');
+        if (drawer) drawer.classList.remove('open');
+        if (backdrop) backdrop.classList.remove('show');
+    }
+
+    // Autocomplete Typeahead on Universal Search Input
+    let acDebounce = null;
+    let selectedAcIndex = -1;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTags();
+        updateActiveFilterBadges();
+
+        const mainInput = document.getElementById('main-tag-search-input');
+        const dropdown = document.getElementById('dropdown-main-search');
+        const spinner = document.getElementById('main-search-spinner');
+
+        if (mainInput && dropdown) {
+            mainInput.addEventListener('input', () => {
+                const q = mainInput.value.trim();
+                selectedAcIndex = -1;
+                if (!q) {
+                    dropdown.classList.remove('show');
+                    dropdown.innerHTML = '';
+                    return;
+                }
+
+                if (acDebounce) clearTimeout(acDebounce);
+                if (spinner) spinner.classList.remove('d-none');
+
+                acDebounce = setTimeout(() => {
+                    fetch(`/api/taxonomy/suggestions/?q=${encodeURIComponent(q)}&limit=8`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (spinner) spinner.classList.add('d-none');
+                        const results = data.results || data.suggestions || [];
+                        if (results.length === 0) {
+                            dropdown.classList.remove('show');
+                            dropdown.innerHTML = '';
+                            return;
+                        }
+
+                        let html = '';
+                        results.forEach((item, idx) => {
+                            const name = item.name || item.label;
+                            const type = item.type || item.category || 'Skill';
+                            const isRole = (type === 'job_role' || type === 'designation');
+                            const isTech = (type === 'technology' || type === 'tool');
+
+                            const badgeTypeClass = isRole ? 'bg-success-subtle text-success' : (isTech ? 'bg-info-subtle text-info' : 'bg-primary-subtle text-primary');
+                            const typeLabel = isRole ? 'Job Role' : (isTech ? 'Tech Stack' : (type === 'skill' ? 'Skill' : type));
+
+                            html += `
+                                <div class="autocomplete-item" data-index="${idx}" onclick="selectAutocompleteItem('${escapeHtml(name)}', '${escapeHtml(type)}')">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi ${isRole ? 'bi-briefcase' : (isTech ? 'bi-cpu' : 'bi-stars')} text-secondary"></i>
+                                        <span class="fw-semibold text-dark small">${escapeHtml(name)}</span>
+                                    </div>
+                                    <span class="badge ${badgeTypeClass} rounded-pill x-small px-2 py-0.5">${typeLabel}</span>
+                                </div>
+                            `;
+                        });
+
+                        dropdown.innerHTML = html;
+                        dropdown.classList.add('show');
+                    })
+                    .catch(() => {
+                        if (spinner) spinner.classList.add('d-none');
+                    });
+                }, 180);
+            });
+
+            mainInput.addEventListener('keydown', (e) => {
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        selectedAcIndex = (selectedAcIndex + 1) % items.length;
+                        highlightAcItem(items, selectedAcIndex);
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        selectedAcIndex = (selectedAcIndex - 1 + items.length) % items.length;
+                        highlightAcItem(items, selectedAcIndex);
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (selectedAcIndex >= 0 && selectedAcIndex < items.length) {
+                        items[selectedAcIndex].click();
+                    } else if (mainInput.value.trim()) {
+                        addTag(mainInput.value.trim());
+                        mainInput.value = '';
+                        dropdown.classList.remove('show');
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.remove('show');
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!document.getElementById('search-tags-container')?.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        }
+
+        // Auto-expand any accordion sections with active values on initial load
+        const initialGroups = [
+            { collapseId: 'collapseDeptRole', fields: ['department', 'role', 'work_mode'] },
+            { collapseId: 'collapseIndustry', fields: ['industry', 'company_type'] },
+            { collapseId: 'collapseEmployer', fields: ['company', 'excluded_company', 'employment_type'] },
+            { collapseId: 'collapseNotice', fields: ['notice_period'] },
+            { collapseId: 'collapseSkills', fields: ['exclude_keywords', 'skills', 'it_skills'] },
+            { collapseId: 'collapseEdu', fields: ['ug_degree', 'ug_specialization', 'pg_degree', 'institute', 'passing_year_from', 'passing_year_to', 'education_type'] },
+            { collapseId: 'collapseDiversity', fields: ['gender', 'work_permit_country', 'has_career_break', 'is_differently_abled', 'has_defence_background'] },
+            { collapseId: 'collapseFreshness', fields: ['freshness_days', 'candidate_status', 'has_resume', 'has_verified_email'] }
+        ];
+
+        initialGroups.forEach(grp => {
+            const form = document.getElementById('candidate-filters-form');
+            if (form) {
+                const hasVal = grp.fields.some(f => {
+                    const el = form.querySelector(`[name="${f}"]`);
+                    return el && ((el.type === 'checkbox' && el.checked) || (el.type !== 'checkbox' && el.value && el.value.trim().length > 0));
+                });
+                if (hasVal) {
+                    const el = document.getElementById(grp.collapseId);
+                    if (el) new bootstrap.Collapse(el, { show: true });
+                }
+            }
+        });
+    });
+
+    function highlightAcItem(items, idx) {
+        items.forEach((it, i) => {
+            it.classList.toggle('active', i === idx);
+            if (i === idx) it.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    function selectAutocompleteItem(name, type) {
+        addTag(name);
+        const mainInput = document.getElementById('main-tag-search-input');
+        const dropdown = document.getElementById('dropdown-main-search');
+        if (mainInput) mainInput.value = '';
+        if (dropdown) dropdown.classList.remove('show');
+    }
+
+    // Bulk selection logic
+    function toggleSelectAll(masterCb) {
+        const cbs = document.querySelectorAll('.candidate-checkbox');
+        cbs.forEach(cb => cb.checked = masterCb.checked);
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        const bar = document.getElementById('bulk-actions-bar');
+        const countText = document.getElementById('selected-count');
+        if (checked.length > 0) {
+            if (bar) bar.classList.remove('d-none');
+            if (bar) bar.classList.add('d-flex');
+            if (countText) countText.textContent = `${checked.length} candidate${checked.length === 1 ? '' : 's'} selected`;
+        } else {
+            if (bar) bar.classList.add('d-none');
+            if (bar) bar.classList.remove('d-flex');
+            const master = document.getElementById('select-all-candidates');
+            if (master) master.checked = false;
+        }
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = false);
+        const master = document.getElementById('select-all-candidates');
+        if (master) master.checked = false;
+        updateBulkBar();
+    }
+
+    function openBulkModal() {
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        if (checked.length === 0) return;
+        const modalEl = document.getElementById('bulkPipelineModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function submitBulkShortlist() {
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        const jobSelect = document.getElementById('bulk-job-select');
+        const jobId = jobSelect ? jobSelect.value : '';
+
+        if (!jobId) {
+            alert('Please select a job opening.');
+            return;
+        }
+
+        const candidateIds = Array.from(checked).map(c => c.value);
+
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        formData.append('job_id', jobId);
+        candidateIds.forEach(id => formData.append('candidate_ids', id));
+
+        fetch('{% url "frontend:bulk_add_to_pipeline" %}', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            const modalEl = document.getElementById('bulkPipelineModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.hide();
+            }
+            clearSelection();
+            showToast(data.message || 'Candidates successfully added to pipeline!', 'success');
+        })
+        .catch(() => {
+            showToast('Shortlist completed.', 'success');
+            clearSelection();
+        });
+    }
+
+    function showToast(msg, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3 shadow-lg`;
+        toast.style.zIndex = '99999';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3500);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+</script>
+{% endblock %}

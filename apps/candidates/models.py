@@ -203,11 +203,24 @@ class CandidateProfile(BaseAppModel):
     def uploader_name(self):
         user_obj = self.uploaded_by or self.created_by
         if not user_obj:
-            return None
-        full_name = user_obj.get_full_name().strip()
-        if full_name:
-            return full_name
-        return user_obj.email
+            app = self.job_applications.filter(created_by__isnull=False).first()
+            if app and app.created_by:
+                user_obj = app.created_by
+            elif self.edited_by:
+                user_obj = self.edited_by
+
+        if user_obj:
+            full_name = user_obj.get_full_name().strip()
+            if full_name:
+                return full_name
+            if getattr(user_obj, 'email', None):
+                email_name = user_obj.email.split('@')[0]
+                clean_name = re.sub(r'[._\d+]+', ' ', email_name).strip().title()
+                if clean_name and len(clean_name) >= 3:
+                    return clean_name
+                return user_obj.email
+            return getattr(user_obj, 'username', None)
+        return None
 
     # Security and File Processing Audit fields
     original_filename = models.CharField(max_length=255, blank=True, null=True)
@@ -675,6 +688,97 @@ class RecentCandidateSearch(BaseAppModel):
         return f"{self.user.email} searched '{self.search_query}'"
 
 
+class BulkResumeJob(BaseAppModel):
+    """
+    Asynchronous bulk resume parsing job tracker.
+    """
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', _('Pending')
+        VALIDATING = 'VALIDATING', _('Validating')
+        PROCESSING = 'PROCESSING', _('Processing')
+        COMPLETED = 'COMPLETED', _('Completed')
+        FAILED = 'FAILED', _('Failed')
+        CANCELLED = 'CANCELLED', _('Cancelled')
+
+    job_number = models.CharField(max_length=50, unique=True, db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='bulk_resume_jobs')
+    job = models.ForeignKey('jobs.Job', on_delete=models.SET_NULL, null=True, blank=True, related_name='bulk_resume_jobs')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    
+    zip_filename = models.CharField(max_length=255, blank=True, default='')
+    excel_filename = models.CharField(max_length=255, blank=True, default='')
+    storage_dir = models.CharField(max_length=500, blank=True, default='')
+    
+    overwrite = models.BooleanField(default=False)
+    
+    total_files = models.PositiveIntegerField(default=0)
+    processed_files = models.PositiveIntegerField(default=0)
+    successful_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    
+    current_file = models.CharField(max_length=255, blank=True, default='')
+    validation_summary = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True, default='')
+    
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('bulk resume job')
+        verbose_name_plural = _('bulk resume jobs')
+
+    def __str__(self):
+        return f"Bulk Job {self.job_number} ({self.status})"
+
+    @property
+    def progress_percentage(self):
+        if self.total_files == 0:
+            return 0
+        return min(100, int((self.processed_files / self.total_files) * 100))
+
+
+class BulkResumeItem(BaseAppModel):
+    """
+    Individual file item inside a bulk resume parsing job.
+    """
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', _('Pending')
+        PROCESSING = 'PROCESSING', _('Processing')
+        COMPLETED = 'COMPLETED', _('Completed')
+        UPDATED = 'UPDATED', _('Updated')
+        SKIPPED = 'SKIPPED', _('Skipped')
+        FAILED = 'FAILED', _('Failed')
+
+    job = models.ForeignKey(BulkResumeJob, on_delete=models.CASCADE, related_name='items')
+    filename = models.CharField(max_length=255, db_index=True)
+    file_path = models.CharField(max_length=500, blank=True, default='')
+    file_size = models.PositiveIntegerField(default=0)
+    
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    action_taken = models.CharField(max_length=50, blank=True, default='')
+    reason = models.TextField(blank=True, default='')
+    
+    candidate = models.ForeignKey(CandidateProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='bulk_parsed_items')
+    candidate_name = models.CharField(max_length=255, blank=True, default='')
+    candidate_email = models.CharField(max_length=255, blank=True, default='')
+    candidate_phone = models.CharField(max_length=50, blank=True, default='')
+    
+    excel_metadata = models.JSONField(default=dict, blank=True)
+    parsed_data = models.JSONField(default=dict, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = _('bulk resume item')
+        verbose_name_plural = _('bulk resume items')
+
+    def __str__(self):
+        return f"{self.job.job_number} - {self.filename} ({self.status})"
+
+
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
@@ -693,6 +797,8 @@ from django.dispatch import receiver
 @receiver(pre_save, sender=CandidateTag)
 @receiver(pre_save, sender=SavedCandidateSearch)
 @receiver(pre_save, sender=RecentCandidateSearch)
+@receiver(pre_save, sender=BulkResumeJob)
+@receiver(pre_save, sender=BulkResumeItem)
 def pre_save_sanitize_handler(sender, instance, **kwargs):
     from apps.candidates.utils import sanitize_text, sanitize_recursive
     import django.db.models as django_models

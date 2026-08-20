@@ -40,6 +40,9 @@
     <aside class="sidebar">
         <!-- Vector Brand Card Header -->
         <div class="sidebar-header p-3 border-bottom" style="border-color: rgba(255, 255, 255, 0.08) !important;">
+            <button class="sidebar-close-btn" id="sidebar-close-btn" type="button" aria-label="Close navigation sidebar">
+                <i class="bi bi-x-lg"></i>
+            </button>
             <div class="branding-card text-center p-3" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px;">
                 <a href="/" class="d-inline-block text-decoration-none mb-2">
                     <div class="tv-monogram mx-auto d-flex align-items-center justify-content-center fw-bold" 
@@ -103,7 +106,7 @@
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
-                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name == 'candidate_search' and not request.GET.pool %}active{% endif %}">
+                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
                     <i class="bi bi-people-fill"></i>
                     <span>Candidates</span>
                 </a>
@@ -126,6 +129,16 @@
                 <a href="{% url 'frontend:interviews' %}" class="sidebar-link {% if request.resolver_match.url_name == 'interviews' %}active{% endif %}">
                     <i class="bi bi-calendar-event-fill"></i>
                     <span>Interviews</span>
+                </a>
+
+                <div class="sidebar-section-label mt-3">TALENT INTELLIGENCE</div>
+                <a href="{% url 'frontend:talent_search' %}" class="sidebar-link {% if request.resolver_match.url_name == 'talent_search' %}active{% endif %}">
+                    <i class="bi bi-search-heart-fill"></i>
+                    <span>Talent Search</span>
+                </a>
+                <a href="{% url 'taxonomy:taxonomy_dashboard' %}" class="sidebar-link {% if request.resolver_match.namespace == 'taxonomy' or request.resolver_match.app_name == 'taxonomy' %}active{% endif %}">
+                    <i class="bi bi-tags-fill"></i>
+                    <span>Taxonomy &amp; Tagging</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">ANALYTICS</div>
@@ -161,7 +174,7 @@
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
-                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,recruiter_candidates' and not request.GET.pool %}active{% endif %}">
+                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,recruiter_candidates' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
                     <i class="bi bi-people-fill"></i>
                     <span>Candidates</span>
                 </a>
@@ -184,6 +197,30 @@
                 <a href="{% url 'frontend:interviews' %}" class="sidebar-link {% if request.resolver_match.url_name == 'interviews' %}active{% endif %}">
                     <i class="bi bi-calendar-event-fill"></i>
                     <span>Interviews</span>
+                </a>
+
+                <div class="sidebar-section-label mt-3">TALENT INTELLIGENCE</div>
+                <a href="{% url 'frontend:talent_search' %}" class="sidebar-link {% if request.resolver_match.url_name == 'talent_search' %}active{% endif %}">
+                    <i class="bi bi-search-heart-fill"></i>
+                    <span>Talent Search</span>
+                </a>
+                <a href="{% url 'taxonomy:taxonomy_dashboard' %}" class="sidebar-link {% if request.resolver_match.namespace == 'taxonomy' or request.resolver_match.app_name == 'taxonomy' %}active{% endif %}">
+                    <i class="bi bi-tags-fill"></i>
+                    <span>Taxonomy &amp; Tagging</span>
+                </a>
+
+                <div class="sidebar-section-label mt-3">ANALYTICS</div>
+                <a href="{% url 'frontend:email_campaigns' %}" class="sidebar-link {% if request.resolver_match.url_name == 'email_campaigns' %}active{% endif %}">
+                    <i class="bi bi-envelope-paper-fill"></i>
+                    <span>Campaigns</span>
+                </a>
+                <a href="{% url 'frontend:resume_parser' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resume_parser' %}active{% endif %}">
+                    <i class="bi bi-file-earmark-arrow-up-fill"></i>
+                    <span>Resume Parser</span>
+                </a>
+                <a href="{% url 'frontend:analytics' %}" class="sidebar-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
+                    <i class="bi bi-graph-up-arrow"></i>
+                    <span>Analytics</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">SETTINGS</div>
@@ -224,15 +261,23 @@
         </div>
     </aside>
 
+    <!-- Sidebar Backdrop Overlay for Mobile/Tablet -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
     <!-- Main Wrapper -->
     <div class="main-wrapper">
         <!-- Top Navbar -->
         <header class="top-navbar">
-            <div class="search-bar">
-                <i class="bi bi-search"></i>
-                <input type="text" placeholder="Search candidates, jobs, etc...">
+            <div class="d-flex align-items-center gap-2.5">
+                <button id="sidebar-toggle-btn" class="navbar-toggle-btn" type="button" aria-label="Toggle Navigation Sidebar">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="search-bar">
+                    <i class="bi bi-search"></i>
+                    <input type="text" placeholder="Search candidates, jobs, etc...">
+                </div>
             </div>
-            <div class="d-flex align-items-center gap-4">
+            <div class="d-flex align-items-center gap-3">
                 <button id="theme-toggle" class="theme-switch-btn" aria-label="Toggle Theme">
                     <i class="bi bi-sun" id="theme-icon-light"></i>
                     <i class="bi bi-moon d-none" id="theme-icon-dark"></i>
@@ -330,6 +375,57 @@
                 setTimeout(() => {
                     loader.classList.add('fade-out');
                 }, 500); // 500ms premium fade-out animation
+            }
+
+            // Mobile Drawer Navigation Handler
+            const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+            const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+            const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+            const sidebar = document.querySelector('.sidebar');
+
+            function openMobileSidebar() {
+                if (sidebar) sidebar.classList.add('open');
+                if (sidebarBackdrop) sidebarBackdrop.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeMobileSidebar() {
+                if (sidebar) sidebar.classList.remove('open');
+                if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+
+            if (sidebarToggleBtn) {
+                sidebarToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openMobileSidebar();
+                });
+            }
+
+            if (sidebarCloseBtn) {
+                sidebarCloseBtn.addEventListener('click', closeMobileSidebar);
+            }
+
+            if (sidebarBackdrop) {
+                sidebarBackdrop.addEventListener('click', closeMobileSidebar);
+            }
+
+            // Close on escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && sidebar && sidebar.classList.contains('open')) {
+                    closeMobileSidebar();
+                }
+            });
+
+            // Close sidebar when navigating via mobile links
+            if (sidebar) {
+                sidebar.querySelectorAll('a.sidebar-link').forEach(link => {
+                    link.addEventListener('click', () => {
+                        if (window.innerWidth < 992) {
+                            closeMobileSidebar();
+                        }
+                    });
+                });
             }
         });
     </script>

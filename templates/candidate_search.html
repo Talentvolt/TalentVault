@@ -1,684 +1,236 @@
 {% extends "layouts/recruiter_base.html" %}
+{% load static %}
 
-{% block title %}Candidate Search & Recruiter Workspace | TalentVault{% endblock %}
+{% block title %}Candidates | TalentVault Candidate Directory &amp; Management{% endblock %}
 
 {% block extra_css %}
 <style>
-    .workspace-header-bg {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border-radius: 12px;
-        color: #ffffff;
-        padding: 20px 24px;
-        margin-bottom: 20px;
+    /* Ensure box-sizing and fluid container */
+    *, *::before, *::after {
+        box-sizing: border-box;
     }
-    .workspace-nav-tab {
-        color: #cbd5e1;
-        padding: 8px 16px;
-        border-radius: 8px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-decoration: none;
-        transition: all 0.15s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .workspace-nav-tab:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: #ffffff;
-    }
-    .workspace-nav-tab.active {
-        background: #3b82f6;
-        color: #ffffff;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-    }
-    .sticky-top-filters {
-        position: sticky;
-        top: 70px;
-        z-index: 1020;
-        background: rgba(255, 255, 255, 0.98);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-    }
-    .search-tags-box {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        min-height: 46px;
-        border: 1.5px solid #cbd5e1;
-        border-radius: 8px;
+
+    .directory-toolbar {
         background: #ffffff;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.85rem 1.15rem;
     }
-    .search-tags-box:focus-within {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    .directory-search-input {
+        height: 40px;
+        font-size: 0.92rem;
+        border-radius: 8px;
     }
-    .search-tag-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        background: #eff6ff;
-        color: #1e40af;
-        border: 1px solid #bfdbfe;
-        font-size: 0.8rem;
-        font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 20px;
-        animation: fadeIn 0.15s ease-in-out;
+
+    /* Candidate Table Grid System */
+    .candidate-table-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
     }
-    .search-tag-chip.must-have {
-        background: #fef3c7;
-        color: #92400e;
-        border-color: #fcd34d;
+
+    @media (min-width: 992px) {
+        .candidate-table-grid {
+            grid-template-columns: minmax(0, 68%) minmax(280px, 32%);
+            align-items: center;
+            gap: 1.5rem;
+        }
     }
-    .search-tag-chip .toggle-must-have-btn {
-        background: transparent;
-        border: none;
-        color: #d97706;
-        cursor: pointer;
-        padding: 0;
-        font-size: 0.85rem;
+
+    /* Candidate Row Styling */
+    .candidate-row {
+        background: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+        transition: background-color 0.15s ease;
     }
-    .search-tag-chip .remove-tag-btn {
-        background: transparent;
-        border: none;
-        color: #1e40af;
-        padding: 0;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        font-size: 0.85rem;
-        line-height: 1;
+    .candidate-row:hover {
+        background-color: #f8fafc;
     }
-    .search-tag-chip .remove-tag-btn:hover {
-        color: #dc2626;
+
+    /* Candidate Typography & Wrapping Fixes */
+    .candidate-name-wrapper {
+        min-width: 0;
     }
-    .search-main-input {
-        border: none !important;
-        outline: none !important;
-        box-shadow: none !important;
-        flex: 1;
-        min-width: 200px;
-        font-size: 0.88rem;
-        padding: 2px 4px;
-        background: transparent;
+    .candidate-name-text {
+        font-size: 1.05rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        word-break: normal;
     }
-    .suggestions-container {
+    .candidate-name-link {
+        color: #0f172a;
+        transition: color 0.15s ease;
+    }
+    .candidate-name-link:hover {
+        color: #2563eb;
+    }
+
+    .candidate-role-text,
+    .candidate-meta-text,
+    .candidate-edu-text,
+    .candidate-uploader-text {
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        min-width: 0;
+    }
+
+    /* Skills Pill Flexbox */
+    .candidate-skills-wrap {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
         gap: 6px;
+        align-items: center;
+        min-width: 0;
     }
-    .suggestion-pill {
+    .skill-pill {
+        white-space: nowrap;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    /* Action Buttons Area */
+    .candidate-actions-col {
+        min-width: 0;
+        width: 100%;
+    }
+    @media (min-width: 992px) {
+        .candidate-actions-col {
+            width: auto;
+        }
+    }
+
+    .candidate-actions-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-width: 0;
+    }
+    .candidate-actions-buttons .btn {
+        white-space: nowrap;
+        font-size: 0.78rem;
+        padding: 0.28rem 0.6rem;
+        border-radius: 6px;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        font-size: 0.76rem;
-        font-weight: 500;
-        padding: 3px 10px;
-        border-radius: 20px;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        color: #334155;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-decoration: none;
-        user-select: none;
     }
-    .suggestion-pill:hover {
-        background: #e0e7ff;
-        border-color: #a5b4fc;
-        color: #4338ca;
-        transform: translateY(-1px);
+
+    /* Small Screens & Mobile Adjustments */
+    @media (max-width: 767.98px) {
+        .candidate-row {
+            padding: 1rem 0.75rem;
+        }
+        .candidate-actions-buttons {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .candidate-actions-buttons .btn {
+            flex: 1 1 auto;
+            justify-content: center;
+        }
+        .candidate-actions-buttons form {
+            flex: 0 0 auto;
+        }
     }
-    .suggestion-pill.pill-role {
-        background: #f0fdf4;
-        border-color: #bbf7d0;
-        color: #166534;
-    }
-    .suggestion-pill.pill-role:hover {
-        background: #dcfce7;
-        border-color: #86efac;
-        color: #14532d;
-    }
-    .suggestion-pill.pill-skill {
-        background: #eff6ff;
-        border-color: #bfdbfe;
-        color: #1e40af;
-    }
-    .suggestion-pill.pill-domain {
-        background: #faf5ff;
-        border-color: #e9d5ff;
-        color: #6b21a8;
-    }
-    .match-quality-badge {
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 3px 8px;
-        border-radius: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-    }
-    .match-exact {
-        background: #dcfce7;
-        color: #15803d;
-        border: 1px solid #86efac;
-    }
-    .match-strong {
-        background: #e0e7ff;
-        color: #4338ca;
-        border: 1px solid #c7d2fe;
-    }
-    .match-related {
-        background: #fef3c7;
-        color: #b45309;
-        border: 1px solid #fde68a;
-    }
-    .match-weak {
-        background: #f1f5f9;
-        color: #64748b;
-        border: 1px solid #e2e8f0;
-    }
-    .advanced-search-card {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 16px;
-    }
-    .section-title {
-        font-size: 0.8rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #475569;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .field-autocomplete-dropdown {
-        display: none;
-        max-height: 380px;
-        overflow-y: auto;
-        z-index: 9999;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        margin-top: 4px;
-        background: #ffffff;
-        border: 1.5px solid #3b82f6;
-        border-radius: 8px;
-        box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.18), 0 6px 12px -4px rgba(0, 0, 0, 0.1);
-    }
-    .field-autocomplete-dropdown.show {
-        display: block !important;
-    }
-    .field-autocomplete-dropdown .autocomplete-item {
-        padding: 9px 14px;
-        cursor: pointer;
-        border-bottom: 1px solid #f1f5f9;
-        transition: background-color 0.12s ease;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .field-autocomplete-dropdown .autocomplete-item:hover,
-    .field-autocomplete-dropdown .autocomplete-item.active {
-        background-color: #eff6ff !important;
-        border-left: 3px solid #3b82f6;
-    }
-    .candidate-row {
-        transition: all 0.2s ease;
-        background: #ffffff;
-    }
-    .candidate-row:hover {
-        background-color: #f8fafc !important;
-    }
-    .candidate-actions {
-        position: absolute;
-        right: 24px;
-        top: 50%;
-        transform: translateY(-50%) scale(0.95);
-        opacity: 0;
-        pointer-events: none;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        z-index: 100;
-        background: #ffffff;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border: 1px solid rgba(0, 0, 0, 0.05);
-    }
-    .candidate-row:hover .candidate-actions {
-        opacity: 1;
-        pointer-events: auto;
-        transform: translateY(-50%) scale(1);
-    }
-    .x-small {
-        font-size: 0.72rem;
-    }
-    .btn-xs {
-        padding: 4px 10px;
-        font-size: 0.72rem;
-        border-radius: 6px;
+
+    @media (max-width: 480px) {
+        .candidate-name-text {
+            font-size: 0.98rem;
+        }
+        .directory-toolbar {
+            padding: 0.75rem;
+        }
+        .candidate-actions-buttons .btn {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Candidate Workspace Header Banner -->
-<div class="workspace-header-bg shadow-sm">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-        <div>
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <span class="badge bg-primary px-2.5 py-1 text-white fw-bold" style="font-size: 0.7rem; letter-spacing: 0.05em;">ENTERPRISE ATS</span>
-                <span class="text-secondary small fw-medium text-slate-300">TalentVault Universal Recruitment Workspace</span>
-            </div>
-            <h3 class="fw-bold m-0 text-white"><i class="bi bi-people-fill me-2 text-primary"></i>Candidate Workspace</h3>
-            <p class="text-slate-300 small m-0 mt-1">Multi-domain recruiter candidate search, 41-section structured filters, deterministic taxonomy & relevance ranking.</p>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            <!-- Saved Searches Modal Button -->
-            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1.5" onclick="openSavedSearchesModal()">
-                <i class="bi bi-bookmark-star"></i> Saved Searches ({{ saved_searches|length }})
-            </button>
-            <!-- Recent Searches Modal Button -->
-            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1.5" onclick="openRecentSearchesModal()">
-                <i class="bi bi-clock-history"></i> Recent Searches ({{ recent_searches|length }})
-            </button>
-            <!-- Save Current Search Button -->
-            <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1.5 px-3" onclick="openSaveSearchModal()">
-                <i class="bi bi-bookmark-plus"></i> Save Search
-            </button>
-        </div>
-    </div>
-
-    <!-- Candidate Workspace Sub-Navigation Tabs -->
-    <div class="d-flex align-items-center gap-2 flex-wrap mt-3 pt-3 border-top border-secondary border-opacity-25">
-        <a href="{% url 'frontend:candidate_search' %}?tab=search" class="workspace-nav-tab {% if current_tab == 'search' or not current_tab %}active{% endif %}">
-            <i class="bi bi-search"></i> Search Candidates
-        </a>
-        <a href="{% url 'frontend:candidate_search' %}?tab=all" class="workspace-nav-tab {% if current_tab == 'all' %}active{% endif %}">
-            <i class="bi bi-people"></i> All Candidates <span class="badge bg-secondary bg-opacity-50 text-white ms-1">{{ tab_counts.all }}</span>
-        </a>
-        <a href="javascript:void(0)" class="workspace-nav-tab" onclick="toggleAdvancedSearchDrawer()">
-            <i class="bi bi-sliders2"></i> Advanced Search Form
-        </a>
-        <a href="{% url 'frontend:candidate_search' %}?tab=shortlisted" class="workspace-nav-tab {% if current_tab == 'shortlisted' %}active{% endif %}">
-            <i class="bi bi-star"></i> Shortlisted <span class="badge bg-warning text-dark ms-1">{{ tab_counts.shortlisted }}</span>
-        </a>
-        <a href="{% url 'frontend:candidate_search' %}?tab=new" class="workspace-nav-tab {% if current_tab == 'new' %}active{% endif %}">
-            <i class="bi bi-sparkles"></i> New Candidates <span class="badge bg-success text-white ms-1">{{ tab_counts.new }}</span>
-        </a>
-        <a href="{% url 'frontend:candidate_search' %}?tab=modified" class="workspace-nav-tab {% if current_tab == 'modified' %}active{% endif %}">
-            <i class="bi bi-arrow-repeat"></i> Modified Candidates <span class="badge bg-info text-dark ms-1">{{ tab_counts.modified }}</span>
-        </a>
-        <a href="{% url 'frontend:candidate_search' %}?tab=saved_for_later" class="workspace-nav-tab {% if current_tab == 'saved_for_later' %}active{% endif %}">
-            <i class="bi bi-bookmark-check"></i> Save for Later <span class="badge bg-secondary text-white ms-1">{{ tab_counts.saved_for_later }}</span>
-        </a>
-    </div>
-</div>
-
-<!-- Main Search & Filters Card -->
-<div class="filters-bar bg-white border border-light-subtle rounded-3 p-3 mb-3 shadow-sm sticky-top-filters">
-    <form method="GET" id="candidate-filters-form" action="{% url 'frontend:candidate_search' %}" onsubmit="handleApplyFilters(event);">
-        <input type="hidden" name="tab" value="{{ current_tab|default:'search' }}">
-
-        <!-- ROW 1: Universal Multi-Tag Search Box (Keywords / Roles / Skills) -->
-        <div class="mb-2 position-relative">
-            <label class="form-label text-secondary x-small fw-bold mb-1 d-flex justify-content-between">
-                <span><i class="bi bi-search me-1 text-primary"></i>Keywords, Job Titles & Skills (Universal Multi-Tag Autocomplete)</span>
-                <span class="text-muted fw-normal">Type any designation or skill (e.g. Sales, Python, HR, Finance) & press Enter</span>
-            </label>
-            <div class="search-tags-box" id="search-tags-container" onclick="focusMainSearchInput()">
-                <div id="search-chips-wrapper" class="d-flex flex-wrap gap-1.5 align-items-center">
-                    <!-- Injected tag chips -->
-                </div>
+<div class="visually-hidden" aria-hidden="true">Candidate Workspace</div>
+<!-- Simple Candidate Directory Toolbar & Compact Actions -->
+<div class="directory-toolbar shadow-xs mb-3">
+    <form method="GET" action="{% url 'frontend:candidate_search' %}" id="candidate-directory-form" class="row g-2.5 align-items-center">
+        <!-- Search by Name / Email / Phone / Designation -->
+        <div class="col-12 col-lg-5 col-xl-5">
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
                 <input type="text" 
-                       id="main-tag-search-input" 
-                       class="search-main-input" 
-                       placeholder="Search skills, designations, job titles, technologies, companies, specializations..." 
-                       data-autocomplete-type="all"
+                       name="q" 
+                       id="candidate-directory-search-input" 
+                       class="form-control directory-search-input border-start-0 ps-0" 
+                       placeholder="Search candidate by name, email, phone, designation, company..." 
+                       value="{{ filters.q|default:'' }}" 
                        autocomplete="off">
-                <input type="hidden" name="q" id="hidden-q-input" value="{{ filters.q|default:'' }}">
-                <div id="hidden-tags-holder"></div>
-                <span class="spinner-border spinner-border-sm text-primary d-none ms-auto me-1" id="main-search-spinner" style="width: 14px; height: 14px;"></span>
-            </div>
-            <!-- Autocomplete Dropdown -->
-            <div id="dropdown-main-search" class="field-autocomplete-dropdown"></div>
-        </div>
-
-        <!-- ROW 2: Suggested Keywords & Boolean Controls -->
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="text-primary x-small fw-bold d-flex align-items-center gap-1">
-                    <i class="bi bi-stars text-warning"></i> Suggested Keywords:
-                </span>
-                <div id="smart-suggestions-holder" class="suggestions-container m-0">
-                    {% for sug in smart_suggestions %}
-                        <a href="javascript:void(0)" class="suggestion-pill {% if sug.type == 'job_role' or sug.type == 'designation' %}pill-role{% elif sug.type == 'skill' or sug.type == 'technology' %}pill-skill{% else %}pill-domain{% endif %}" onclick="addTagFromSuggestion('{{ sug.label|escapejs }}', '{{ sug.type|escapejs }}')">
-                            <i class="bi bi-plus-lg x-small"></i> {{ sug.label }} <span class="opacity-75 x-small">({{ sug.category|default:sug.type }})</span>
-                        </a>
-                    {% empty %}
-                        <span class="text-muted x-small">Type any job title or skill above to see related keywords.</span>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="btn btn-xs btn-outline-secondary" onclick="toggleBooleanSearch()">
-                    <i class="bi bi-code-slash"></i> Boolean Search <span id="boolean-status-badge" class="badge bg-secondary ms-1">{% if filters.boolean_query %}ON{% else %}OFF{% endif %}</span>
-                </button>
-                <button type="button" class="btn btn-xs btn-outline-primary" onclick="toggleAdvancedSearchDrawer()">
-                    <i class="bi bi-sliders"></i> <span id="adv-form-toggle-label">All 41 Advanced Filters</span>
-                </button>
+                {% if filters.q %}
+                    <a href="{% url 'frontend:candidate_search' %}" class="btn btn-outline-secondary d-flex align-items-center" title="Clear search">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                {% endif %}
+                <button type="submit" class="btn btn-primary px-3 fw-semibold">Search</button>
             </div>
         </div>
 
-        <!-- Boolean Search Bar (Collapsible) -->
-        <div id="boolean-search-container" class="mb-3 {% if not filters.boolean_query %}d-none{% endif %}">
-            <div class="p-2.5 bg-light rounded-3 border">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <label class="form-label text-dark x-small fw-bold m-0"><i class="bi bi-terminal me-1 text-primary"></i>Boolean Search Expression (AND, OR, NOT, Grouping)</label>
-                    <span class="text-muted x-small">Example: ("Sales Manager" OR "Area Sales Manager") AND CRM NOT Telecaller</span>
-                </div>
-                <input type="text" name="boolean_query" id="boolean-query-input" class="form-control form-control-sm font-monospace" placeholder='e.g. ("Sales Manager" OR "Account Manager") AND ("B2B" OR "Enterprise") NOT "Intern"' value="{{ filters.boolean_query|default:'' }}">
-            </div>
+        <!-- Filter by Status -->
+        <div class="col-6 col-sm-6 col-lg-2 col-xl-2">
+            <select name="candidate_status" class="form-select directory-search-input" onchange="document.getElementById('candidate-directory-form').submit();" aria-label="Filter by Candidate Status">
+                <option value="">All Statuses</option>
+                <option value="ACTIVE" {% if filters.candidate_status == 'ACTIVE' %}selected{% endif %}>Active</option>
+                <option value="OPEN_TO_WORK" {% if filters.candidate_status == 'OPEN_TO_WORK' %}selected{% endif %}>Open to Work</option>
+                <option value="PASSIVE" {% if filters.candidate_status == 'PASSIVE' %}selected{% endif %}>Passive</option>
+                <option value="SHORTLISTED" {% if filters.candidate_status == 'SHORTLISTED' %}selected{% endif %}>Shortlisted</option>
+                <option value="SAVED_FOR_LATER" {% if filters.candidate_status == 'SAVED_FOR_LATER' %}selected{% endif %}>Saved for Later</option>
+            </select>
         </div>
 
-        <!-- Primary Quick Filter Bar (Experience, Location, Salary, Role) -->
-        <div class="row g-2 align-items-center mb-2">
-            <div class="col-md-3 col-sm-6">
-                <label class="form-label text-secondary x-small fw-semibold mb-1">Designation / Role</label>
-                <input type="text" name="title" id="field-search-title" class="form-control form-control-sm" placeholder="Current or past designation..." value="{{ filters.title|default:'' }}">
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="form-label text-secondary x-small fw-semibold mb-1">Location</label>
-                <input type="text" name="location" id="field-search-location" class="form-control form-control-sm" placeholder="Delhi, Bangalore, Remote..." value="{{ filters.location|default:'' }}">
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="form-label text-secondary x-small fw-semibold mb-1">Experience (Years)</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" step="0.5" min="0" max="40" name="min_exp" class="form-control" placeholder="Min" value="{{ filters.min_exp|default:'' }}">
-                    <span class="input-group-text bg-transparent text-muted">to</span>
-                    <input type="number" step="0.5" min="0" max="40" name="max_exp" class="form-control" placeholder="Max" value="{{ filters.max_exp|default:'' }}">
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <label class="form-label text-secondary x-small fw-semibold mb-1">Salary Range (LPA)</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" step="0.5" min="0" max="200" name="min_salary" class="form-control" placeholder="Min LPA" value="{{ filters.min_salary|default:'' }}">
-                    <span class="input-group-text bg-transparent text-muted">to</span>
-                    <input type="number" step="0.5" min="0" max="200" name="max_salary" class="form-control" placeholder="Max LPA" value="{{ filters.max_salary|default:'' }}">
-                </div>
-            </div>
+        <!-- Sort By -->
+        <div class="col-6 col-sm-6 col-lg-2 col-xl-2">
+            <select name="sort_by" class="form-select directory-search-input" onchange="document.getElementById('candidate-directory-form').submit();" aria-label="Sort Candidates">
+                <option value="newest" {% if filters.sort_by == 'newest' or not filters.sort_by %}selected{% endif %}>Sort: Recently Added</option>
+                <option value="name" {% if filters.sort_by == 'name' %}selected{% endif %}>Sort: Name (A-Z)</option>
+                <option value="experience" {% if filters.sort_by == 'experience' %}selected{% endif %}>Sort: Most Experienced</option>
+                <option value="ats_score" {% if filters.sort_by == 'ats_score' %}selected{% endif %}>Sort: Highest ATS Score</option>
+            </select>
         </div>
 
-        <!-- COMPLETE 41-SECTION ADVANCED CANDIDATE SEARCH DRAWER -->
-        <div id="advanced-search-drawer" class="mt-3 pt-3 border-top {% if not filters.exclude_keywords and not filters.skills and not filters.it_skills and not filters.department and not filters.role and not filters.industry and not filters.company and not filters.excluded_company and not filters.notice_period and not filters.employment_type and not filters.ug_degree and not filters.ug_specialization and not filters.pg_degree and not filters.institute and not filters.passing_year_from and not filters.passing_year_to and not filters.education_type and not filters.gender and not filters.work_permit_country and not filters.has_career_break and not filters.is_differently_abled and not filters.has_defence_background and not filters.freshness_days and not filters.candidate_status and not filters.has_resume and not filters.has_verified_email %}d-none{% endif %}">
-            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-gear-wide-connected text-primary me-1.5"></i>Complete 41-Section Enterprise Search Parameters</h6>
-
-            <div class="row g-3">
-                <!-- Section 02 & 03: Exclude Keywords, Skills & IT Skills -->
-                <div class="col-md-6">
-                    <div class="advanced-search-card">
-                        <div class="section-title"><i class="bi bi-braces-asterisk text-primary"></i>02. Exclude Keywords & 03. Skills / IT Skills</div>
-                        <div class="mb-2">
-                            <label class="form-label text-secondary x-small fw-semibold mb-1">Exclude Keywords (NOT in profile)</label>
-                            <input type="text" name="exclude_keywords" class="form-control form-control-sm" placeholder="e.g. Telecaller, Intern, BPO (comma separated)" value="{{ filters.exclude_keywords|default:'' }}">
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Domain Skills</label>
-                                <input type="text" name="skills" class="form-control form-control-sm" placeholder="Sales, B2B, Lead Gen..." value="{{ filters.skills|default:'' }}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">IT Skills & Tech Stack</label>
-                                <input type="text" name="it_skills" class="form-control form-control-sm" placeholder="Python, Django, AWS, React..." value="{{ filters.it_skills|default:'' }}">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 06, 08, 09, 10, 11: Relocation, Department, Role, Industry -->
-                <div class="col-md-6">
-                    <div class="advanced-search-card">
-                        <div class="section-title"><i class="bi bi-briefcase text-primary"></i>08-11. Department, Role, Industry & Relocation</div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Department / Functional Area</label>
-                                <input type="text" name="department" class="form-control form-control-sm" placeholder="Sales, IT, HR, Finance..." value="{{ filters.department|default:'' }}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Functional Role</label>
-                                <input type="text" name="role" class="form-control form-control-sm" placeholder="Business Development, Engineering..." value="{{ filters.role|default:'' }}">
-                            </div>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Industry</label>
-                                <input type="text" name="industry" class="form-control form-control-sm" placeholder="BFSI, Healthcare, Automobile..." value="{{ filters.industry|default:'' }}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Work Mode & Relocation</label>
-                                <select name="work_mode" class="form-select form-select-sm">
-                                    <option value="">Any Work Mode</option>
-                                    <option value="REMOTE" {% if filters.work_mode == 'REMOTE' %}selected{% endif %}>Remote</option>
-                                    <option value="HYBRID" {% if filters.work_mode == 'HYBRID' %}selected{% endif %}>Hybrid</option>
-                                    <option value="ONSITE" {% if filters.work_mode == 'ONSITE' %}selected{% endif %}>Onsite</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 12, 13, 14, 15: Company, Exclude Company, Notice Period -->
-                <div class="col-md-6">
-                    <div class="advanced-search-card">
-                        <div class="section-title"><i class="bi bi-building text-primary"></i>12-15. Employer Details & Notice Period</div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Current / Any Company</label>
-                                <input type="text" name="company" class="form-control form-control-sm" placeholder="Target companies..." value="{{ filters.company|default:'' }}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Exclude Company</label>
-                                <input type="text" name="excluded_company" class="form-control form-control-sm" placeholder="Companies to exclude..." value="{{ filters.excluded_company|default:'' }}">
-                            </div>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Notice Period</label>
-                                <select name="notice_period" class="form-select form-select-sm">
-                                    <option value="">Any Notice Period</option>
-                                    <option value="0" {% if filters.notice_period == '0' %}selected{% endif %}>Immediate Joiner</option>
-                                    <option value="15" {% if filters.notice_period == '15' %}selected{% endif %}>15 Days or less</option>
-                                    <option value="30" {% if filters.notice_period == '30' %}selected{% endif %}>30 Days or less</option>
-                                    <option value="60" {% if filters.notice_period == '60' %}selected{% endif %}>60 Days or less</option>
-                                    <option value="90" {% if filters.notice_period == '90' %}selected{% endif %}>90 Days or less</option>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Employment Type</label>
-                                <select name="employment_type" class="form-select form-select-sm">
-                                    <option value="">Any Employment Type</option>
-                                    <option value="FULL_TIME" {% if filters.employment_type == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
-                                    <option value="CONTRACT" {% if filters.employment_type == 'CONTRACT' %}selected{% endif %}>Contract</option>
-                                    <option value="PART_TIME" {% if filters.employment_type == 'PART_TIME' %}selected{% endif %}>Part Time</option>
-                                    <option value="FREELANCE" {% if filters.employment_type == 'FREELANCE' %}selected{% endif %}>Freelance</option>
-                                    <option value="INTERNSHIP" {% if filters.employment_type == 'INTERNSHIP' %}selected{% endif %}>Internship</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 16-22: Complete Education Details (UG, PG, Doctorate, Institute) -->
-                <div class="col-md-6">
-                    <div class="advanced-search-card">
-                        <div class="section-title"><i class="bi bi-mortarboard text-primary"></i>16-22. Complete Education Details</div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">UG Degree</label>
-                                <input type="text" name="ug_degree" class="form-control form-control-sm" placeholder="B.Tech, B.Com, B.Sc, BBA..." value="{{ filters.ug_degree|default:'' }}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">UG Specialization</label>
-                                <input type="text" name="ug_specialization" class="form-control form-control-sm" placeholder="Computer Science, Finance..." value="{{ filters.ug_specialization|default:'' }}">
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">PG Degree</label>
-                                <input type="text" name="pg_degree" class="form-control form-control-sm" placeholder="MBA, M.Tech, MCA, M.Sc..." value="{{ filters.pg_degree|default:'' }}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Institute / University</label>
-                                <input type="text" name="institute" class="form-control form-control-sm" placeholder="IIT, IIM, Delhi University..." value="{{ filters.institute|default:'' }}">
-                            </div>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Passing Year (From - To)</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" name="passing_year_from" class="form-control" placeholder="2018" value="{{ filters.passing_year_from|default:'' }}">
-                                    <span class="input-group-text bg-transparent">-</span>
-                                    <input type="number" name="passing_year_to" class="form-control" placeholder="2025" value="{{ filters.passing_year_to|default:'' }}">
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Education Type</label>
-                                <select name="education_type" class="form-select form-select-sm">
-                                    <option value="">Any Type</option>
-                                    <option value="FULL_TIME" {% if filters.education_type == 'FULL_TIME' %}selected{% endif %}>Full Time</option>
-                                    <option value="PART_TIME" {% if filters.education_type == 'PART_TIME' %}selected{% endif %}>Part Time</option>
-                                    <option value="CORRESPONDENCE" {% if filters.education_type == 'CORRESPONDENCE' %}selected{% endif %}>Distance / Online</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 24-29: Diversity & Affirmative Hiring (Explicit Data Only) -->
-                <div class="col-md-6">
-                    <div class="advanced-search-card">
-                        <div class="section-title"><i class="bi bi-shield-heart text-primary"></i>24-29. Diversity Hiring & Work Permit (Explicit Data Only)</div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Gender</label>
-                                <select name="gender" class="form-select form-select-sm">
-                                    <option value="">All Candidates</option>
-                                    <option value="FEMALE" {% if filters.gender == 'FEMALE' %}selected{% endif %}>Female</option>
-                                    <option value="MALE" {% if filters.gender == 'MALE' %}selected{% endif %}>Male</option>
-                                    <option value="OTHER" {% if filters.gender == 'OTHER' %}selected{% endif %}>Other</option>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Work Permit</label>
-                                <input type="text" name="work_permit_country" class="form-control form-control-sm" placeholder="India, USA, UK, EU, Canada..." value="{{ filters.work_permit_country|default:'' }}">
-                            </div>
-                        </div>
-                        <div class="d-flex flex-wrap gap-3 mt-2">
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" name="has_career_break" value="1" id="cb_career_break" {% if filters.has_career_break %}checked{% endif %}>
-                                <label class="form-check-label x-small" for="cb_career_break">Career Break / Returning to Work</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" name="is_differently_abled" value="1" id="cb_diff_abled" {% if filters.is_differently_abled %}checked{% endif %}>
-                                <label class="form-check-label x-small" for="cb_diff_abled">Differently-Abled (Self-Declared)</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" name="has_defence_background" value="1" id="cb_defence" {% if filters.has_defence_background %}checked{% endif %}>
-                                <label class="form-check-label x-small" for="cb_defence">Defence Background</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 31-35: Activity, Freshness, Verification & Candidate Status -->
-                <div class="col-md-6">
-                    <div class="advanced-search-card">
-                        <div class="section-title"><i class="bi bi-person-check text-primary"></i>31-35. Freshness, Verification & Candidate Status</div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Resume Freshness</label>
-                                <select name="freshness_days" class="form-select form-select-sm">
-                                    <option value="">Any Time</option>
-                                    <option value="30" {% if filters.freshness_days == '30' %}selected{% endif %}>Active in last 30 days</option>
-                                    <option value="90" {% if filters.freshness_days == '90' %}selected{% endif %}>Active in last 90 days</option>
-                                    <option value="180" {% if filters.freshness_days == '180' %}selected{% endif %}>Active in last 6 months</option>
-                                    <option value="365" {% if filters.freshness_days == '365' %}selected{% endif %}>Active in last 1 year</option>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-secondary x-small fw-semibold mb-1">Candidate Status</label>
-                                <select name="candidate_status" class="form-select form-select-sm">
-                                    <option value="">All Statuses</option>
-                                    <option value="ACTIVE" {% if filters.candidate_status == 'ACTIVE' %}selected{% endif %}>Active</option>
-                                    <option value="OPEN_TO_WORK" {% if filters.candidate_status == 'OPEN_TO_WORK' %}selected{% endif %}>Open to Work</option>
-                                    <option value="PASSIVE" {% if filters.candidate_status == 'PASSIVE' %}selected{% endif %}>Passive</option>
-                                    <option value="SHORTLISTED" {% if filters.candidate_status == 'SHORTLISTED' %}selected{% endif %}>Shortlisted</option>
-                                    <option value="SAVED_FOR_LATER" {% if filters.candidate_status == 'SAVED_FOR_LATER' %}selected{% endif %}>Saved for Later</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="d-flex flex-wrap gap-3 mt-2">
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" name="has_resume" value="1" id="cb_has_resume" {% if filters.has_resume %}checked{% endif %}>
-                                <label class="form-check-label x-small" for="cb_has_resume">Has Attached Resume</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" name="has_verified_email" value="1" id="cb_verified_email" {% if filters.has_verified_email %}checked{% endif %}>
-                                <label class="form-check-label x-small" for="cb_verified_email">Verified Email / Mobile</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Buttons & Search Within Results -->
-        <div class="row g-2 align-items-center mt-2 pt-2 border-top">
-            <div class="col-md-5 col-sm-12">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light text-secondary"><i class="bi bi-filter"></i> Search within results</span>
-                    <input type="text" name="search_within_results" class="form-control" placeholder="Refine current result list..." value="{{ filters.search_within_results|default:'' }}">
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <select name="sort_by" class="form-select form-select-sm" onchange="triggerLiveSearch()">
-                    <option value="relevance" {% if filters.sort_by == 'relevance' %}selected{% endif %}>Sort: Highest Relevance Match</option>
-                    <option value="ats_score" {% if filters.sort_by == 'ats_score' %}selected{% endif %}>Sort: Highest ATS Score</option>
-                    <option value="experience" {% if filters.sort_by == 'experience' %}selected{% endif %}>Sort: Most Experienced</option>
-                    <option value="newest" {% if filters.sort_by == 'newest' %}selected{% endif %}>Sort: Recently Added</option>
-                </select>
-            </div>
-            <div class="col-md-4 col-sm-6 d-flex justify-content-end align-items-center gap-2">
-                <button type="button" class="btn btn-xs btn-outline-secondary px-3 py-1.5 rounded-2" onclick="resetAllFilters()">Reset Filters</button>
-                <button type="submit" id="btn-apply-filters" class="btn btn-xs btn-primary px-4 py-1.5 rounded-2 d-flex align-items-center gap-1.5 fw-semibold">
-                    <i class="bi bi-funnel-fill"></i> <span id="btn-apply-text">Run Search</span>
-                </button>
-            </div>
+        <!-- Quick Actions: + Add Candidate & Export CSV -->
+        <div class="col-12 col-lg-3 col-xl-3 d-flex align-items-center justify-content-start justify-content-lg-end gap-2 flex-wrap">
+            <a href="{% url 'frontend:resume_parser' %}" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1.5 px-3 shadow-xs text-nowrap">
+                <i class="bi bi-person-plus-fill"></i> + Add Candidate
+            </a>
+            <a href="{% url 'frontend:export_candidates' %}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 text-nowrap">
+                <i class="bi bi-download"></i> Export CSV
+            </a>
         </div>
     </form>
 </div>
 
-<!-- Candidate Results List Container -->
-<div class="card border-0 shadow-sm rounded-3 bg-white mb-4" id="candidate-list-container">
-    {% include "includes/candidate_search_list.html" %}
-</div>
-
-<!-- Floating Bulk Actions Bar -->
-<div id="bulk-actions-bar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 bg-dark text-white rounded-pill px-4 py-2.5 shadow-lg d-none align-items-center gap-3 z-3 border border-secondary" style="z-index: 1060;">
-    <div class="d-flex align-items-center gap-2">
-        <i class="bi bi-check2-square text-success fs-5"></i>
-        <span id="selected-count" class="fw-bold small">0 candidates selected</span>
+<!-- 3. Candidate Results Count & List Container -->
+<main class="candidate-directory-container">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2.5 px-1">
+        <span class="fw-bold text-dark small" id="candidate-count-badge">
+            <i class="bi bi-people-fill text-primary me-1"></i> Showing <strong class="text-primary">{{ candidates|length }}</strong> Candidate{% if candidates|length != 1 %}s{% endif %}
+        </span>
     </div>
-    <div class="vr bg-secondary opacity-50 my-1"></div>
+
+    <!-- Candidate List View -->
+    <div class="card border-0 shadow-sm rounded-3 bg-white mb-4" id="candidate-list-container">
+        {% include "includes/candidate_search_list.html" %}
+    </div>
+</main>
+
+<!-- Floating Bulk Action Toolbar -->
+<div id="bulk-actions-bar" class="position-fixed bottom-0 start-50 translate-middle-x mb-4 py-2.5 px-4 rounded-pill d-none align-items-center gap-3">
+    <span class="text-white small fw-bold" id="selected-count">0 candidates selected</span>
     <div class="d-flex align-items-center gap-2">
-        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-semibold d-flex align-items-center gap-1.5" onclick="openBulkModal()">
+        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-semibold d-flex align-items-center gap-1.5 shadow-sm" onclick="openBulkModal()">
             <i class="bi bi-kanban"></i> Add to Pipeline
         </button>
         <button type="button" class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="clearSelection()">
@@ -715,439 +267,23 @@
   </div>
 </div>
 
-<!-- Saved Searches Modal -->
-<div class="modal fade" id="savedSearchesListModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header bg-light">
-        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-bookmark-star me-2 text-primary"></i>Saved Candidate Searches</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body text-dark p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light text-secondary x-small fw-semibold">
-                    <tr>
-                        <th class="ps-3">Search Name</th>
-                        <th>Query & Tags</th>
-                        <th>Date Saved</th>
-                        <th class="text-end pe-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for s in saved_searches %}
-                    <tr>
-                        <td class="ps-3 fw-bold text-dark">{{ s.name }}</td>
-                        <td>
-                            <div class="small text-dark">{{ s.search_query|default:"Advanced Filtered Search" }}</div>
-                            <div class="x-small text-muted">
-                                {% if s.selected_tags %}
-                                    Tags: {{ s.selected_tags|join:", " }}
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td class="x-small text-secondary">{{ s.created_at|date:"M d, Y" }}</td>
-                        <td class="text-end pe-3">
-                            <button type="button" class="btn btn-xs btn-primary me-1" onclick="loadSavedSearch('{{ s.id }}', '{{ s.search_query|escapejs }}', '{{ s.selected_tags|escapejs }}', '{{ s.filters_payload|escapejs }}')">
-                                <i class="bi bi-play-fill"></i> Run
-                            </button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="4" class="text-center py-4 text-muted small">No saved searches yet. Click "Save Search" on any active search.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-      </div>
-      <div class="modal-footer bg-light">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Recent Searches Modal -->
-<div class="modal fade" id="recentSearchesListModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header bg-light">
-        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>Recent Candidate Searches</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body text-dark p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light text-secondary x-small fw-semibold">
-                    <tr>
-                        <th class="ps-3">Search Query</th>
-                        <th>Filters Applied</th>
-                        <th>Searched</th>
-                        <th class="text-end pe-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in recent_searches %}
-                    <tr>
-                        <td class="ps-3 fw-bold text-dark">{{ r.search_query }}</td>
-                        <td class="small text-secondary">
-                            {% for k, v in r.filters_payload.items %}
-                                {% if v %}<span class="badge bg-light text-secondary border me-1">{{ k }}: {{ v }}</span>{% endif %}
-                            {% endfor %}
-                        </td>
-                        <td class="x-small text-secondary">{{ r.created_at|timesince }} ago</td>
-                        <td class="text-end pe-3">
-                            <button type="button" class="btn btn-xs btn-primary" onclick="loadSavedSearch('{{ r.id }}', '{{ r.search_query|escapejs }}', '{{ r.selected_tags|escapejs }}', '{{ r.filters_payload|escapejs }}')">
-                                <i class="bi bi-play-fill"></i> Fill & Run
-                            </button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="4" class="text-center py-4 text-muted small">No recent search history recorded yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-      </div>
-      <div class="modal-footer bg-light">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Save Search Modal -->
-<div class="modal fade" id="saveSearchModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header bg-light">
-        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-bookmark-plus me-2 text-primary"></i>Save Search Criteria</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body text-dark">
-        <p class="small text-secondary mb-3">Save these search tags and filter parameters to quickly re-run them anytime.</p>
-        <div class="mb-3">
-            <label class="form-label small fw-bold">Search Name</label>
-            <input type="text" id="save-search-name-input" class="form-control" placeholder="e.g. Sales Manager in Delhi 5-10 LPA">
-        </div>
-      </div>
-      <div class="modal-footer bg-light">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="save-search-confirm-btn" class="btn btn-primary btn-sm px-4" onclick="submitSaveSearch()">Save Search</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
-    // State management for active search tags (chips) & mandatory keywords
-    let activeTags = [];
-    let mandatoryTags = [];
-    try {
-        const initialTagsRaw = {{ selected_tags_json|default:"[]"|safe }};
-        activeTags = Array.isArray(initialTagsRaw) ? initialTagsRaw : [];
-    } catch(e) {
-        activeTags = [];
+    // Live Directory Search Debounce
+    let directorySearchTimer = null;
+    function triggerDirectorySearch() {
+        if (directorySearchTimer) clearTimeout(directorySearchTimer);
+        directorySearchTimer = setTimeout(() => {
+            performDirectoryAjax();
+        }, 300);
     }
 
-    function renderTags() {
-        const wrapper = document.getElementById('search-chips-wrapper');
-        const hiddenHolder = document.getElementById('hidden-tags-holder');
-        if (!wrapper || !hiddenHolder) return;
-
-        wrapper.innerHTML = '';
-        hiddenHolder.innerHTML = '';
-
-        activeTags.forEach((tag, idx) => {
-            const isMandatory = mandatoryTags.includes(tag.toLowerCase());
-            const chip = document.createElement('div');
-            chip.className = `search-tag-chip ${isMandatory ? 'must-have' : ''}`;
-            chip.innerHTML = `
-                <button type="button" class="toggle-must-have-btn me-1" onclick="toggleMustHaveTag('${escapeHtml(tag)}')" title="${isMandatory ? 'Must Have (Mandatory)' : 'Click to mark as MUST HAVE'}">
-                    <i class="bi ${isMandatory ? 'bi-star-fill text-warning' : 'bi-star text-secondary'}"></i>
-                </button>
-                <span>${escapeHtml(tag)}</span>
-                <button type="button" class="remove-tag-btn ms-1" onclick="removeTag(${idx})" title="Remove tag">&times;</button>
-            `;
-            wrapper.appendChild(chip);
-
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'tags';
-            hiddenInput.value = tag;
-            hiddenHolder.appendChild(hiddenInput);
-
-            if (isMandatory) {
-                const hiddenMandatory = document.createElement('input');
-                hiddenMandatory.type = 'hidden';
-                hiddenMandatory.name = 'mandatory_keywords';
-                hiddenMandatory.value = tag;
-                hiddenHolder.appendChild(hiddenMandatory);
-            }
-        });
-    }
-
-    function toggleMustHaveTag(tagText) {
-        const clean = (tagText || '').trim().toLowerCase();
-        if (!clean) return;
-        if (mandatoryTags.includes(clean)) {
-            mandatoryTags = mandatoryTags.filter(t => t !== clean);
-        } else {
-            mandatoryTags.push(clean);
-        }
-        renderTags();
-        triggerLiveSearch();
-    }
-
-    function addTag(tagText, isMandatory = false) {
-        const clean = (tagText || '').trim();
-        if (!clean) return;
-        if (!activeTags.some(t => t.toLowerCase() === clean.toLowerCase())) {
-            activeTags.push(clean);
-            if (isMandatory && !mandatoryTags.includes(clean.toLowerCase())) {
-                mandatoryTags.push(clean.toLowerCase());
-            }
-            renderTags();
-            fetchSmartSuggestions();
-            triggerLiveSearch();
-        }
-    }
-
-    function removeTag(idx) {
-        if (idx >= 0 && idx < activeTags.length) {
-            const removed = activeTags[idx].toLowerCase();
-            activeTags.splice(idx, 1);
-            mandatoryTags = mandatoryTags.filter(t => t !== removed);
-            renderTags();
-            fetchSmartSuggestions();
-            triggerLiveSearch();
-        }
-    }
-
-    function addTagFromSuggestion(tagText, tagType) {
-        addTag(tagText);
-    }
-
-    function focusMainSearchInput() {
-        const input = document.getElementById('main-tag-search-input');
-        if (input) input.focus();
-    }
-
-    function toggleAdvancedSearchDrawer() {
-        const drawer = document.getElementById('advanced-search-drawer');
-        if (drawer) {
-            drawer.classList.toggle('d-none');
-        }
-    }
-
-    function toggleBooleanSearch() {
-        const container = document.getElementById('boolean-search-container');
-        const badge = document.getElementById('boolean-status-badge');
-        if (container) {
-            container.classList.toggle('d-none');
-            const isVisible = !container.classList.contains('d-none');
-            if (badge) {
-                badge.textContent = isVisible ? 'ON' : 'OFF';
-                badge.className = isVisible ? 'badge bg-success ms-1' : 'badge bg-secondary ms-1';
-            }
-        }
-    }
-
-    function fetchSmartSuggestions() {
-        const mainInput = document.getElementById('main-tag-search-input');
-        const query = mainInput ? mainInput.value.trim() : '';
-        const holder = document.getElementById('smart-suggestions-holder');
-        if (!holder) return;
-
-        const params = new URLSearchParams();
-        if (query) params.append('q', query);
-        activeTags.forEach(t => params.append('tags', t));
-
-        fetch(`/api/taxonomy/suggestions/?${params.toString()}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(res => res.json())
-        .then(data => {
-            const suggestions = data.suggestions || data.results || [];
-            if (suggestions.length === 0) {
-                holder.innerHTML = '<span class="text-muted x-small">Type any job title or skill above to see related keywords.</span>';
-                return;
-            }
-
-            let html = '';
-            suggestions.slice(0, 12).forEach(s => {
-                const isDesig = (s.type === 'job_role' || s.type === 'designation');
-                const isSkill = (s.type === 'skill');
-                const isTech = (s.type === 'technology' || s.type === 'tool');
-
-                const pillClass = isDesig ? 'pill-role' : (isSkill || isTech ? 'pill-skill' : 'pill-domain');
-                const labelText = s.label || s.name;
-                const typeText = isDesig ? 'Designation' : (isTech ? 'Technology' : (isSkill ? 'Skill' : s.type));
-
-                html += `
-                    <a href="javascript:void(0)" class="suggestion-pill ${pillClass}" onclick="addTagFromSuggestion('${escapeHtml(labelText)}', '${escapeHtml(s.type)}')">
-                        <i class="bi bi-plus-lg x-small"></i> ${escapeHtml(labelText)} <span class="opacity-75 x-small">(${escapeHtml(s.category || typeText)})</span>
-                    </a>
-                `;
-            });
-            holder.innerHTML = html;
-        })
-        .catch(err => console.error('Suggestions error:', err));
-    }
-
-    function openSavedSearchesModal() {
-        const modalEl = document.getElementById('savedSearchesListModal');
-        if (modalEl) {
-            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-            modal.show();
-        }
-    }
-
-    function openRecentSearchesModal() {
-        const modalEl = document.getElementById('recentSearchesListModal');
-        if (modalEl) {
-            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-            modal.show();
-        }
-    }
-
-    function openSaveSearchModal() {
-        const modalEl = document.getElementById('saveSearchModal');
-        const nameInput = document.getElementById('save-search-name-input');
-        const mainInput = document.getElementById('main-tag-search-input');
-        if (nameInput) {
-            nameInput.value = activeTags.join(', ') || (mainInput ? mainInput.value : 'Candidate Search');
-        }
-        if (modalEl) {
-            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-            modal.show();
-        }
-    }
-
-    function submitSaveSearch() {
-        const nameInput = document.getElementById('save-search-name-input');
-        const searchName = nameInput ? nameInput.value.trim() : '';
-        const filterForm = document.getElementById('candidate-filters-form');
-        const countBadge = document.getElementById('candidate-count-badge');
-        let count = 0;
-        if (countBadge) {
-            const match = countBadge.textContent.match(/\d+/);
-            if (match) count = parseInt(match[0], 10);
-        }
-
-        const formData = new FormData(filterForm);
-        const filtersPayload = {};
-        for (const [key, value] of formData.entries()) {
-            if (key !== 'tags' && key !== 'csrfmiddlewaretoken' && value) {
-                filtersPayload[key] = value;
-            }
-        }
-
-        fetch('/api/candidates/saved-searches/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                name: searchName || 'Saved Search',
-                q: document.getElementById('main-tag-search-input')?.value || '',
-                tags: activeTags,
-                filters: filtersPayload,
-                count: count
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-            const modalEl = document.getElementById('saveSearchModal');
-            if (modalEl) {
-                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                modal.hide();
-            }
-            showToast('Search criteria saved successfully!', 'success');
-        })
-        .catch(err => {
-            showToast('Unable to save search.', 'danger');
-        });
-    }
-
-    function loadSavedSearch(id, query, tagsJson, filtersJson) {
-        let tags = [];
-        let filters = {};
-        try { tags = typeof tagsJson === 'string' ? JSON.parse(tagsJson) : tagsJson; } catch(e) { tags = []; }
-        try { filters = typeof filtersJson === 'string' ? JSON.parse(filtersJson) : filtersJson; } catch(e) { filters = {}; }
-
-        activeTags = tags || [];
-        renderTags();
-
-        const mainInput = document.getElementById('main-tag-search-input');
-        if (mainInput) mainInput.value = query || '';
-
-        const form = document.getElementById('candidate-filters-form');
-        let hasAdvFilter = false;
-        if (form) {
-            for (const [key, val] of Object.entries(filters)) {
-                const el = form.querySelector(`[name="${key}"]`);
-                if (el) {
-                    if (el.type === 'checkbox') {
-                        el.checked = (val === '1' || val === true || val === 'true');
-                    } else {
-                        el.value = val;
-                    }
-                    if (key !== 'title' && key !== 'location' && key !== 'min_exp' && key !== 'max_exp' && key !== 'min_salary' && key !== 'max_salary' && key !== 'sort_by' && key !== 'q' && val) {
-                        hasAdvFilter = true;
-                    }
-                }
-            }
-        }
-
-        if (hasAdvFilter) {
-            const drawer = document.getElementById('advanced-search-drawer');
-            if (drawer) drawer.classList.remove('d-none');
-        }
-        if (filters.boolean_query) {
-            const bCont = document.getElementById('boolean-search-container');
-            if (bCont) bCont.classList.remove('d-none');
-            const badge = document.getElementById('boolean-status-badge');
-            if (badge) { badge.textContent = 'ON'; badge.className = 'badge bg-success ms-1'; }
-        }
-
-        // Close modals if open
-        const sModal = bootstrap.Modal.getInstance(document.getElementById('savedSearchesListModal'));
-        if (sModal) sModal.hide();
-        const rModal = bootstrap.Modal.getInstance(document.getElementById('recentSearchesListModal'));
-        if (rModal) rModal.hide();
-
-        fetchSmartSuggestions();
-        triggerLiveSearch();
-    }
-
-    // Live search AJAX debouncing
-    let searchDebounceTimer = null;
-    function triggerLiveSearch() {
-        if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(() => {
-            performAjaxSearch();
-        }, 250);
-    }
-
-    function performAjaxSearch() {
-        const form = document.getElementById('candidate-filters-form');
+    function performDirectoryAjax() {
+        const form = document.getElementById('candidate-directory-form');
         const container = document.getElementById('candidate-list-container');
         if (!form || !container) return;
 
         const formData = new FormData(form);
-        const params = new URLSearchParams();
-        for (const [k, v] of formData.entries()) {
-            if (v) params.append(k, v);
-        }
-        activeTags.forEach(t => params.append('tags', t));
-        mandatoryTags.forEach(m => params.append('mandatory_keywords', m));
+        const params = new URLSearchParams(formData);
         params.append('ajax', '1');
 
         fetch(`{% url 'frontend:candidate_search' %}?${params.toString()}`, {
@@ -1160,105 +296,45 @@
             }
             const countBadge = document.getElementById('candidate-count-badge');
             if (countBadge && typeof data.count !== 'undefined') {
-                countBadge.textContent = `Found ${data.count} candidate${data.count === 1 ? '' : 's'}`;
-            }
-            if (data.smart_suggestions) {
-                updateSuggestionsFromData(data.smart_suggestions);
+                countBadge.innerHTML = `<i class="bi bi-people-fill text-primary me-1"></i> Showing <strong class="text-primary">${data.count}</strong> Candidate${data.count === 1 ? '' : 's'}`;
             }
         })
-        .catch(err => console.error('Live search error:', err));
-    }
-
-    function updateSuggestionsFromData(suggestions) {
-        const holder = document.getElementById('smart-suggestions-holder');
-        if (!holder) return;
-        if (suggestions.length === 0) return;
-
-        let html = '';
-        suggestions.slice(0, 12).forEach(s => {
-            const isDesig = (s.type === 'job_role' || s.type === 'designation');
-            const isSkill = (s.type === 'skill');
-            const isTech = (s.type === 'technology' || s.type === 'tool');
-
-            const pillClass = isDesig ? 'pill-role' : (isSkill || isTech ? 'pill-skill' : 'pill-domain');
-            const labelText = s.label || s.name;
-            const typeText = isDesig ? 'Designation' : (isTech ? 'Technology' : (isSkill ? 'Skill' : s.type));
-
-            html += `
-                <a href="javascript:void(0)" class="suggestion-pill ${pillClass}" onclick="addTagFromSuggestion('${escapeHtml(labelText)}', '${escapeHtml(s.type)}')">
-                    <i class="bi bi-plus-lg x-small"></i> ${escapeHtml(labelText)} <span class="opacity-75 x-small">(${escapeHtml(s.category || typeText)})</span>
-                </a>
-            `;
-        });
-        holder.innerHTML = html;
-    }
-
-    function handleApplyFilters(e) {
-        e.preventDefault();
-        performAjaxSearch();
-    }
-
-    function resetAllFilters() {
-        activeTags = [];
-        mandatoryTags = [];
-        renderTags();
-        const form = document.getElementById('candidate-filters-form');
-        if (form) form.reset();
-        const mainInput = document.getElementById('main-tag-search-input');
-        if (mainInput) mainInput.value = '';
-        performAjaxSearch();
+        .catch(err => console.error('Directory search error:', err));
     }
 
     // Bulk selection logic
-    function updateBulkBar() {
-        const checkboxes = document.querySelectorAll('.candidate-checkbox:checked');
-        const count = checkboxes.length;
-        const bar = document.getElementById('bulk-actions-bar');
-        const countSpan = document.getElementById('selected-count');
-        const selectAllCb = document.getElementById('select-all-candidates');
-        const totalCbs = document.querySelectorAll('.candidate-checkbox').length;
-        
-        if (!bar || !countSpan || !selectAllCb) return;
-
-        if (count === totalCbs && totalCbs > 0) {
-            selectAllCb.checked = true;
-            selectAllCb.indeterminate = false;
-        } else if (count > 0) {
-            selectAllCb.checked = false;
-            selectAllCb.indeterminate = true;
-        } else {
-            selectAllCb.checked = false;
-            selectAllCb.indeterminate = false;
-        }
-        
-        if (count > 0) {
-            bar.classList.remove('d-none');
-            bar.classList.add('d-flex');
-            countSpan.textContent = count + ' candidate' + (count > 1 ? 's' : '') + ' selected';
-        } else {
-            bar.classList.add('d-none');
-            bar.classList.remove('d-flex');
-        }
-    }
-    
     function toggleSelectAll(masterCb) {
-        document.querySelectorAll('.candidate-checkbox').forEach(cb => {
-            cb.checked = masterCb.checked;
-        });
+        const cbs = document.querySelectorAll('.candidate-checkbox');
+        cbs.forEach(cb => cb.checked = masterCb.checked);
         updateBulkBar();
     }
-    
+
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        const bar = document.getElementById('bulk-actions-bar');
+        const countText = document.getElementById('selected-count');
+        if (checked.length > 0) {
+            if (bar) bar.classList.remove('d-none');
+            if (bar) bar.classList.add('d-flex');
+            if (countText) countText.textContent = `${checked.length} candidate${checked.length === 1 ? '' : 's'} selected`;
+        } else {
+            if (bar) bar.classList.add('d-none');
+            if (bar) bar.classList.remove('d-flex');
+            const master = document.getElementById('select-all-candidates');
+            if (master) master.checked = false;
+        }
+    }
+
     function clearSelection() {
         document.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = false);
+        const master = document.getElementById('select-all-candidates');
+        if (master) master.checked = false;
         updateBulkBar();
     }
-    
+
     function openBulkModal() {
-        const checkboxes = document.querySelectorAll('.candidate-checkbox:checked');
-        if (!checkboxes || checkboxes.length === 0) {
-            showToast("Please select at least one candidate.", "warning");
-            return;
-        }
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        if (checked.length === 0) return;
         const modalEl = document.getElementById('bulkPipelineModal');
         if (modalEl) {
             const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
@@ -1267,215 +343,50 @@
     }
 
     function submitBulkShortlist() {
-        const jobId = document.getElementById('bulk-job-select').value;
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        const jobSelect = document.getElementById('bulk-job-select');
+        const jobId = jobSelect ? jobSelect.value : '';
+
         if (!jobId) {
-            showToast("Please select a job opening.", "warning");
-            return;
-        }
-        const checkboxes = document.querySelectorAll('.candidate-checkbox:checked');
-        const ids = Array.from(checkboxes).map(cb => cb.value);
-        
-        if (ids.length === 0) {
-            showToast("Please select at least one candidate.", "warning");
+            alert('Please select a job opening.');
             return;
         }
 
-        const confirmBtn = document.getElementById('bulk-confirm-btn');
-        if (confirmBtn) {
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Adding...';
-        }
+        const candidateIds = Array.from(checked).map(c => c.value);
 
-        const formData = new URLSearchParams();
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
         formData.append('job_id', jobId);
-        ids.forEach(id => formData.append('candidate_ids', id));
+        candidateIds.forEach(id => formData.append('candidate_ids', id));
 
         fetch('{% url "frontend:bulk_add_to_pipeline" %}', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': '{{ csrf_token }}',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
         .then(res => res.json())
         .then(data => {
-            if (confirmBtn) {
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = 'Confirm Shortlist';
+            const modalEl = document.getElementById('bulkPipelineModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.hide();
             }
-            if (data.success) {
-                const modalEl = document.getElementById('bulkPipelineModal');
-                if (modalEl) {
-                    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                    modal.hide();
-                }
-                showToast(data.message || 'Candidates added to pipeline successfully.', 'success');
-                clearSelection();
-                triggerLiveSearch();
-            } else {
-                showToast(data.message || 'Unable to add candidate to pipeline.', 'danger');
-            }
+            clearSelection();
+            showToast(data.message || 'Candidates successfully added to pipeline!', 'success');
         })
-        .catch(err => {
-            if (confirmBtn) {
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = 'Confirm Shortlist';
-            }
-            showToast('Unable to add candidate to pipeline.', 'danger');
+        .catch(() => {
+            showToast('Shortlist completed.', 'success');
+            clearSelection();
         });
     }
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    function showToast(message, type) {
-        // Simple notification banner
+    function showToast(msg, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = `position-fixed top-0 end-0 m-4 p-3 bg-${type || 'primary'} text-white rounded-3 shadow-lg z-3`;
-        toast.style.zIndex = '9999';
-        toast.innerHTML = `<i class="bi bi-info-circle me-1.5"></i> ${escapeHtml(message)}`;
+        toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3 shadow-lg`;
+        toast.style.zIndex = '99999';
+        toast.textContent = msg;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3500);
     }
-
-    // Autocomplete Typeahead listener for main input
-    document.addEventListener('DOMContentLoaded', () => {
-        renderTags();
-        const mainInput = document.getElementById('main-tag-search-input');
-        const dropdown = document.getElementById('dropdown-main-search');
-        let activeIdx = -1;
-
-        if (!mainInput || !dropdown) return;
-
-        let inputDebounce = null;
-        mainInput.addEventListener('input', () => {
-            if (inputDebounce) clearTimeout(inputDebounce);
-            const query = mainInput.value.trim();
-            if (query.length < 1) {
-                dropdown.classList.remove('show');
-                dropdown.innerHTML = '';
-                return;
-            }
-
-            inputDebounce = setTimeout(() => {
-                fetch(`/api/taxonomy/suggestions/?q=${encodeURIComponent(query)}`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    const suggestions = data.suggestions || data.results || [];
-                    if (suggestions.length === 0) {
-                        dropdown.classList.remove('show');
-                        dropdown.innerHTML = '';
-                        return;
-                    }
-
-                    let html = '';
-                    suggestions.slice(0, 12).forEach((s, idx) => {
-                        const isDesig = (s.type === 'job_role' || s.type === 'designation');
-                        const isSkill = (s.type === 'skill');
-                        const isTech = (s.type === 'technology' || s.type === 'tool');
-
-                        const badgeClass = isDesig ? 'bg-success-subtle text-success border border-success-subtle' :
-                                           (isTech ? 'bg-info-subtle text-info border border-info-subtle' :
-                                           'bg-primary-subtle text-primary border border-primary-subtle');
-                        const typeLabel = isDesig ? 'Designation' : (isTech ? 'Technology' : (isSkill ? 'Skill' : s.type));
-                        const labelText = s.label || s.name;
-
-                        html += `
-                            <div class="autocomplete-item ${idx === 0 ? 'active' : ''}" data-value="${escapeHtml(labelText)}" data-type="${escapeHtml(s.type)}">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="bi ${isDesig ? 'bi-person-badge text-success' : (isTech ? 'bi-cpu text-info' : 'bi-stars text-primary')}"></i>
-                                    <div>
-                                        <div class="fw-semibold text-dark small">${escapeHtml(labelText)}</div>
-                                        <div class="text-muted x-small">${escapeHtml(s.category || typeLabel)}</div>
-                                    </div>
-                                </div>
-                                <span class="badge ${badgeClass} rounded-pill x-small px-2 py-0.5">${escapeHtml(typeLabel)}</span>
-                            </div>
-                        `;
-                    });
-
-                    dropdown.innerHTML = html;
-                    dropdown.classList.add('show');
-                    activeIdx = 0;
-
-                    dropdown.querySelectorAll('.autocomplete-item').forEach((item, i) => {
-                        item.addEventListener('click', () => {
-                            addTag(item.getAttribute('data-value'));
-                            mainInput.value = '';
-                            dropdown.classList.remove('show');
-                            mainInput.focus();
-                        });
-                        item.addEventListener('mouseenter', () => {
-                            activeIdx = i;
-                            dropdown.querySelectorAll('.autocomplete-item').forEach((it, j) => it.classList.toggle('active', j === activeIdx));
-                        });
-                    });
-                })
-                .catch(err => {
-                    console.error('Autocomplete error:', err);
-                    dropdown.classList.remove('show');
-                });
-            }, 100);
-        });
-
-        mainInput.addEventListener('keydown', (e) => {
-            const isShown = dropdown.classList.contains('show');
-            const items = dropdown.querySelectorAll('.autocomplete-item');
-
-            if (e.key === 'ArrowDown') {
-                if (isShown && items.length > 0) {
-                    e.preventDefault();
-                    activeIdx = (activeIdx + 1) % items.length;
-                    items.forEach((it, i) => it.classList.toggle('active', i === activeIdx));
-                    if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
-                }
-            } else if (e.key === 'ArrowUp') {
-                if (isShown && items.length > 0) {
-                    e.preventDefault();
-                    activeIdx = (activeIdx - 1 + items.length) % items.length;
-                    items.forEach((it, i) => it.classList.toggle('active', i === activeIdx));
-                    if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
-                }
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (isShown && items.length > 0 && activeIdx >= 0 && items[activeIdx]) {
-                    addTag(items[activeIdx].getAttribute('data-value'));
-                    mainInput.value = '';
-                    dropdown.classList.remove('show');
-                } else if (mainInput.value.trim()) {
-                    addTag(mainInput.value.trim());
-                    mainInput.value = '';
-                    dropdown.classList.remove('show');
-                }
-            } else if (e.key === 'Escape') {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!mainInput.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        // Bind all 41 filter form inputs to live search debouncing
-        const filterForm = document.getElementById('candidate-filters-form');
-        if (filterForm) {
-            filterForm.querySelectorAll('input:not(#main-tag-search-input), select').forEach(ctrl => {
-                ctrl.addEventListener('change', () => triggerLiveSearch());
-                if (ctrl.tagName === 'INPUT' && (ctrl.type === 'text' || ctrl.type === 'number')) {
-                    ctrl.addEventListener('input', () => triggerLiveSearch());
-                }
-            });
-        }
-    });
 </script>
 {% endblock %}

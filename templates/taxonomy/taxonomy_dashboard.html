@@ -1,0 +1,1062 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Taxonomy &amp; Tagging Management | TalentVault{% endblock %}
+
+{% block extra_css %}
+<style>
+    .taxonomy-header-bg {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-radius: 16px;
+        color: #ffffff;
+        padding: 1.5rem 1.75rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 20px rgba(15, 23, 42, 0.12);
+    }
+    .taxonomy-tabs-nav {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: none;
+    }
+    .taxonomy-tabs-nav::-webkit-scrollbar {
+        display: none;
+    }
+    .taxonomy-tab-link {
+        color: var(--slate-600);
+        padding: 8px 14px;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        background: #ffffff;
+        border: 1px solid var(--slate-200);
+    }
+    .taxonomy-tab-link:hover {
+        background: var(--slate-100);
+        color: var(--slate-900);
+        border-color: var(--slate-300);
+        transform: translateY(-1px);
+    }
+    .taxonomy-tab-link.active {
+        background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+        color: #ffffff !important;
+        border-color: #60a5fa;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+    }
+    .taxonomy-tab-link.active .badge {
+        background: rgba(255, 255, 255, 0.25) !important;
+        color: #ffffff !important;
+    }
+    .tree-node {
+        border-left: 2px solid var(--slate-300);
+        padding-left: 14px;
+        margin-left: 8px;
+        margin-bottom: 8px;
+    }
+    .tree-node-item {
+        background: #ffffff;
+        border: 1px solid var(--slate-200);
+        border-radius: 8px;
+        padding: 8px 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.15s ease;
+    }
+    .tree-node-item:hover {
+        border-color: var(--primary-color);
+        background-color: var(--primary-light);
+    }
+    .kpi-card {
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 1rem 1.15rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px -2px rgba(15, 23, 42, 0.08);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Taxonomy Dashboard Header Banner -->
+<div class="taxonomy-header-bg shadow-sm">
+    <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1.5 flex-wrap">
+                <span class="workspace-badge"><i class="bi bi-diagram-3 me-1"></i>TV-URT Ontological Engine</span>
+                <span class="small fw-medium text-slate-300">Normalized Recruitment Classification System</span>
+            </div>
+            <h3 class="workspace-title text-white"><i class="bi bi-tags-fill text-primary"></i>Taxonomy &amp; Tagging</h3>
+            <p class="text-slate-300 small m-0 mt-1">Manage normalized job titles, skills, synonyms, multi-domain hierarchies, and recruitment ontology graphs.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1.5 px-3 shadow-xs" data-bs-toggle="modal" data-bs-target="#addEntityModal">
+                <i class="bi bi-plus-lg"></i> Add Entity
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#addAliasModal">
+                <i class="bi bi-arrow-left-right"></i> Add Synonym
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#addRelationshipModal">
+                <i class="bi bi-share"></i> Add Relation
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-three-dots-vertical"></i> Actions
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0">
+                    <li><a class="dropdown-item" href="javascript:void(0)" data-bs-toggle="modal" data-bs-target="#mergeEntityModal"><i class="bi bi-intersect me-2 text-warning"></i> Merge Entities</a></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" data-bs-toggle="modal" data-bs-target="#importTaxonomyModal"><i class="bi bi-file-earmark-arrow-up me-2 text-primary"></i> Import Taxonomy (CSV/JSON)</a></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" data-bs-toggle="modal" data-bs-target="#exportTaxonomyModal"><i class="bi bi-file-earmark-arrow-down me-2 text-success"></i> Export Taxonomy</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="POST" action="{% url 'taxonomy:taxonomy_seed' %}" onsubmit="return confirm('Seed / update the core multi-domain taxonomy across 50+ sectors?');" class="m-0">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item text-primary fw-semibold"><i class="bi bi-lightning-charge-fill me-2"></i> Seed Base Taxonomy</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Messages / Alerts -->
+{% if messages %}
+<div class="mb-4">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-2 shadow-xs" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Summary KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="kpi-card">
+            <span class="x-small text-muted fw-bold text-uppercase d-block mb-1">Total Tags</span>
+            <h4 class="fw-bold m-0 text-primary">{{ stats.total_tags }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="kpi-card">
+            <span class="x-small text-muted fw-bold text-uppercase d-block mb-1">Job Titles</span>
+            <h4 class="fw-bold m-0 text-dark">{{ stats.total_roles }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="kpi-card">
+            <span class="x-small text-muted fw-bold text-uppercase d-block mb-1">Skills &amp; Tech</span>
+            <h4 class="fw-bold m-0 text-success">{{ stats.total_skills|add:stats.total_technologies }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="kpi-card">
+            <span class="x-small text-muted fw-bold text-uppercase d-block mb-1">Industries &amp; Depts</span>
+            <h4 class="fw-bold m-0 text-info">{{ stats.total_industries|add:stats.total_departments }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="kpi-card">
+            <span class="x-small text-muted fw-bold text-uppercase d-block mb-1">Synonyms &amp; Aliases</span>
+            <h4 class="fw-bold m-0 text-warning">{{ stats.total_aliases }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="kpi-card">
+            <span class="x-small text-muted fw-bold text-uppercase d-block mb-1">Ontology Links</span>
+            <h4 class="fw-bold m-0 text-purple-600" style="color: #9333ea;">{{ stats.total_relations }}</h4>
+        </div>
+    </div>
+</div>
+
+<!-- Main Taxonomy Category Tabs Navigation -->
+<div class="taxonomy-tabs-nav mb-4">
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=roles" class="taxonomy-tab-link {% if current_tab == 'roles' %}active{% endif %}">
+        <i class="bi bi-briefcase-fill"></i> Job Titles &amp; Roles <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_roles }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=skills" class="taxonomy-tab-link {% if current_tab == 'skills' %}active{% endif %}">
+        <i class="bi bi-stars"></i> Skills <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_skills }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=technologies" class="taxonomy-tab-link {% if current_tab == 'technologies' %}active{% endif %}">
+        <i class="bi bi-cpu-fill"></i> Technologies <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_technologies }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=tools" class="taxonomy-tab-link {% if current_tab == 'tools' %}active{% endif %}">
+        <i class="bi bi-tools"></i> Tools &amp; Platforms <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_tools }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=departments" class="taxonomy-tab-link {% if current_tab == 'departments' %}active{% endif %}">
+        <i class="bi bi-diagram-3-fill"></i> Departments <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_departments }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=industries" class="taxonomy-tab-link {% if current_tab == 'industries' %}active{% endif %}">
+        <i class="bi bi-building-fill"></i> Industries <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_industries }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=specializations" class="taxonomy-tab-link {% if current_tab == 'specializations' %}active{% endif %}">
+        <i class="bi bi-bullseye"></i> Specializations <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_specializations }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=qualifications" class="taxonomy-tab-link {% if current_tab == 'qualifications' %}active{% endif %}">
+        <i class="bi bi-mortarboard-fill"></i> Education &amp; Degrees <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_qualifications }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=certifications" class="taxonomy-tab-link {% if current_tab == 'certifications' %}active{% endif %}">
+        <i class="bi bi-patch-check-fill"></i> Certifications <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_certifications }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=aliases" class="taxonomy-tab-link {% if current_tab == 'aliases' %}active{% endif %}">
+        <i class="bi bi-arrow-left-right"></i> Synonyms &amp; Aliases <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_aliases }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=relations" class="taxonomy-tab-link {% if current_tab == 'relations' %}active{% endif %}">
+        <i class="bi bi-share-fill"></i> Relationships <span class="badge bg-secondary bg-opacity-10 text-dark ms-1">{{ stats.total_relations }}</span>
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=tree" class="taxonomy-tab-link {% if current_tab == 'tree' %}active{% endif %}">
+        <i class="bi bi-folder-symlink-fill"></i> Visual Tree View
+    </a>
+    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab=logs" class="taxonomy-tab-link {% if current_tab == 'logs' %}active{% endif %}">
+        <i class="bi bi-journal-text"></i> Audit Logs
+    </a>
+</div>
+
+{% if current_tab == 'tree' %}
+<!-- =========================================================================
+     TAB: INTERACTIVE VISUAL TREE VIEW
+     ========================================================================= -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-dark"><i class="bi bi-diagram-3 me-2 text-primary"></i>Hierarchical Role &amp; Career Ladder Graph</span>
+        <button type="button" class="btn btn-xs btn-outline-primary" onclick="loadVisualTreeData()"><i class="bi bi-arrow-clockwise"></i> Refresh Tree</button>
+    </div>
+    <div class="card-body p-4" id="taxonomy-tree-container">
+        <div class="d-flex align-items-center justify-content-center py-5">
+            <div class="spinner-border text-primary me-2" role="status"></div>
+            <span class="text-secondary small">Loading interactive taxonomy tree...</span>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- =========================================================================
+     STANDARD DATA TABLE VIEW
+     ========================================================================= -->
+
+<!-- Search & Filtering Bar -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-3">
+        <form method="GET" class="row g-2 align-items-center">
+            <input type="hidden" name="tab" value="{{ current_tab }}">
+
+            <div class="col-md-5 col-12">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search {{ current_config.title }}..." value="{{ query }}">
+                </div>
+            </div>
+
+            <div class="col-md-2 col-6">
+                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="ALL" {% if status_filter == 'ALL' %}selected{% endif %}>Status: All</option>
+                    <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>Active</option>
+                    <option value="INACTIVE" {% if status_filter == 'INACTIVE' %}selected{% endif %}>Inactive</option>
+                    <option value="DEPRECATED" {% if status_filter == 'DEPRECATED' %}selected{% endif %}>Deprecated</option>
+                </select>
+            </div>
+
+            {% if current_tab == 'roles' %}
+            <div class="col-md-3 col-6">
+                <select name="industry" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">Industry: All Sectors</option>
+                    {% for ind in industries_list %}
+                        <option value="{{ ind.id }}" {% if industry_filter == ind.id|stringformat:"s" %}selected{% endif %}>{{ ind.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-2 col-12 d-flex gap-1.5 justify-content-end">
+                <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-funnel-fill me-1"></i>Filter</button>
+                {% if query or status_filter != 'ALL' or industry_filter %}
+                    <a href="{% url 'taxonomy:taxonomy_dashboard' %}?tab={{ current_tab }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-dark">
+            <i class="bi {{ current_config.icon }} me-2 text-primary"></i>
+            {{ current_config.title }}
+        </span>
+        <span class="badge bg-light text-secondary border small">Total in view: {{ items|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4 py-3 small text-uppercase fw-bold">Name &amp; Canonical</th>
+                        {% if current_tab == 'roles' %}
+                            <th class="py-3 small text-uppercase fw-bold">Seniority &amp; Exp</th>
+                            <th class="py-3 small text-uppercase fw-bold">Department / Industry</th>
+                            <th class="py-3 small text-uppercase fw-bold">Aliases</th>
+                        {% elif current_tab == 'skills' %}
+                            <th class="py-3 small text-uppercase fw-bold">Skill Category</th>
+                            <th class="py-3 small text-uppercase fw-bold">Type</th>
+                            <th class="py-3 small text-uppercase fw-bold">Popularity</th>
+                        {% elif current_tab == 'technologies' %}
+                            <th class="py-3 small text-uppercase fw-bold">Tech Category</th>
+                            <th class="py-3 small text-uppercase fw-bold">Vendor</th>
+                        {% elif current_tab == 'aliases' %}
+                            <th class="py-3 small text-uppercase fw-bold">Target Canonical</th>
+                            <th class="py-3 small text-uppercase fw-bold">Entity Type</th>
+                            <th class="py-3 small text-uppercase fw-bold">Alias Type</th>
+                            <th class="py-3 small text-uppercase fw-bold">Confidence</th>
+                        {% elif current_tab == 'relations' %}
+                            <th class="py-3 small text-uppercase fw-bold">Target Role</th>
+                            <th class="py-3 small text-uppercase fw-bold">Relation Type</th>
+                            <th class="py-3 small text-uppercase fw-bold">Weight / Strength</th>
+                        {% elif current_tab == 'logs' %}
+                            <th class="py-3 small text-uppercase fw-bold">File / Source</th>
+                            <th class="py-3 small text-uppercase fw-bold">Created</th>
+                            <th class="py-3 small text-uppercase fw-bold">Skipped</th>
+                        {% endif %}
+                        <th class="py-3 small text-uppercase fw-bold">Status</th>
+                        <th class="pe-4 py-3 text-end small text-uppercase fw-bold">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">
+                                <a href="javascript:void(0)" onclick="openTaxonomyDrawer('{{ current_config.type_code }}', '{{ item.id }}')" class="text-decoration-none text-dark hover-primary">
+                                    {% if current_tab == 'aliases' %}{{ item.alias }}{% elif current_tab == 'logs' %}{{ item.source_name }}{% elif item.canonical_name %}{{ item.canonical_name }}{% else %}{{ item.name }}{% endif %}
+                                </a>
+                            </div>
+                            <span class="text-secondary x-small font-monospace">{% if current_tab == 'aliases' %}{{ item.normalized_alias }}{% elif item.normalized_name %}{{ item.normalized_name }}{% elif item.slug %}{{ item.slug }}{% endif %}</span>
+                        </td>
+
+                        {% if current_tab == 'roles' %}
+                            <td>
+                                <span class="badge bg-light text-dark border small">{{ item.get_seniority_display }}</span>
+                                <div class="x-small text-muted">{{ item.get_typical_experience_display }}</div>
+                            </td>
+                            <td>
+                                <div class="small fw-medium text-dark">{{ item.department.name|default:"General Department" }}</div>
+                                <div class="x-small text-muted">{{ item.industry.name|default:"Universal Sector" }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill x-small px-2 py-0.5">
+                                    {{ item.aliases.count }} Aliases
+                                </span>
+                            </td>
+                        {% elif current_tab == 'skills' %}
+                            <td>
+                                <span class="badge bg-light text-dark border small">{{ item.category.name|default:"General" }}</span>
+                            </td>
+                            <td>
+                                <span class="small text-secondary">{{ item.get_skill_type_display }}</span>
+                            </td>
+                            <td>
+                                {% if item.is_popular %}<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill x-small">Popular</span>{% else %}<span class="text-muted x-small">Standard</span>{% endif %}
+                            </td>
+                        {% elif current_tab == 'technologies' %}
+                            <td>
+                                <span class="badge bg-info-subtle text-info border border-info-subtle small">{{ item.get_tech_category_display }}</span>
+                            </td>
+                            <td>
+                                <span class="small text-secondary">{{ item.vendor|default:"Open Source" }}</span>
+                            </td>
+                        {% elif current_tab == 'aliases' %}
+                            <td>
+                                <div class="fw-semibold text-primary small">{{ item.canonical_name }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border small">{{ item.get_entity_type_display }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary-subtle text-secondary small">{{ item.get_alias_type_display }}</span>
+                            </td>
+                            <td>
+                                <span class="fw-bold small">{{ item.confidence|floatformat:2 }}</span>
+                            </td>
+                        {% elif current_tab == 'relations' %}
+                            <td>
+                                <div class="fw-semibold text-primary small">{{ item.target_role.canonical_name }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border small">{{ item.get_relation_type_display }}</span>
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 6px; width: 80px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width: {{ item.weight|floatformat:2|slice:'2:' }}0%;"></div>
+                                </div>
+                                <span class="x-small text-muted">{{ item.weight }}</span>
+                            </td>
+                        {% elif current_tab == 'logs' %}
+                            <td>
+                                <div class="small text-dark">{{ item.file_name|default:item.source_name }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-success-subtle text-success small">+{{ item.records_created }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-secondary border small">{{ item.duplicates_skipped }} skipped</span>
+                            </td>
+                        {% endif %}
+
+                        <td>
+                            {% if item.status == 'ACTIVE' %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill small">Active</span>
+                            {% elif item.status == 'INACTIVE' %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2.5 py-1 rounded-pill small">Inactive</span>
+                            {% elif item.status == 'DEPRECATED' %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1 rounded-pill small">Deprecated</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark border px-2 py-1 small">{{ item.status|default:"Active" }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="pe-4 text-end">
+                            <div class="d-inline-flex gap-1">
+                                <button type="button" class="btn btn-xs btn-outline-primary" onclick="openTaxonomyDrawer('{{ current_config.type_code }}', '{{ item.id }}')" title="View Details Drawer">
+                                    <i class="bi bi-eye"></i> Details
+                                </button>
+                                <form method="POST" action="{% url 'taxonomy:taxonomy_entity_toggle_status' current_config.type_code item.id %}" class="d-inline m-0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs btn-outline-secondary" title="Toggle Status">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </form>
+                                <form method="POST" action="{% url 'taxonomy:taxonomy_entity_delete' current_config.type_code item.id %}" class="d-inline m-0" onsubmit="return confirm('Deactivate/Delete this taxonomy entry?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs btn-outline-danger" title="Deactivate">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-secondary">
+                            <i class="bi bi-tags fs-2 d-block mb-2 text-muted"></i>
+                            No taxonomy records found for this category or filter.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav class="mt-4 pb-4">
+    <ul class="pagination justify-content-center pagination-sm">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+        </li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+            {% if page_obj.number == i %}
+            <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+            {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ i }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ i }}</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endif %}
+
+<!-- =========================================================================
+     SLIDE-OVER TAG DETAILS DRAWER (Offcanvas)
+     ========================================================================= -->
+<div class="offcanvas offcanvas-end shadow-lg" tabindex="-1" id="taxonomyDetailsDrawer" style="width: 420px; max-width: 90vw;">
+    <div class="offcanvas-header bg-light border-bottom">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-tag-fill text-primary fs-5"></i>
+            <h5 class="offcanvas-title fw-bold text-dark m-0" id="drawer-entity-name">Taxonomy Entity</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-4" id="drawer-content-body">
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: ADD NEW TAXONOMY ENTITY
+     ========================================================================= -->
+<div class="modal fade" id="addEntityModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-plus-circle-fill text-primary me-2"></i>Add Taxonomy Entity</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{% url 'taxonomy:taxonomy_entity_create' %}" id="add-entity-form">
+        {% csrf_token %}
+        <div class="modal-body text-dark">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Taxonomy Category</label>
+                    <select name="entity_type" id="modal-entity-type-select" class="form-select" onchange="toggleModalFields(this.value)">
+                        <option value="job_role" {% if current_tab == 'roles' %}selected{% endif %}>Job Title / Designation</option>
+                        <option value="skill" {% if current_tab == 'skills' %}selected{% endif %}>Skill / Competency</option>
+                        <option value="technology" {% if current_tab == 'technologies' %}selected{% endif %}>Technology / Stack</option>
+                        <option value="tool" {% if current_tab == 'tools' %}selected{% endif %}>Tool / Platform</option>
+                        <option value="department" {% if current_tab == 'departments' %}selected{% endif %}>Department / Division</option>
+                        <option value="industry" {% if current_tab == 'industries' %}selected{% endif %}>Industry / Sector</option>
+                        <option value="qualification" {% if current_tab == 'qualifications' %}selected{% endif %}>Education / Degree</option>
+                        <option value="certification" {% if current_tab == 'certifications' %}selected{% endif %}>Certification</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Entity Name (Canonical)</label>
+                    <input type="text" name="name" id="modal-entity-name" class="form-control" placeholder="e.g. Area Sales Manager, Python, React..." required onkeyup="checkDuplicateEntity(this.value)">
+                    <div id="duplicate-warning-box" class="x-small text-danger mt-1 d-none"></div>
+                </div>
+
+                <!-- Job Role Specific Fields -->
+                <div class="col-md-6 role-specific-field">
+                    <label class="form-label small fw-bold">Seniority Level</label>
+                    <select name="seniority" class="form-select">
+                        <option value="ENTRY">Entry-Level / Fresher</option>
+                        <option value="JUNIOR">Junior / Associate / Officer</option>
+                        <option value="MID" selected>Mid-Level / Specialist / Executive</option>
+                        <option value="SENIOR">Senior / Lead / Principal</option>
+                        <option value="MANAGER">Manager / Deputy Manager</option>
+                        <option value="DIRECTOR">Director / Head / VP</option>
+                        <option value="EXECUTIVE">CXO / President</option>
+                    </select>
+                </div>
+                <div class="col-md-6 role-specific-field">
+                    <label class="form-label small fw-bold">Department</label>
+                    <select name="department_id" class="form-select">
+                        <option value="">-- Universal Department --</option>
+                        {% for d in departments_list %}
+                            <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 role-specific-field">
+                    <label class="form-label small fw-bold">Industry Sector</label>
+                    <select name="industry_id" class="form-select">
+                        <option value="">-- Multi-Industry / Cross-Sector --</option>
+                        {% for ind in industries_list %}
+                            <option value="{{ ind.id }}">{{ ind.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 role-specific-field">
+                    <label class="form-label small fw-bold">Parent Role Hierarchy (Optional)</label>
+                    <select name="parent_role_id" class="form-select">
+                        <option value="">-- No Direct Parent --</option>
+                        {% for jr in job_roles_dropdown %}
+                            <option value="{{ jr.id }}">{{ jr.canonical_name }} ({{ jr.get_seniority_display }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Synonyms &amp; Aliases (Comma Separated)</label>
+                    <input type="text" name="aliases" class="form-control" placeholder="e.g. ASM, Territory Sales Lead, Regional Head">
+                    <div class="form-text x-small">These will automatically be registered in the synonym normalization engine.</div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Description / Scope Notes</label>
+                    <textarea name="description" class="form-control" rows="2" placeholder="Standard occupational duties, skills, or ontology notes..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Create Entity</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: ADD SYNONYM / ALIAS
+     ========================================================================= -->
+<div class="modal fade" id="addAliasModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-arrow-left-right text-warning me-2"></i>Map Synonym / Alias</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{% url 'taxonomy:taxonomy_alias_create' %}">
+        {% csrf_token %}
+        <div class="modal-body text-dark">
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Original Term / Alias / Abbreviation</label>
+                <input type="text" name="alias" class="form-control" placeholder="e.g. SDE, BDE, Sales Exec, ReactJS" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Target Canonical Name</label>
+                <input type="text" name="canonical_name" class="form-control" placeholder="e.g. Software Engineer, Business Development Executive" required>
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label small fw-bold">Entity Type</label>
+                    <select name="entity_type" class="form-select">
+                        <option value="JOB_ROLE">Job Role / Designation</option>
+                        <option value="SKILL">Skill</option>
+                        <option value="TECHNOLOGY">Technology</option>
+                        <option value="TOOL">Tool</option>
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-bold">Alias Type</label>
+                    <select name="alias_type" class="form-select">
+                        <option value="ABBREVIATION">Abbreviation (SDE, BDE)</option>
+                        <option value="SYNONYM" selected>Synonym / Equivalent</option>
+                        <option value="ACRONYM">Acronym (ASM, BDM)</option>
+                        <option value="SPELLING_VARIANT">Spelling Variant</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Matching Confidence (0.50 - 1.00)</label>
+                <input type="number" step="0.05" min="0.5" max="1.0" name="confidence" class="form-control" value="0.95">
+            </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Create Alias</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: ADD RELATIONSHIP
+     ========================================================================= -->
+<div class="modal fade" id="addRelationshipModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-share text-primary me-2"></i>Create Ontology Relationship</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{% url 'taxonomy:taxonomy_relationship_create' %}">
+        {% csrf_token %}
+        <div class="modal-body text-dark">
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Relationship Category</label>
+                <select name="relationship_category" class="form-select" onchange="toggleRelCategory(this.value)">
+                    <option value="role_to_role">Role <-> Role (Hierarchy, Equivalent, Related)</option>
+                    <option value="role_to_skill">Role <-> Skill / Technology Mapping</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Source Job Role</label>
+                <select name="source_role_id" class="form-select" required>
+                    <option value="">-- Choose Source Role --</option>
+                    {% for jr in job_roles_dropdown %}
+                        <option value="{{ jr.id }}">{{ jr.canonical_name }} ({{ jr.get_seniority_display }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="target-role-group" class="mb-3">
+                <label class="form-label small fw-bold">Target Job Role</label>
+                <select name="target_role_id" class="form-select">
+                    <option value="">-- Choose Target Role --</option>
+                    {% for jr in job_roles_dropdown %}
+                        <option value="{{ jr.id }}">{{ jr.canonical_name }}</option>
+                    {% endfor %}
+                </select>
+                <label class="form-label small fw-bold mt-2">Relation Type</label>
+                <select name="relation_type" class="form-select">
+                    <option value="PARENT_ROLE">Parent / Senior Role</option>
+                    <option value="CHILD_ROLE">Child / Subordinate Role</option>
+                    <option value="RELATED_ROLE" selected>Related Functional Role</option>
+                    <option value="FUNCTIONAL_EQUIVALENT">Functional Equivalent</option>
+                    <option value="ADJACENT_ROLE">Adjacent Career Role</option>
+                </select>
+            </div>
+            <div id="target-skill-group" class="mb-3 d-none">
+                <label class="form-label small fw-bold">Target Skill / Tech Name</label>
+                <input type="text" name="skill_name" class="form-control" placeholder="e.g. Lead Generation, Python, CRM">
+                <label class="form-label small fw-bold mt-2">Skill Relation Type</label>
+                <select name="skill_relation_type" class="form-select">
+                    <option value="PRIMARY_SKILL">Primary / Core Skill</option>
+                    <option value="SECONDARY_SKILL">Secondary Skill</option>
+                    <option value="MANDATORY">Mandatory Skill</option>
+                    <option value="DOMAIN_SKILL">Domain Competency</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Relationship Weight (0.1 - 1.0)</label>
+                <input type="number" step="0.05" min="0.1" max="1.0" name="weight" class="form-control" value="0.85">
+            </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Create Relationship</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: MERGE ENTITIES
+     ========================================================================= -->
+<div class="modal fade" id="mergeEntityModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-intersect text-warning me-2"></i>Merge Duplicate Entities</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{% url 'taxonomy:taxonomy_merge' %}" onsubmit="return confirm('Are you sure you want to merge these entities? Source will become an alias of Target.');">
+        {% csrf_token %}
+        <div class="modal-body text-dark">
+            <p class="small text-secondary mb-3">Consolidate spelling variants or duplicates. The source entity's aliases and skill relations will be automatically transferred to the target canonical entity.</p>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Entity Category</label>
+                <select name="entity_type" class="form-select">
+                    <option value="job_role">Job Titles / Roles</option>
+                    <option value="skill">Skills</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Source Entity (Duplicate / To be merged)</label>
+                <select name="source_entity_id" class="form-select" required>
+                    <option value="">-- Choose Source Entity --</option>
+                    {% for jr in job_roles_dropdown %}
+                        <option value="{{ jr.id }}">{{ jr.canonical_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Target Canonical Entity (Will remain active)</label>
+                <select name="target_entity_id" class="form-select" required>
+                    <option value="">-- Choose Target Canonical --</option>
+                    {% for jr in job_roles_dropdown %}
+                        <option value="{{ jr.id }}">{{ jr.canonical_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning btn-sm px-4 fw-semibold">Confirm Merge</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: BULK IMPORT TAXONOMY
+     ========================================================================= -->
+<div class="modal fade" id="importTaxonomyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-arrow-up text-primary me-2"></i>Bulk Import Taxonomy</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{% url 'taxonomy:taxonomy_import' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-body text-dark">
+            <p class="small text-secondary mb-3">Upload standard CSV or JSON taxonomy files with headers: <code>category, name, canonical_name, aliases, seniority, department</code>.</p>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Select File (CSV or JSON)</label>
+                <input type="file" name="taxonomy_file" class="form-control" accept=".csv,.json,.txt" required>
+            </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Upload &amp; Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: BULK EXPORT TAXONOMY
+     ========================================================================= -->
+<div class="modal fade" id="exportTaxonomyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-arrow-down text-success me-2"></i>Export Taxonomy</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="GET" action="{% url 'taxonomy:taxonomy_export' %}">
+        <div class="modal-body text-dark">
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Select Category</label>
+                <select name="category" class="form-select">
+                    <option value="roles">Job Titles &amp; Roles</option>
+                    <option value="skills">Skills</option>
+                    <option value="technologies">Technologies</option>
+                    <option value="tools">Tools</option>
+                    <option value="departments">Departments</option>
+                    <option value="industries">Industries</option>
+                    <option value="aliases">Synonyms &amp; Aliases</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Export Format</label>
+                <select name="format" class="form-select">
+                    <option value="csv" selected>CSV (Spreadsheet Format)</option>
+                    <option value="json">JSON (Structured Data)</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm px-4">Download Export</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+    // Slide-over Drawer Opener
+    function openTaxonomyDrawer(entityType, entityId) {
+        const drawerEl = document.getElementById('taxonomyDetailsDrawer');
+        const nameHeader = document.getElementById('drawer-entity-name');
+        const bodyContent = document.getElementById('drawer-content-body');
+        if (!drawerEl) return;
+
+        const offcanvas = bootstrap.Offcanvas.getInstance(drawerEl) || new bootstrap.Offcanvas(drawerEl);
+        offcanvas.show();
+
+        bodyContent.innerHTML = '<div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+
+        fetch(`/taxonomy/entities/${entityType}/${entityId}/detail-json/`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            nameHeader.textContent = data.name;
+            let html = `
+                <div class="d-flex flex-column gap-3">
+                    <div>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill x-small px-2.5 py-1">${data.entity_type}</span>
+                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary'} rounded-pill x-small px-2.5 py-1 ms-1">${data.status}</span>
+                    </div>
+                    
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="x-small text-muted fw-semibold mb-1">CANONICAL IDENTIFIER</div>
+                        <div class="fw-bold text-dark">${escapeHtml(data.name)}</div>
+                        <div class="x-small text-muted font-monospace mt-0.5">${escapeHtml(data.normalized_name)}</div>
+                    </div>
+            `;
+
+            if (data.industry) {
+                html += `
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <span class="x-small text-muted d-block">Industry</span>
+                            <span class="small fw-semibold text-dark">${escapeHtml(data.industry)}</span>
+                        </div>
+                        <div class="col-6">
+                            <span class="x-small text-muted d-block">Department</span>
+                            <span class="small fw-semibold text-dark">${escapeHtml(data.department || 'N/A')}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (data.aliases && data.aliases.length > 0) {
+                html += `
+                    <div>
+                        <label class="x-small text-muted fw-bold text-uppercase d-block mb-1.5"><i class="bi bi-arrow-left-right me-1"></i> Synonyms &amp; Aliases (${data.aliases.length})</label>
+                        <div class="d-flex flex-wrap gap-1.5">
+                `;
+                data.aliases.forEach(a => {
+                    html += `<span class="badge bg-white text-dark border rounded-pill x-small px-2.5 py-1">${escapeHtml(a.alias)} <span class="opacity-50">(${a.type})</span></span>`;
+                });
+                html += `</div></div>`;
+            }
+
+            if (data.related_skills && data.related_skills.length > 0) {
+                html += `
+                    <div>
+                        <label class="x-small text-muted fw-bold text-uppercase d-block mb-1.5"><i class="bi bi-stars me-1 text-primary"></i> Mapped Skills &amp; Tech (${data.related_skills.length})</label>
+                        <div class="d-flex flex-wrap gap-1.5">
+                `;
+                data.related_skills.forEach(s => {
+                    html += `<span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill x-small px-2.5 py-1">${escapeHtml(s.name)}</span>`;
+                });
+                html += `</div></div>`;
+            }
+
+            if (data.related_roles && data.related_roles.length > 0) {
+                html += `
+                    <div>
+                        <label class="x-small text-muted fw-bold text-uppercase d-block mb-1.5"><i class="bi bi-share me-1 text-info"></i> Related Roles (${data.related_roles.length})</label>
+                        <div class="d-flex flex-column gap-1">
+                `;
+                data.related_roles.forEach(r => {
+                    html += `<div class="d-flex justify-content-between align-items-center small p-1.5 bg-light rounded"><span class="fw-semibold text-dark">${escapeHtml(r.target_name)}</span><span class="badge bg-light text-secondary border x-small">${r.relation_type}</span></div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            html += `
+                    <div class="mt-2 pt-2 border-top">
+                        <div class="d-flex justify-content-between text-secondary x-small">
+                            <span>Candidate Matches: <strong class="text-dark">${data.candidate_usage_count} profile(s)</strong></span>
+                            <span>Source: <strong class="text-dark">${data.source}</strong></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            bodyContent.innerHTML = html;
+        })
+        .catch(err => {
+            bodyContent.innerHTML = '<div class="alert alert-danger">Unable to load details.</div>';
+        });
+    }
+
+    // Modal Field Toggles
+    function toggleModalFields(val) {
+        const isRole = (val === 'job_role');
+        document.querySelectorAll('.role-specific-field').forEach(el => {
+            el.style.display = isRole ? 'block' : 'none';
+        });
+    }
+
+    function toggleRelCategory(val) {
+        document.getElementById('target-role-group').classList.toggle('d-none', val !== 'role_to_role');
+        document.getElementById('target-skill-group').classList.toggle('d-none', val !== 'role_to_skill');
+    }
+
+    // Live Duplicate Checker
+    let dupTimer = null;
+    function checkDuplicateEntity(name) {
+        if (dupTimer) clearTimeout(dupTimer);
+        const warningBox = document.getElementById('duplicate-warning-box');
+        const entityType = document.getElementById('modal-entity-type-select').value;
+        if (!name || name.trim().length < 2) {
+            warningBox.classList.add('d-none');
+            return;
+        }
+
+        dupTimer = setTimeout(() => {
+            fetch(`/taxonomy/api/check-duplicate/?name=${encodeURIComponent(name.trim())}&type=${entityType}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.has_duplicate) {
+                    warningBox.classList.remove('d-none');
+                    warningBox.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Possible duplicate(s) exist: <strong>${data.matches.map(m => m.name).join(', ')}</strong>`;
+                } else {
+                    warningBox.classList.add('d-none');
+                }
+            })
+            .catch(() => {});
+        }, 200);
+    }
+
+    // Interactive Visual Tree Loader
+    function loadVisualTreeData() {
+        const container = document.getElementById('taxonomy-tree-container');
+        if (!container) return;
+        container.innerHTML = '<div class="d-flex align-items-center justify-content-center py-5"><div class="spinner-border text-primary me-2"></div><span class="text-secondary small">Loading visual taxonomy tree...</span></div>';
+
+        fetch('/taxonomy/api/tree-data/')
+        .then(res => res.json())
+        .then(data => {
+            const tree = data.tree || [];
+            if (tree.length === 0) {
+                container.innerHTML = '<div class="text-center py-4 text-muted">No hierarchy data available. Click "Seed Base Taxonomy" to populate.</div>';
+                return;
+            }
+
+            let html = '<div class="d-flex flex-column gap-3">';
+            tree.forEach(dept => {
+                html += `
+                    <div class="card border rounded-3 p-3 bg-light">
+                        <h6 class="fw-bold text-primary m-0 mb-2"><i class="bi bi-diagram-3-fill me-1.5"></i> ${escapeHtml(dept.name)}</h6>
+                        <div class="tree-node">
+                `;
+                dept.children.forEach(role => {
+                    html += `
+                        <div class="mb-2">
+                            <div class="tree-node-item">
+                                <i class="bi bi-briefcase text-secondary"></i>
+                                <span class="fw-semibold text-dark small">${escapeHtml(role.name)}</span>
+                                <span class="badge bg-light text-secondary border x-small">${role.seniority}</span>
+                            </div>
+                    `;
+                    if (role.children && role.children.length > 0) {
+                        html += `<div class="tree-node mt-1">`;
+                        role.children.forEach(sub => {
+                            html += `
+                                <div class="tree-node-item my-1">
+                                    <i class="bi bi-arrow-return-right text-muted x-small"></i>
+                                    <span class="text-secondary small">${escapeHtml(sub.name)}</span>
+                                </div>
+                            `;
+                        });
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                });
+                html += `</div></div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(err => {
+            container.innerHTML = '<div class="alert alert-danger">Unable to load tree hierarchy.</div>';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if ('{{ current_tab }}' === 'tree') {
+            loadVisualTreeData();
+        }
+    });
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+</script>
+{% endblock %}

@@ -1,260 +1,224 @@
 {% load static %}
-<!-- Table Header Row -->
-<div class="bg-light border-bottom px-3 py-2 d-flex align-items-center justify-content-between text-secondary x-small fw-semibold">
-    <div class="d-flex align-items-center gap-3 w-100">
-        <div class="form-check m-0">
-            <input class="form-check-input" type="checkbox" id="select-all-candidates" onchange="toggleSelectAll(this)">
+<!-- Candidate List Table Header (Desktop/Laptop) -->
+<div class="candidate-table-header bg-light border-bottom px-3 py-2.5 d-none d-md-block text-secondary x-small fw-semibold">
+    <div class="candidate-table-grid">
+        <!-- LEFT: Checkbox + Candidate Profile & Experience -->
+        <div class="d-flex align-items-center gap-3 min-w-0">
+            <div class="form-check m-0 d-flex align-items-center flex-shrink-0">
+                <input class="form-check-input" type="checkbox" id="select-all-candidates" onchange="toggleSelectAll(this)" aria-label="Select all candidates">
+            </div>
+            <div class="fw-bold text-dark text-uppercase tracking-wider">
+                <i class="bi bi-person-lines-fill me-1 text-primary"></i> Candidate Profile &amp; Experience
+            </div>
         </div>
-        <div class="row w-100 g-3">
-            <div class="col-md-6" style="padding-left: 12px;">Candidate Profile & Relevance</div>
-            <div class="col-md-6" style="padding-left: 12px;">Application & Match Breakdown</div>
+        
+        <!-- RIGHT: Status & Actions Header -->
+        <div class="text-start text-lg-end pe-1 fw-bold text-dark text-uppercase tracking-wider">
+            <i class="bi bi-gear-fill me-1 text-primary"></i> Status &amp; Actions
         </div>
     </div>
 </div>
 
-<!-- Candidate Rows List -->
+<!-- Candidate Cards / Rows List -->
 <div class="candidate-list">
     {% for candidate in candidates %}
-    <div class="candidate-row p-3 border-bottom d-flex align-items-center justify-content-between position-relative" data-candidate-id="{{ candidate.id }}">
-        <div class="d-flex align-items-start gap-3 w-100">
-            <!-- Checkbox -->
-            <div class="form-check m-0 pt-1">
-                <input class="form-check-input candidate-checkbox" type="checkbox" value="{{ candidate.id }}" onchange="updateBulkBar()">
-            </div>
+    <div class="candidate-row p-3 p-md-3.5 border-bottom position-relative" data-candidate-id="{{ candidate.id }}">
+        <div class="candidate-table-grid">
+            <!-- LEFT: Profile Photo + Candidate Details -->
+            <div class="d-flex align-items-start gap-3 min-w-0">
+                <!-- Checkbox -->
+                <div class="form-check m-0 pt-1 flex-shrink-0">
+                    <input class="form-check-input candidate-checkbox" type="checkbox" value="{{ candidate.id }}" onchange="updateBulkBar()" aria-label="Select {{ candidate.full_name|default:candidate.user.email }}">
+                </div>
 
-            <!-- Profile Photo / Neutral Icon -->
-            <div class="candidate-avatar flex-shrink-0 pt-1">
-                {% if candidate.has_profile_photo %}
-                    <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover" style="width: 42px; height: 42px; border: 1px solid #dee2e6;" alt="Photo">
-                {% else %}
-                    <div class="bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; border: 1px solid #dee2e6;">
-                        <i class="bi bi-person" style="font-size: 22px; line-height: 1;"></i>
+                <!-- Profile Photo / Avatar -->
+                <div class="candidate-avatar flex-shrink-0 pt-0.5">
+                    {% if candidate.has_profile_photo %}
+                        <img src="{{ candidate.profile_photo.url }}" class="rounded-circle object-fit-cover shadow-2xs" style="width: 44px; height: 44px; border: 1.5px solid #cbd5e1;" alt="{{ candidate.full_name }}">
+                    {% else %}
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-2xs" style="width: 44px; height: 44px; border: 1.5px solid #dbeafe; font-size: 1.1rem;">
+                            {{ candidate.full_name|default:candidate.user.email|slice:":1"|upper }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Candidate Main Info -->
+                <div class="candidate-info-block d-flex flex-column gap-1 min-w-0 flex-grow-1">
+                    <!-- Name -->
+                    <div class="candidate-name-wrapper">
+                        <h6 class="fw-bold text-dark m-0 candidate-name-text">
+                            <a href="{% url 'frontend:candidate_detail' candidate.id %}{% if selected_job %}?job_id={{ selected_job.id }}{% endif %}" class="candidate-name-link text-decoration-none">
+                                {{ candidate.full_name|default:candidate.user.email }}
+                            </a>
+                        </h6>
                     </div>
-                {% endif %}
-            </div>
+                    
+                    <!-- Designation & Company -->
+                    <div class="candidate-role-text text-secondary small fw-medium">
+                        <span class="text-dark fw-bold">{{ candidate.current_designation|default:"Role Not Specified" }}</span>
+                        {% if candidate.current_company %}<span class="text-muted"> at </span><span class="text-dark fw-semibold">{{ candidate.current_company }}</span>{% endif %}
+                    </div>
+                    
+                    <!-- Experience • Salary • Location -->
+                    <div class="candidate-meta-text text-secondary x-small d-flex align-items-center gap-2 flex-wrap">
+                        <span><i class="bi bi-briefcase text-primary opacity-75 me-1"></i><strong class="text-dark">{{ candidate.total_experience|floatformat:1 }} Yrs Exp</strong></span>
+                        <span class="text-muted">&bull;</span>
+                        {% if candidate.current_salary %}
+                            <span><i class="bi bi-cash-stack text-success opacity-75 me-1"></i><strong class="text-dark">&#8377;{{ candidate.current_salary|floatformat:1 }} LPA</strong></span>
+                            <span class="text-muted">&bull;</span>
+                        {% endif %}
+                        <span><i class="bi bi-geo-alt text-danger opacity-75 me-1"></i>{{ candidate.location|default:"Location N/A" }}</span>
+                    </div>
 
-            <div class="row w-100 g-3 align-items-start">
-                <!-- LEFT SECTION: Candidate Profile -->
-                <div class="col-md-6">
-                    <div class="d-flex flex-column gap-1 overflow-hidden">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <h6 class="fw-bold text-dark m-0"><a href="{% url 'frontend:candidate_detail' candidate.id %}{% if selected_job %}?job_id={{ selected_job.id }}{% endif %}" class="text-dark text-decoration-none candidate-name-link">{{ candidate.full_name|default:candidate.user.email }}</a></h6>
-                            {% if candidate.is_immediate_joiner %}
-                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill x-small">Immediate Joiner</span>
+                    <!-- Education -->
+                    <div class="candidate-edu-text text-secondary x-small d-flex align-items-start gap-1.5 flex-wrap">
+                        <i class="bi bi-mortarboard text-muted mt-0.5"></i>
+                        <span>
+                            {% if candidate.educations.all %}
+                                {% with edu=candidate.educations.first %}
+                                    <strong>{{ edu.degree }}</strong>{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}{% if edu.institution %}, {{ edu.institution }}{% endif %}
+                                {% endwith %}
+                            {% else %}
+                                Degree / Qualification on profile
                             {% endif %}
-                            <!-- Match Quality Tier Badge -->
-                            {% if candidate.match_quality %}
-                                <span class="match-quality-badge {% if candidate.match_quality == 'EXACT MATCH' %}match-exact{% elif candidate.match_quality == 'STRONG MATCH' %}match-strong{% elif candidate.match_quality == 'RELATED MATCH' %}match-related{% else %}match-weak{% endif %}">
-                                    {{ candidate.match_quality }}
-                                </span>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="text-secondary small fw-medium text-truncate">
-                            <span class="text-dark fw-semibold">{{ candidate.current_designation|default:"Designation: N/A" }}</span>
-                            {% if candidate.current_company %} at <span class="text-dark">{{ candidate.current_company }}</span>{% endif %}
-                        </div>
-                        
-                        <div class="text-secondary x-small d-flex align-items-center gap-1">
-                            <i class="bi bi-mortarboard text-muted"></i>
-                            <span>
-                                {% if candidate.educations.all %}
-                                    {% with edu=candidate.educations.first %}
-                                        {{ edu.degree }}{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %} from {{ edu.institution }}
-                                    {% endwith %}
-                                {% else %}
-                                    B.A / B.Tech / Degree
-                                {% endif %}
-                            </span>
-                        </div>
-                        
-                        <div class="text-secondary x-small d-flex align-items-center gap-2 flex-wrap">
-                            <span><i class="bi bi-geo-alt text-muted me-0.5"></i> {{ candidate.location|default:"Location N/A" }}</span>
-                            <span>&bull;</span>
-                            <span class="fw-semibold text-dark">Exp: {{ candidate.total_experience|floatformat:1 }} Yrs</span>
-                            {% if candidate.current_salary %}
-                                <span>&bull;</span>
-                                <span>CTC: {{ candidate.current_salary|floatformat:1 }}</span>
-                            {% endif %}
-                        </div>
-                        
-                        <!-- Matched Tags / Skills pills -->
-                        <div class="d-flex flex-wrap gap-1 mt-1 align-items-center">
-                            <span class="x-small text-muted me-1">Key Skills:</span>
-                            {% for s in candidate.skills.all|slice:":5" %}
-                                <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">{{ s.skill_name }}</span>
+                        </span>
+                    </div>
+                    
+                    <!-- Skills: [Skill] [Skill] [Skill] [+X] -->
+                    <div class="candidate-skills-wrap mt-1">
+                        <span class="x-small text-muted me-1 fw-bold">Skills:</span>
+                        {% for s in candidate.skills.all|slice:":6" %}
+                            <span class="badge bg-light text-secondary border border-light-subtle rounded-pill x-small px-2 py-0.5 skill-pill">{{ s.skill_name }}</span>
+                        {% empty %}
+                            {% for t in candidate.matched_tags_list|slice:":4" %}
+                                <span class="badge bg-light text-secondary border border-light-subtle rounded-pill x-small px-2 py-0.5 skill-pill">{{ t }}</span>
                             {% empty %}
-                                {% for t in candidate.matched_tags_list|slice:":3" %}
-                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">{{ t }}</span>
-                                {% empty %}
-                                    <span class="badge bg-light text-secondary border border-light-subtle rounded-1 x-small px-2 py-0.5">Profile Verified</span>
-                                {% endfor %}
+                                <span class="badge bg-light text-secondary border border-light-subtle rounded-pill x-small px-2 py-0.5 skill-pill">Profile Verified</span>
                             {% endfor %}
-                        </div>
-
-                        <!-- System Inferred / Related Skills -->
-                        {% if candidate.ai_skills %}
-                        <div class="d-flex flex-wrap gap-1 mt-1 align-items-center">
-                            <span class="x-small text-info me-1"><i class="bi bi-stars"></i> Related Skills:</span>
-                            {% for sk in candidate.ai_skills|slice:":3" %}
-                                <span class="badge bg-info-subtle text-info border border-info-subtle rounded-1 x-small px-1.5 py-0.5">{{ sk }}</span>
-                            {% endfor %}
-                        </div>
+                        {% endfor %}
+                        {% if candidate.skills.count > 6 %}
+                            <span class="badge bg-secondary-subtle text-secondary rounded-pill x-small px-1.5 py-0.5">+{{ candidate.skills.count|add:"-6" }}</span>
                         {% endif %}
                     </div>
-                </div>
 
-                <!-- RIGHT SECTION: Application, ATS & Why Matched Accordion -->
-                <div class="col-md-6">
-                    <div class="row w-100 g-1">
-                        <div class="col-12 d-flex justify-content-between align-items-start">
-                            <div class="d-flex flex-column gap-1 overflow-hidden" style="max-width: 70%;">
-                                <span class="fw-semibold text-dark text-truncate small">
-                                    {% if candidate.latest_application %}
-                                        {{ candidate.latest_application.job.title }}
-                                    {% else %}
-                                        Talent Pool (Sourced)
-                                    {% endif %}
-                                </span>
-                                <span class="text-secondary x-small">
-                                    {% if candidate.latest_application %}
-                                        {{ candidate.latest_application.job.display_company }} &bull; {{ candidate.latest_application.job.location }}
-                                    {% else %}
-                                        Unassigned Candidate
-                                    {% endif %}
-                                </span>
-                            </div>
-                            <div class="d-flex flex-column align-items-end gap-1" style="min-width: 30%;">
-                                <!-- Stage Badge -->
-                                <span class="badge {% if candidate.latest_application %}{{ candidate.latest_application.badge_class }}{% else %}bg-secondary text-secondary{% endif %} px-2.5 py-0.5 rounded-pill small fw-medium">
-                                    {% if candidate.latest_application %}{{ candidate.latest_application.get_stage_display }}{% else %}Talent Pool{% endif %}
-                                </span>
-                                
-                                <!-- ATS & Relevance Score Badges -->
-                                <div class="d-flex align-items-center gap-1.5 mt-0.5">
-                                    {% with score=candidate.relevance_score|default:candidate.ats_score|default:75 %}
-                                        <span class="badge {% if score >= 80 %}ats-badge-green{% elif score >= 60 %}ats-badge-orange{% else %}ats-badge-red{% endif %} fw-bold px-2 py-1" style="font-size: 11px;">
-                                            {{ score }}% Fit
-                                        </span>
-                                    {% endwith %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Why Matched Details Dropdown -->
-                        {% if candidate.why_matched_reasons %}
-                        <div class="col-12 mt-2">
-                            <details class="why-matched-box">
-                                <summary class="fw-bold text-primary cursor-pointer d-flex align-items-center justify-content-between" style="cursor: pointer;">
-                                    <span><i class="bi bi-info-circle me-1"></i> Why this candidate matches</span>
-                                    <span class="x-small text-muted">View breakdown &dtrif;</span>
-                                </summary>
-                                <ul class="mt-2 mb-0">
-                                    {% for r in candidate.why_matched_reasons %}
-                                        <li>{{ r }}</li>
-                                    {% endfor %}
-                                </ul>
-                            </details>
-                        </div>
-                        {% endif %}
-                        
-                        <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-between text-secondary x-small">
-                            <span>Source: <span class="fw-medium text-dark">{% if candidate.linkedin_url %}LinkedIn{% else %}Resume Upload{% endif %}</span></span>
-                            <span>Added: <span class="fw-medium text-dark">{{ candidate.created_at|timesince }} ago</span></span>
-                        </div>
+                    <!-- Uploaded By User Metadata -->
+                    <div class="candidate-uploader-text text-secondary x-small d-flex align-items-center gap-2 flex-wrap mt-0.5">
+                        <span><i class="bi bi-person-up text-primary opacity-75 me-1"></i>Uploaded By: <strong class="text-dark">{{ candidate.effective_uploader_name|default:candidate.uploader_name|default:request.user.get_full_name|default:request.user.email }}</strong></span>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Candidate Action overlay displayed on hover -->
-        <div class="candidate-actions bg-white border border-light-subtle rounded-3 py-1.5 px-2 shadow-sm d-flex gap-1 align-items-center justify-content-end">
-            <a href="{% url 'frontend:candidate_detail' candidate.id %}" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" title="View Profile">
-                <i class="bi bi-eye"></i> View
-            </a>
-            {% if candidate.has_resume %}
-                <a href="{{ candidate.resume_file_url }}" target="_blank" class="btn btn-xs btn-outline-secondary d-flex align-items-center gap-1" title="Download Resume">
-                    <i class="bi bi-download"></i> Resume
-                </a>
-            {% endif %}
-            <button class="btn btn-xs btn-outline-success d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#addToPipelineModal{{ candidate.id }}" title="Add to Pipeline">
-                <i class="bi bi-plus-circle"></i> Pipeline
-            </button>
-            <a href="{% url 'frontend:interviews' %}?candidate_id={{ candidate.id }}" class="btn btn-xs btn-outline-info d-flex align-items-center gap-1" title="Schedule Interview">
-                <i class="bi bi-calendar-event"></i> Schedule
-            </a>
-            <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="m-0 d-inline">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-xs btn-outline-danger d-flex align-items-center gap-1" title="Reject Candidate">
-                    <i class="bi bi-x-circle"></i> Reject
-                </button>
-            </form>
+            <!-- RIGHT: Status & Actions -->
+            <div class="candidate-actions-col d-flex flex-column align-items-start align-items-lg-end justify-content-between gap-2 min-w-0">
+                <!-- Status Badge & Applied Job (if any) -->
+                <div class="d-flex flex-wrap align-items-center gap-1.5">
+                    <span class="badge {% if candidate.latest_application %}{{ candidate.latest_application.badge_class }}{% else %}bg-secondary-subtle text-secondary border border-secondary-subtle{% endif %} px-2.5 py-1 rounded-pill small fw-medium">
+                        {% if candidate.latest_application %}{{ candidate.latest_application.get_stage_display }}{% else %}{{ candidate.get_candidate_status_display|default:"Active" }}{% endif %}
+                    </span>
+                    {% if candidate.latest_application %}
+                        <span class="text-secondary x-small text-truncate" style="max-width: 200px;" title="{{ candidate.latest_application.job.title }} • {{ candidate.latest_application.job.display_company }}">
+                            <i class="bi bi-briefcase me-1 text-primary"></i><strong>{{ candidate.latest_application.job.title }}</strong> &bull; {{ candidate.latest_application.job.display_company }}
+                        </span>
+                    {% endif %}
+                </div>
+
+                <!-- Action Buttons Group (Desktop & Mobile) -->
+                <div class="candidate-actions-buttons">
+                    <a href="{% url 'frontend:candidate_detail' candidate.id %}" class="btn btn-outline-primary" title="View Profile">
+                        <i class="bi bi-eye"></i> View Profile
+                    </a>
+                    <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addToPipelineModal{{ candidate.id }}" title="Shortlist / Add to Pipeline">
+                        <i class="bi bi-plus-circle"></i> Pipeline
+                    </button>
+                    {% if candidate.has_resume %}
+                        <a href="{{ candidate.resume_file_url }}" target="_blank" class="btn btn-outline-secondary" title="Download Resume">
+                            <i class="bi bi-download"></i> Resume
+                        </a>
+                    {% endif %}
+                    <a href="{% url 'frontend:interviews' %}?candidate_id={{ candidate.id }}" class="btn btn-outline-info" title="Schedule Interview">
+                        <i class="bi bi-calendar-event"></i> Schedule
+                    </a>
+                    <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="m-0 d-inline" onsubmit="return confirm('Reject candidate {{ candidate.full_name|default:candidate.user.email }}?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger" title="Reject Candidate">
+                            <i class="bi bi-x-circle"></i> Reject
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Add to Pipeline Modal for this Candidate -->
+    <!-- Individual Add to Pipeline Modal -->
     <div class="modal fade" id="addToPipelineModal{{ candidate.id }}" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog text-start">
+      <div class="modal-dialog">
         <div class="modal-content border-0 shadow-lg">
           <div class="modal-header bg-light">
-            <h5 class="modal-title text-dark fw-bold"><i class="bi bi-kanban me-2 text-primary"></i>Add to Pipeline</h5>
+            <h5 class="modal-title fw-bold text-dark"><i class="bi bi-kanban me-2 text-primary"></i>Add to Job Pipeline</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <form method="POST" action="{% url 'frontend:add_to_pipeline' candidate.id %}" onsubmit="return handleSingleAddToPipeline(event, '{{ candidate.id }}')">
+          <form method="POST" action="{% url 'frontend:bulk_add_to_pipeline' %}">
             {% csrf_token %}
+            <input type="hidden" name="candidate_ids" value="{{ candidate.id }}">
             <div class="modal-body text-dark">
-                <p class="small text-secondary mb-3">Shortlist candidate <strong>{{ candidate.full_name|default:candidate.user.email }}</strong> to an active role.</p>
+                <p class="small text-secondary mb-3">Add <strong>{{ candidate.full_name|default:candidate.user.email }}</strong> to an active opening.</p>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">Select Job Opening</label>
+                    <label class="form-label small fw-bold">Select Active Opening</label>
                     <select name="job_id" class="form-select" required>
-                        <option value="">-- Choose Job --</option>
+                        <option value="">-- Choose Job Opening --</option>
                         {% for job in active_jobs %}
-                            <option value="{{ job.id }}">{{ job.title }} ({{ job.location }})</option>
+                            <option value="{{ job.id }}" {% if selected_job and selected_job.id == job.id %}selected{% endif %}>{{ job.title }} ({{ job.location }})</option>
                         {% endfor %}
                     </select>
                 </div>
             </div>
             <div class="modal-footer bg-light">
               <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-success btn-sm px-4">Confirm Shortlist</button>
+              <button type="submit" class="btn btn-primary btn-sm px-4">Add to Pipeline</button>
             </div>
           </form>
         </div>
       </div>
     </div>
+
     {% empty %}
-    <div class="w-100 text-center py-5 text-secondary">
-        <i class="bi bi-people fs-1 text-secondary-50 mb-3 d-block"></i>
-        <h5 class="fw-bold text-dark">No candidates found matching your criteria.</h5>
-        <p class="text-secondary small">Try adjusting your search terms, skills, or filter parameters.</p>
+    <!-- Empty State -->
+    <div class="text-center py-5 px-3">
+        <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 72px; height: 72px;">
+            <i class="bi bi-people text-muted fs-1"></i>
+        </div>
+        <h5 class="fw-bold text-dark mb-1">No candidates match the specified filters</h5>
+        <p class="text-secondary small mb-3">Try widening your search terms, reducing experience thresholds, or clearing filters.</p>
+        <a href="{% url 'frontend:candidate_search' %}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset All Filters
+        </a>
     </div>
     {% endfor %}
 </div>
 
-<!-- Pagination -->
+<!-- Pagination Navigation -->
 {% if is_paginated %}
-<nav class="mt-4 pb-3">
-    <ul class="pagination justify-content-center pagination-sm">
+<nav class="p-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="text-secondary x-small">
+        Page <strong class="text-dark">{{ page_obj.number }}</strong> of <strong class="text-dark">{{ page_obj.paginator.num_pages }}</strong>
+    </span>
+    <ul class="pagination pagination-sm m-0">
         {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' and key != 'ajax' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
-        </li>
-        {% endif %}
-
-        {% for i in page_obj.paginator.page_range %}
-            {% if page_obj.number == i %}
-            <li class="page-item active"><span class="page-link">{{ i }}</span></li>
-            {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ i }}{% for key, value in request.GET.items %}{% if key != 'page' and key != 'ajax' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ i }}</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">&laquo; Prev</a>
             </li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">{{ num }}</a></li>
             {% endif %}
         {% endfor %}
-
         {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' and key != 'ajax' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
-        </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">Next &raquo;</a>
+            </li>
         {% endif %}
     </ul>
 </nav>

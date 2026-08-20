@@ -24,13 +24,13 @@
 
 {% block content %}
 <!-- Welcome Header -->
-<div class="d-flex justify-content-between align-items-center mb-4 fade-in">
+<div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-2 mb-4 fade-in">
     <div>
-        <h2 class="fw-bold m-0 text-dark" style="font-size: 1.75rem; letter-spacing: -0.5px;" id="dashboardDynamicGreeting">Welcome, {{ request.user.first_name|default:request.user.get_full_name|default:request.user.email }} 👋</h2>
+        <h2 class="fw-bold m-0 text-dark" style="font-size: 1.6rem; letter-spacing: -0.5px;" id="dashboardDynamicGreeting">Welcome, {{ request.user.first_name|default:request.user.get_full_name|default:request.user.email }} 👋</h2>
         <p class="text-secondary small m-0 mt-1">Here's what's happening with your recruitment today.</p>
     </div>
     <div>
-        <span class="text-secondary small fw-medium bg-white border px-3 py-1.5 rounded-pill"><i class="bi bi-calendar3 me-1 text-primary"></i> {{ timezone_now|date:"l, M d, Y" }}</span>
+        <span class="text-secondary small fw-medium bg-white border px-3 py-1.5 rounded-pill shadow-xs"><i class="bi bi-calendar3 me-1 text-primary"></i> {{ timezone_now|date:"l, M d, Y" }}</span>
     </div>
 </div>
 

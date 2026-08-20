@@ -38,3 +38,8 @@ python313/
 scratch/
 *.whl
 *.zip
+
+# Bulk parser temporary files
+**/temp_bulk_jobs/
+**/tmp_bulk_jobs/
+*.tmp
