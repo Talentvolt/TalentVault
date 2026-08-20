@@ -612,6 +612,38 @@ def test_structured_resume_editor_save_and_reload_version_selection():
     assert v1_context['candidate'].location == "Old Location"
 
 
+def test_format_upload_relative_time_helper():
+    from utils.date_helpers import format_upload_relative_time
+    from django.utils import timezone
+    import datetime
+
+    # 1. None and invalid
+    assert format_upload_relative_time(None) == ""
+    assert format_upload_relative_time("") == ""
+    assert format_upload_relative_time("invalid-date") == ""
+
+    # 2. Just now
+    now = timezone.now()
+    assert format_upload_relative_time(now) == "Just now"
+    assert format_upload_relative_time(now - datetime.timedelta(seconds=30)) == "Just now"
+
+    # 3. Minutes ago
+    assert format_upload_relative_time(now - datetime.timedelta(minutes=5)) == "5 minutes ago"
+    assert format_upload_relative_time(now - datetime.timedelta(minutes=1)) == "1 minute ago"
+
+    # 4. Hours ago
+    assert format_upload_relative_time(now - datetime.timedelta(hours=4)) == "4 hours ago"
+    assert format_upload_relative_time(now - datetime.timedelta(hours=1)) == "1 hour ago"
+
+    # 5. Days ago
+    assert format_upload_relative_time(now - datetime.timedelta(days=1)) == "1 day ago"
+    assert format_upload_relative_time(now - datetime.timedelta(days=2)) == "2 days ago"
+
+    # 6. Weeks ago
+    assert format_upload_relative_time(now - datetime.timedelta(days=14)) == "2 weeks ago"
+
+
+
 
 
 
