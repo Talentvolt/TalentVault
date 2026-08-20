@@ -720,15 +720,18 @@ class UniversalCandidateSearchService:
             })
 
         # -------------------------------------------------------------
-        # 4. SORTING
+        # 4. SORTING (Strict canonical created_at timestamp descending)
         # -------------------------------------------------------------
         if sort_by in ["relevance", "match", "highest_match"]:
             scored_candidates.sort(key=lambda x: (-x["relevance_score"], -x["ats_score"], -x["candidate"].created_at.timestamp()))
         elif sort_by in ["ats_score", "highest_ats", "ats"]:
             scored_candidates.sort(key=lambda x: (-x["ats_score"], -x["relevance_score"], -x["candidate"].created_at.timestamp()))
         elif sort_by in ["experience", "highest_experience"]:
-            scored_candidates.sort(key=lambda x: (-float(x["candidate"].total_experience or 0), -x["relevance_score"]))
-        elif sort_by in ["newest", "created_at"]:
+            scored_candidates.sort(key=lambda x: (-float(x["candidate"].total_experience or 0), -x["candidate"].created_at.timestamp()))
+        elif sort_by in ["name", "name_asc"]:
+            scored_candidates.sort(key=lambda x: ((x["candidate"].full_name or "").lower(), -x["candidate"].created_at.timestamp()))
+        else:
+            # Default "newest" / "created_at" sorting: strictly newest first by created_at DateTimeField
             scored_candidates.sort(key=lambda x: -x["candidate"].created_at.timestamp())
 
         return scored_candidates

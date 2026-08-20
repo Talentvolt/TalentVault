@@ -150,6 +150,65 @@
             padding: 0.25rem 0.5rem;
         }
     }
+
+    /* Candidate Autocomplete Dropdown Styles */
+    .candidate-autocomplete-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 12px;
+        right: 12px;
+        z-index: 1050;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e2e8f0;
+        background-color: #ffffff;
+    }
+    .candidate-suggestion-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 14px;
+        text-decoration: none;
+        color: #1e293b;
+        border: none;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background-color 0.12s ease;
+        cursor: pointer;
+    }
+    .candidate-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .candidate-suggestion-item:hover,
+    .candidate-suggestion-item.active {
+        background-color: #f8fafc;
+        color: #0f172a;
+    }
+    .candidate-suggestion-item:focus {
+        outline: none;
+        background-color: #f1f5f9;
+    }
+    .suggestion-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: #e0e7ff;
+        color: #4338ca;
+        font-weight: 700;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .suggestion-highlight {
+        background-color: #fef08a;
+        color: #854d0e;
+        padding: 0 2px;
+        border-radius: 2px;
+        font-weight: 600;
+    }
+    .letter-spacing-1 {
+        letter-spacing: 0.05em;
+    }
 </style>
 {% endblock %}
 
@@ -158,15 +217,15 @@
 <!-- Simple Candidate Directory Toolbar & Compact Actions -->
 <div class="directory-toolbar shadow-xs mb-3">
     <form method="GET" action="{% url 'frontend:candidate_search' %}" id="candidate-directory-form" class="row g-2.5 align-items-center">
-        <!-- Search by Name / Email / Phone / Designation -->
-        <div class="col-12 col-lg-5 col-xl-5">
+        <!-- Search by Name / Email / Phone / Designation / Company / Skills -->
+        <div class="col-12 col-lg-5 col-xl-5 position-relative" id="candidate-search-input-wrapper">
             <div class="input-group">
                 <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
                 <input type="text" 
                        name="q" 
                        id="candidate-directory-search-input" 
                        class="form-control directory-search-input border-start-0 ps-0" 
-                       placeholder="Search candidate by name, email, phone, designation, company..." 
+                       placeholder="Search candidate by name, email, phone, designation, company, skills..." 
                        value="{{ filters.q|default:'' }}" 
                        autocomplete="off">
                 {% if filters.q %}
@@ -175,6 +234,23 @@
                     </a>
                 {% endif %}
                 <button type="submit" class="btn btn-primary px-3 fw-semibold">Search</button>
+            </div>
+
+            <!-- Live Autocomplete Dropdown -->
+            <div id="candidate-autocomplete-dropdown" class="candidate-autocomplete-dropdown shadow-lg rounded-3 border bg-white d-none">
+                <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center bg-light">
+                    <span class="x-small text-uppercase fw-bold text-muted letter-spacing-1">Candidates</span>
+                    <span id="autocomplete-count-badge" class="badge bg-primary-subtle text-primary x-small"></span>
+                </div>
+                <div id="autocomplete-results-list" class="list-group list-group-flush" style="max-height: 330px; overflow-y: auto;">
+                    <!-- Dynamically injected items -->
+                </div>
+                <div id="autocomplete-footer" class="p-2 border-top bg-light text-center">
+                    <a href="#" id="autocomplete-view-all-btn" class="text-primary fw-semibold small text-decoration-none d-flex align-items-center justify-content-center gap-1">
+                        <span>View all results for &ldquo;<strong id="autocomplete-query-text"></strong>&rdquo;</span>
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -301,6 +377,184 @@
         })
         .catch(err => console.error('Directory search error:', err));
     }
+
+    // Live Candidate Autocomplete Suggestions
+    (function() {
+        const searchInput = document.getElementById('candidate-directory-search-input');
+        const wrapper = document.getElementById('candidate-search-input-wrapper');
+        const dropdown = document.getElementById('candidate-autocomplete-dropdown');
+        const resultsList = document.getElementById('autocomplete-results-list');
+        const viewAllBtn = document.getElementById('autocomplete-view-all-btn');
+        const queryText = document.getElementById('autocomplete-query-text');
+        const countBadge = document.getElementById('autocomplete-count-badge');
+        const form = document.getElementById('candidate-directory-form');
+
+        if (!searchInput || !dropdown || !resultsList) return;
+
+        let debounceTimer = null;
+        let activeIndex = -1;
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function highlightMatch(text, query) {
+            if (!text || !query) return escapeHtml(text);
+            const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${safeQuery})`, 'gi');
+            return escapeHtml(text).replace(regex, '<span class="suggestion-highlight">$1</span>');
+        }
+
+        function showDropdown() {
+            dropdown.classList.remove('d-none');
+        }
+
+        function hideDropdown() {
+            dropdown.classList.add('d-none');
+            activeIndex = -1;
+        }
+
+        function renderSuggestions(data, query) {
+            const candidates = data.results || data.candidates || [];
+            activeIndex = -1;
+
+            if (queryText) queryText.textContent = query;
+            if (countBadge) countBadge.textContent = candidates.length > 0 ? `${candidates.length} match${candidates.length === 1 ? '' : 'es'}` : '';
+
+            if (viewAllBtn) {
+                viewAllBtn.onclick = function(e) {
+                    e.preventDefault();
+                    hideDropdown();
+                    if (form) form.submit();
+                };
+            }
+
+            if (candidates.length === 0) {
+                resultsList.innerHTML = `
+                    <div class="p-3 text-center text-muted small">
+                        <i class="bi bi-search me-1 text-secondary opacity-75"></i>
+                        No candidates found for &ldquo;<strong>${escapeHtml(query)}</strong>&rdquo;
+                    </div>
+                `;
+                showDropdown();
+                return;
+            }
+
+            let html = '';
+            candidates.forEach((cand, idx) => {
+                const highlightedName = highlightMatch(cand.name, query);
+                const highlightedSubtitle = cand.subtitle ? highlightMatch(cand.subtitle, query) : escapeHtml(cand.location || 'Candidate Profile');
+                const skillTag = cand.matched_skill 
+                    ? `<span class="badge bg-light text-primary border border-primary-subtle x-small ms-1.5 flex-shrink-0"><i class="bi bi-tag-fill me-1 opacity-75"></i>${highlightMatch(cand.matched_skill, query)}</span>`
+                    : '';
+
+                html += `
+                    <a href="${cand.url}" class="candidate-suggestion-item list-group-item list-group-item-action" data-index="${idx}">
+                        <div class="suggestion-avatar">${escapeHtml(cand.avatar || 'C')}</div>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="fw-bold text-dark text-truncate small">${highlightedName}</div>
+                                ${skillTag}
+                            </div>
+                            <div class="text-secondary x-small text-truncate mt-0.5">${highlightedSubtitle}</div>
+                        </div>
+                        <i class="bi bi-chevron-right text-muted small ms-1 flex-shrink-0"></i>
+                    </a>
+                `;
+            });
+
+            resultsList.innerHTML = html;
+            showDropdown();
+
+            const items = resultsList.querySelectorAll('.candidate-suggestion-item');
+            items.forEach((item, idx) => {
+                item.addEventListener('mouseenter', () => {
+                    setActiveIndex(idx);
+                });
+            });
+        }
+
+        function setActiveIndex(idx) {
+            const items = resultsList.querySelectorAll('.candidate-suggestion-item');
+            items.forEach(el => el.classList.remove('active'));
+            activeIndex = idx;
+            if (idx >= 0 && idx < items.length) {
+                items[idx].classList.add('active');
+                items[idx].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function fetchSuggestions(query) {
+            const url = `{% url 'frontend:candidate_autocomplete' %}?q=${encodeURIComponent(query)}&type=candidates`;
+            fetch(url, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                renderSuggestions(data, query);
+            })
+            .catch(err => {
+                console.error('Candidate autocomplete error:', err);
+            });
+        }
+
+        searchInput.addEventListener('input', function() {
+            const q = searchInput.value.trim();
+            if (debounceTimer) clearTimeout(debounceTimer);
+
+            if (q.length < 2) {
+                hideDropdown();
+                return;
+            }
+
+            debounceTimer = setTimeout(() => {
+                fetchSuggestions(q);
+            }, 280);
+        });
+
+        searchInput.addEventListener('keydown', function(e) {
+            const items = resultsList.querySelectorAll('.candidate-suggestion-item');
+            const isVisible = !dropdown.classList.contains('d-none');
+
+            if (e.key === 'ArrowDown') {
+                if (!isVisible && searchInput.value.trim().length >= 2) {
+                    fetchSuggestions(searchInput.value.trim());
+                    e.preventDefault();
+                    return;
+                }
+                if (isVisible && items.length > 0) {
+                    e.preventDefault();
+                    const nextIndex = (activeIndex + 1) < items.length ? (activeIndex + 1) : 0;
+                    setActiveIndex(nextIndex);
+                }
+            } else if (e.key === 'ArrowUp') {
+                if (isVisible && items.length > 0) {
+                    e.preventDefault();
+                    const prevIndex = (activeIndex - 1) >= 0 ? (activeIndex - 1) : (items.length - 1);
+                    setActiveIndex(prevIndex);
+                }
+            } else if (e.key === 'Enter') {
+                if (isVisible && activeIndex >= 0 && activeIndex < items.length) {
+                    e.preventDefault();
+                    items[activeIndex].click();
+                } else {
+                    hideDropdown();
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+
+        // Close on clicking outside
+        document.addEventListener('click', function(e) {
+            if (wrapper && !wrapper.contains(e.target)) {
+                hideDropdown();
+            }
+        });
+    })();
 
     // Bulk selection logic
     function toggleSelectAll(masterCb) {

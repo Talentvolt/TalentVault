@@ -1431,7 +1431,7 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         from apps.candidates.models import RecentCandidateSearch
         
         user = self.request.user
-        base_qs = get_tenant_candidates_qs(user).prefetch_related(
+        base_qs = get_tenant_candidates_qs(user).order_by('-created_at').prefetch_related(
             Prefetch(
                 'job_applications',
                 queryset=get_tenant_applications_qs(user).select_related('job', 'job__company', 'job__client', 'created_by').order_by('-created_at')
@@ -1521,7 +1521,7 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         if not mandatory_keywords_param and self.request.GET.get('mandatory_keywords'):
             mandatory_keywords_param = [k.strip() for k in self.request.GET.get('mandatory_keywords').split(',') if k.strip()]
         boolean_query_param = (self.request.GET.get('boolean_query') or '').strip()
-        sort_by = self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'relevance'
+        sort_by = (self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'newest').strip()
 
         # Tab routing (e.g. shortlisted, saved_for_later, new, modified)
         tab_param = self.request.GET.get('tab', '').strip().lower()
@@ -1628,15 +1628,6 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             sort_by=sort_by
         )
 
-        user_display_name = ""
-        if user and user.is_authenticated:
-            user_display_name = user.get_full_name().strip()
-            if not user_display_name and user.email:
-                email_name = user.email.split('@')[0]
-                import re as re_mod
-                clean_name = re_mod.sub(r'[._\d+]+', ' ', email_name).strip().title()
-                user_display_name = clean_name if len(clean_name) >= 3 else user.email
-
         candidates_list = []
         for item in scored_results:
             cand = item["candidate"]
@@ -1650,10 +1641,7 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             cand.latest_application = apps_list[0] if apps_list else None
 
             # Resolve effective uploader user name
-            cand_uploader = cand.uploader_name
-            if not cand_uploader and user_display_name:
-                cand_uploader = user_display_name
-            cand.effective_uploader_name = cand_uploader
+            cand.effective_uploader_name = cand.uploader_name or "System Import"
 
             candidates_list.append(cand)
 
@@ -1738,7 +1726,7 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             'search_within_results': (self.request.GET.get('search_within_results') or '').strip(),
             'mandatory_keywords': (self.request.GET.get('mandatory_keywords') or '').strip(),
             'boolean_query': (self.request.GET.get('boolean_query') or '').strip(),
-            'sort_by': (self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'relevance').strip(),
+            'sort_by': (self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'newest').strip(),
         }
         context['selected_tags'] = selected_tags_list
         context['selected_tags_json'] = json.dumps([t["label"] for t in selected_tags_list])
@@ -1925,50 +1913,25 @@ class CandidateRecentSearchesAPIView(RecruiterRequiredMixin, View):
 class CandidateAutocompleteView(RecruiterRequiredMixin, View):
     """
     Universal Dynamic candidate & taxonomy autocomplete suggestions.
-    Fast, debounced, ranked by exact match > prefix > substring.
+    Fast, debounced, indexed/multi-field partial search with rank ordering.
+    Supports candidate name, email, phone, designation, company, skills, and location.
     """
     def get(self, request, *args, **kwargs):
-        from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
+        import urllib.parse
+        from django.db.models import Q
         stype = request.GET.get('type', 'all').strip().lower()
         q = request.GET.get('q', '').strip()
 
-        if not q or (stype not in ['name', 'candidate_name'] and len(q) < 1):
-            return JsonResponse({'results': [], 'suggestions': []})
+        if not q or len(q) < 2:
+            return JsonResponse({'query': q, 'count': 0, 'results': [], 'candidates': [], 'suggestions': []})
 
         user = request.user
         q_lower = q.lower()
-        results = []
-        seen = set()
 
-        if stype in ['name', 'candidate_name']:
-            candidates_qs = get_tenant_candidates_qs(user).select_related('user').filter(
-                Q(full_name__icontains=q) |
-                Q(user__first_name__icontains=q) |
-                Q(user__last_name__icontains=q) |
-                Q(user__email__icontains=q)
-            ).distinct()[:20]
-
-            for cand in candidates_qs:
-                cand_name = cand.full_name or cand.user.get_full_name() or cand.user.email
-                if not cand_name or cand_name in seen:
-                    continue
-                seen.add(cand_name)
-
-                name_lower = cand_name.lower()
-                rank = 1 if name_lower == q_lower else (2 if name_lower.startswith(q_lower) else 3)
-                results.append({
-                    'value': cand_name,
-                    'title': cand.current_designation or "Candidate",
-                    'subtitle': cand.location or "",
-                    'avatar': cand_name[0].upper() if cand_name else "C",
-                    'rank': rank,
-                    'url': reverse('frontend:candidate_detail', kwargs={'pk': cand.id})
-                })
-            results.sort(key=lambda x: (x['rank'], x['value']))
-
-        else:
-            # Universal Taxonomy Autocomplete
-            taxonomy_data = TaxonomyEngine.get_smart_suggestions(query=q, limit=15)
+        if stype == 'taxonomy':
+            from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
+            taxonomy_data = TaxonomyEngine.get_smart_suggestions(query=q, limit=12)
+            results = []
             for s in taxonomy_data.get('results', []):
                 results.append({
                     'id': s.get('id', ''),
@@ -1981,8 +1944,122 @@ class CandidateAutocompleteView(RecruiterRequiredMixin, View):
                     'score': s.get('score', 0.8),
                     'subtitle': f"{s.get('type', 'Keyword').title()} &bull; {s.get('category', '')}"
                 })
+            return JsonResponse({'query': q, 'count': len(results), 'results': results, 'suggestions': results})
 
-        return JsonResponse({'query': q, 'count': len(results), 'results': results, 'suggestions': results})
+        # Multi-field Candidate Directory Autocomplete Search
+        candidates_qs = get_tenant_candidates_qs(user).select_related('user').prefetch_related('skills').filter(
+            Q(full_name__icontains=q) |
+            Q(user__first_name__icontains=q) |
+            Q(user__last_name__icontains=q) |
+            Q(user__email__icontains=q) |
+            Q(user__phone_number__icontains=q) |
+            Q(current_designation__icontains=q) |
+            Q(current_company__icontains=q) |
+            Q(skills__skill_name__icontains=q) |
+            Q(location__icontains=q)
+        ).distinct()[:20]
+
+        results = []
+        seen_ids = set()
+
+        for cand in candidates_qs:
+            if cand.id in seen_ids:
+                continue
+            seen_ids.add(cand.id)
+
+            cand_name = cand.full_name or (cand.user.get_full_name().strip() if cand.user else '') or (cand.user.email if cand.user else 'Candidate')
+            cand_name_lower = cand_name.lower()
+            desig = cand.current_designation or ""
+            desig_lower = desig.lower()
+            comp = cand.current_company or ""
+            comp_lower = comp.lower()
+            skills = [s.skill_name for s in cand.skills.all()[:5] if s.skill_name]
+            skills_lower = [s.lower() for s in skills]
+
+            # Determine match relevance rank
+            if cand_name_lower == q_lower:
+                rank = 1
+            elif cand_name_lower.startswith(q_lower):
+                rank = 2
+            elif q_lower in cand_name_lower:
+                rank = 3
+            elif desig_lower.startswith(q_lower) or q_lower in desig_lower:
+                rank = 4
+            elif any(q_lower in sk for sk in skills_lower):
+                rank = 5
+            elif q_lower in comp_lower:
+                rank = 6
+            else:
+                rank = 7
+
+            subtitle_parts = []
+            if desig:
+                subtitle_parts.append(desig)
+            if comp:
+                subtitle_parts.append(comp)
+            subtitle = " · ".join(subtitle_parts) if subtitle_parts else (cand.location or "Candidate Profile")
+
+            matched_skill = ""
+            for sk in skills:
+                if q_lower in sk.lower():
+                    matched_skill = sk
+                    break
+
+            results.append({
+                'id': str(cand.id),
+                'value': cand_name,
+                'name': cand_name,
+                'title': desig or "Candidate",
+                'designation': desig,
+                'company': comp,
+                'subtitle': subtitle,
+                'location': cand.location or "",
+                'skills': skills,
+                'matched_skill': matched_skill,
+                'rank': rank,
+                'avatar': cand_name[0].upper() if cand_name else "C",
+                'url': reverse('frontend:candidate_detail', kwargs={'pk': cand.id}),
+            })
+
+        results.sort(key=lambda x: (x['rank'], x['name'].lower()))
+        top_results = results[:8]
+
+        # If general search and no candidate profiles match, enrich with taxonomy suggestions
+        if not top_results and stype in ['all', '']:
+            from apps.taxonomy.services.taxonomy_engine import TaxonomyEngine
+            taxonomy_data = TaxonomyEngine.get_smart_suggestions(query=q, limit=12)
+            tax_results = []
+            for s in taxonomy_data.get('results', []):
+                tax_results.append({
+                    'id': s.get('id', ''),
+                    'value': s['label'],
+                    'name': s['label'],
+                    'label': s['label'],
+                    'title': s['label'],
+                    'type': s.get('type', 'designation'),
+                    'category': s.get('category', ''),
+                    'score': s.get('score', 0.8),
+                    'subtitle': f"{s.get('type', 'Keyword').title()} &bull; {s.get('category', '')}"
+                })
+            return JsonResponse({
+                'query': q,
+                'count': len(tax_results),
+                'total_matches': len(tax_results),
+                'results': tax_results,
+                'candidates': [],
+                'suggestions': tax_results,
+                'view_all_url': f"{reverse('frontend:candidate_search')}?q={urllib.parse.quote(q)}"
+            })
+
+        return JsonResponse({
+            'query': q,
+            'count': len(top_results),
+            'total_matches': len(results),
+            'results': top_results,
+            'candidates': top_results,
+            'suggestions': top_results,
+            'view_all_url': f"{reverse('frontend:candidate_search')}?q={urllib.parse.quote(q)}"
+        })
 
 
 class JobCandidatesView(RecruiterRequiredMixin, ListView):
@@ -2188,22 +2265,35 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
                 duplicates.append(res)
         context['duplicates'] = duplicates
         
-        # Determine which version to preview (default to 1)
+        # Determine which version to preview (default to self.object.current_version or latest available)
         version_param = self.request.GET.get('version')
-        selected_version_id = 1
+        selected_version_id = None
         if version_param:
             try:
                 selected_version_id = int(version_param)
             except ValueError:
-                selected_version_id = 1
+                selected_version_id = None
                 
+        if selected_version_id is None:
+            selected_version_id = self.object.current_version or 1
+
         version_str = str(selected_version_id)
         if self.object.resume_versions and version_str in self.object.resume_versions:
             version_data = self.object.resume_versions[version_str]["data"]
         else:
-            if self.object.resume_versions and "1" in self.object.resume_versions:
-                version_data = self.object.resume_versions["1"]["data"]
-                selected_version_id = 1
+            current_ver_str = str(self.object.current_version) if self.object.current_version else "1"
+            if self.object.resume_versions and current_ver_str in self.object.resume_versions:
+                version_data = self.object.resume_versions[current_ver_str]["data"]
+                selected_version_id = self.object.current_version
+            elif self.object.resume_versions:
+                available_keys = [int(k) for k in self.object.resume_versions.keys() if str(k).isdigit()]
+                if available_keys:
+                    latest_key = str(max(available_keys))
+                    version_data = self.object.resume_versions[latest_key]["data"]
+                    selected_version_id = int(latest_key)
+                else:
+                    version_data = {}
+                    selected_version_id = self.object.current_version or 1
             else:
                 # Reconstruct version data from database fields if versions are empty
                 version_data = {
@@ -2211,7 +2301,7 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
                         "name": self.object.full_name,
                         "current_company": self.object.current_company,
                         "current_designation": self.object.current_designation,
-                        "total_experience": float(self.object.total_experience),
+                        "total_experience": float(self.object.total_experience) if self.object.total_experience is not None else 0.0,
                         "location": self.object.location,
                     },
                     "summary": self.object.summary,
@@ -2249,7 +2339,7 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
                         } for c in self.object.certifications.all()
                     ]
                 }
-                selected_version_id = 1
+                selected_version_id = self.object.current_version or 1
 
         context['selected_version_id'] = selected_version_id
 
@@ -4519,16 +4609,37 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
             
         current_sal = info.get("current_salary")
         expected_sal = info.get("expected_salary")
-        if current_sal is not None:
+        if current_sal is not None and str(current_sal).strip() != "":
             try:
                 profile.current_salary = Decimal(str(current_sal)) * 100000
             except Exception:
                 pass
-        if expected_sal is not None:
+        elif current_sal is None or str(current_sal).strip() == "":
+            profile.current_salary = None
+
+        if expected_sal is not None and str(expected_sal).strip() != "":
             try:
                 profile.expected_salary = Decimal(str(expected_sal)) * 100000
             except Exception:
                 pass
+        elif expected_sal is None or str(expected_sal).strip() == "":
+            profile.expected_salary = None
+            
+        # Update user email / phone if provided
+        new_email = info.get("email")
+        new_phone = info.get("phone")
+        if profile.user:
+            user_changed = False
+            if new_email and new_email.strip() and new_email.strip() != profile.user.email:
+                from apps.accounts.models import User
+                if not User.objects.filter(email__iexact=new_email.strip()).exclude(id=profile.user.id).exists():
+                    profile.user.email = new_email.strip()
+                    user_changed = True
+            if new_phone is not None and new_phone != profile.user.phone_number:
+                profile.user.phone_number = new_phone.strip() if new_phone else ""
+                user_changed = True
+            if user_changed:
+                profile.user.save()
             
         profile.edited_by = request.user
         profile.edited_at = timezone.now()

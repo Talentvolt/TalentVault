@@ -485,5 +485,133 @@ def test_save_llm_parsed_data_education_one_year():
     assert edu.end_date == datetime.date(2015, 5, 1)
 
 
+@pytest.mark.django_db
+def test_structured_resume_editor_save_and_reload_version_selection():
+    from apps.candidates.models import CandidateProfile
+    from apps.accounts.models import User
+    from apps.core.views import CandidateJSONEditView, CandidateDetailView
+    from django.test import RequestFactory
+    from django.urls import reverse
+    from decimal import Decimal
+    import json
+
+    # 1. Create Recruiter and Candidate
+    recruiter = User.objects.create_user(email="recruiter_test@example.com", password="password123", role="RECRUITER")
+    candidate_user = User.objects.create_user(email="original_candidate@example.com", password="password123", phone_number="1111111111", role="CANDIDATE")
+    profile = CandidateProfile.objects.create(
+        user=candidate_user,
+        full_name="Original Name",
+        location="Old Location",
+        current_designation="Junior Dev",
+        current_company="Old Corp",
+        summary="Original summary text",
+        current_salary=Decimal("500000.00"),
+        expected_salary=Decimal("800000.00"),
+        current_version=1,
+        resume_versions={
+            "1": {
+                "version": 1,
+                "label": "Original Resume (v1)",
+                "data": {
+                    "personal_info": {
+                        "name": "Original Name",
+                        "email": "original_candidate@example.com",
+                        "phone": "1111111111",
+                        "location": "Old Location",
+                        "current_company": "Old Corp",
+                        "current_designation": "Junior Dev",
+                        "total_experience": 1.0,
+                        "current_salary": 5.0,
+                        "expected_salary": 8.0,
+                    },
+                    "summary": "Original summary text",
+                    "skills": ["Python"],
+                    "experience": [],
+                    "education": [],
+                    "projects": [],
+                    "certifications": []
+                }
+            }
+        }
+    )
+
+    # 2. Recruiter edits candidate via Structured Resume Editor
+    edited_data = {
+        "personal_info": {
+            "name": "Updated Candidate Name",
+            "email": "updated_candidate@example.com",
+            "phone": "9999999999",
+            "location": "Bangalore, India",
+            "current_company": "Tech Innovators",
+            "current_designation": "Lead Architect",
+            "total_experience": 8.5,
+            "current_salary": 25.0,
+            "expected_salary": 35.0,
+        },
+        "summary": "Experienced Lead Architect specializing in scalable Python/Django systems.",
+        "skills": ["Python", "Django", "PostgreSQL", "AWS"],
+        "experience": [
+            {
+                "company": "Tech Innovators",
+                "designation": "Lead Architect",
+                "start_date": "2020-01-01",
+                "end_date": "Present",
+                "description": "Architected high-throughput services."
+            }
+        ],
+        "education": [],
+        "projects": [],
+        "certifications": []
+    }
+
+    factory = RequestFactory()
+    edit_req = factory.post(
+        reverse('frontend:candidate_edit_json', kwargs={'pk': profile.pk}),
+        data=json.dumps(edited_data),
+        content_type='application/json'
+    )
+    edit_req.user = recruiter
+    edit_res = CandidateJSONEditView.as_view()(edit_req, pk=profile.pk)
+    assert edit_res.status_code == 200
+
+    profile.refresh_from_db()
+    candidate_user.refresh_from_db()
+    assert profile.current_version == 2
+    assert profile.full_name == "Updated Candidate Name"
+    assert profile.location == "Bangalore, India"
+    assert profile.current_designation == "Lead Architect"
+    assert profile.current_salary == Decimal("2500000.00")
+    assert profile.expected_salary == Decimal("3500000.00")
+    assert candidate_user.email == "updated_candidate@example.com"
+    assert candidate_user.phone_number == "9999999999"
+
+    # 3. Reload candidate detail page WITHOUT version query param (should default to current_version 2)
+    view_req = factory.get(reverse('frontend:candidate_detail', kwargs={'pk': profile.pk}))
+    view_req.user = recruiter
+    detail_view = CandidateDetailView()
+    detail_view.setup(view_req, pk=profile.pk)
+    detail_view.object = profile
+    context = detail_view.get_context_data()
+
+    assert context['selected_version_id'] == 2
+    assert context['candidate'].full_name == "Updated Candidate Name"
+    assert context['candidate'].location == "Bangalore, India"
+    assert context['candidate'].current_designation == "Lead Architect"
+    assert context['candidate'].summary == "Experienced Lead Architect specializing in scalable Python/Django systems."
+
+    # 4. Request explicit version 1 (should display old version 1 data)
+    v1_req = factory.get(reverse('frontend:candidate_detail', kwargs={'pk': profile.pk}) + '?version=1')
+    v1_req.user = recruiter
+    v1_view = CandidateDetailView()
+    v1_view.setup(v1_req, pk=profile.pk)
+    v1_view.object = profile
+    v1_context = v1_view.get_context_data()
+
+    assert v1_context['selected_version_id'] == 1
+    assert v1_context['candidate'].full_name == "Original Name"
+    assert v1_context['candidate'].location == "Old Location"
+
+
+
 
 

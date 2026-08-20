@@ -101,9 +101,13 @@
                         {% endif %}
                     </div>
 
-                    <!-- Uploaded By User Metadata -->
-                    <div class="candidate-uploader-text text-secondary x-small d-flex align-items-center gap-2 flex-wrap mt-0.5">
-                        <span><i class="bi bi-person-up text-primary opacity-75 me-1"></i>Uploaded By: <strong class="text-dark">{{ candidate.effective_uploader_name|default:candidate.uploader_name|default:request.user.get_full_name|default:request.user.email }}</strong></span>
+                    <!-- Uploaded By User Metadata & Relative Time -->
+                    <div class="candidate-uploader-text text-secondary x-small d-flex align-items-center gap-1.5 flex-wrap mt-0.5">
+                        <span><i class="bi bi-person-up text-primary opacity-75 me-1"></i>Uploaded By: <strong class="text-dark">{{ candidate.effective_uploader_name|default:candidate.uploader_name|default:"System Import" }}</strong></span>
+                        {% if candidate.created_relative_time %}
+                            <span class="text-muted opacity-50">&bull;</span>
+                            <span class="text-muted"><i class="bi bi-clock-history me-1 opacity-75"></i>{{ candidate.created_relative_time }}</span>
+                        {% endif %}
                     </div>
                 </div>
             </div>

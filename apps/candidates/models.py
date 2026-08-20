@@ -222,6 +222,11 @@ class CandidateProfile(BaseAppModel):
             return getattr(user_obj, 'username', None)
         return None
 
+    @property
+    def created_relative_time(self):
+        from utils.date_helpers import format_upload_relative_time
+        return format_upload_relative_time(self.created_at)
+
     # Security and File Processing Audit fields
     original_filename = models.CharField(max_length=255, blank=True, null=True)
     secure_filename = models.CharField(max_length=255, blank=True, null=True)
@@ -282,20 +287,31 @@ class CandidateProfile(BaseAppModel):
             if "personal_info" not in version_data:
                 version_data["personal_info"] = {}
             
-            version_data["personal_info"]["name"] = self.full_name
-            version_data["personal_info"]["current_company"] = self.current_company
-            version_data["personal_info"]["current_designation"] = self.current_designation
+            if self.full_name:
+                version_data["personal_info"]["name"] = self.full_name
+            if self.current_company is not None:
+                version_data["personal_info"]["current_company"] = self.current_company
+            if self.current_designation is not None:
+                version_data["personal_info"]["current_designation"] = self.current_designation
             try:
                 version_data["personal_info"]["total_experience"] = float(self.total_experience) if self.total_experience is not None else 0.0
             except Exception:
                 pass
             try:
-                version_data["personal_info"]["current_salary"] = float(self.current_salary) / 100000.0 if self.current_salary is not None else 0.0
-                version_data["personal_info"]["expected_salary"] = float(self.expected_salary) / 100000.0 if self.expected_salary is not None else 0.0
+                version_data["personal_info"]["current_salary"] = float(self.current_salary) / 100000.0 if self.current_salary is not None else None
+                version_data["personal_info"]["expected_salary"] = float(self.expected_salary) / 100000.0 if self.expected_salary is not None else None
             except Exception:
                 pass
-            version_data["personal_info"]["location"] = self.location
-            version_data["summary"] = self.summary
+            if self.location is not None:
+                version_data["personal_info"]["location"] = self.location
+            if self.summary is not None:
+                version_data["summary"] = self.summary
+            
+            if hasattr(self, 'user') and self.user:
+                if "email" not in version_data["personal_info"] or not version_data["personal_info"]["email"]:
+                    version_data["personal_info"]["email"] = self.user.email
+                if "phone" not in version_data["personal_info"] or not version_data["personal_info"]["phone"]:
+                    version_data["personal_info"]["phone"] = self.user.phone_number or ""
             
             self.resume_versions[version_str]["data"] = version_data
             self.parsed_json = version_data
