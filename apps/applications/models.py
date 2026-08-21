@@ -142,7 +142,17 @@ class Application(BaseAppModel):
     linkedin_url = models.URLField(max_length=500, blank=True, null=True)
     portfolio_url = models.URLField(max_length=500, blank=True, null=True)
     resume = models.FileField(upload_to='application_resumes/', null=True, blank=True)
-    screening_answers = models.JSONField(default=dict, blank=True)
+    @property
+    def resume_download_url(self):
+        """
+        Returns the secure authorized resume download URL.
+        """
+        if self.candidate and self.candidate.has_resume:
+            return self.candidate.resume_file_url
+        if self.resume and self.resume.name:
+            from utils.s3 import get_presigned_url
+            return get_presigned_url(self.resume, expires_in=900, as_attachment=True)
+        return "#"
 
     class Meta:
         unique_together = ('job', 'candidate')

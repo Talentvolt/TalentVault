@@ -170,12 +170,45 @@ class CandidateProfile(BaseAppModel):
 
     @property
     def resume_file_url(self):
+        """
+        Returns the authorized resume download endpoint URL.
+        """
         try:
             if self.has_resume:
-                return self.resume.url
+                from django.urls import reverse
+                return reverse('frontend:candidate_resume_download', args=[self.pk])
         except Exception:
             pass
         return "#"
+
+    @property
+    def resume_preview_url(self):
+        """
+        Returns the authorized resume preview endpoint URL.
+        """
+        try:
+            if self.has_resume:
+                from django.urls import reverse
+                return reverse('frontend:candidate_resume_preview', args=[self.pk])
+        except Exception:
+            pass
+        return "#"
+
+    def get_presigned_resume_url(self, expires_in=900, as_attachment=False):
+        """
+        Generates a secure temporary S3 presigned GET URL for this candidate's resume.
+        """
+        if not self.has_resume:
+            return ""
+        import os
+        from utils.s3 import get_presigned_url
+        filename = self.original_filename or os.path.basename(self.resume.name)
+        return get_presigned_url(
+            self.resume,
+            expires_in=expires_in,
+            as_attachment=as_attachment,
+            filename=filename
+        )
 
     @property
     def current_salary_lpa(self):

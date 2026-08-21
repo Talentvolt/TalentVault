@@ -4,7 +4,7 @@ import json
 import logging
 from decimal import Decimal
 from datetime import datetime
-from django.http import JsonResponse, HttpResponse, FileResponse, Http404
+from django.http import JsonResponse, HttpResponse, FileResponse, Http404, HttpResponseForbidden
 from django.views.generic import TemplateView, ListView, DetailView, View, CreateView, UpdateView, DeleteView
 from django.utils.decorators import method_decorator
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -5405,16 +5405,41 @@ class CandidateExportPDFView(LoginRequiredMixin, View):
         return response
 
 
+def user_can_access_candidate_resume(user, candidate):
+    """
+    Checks if a user is authorized to preview or download a candidate's resume.
+    Recruiters, Company Admins, Super Admins, and the candidate themselves are authorized.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+    role = getattr(user, 'role', None)
+    if role in [User.Role.SUPER_ADMIN, User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+        return True
+    if role == User.Role.CANDIDATE and candidate.user_id == user.id:
+        return True
+    return False
+
+
 @method_decorator(xframe_options_sameorigin, name='dispatch')
 class CandidateResumePreviewView(LoginRequiredMixin, View):
     """
     Renders inline candidate resume in browser for PDF, JPG, PNG, DOC, DOCX, RTF, TXT previews.
     Only displays the original uploaded file stored in CandidateProfile.resume.
+    Enforces role/candidate authorization.
     """
     def get(self, request, pk, *args, **kwargs):
         candidate = get_object_or_404(CandidateProfile, pk=pk)
+        
+        if not user_can_access_candidate_resume(request.user, candidate):
+            return HttpResponseForbidden("You do not have permission to view this candidate's resume.")
+
         candidate.preview_status = 'VIEWED'
-        candidate.save(update_fields=['preview_status'])
+        try:
+            candidate.save(update_fields=['preview_status'])
+        except Exception:
+            pass
         
         from utils.preview import generate_resume_preview_response
         return generate_resume_preview_response(candidate)
@@ -5423,36 +5448,49 @@ class CandidateResumePreviewView(LoginRequiredMixin, View):
 class CandidateResumeDownloadView(LoginRequiredMixin, View):
     """
     Forces download of the original candidate resume file stored in CandidateProfile.resume, preserving filename.
+    Generates a temporary S3 presigned GET URL (15 minutes expiry) with correct Content-Type and Content-Disposition.
+    Enforces role/candidate authorization.
     """
     def get(self, request, pk, *args, **kwargs):
         import os
         import mimetypes
         try:
             candidate = get_object_or_404(CandidateProfile, pk=pk)
+            
+            if not user_can_access_candidate_resume(request.user, candidate):
+                return HttpResponseForbidden("You do not have permission to download this candidate's resume.")
+
             if not candidate.resume or not candidate.resume.name:
-                return HttpResponse("No resume file found.", status=404)
+                return HttpResponse("No resume file found for this candidate.", status=404)
                 
             resume_file = candidate.resume
             filename = candidate.original_filename or os.path.basename(resume_file.name)
             
-            from utils.s3 import get_presigned_url
-            presigned_url = get_presigned_url(resume_file, expires_in=3600, as_attachment=True, filename=filename)
+            from utils.s3 import get_presigned_url, get_content_type
+            content_type = get_content_type(filename)
+            
+            # Local storage support
+            if getattr(settings, 'USE_LOCAL_STORAGE', '0') == '1':
+                if hasattr(resume_file.storage, 'path') and resume_file.storage.exists(resume_file.name):
+                    f = resume_file.open('rb')
+                    return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+
+            presigned_url = get_presigned_url(
+                resume_file,
+                expires_in=900,
+                as_attachment=True,
+                filename=filename,
+                content_type=content_type
+            )
             if presigned_url and presigned_url.startswith('http'):
                 return redirect(presigned_url)
 
-            if resume_file.storage.exists(resume_file.name):
-                try:
-                    if hasattr(resume_file.storage, 'path'):
-                        f = resume_file.open('rb')
-                        content_type, _ = mimetypes.guess_type(resume_file.name)
-                        if not content_type:
-                            content_type = 'application/octet-stream'
-                        return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
-                except NotImplementedError:
-                    pass
-                return redirect(resume_file.url)
+            if hasattr(resume_file.storage, 'path') and resume_file.storage.exists(resume_file.name):
+                f = resume_file.open('rb')
+                return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+
         except Exception as e:
-            logger.error(f"Error downloading candidate resume {pk}: {e}")
+            logger.error(f"Error downloading candidate resume {pk}: {e}", exc_info=True)
             
         return HttpResponse("Resume file is not available.", status=404)
 
@@ -5497,13 +5535,28 @@ class PublicCandidateResumeDownloadView(View):
             resume_file = candidate.resume
             filename = candidate.original_filename or os.path.basename(resume_file.name)
             
-            from utils.s3 import get_presigned_url
-            presigned_url = get_presigned_url(resume_file, expires_in=3600, as_attachment=True, filename=filename)
+            from utils.s3 import get_presigned_url, get_content_type
+            content_type = get_content_type(filename)
+            
+            # Local storage support
+            if getattr(settings, 'USE_LOCAL_STORAGE', '0') == '1':
+                if hasattr(resume_file.storage, 'path') and resume_file.storage.exists(resume_file.name):
+                    f = resume_file.open('rb')
+                    return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
+
+            presigned_url = get_presigned_url(
+                resume_file,
+                expires_in=900,
+                as_attachment=True,
+                filename=filename,
+                content_type=content_type
+            )
             if presigned_url and presigned_url.startswith('http'):
                 return redirect(presigned_url)
 
-            if resume_file.storage.exists(resume_file.name):
-                return redirect(resume_file.url)
+            if hasattr(resume_file.storage, 'path') and resume_file.storage.exists(resume_file.name):
+                f = resume_file.open('rb')
+                return FileResponse(f, as_attachment=True, filename=filename, content_type=content_type)
 
         except Exception as e:
             logger.error(f"Error downloading candidate resume {pk}: {e}")

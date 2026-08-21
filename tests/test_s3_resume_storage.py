@@ -100,7 +100,7 @@ class S3ResumeStorageTests(TestCase):
             self.profile.refresh_from_db()
             self.assertEqual(self.profile.resume.name, saved_key)
             self.assertTrue(self.profile.has_resume)
-            self.assertIn(saved_key, self.profile.resume_file_url)
+            self.assertEqual(self.profile.resume_file_url, reverse('frontend:candidate_resume_download', args=[self.profile.pk]))
 
     def test_upload_doc_and_docx_success_lifecycle(self):
         """Test DOC and DOCX resume uploads."""

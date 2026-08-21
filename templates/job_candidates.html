@@ -712,12 +712,8 @@
                             <i class="bi bi-person me-1"></i>View Profile
                         </a>
 
-                        {% if app.resume %}
-                            <a href="{{ app.resume.url }}" download class="btn btn-sm btn-outline-secondary fw-bold py-1.5" style="border-radius: 8px; font-size: 12px;">
-                                <i class="bi bi-download me-1"></i>Download Resume
-                            </a>
-                        {% elif app.candidate.resume %}
-                            <a href="{{ app.candidate.resume.url }}" download class="btn btn-sm btn-outline-secondary fw-bold py-1.5" style="border-radius: 8px; font-size: 12px;">
+                        {% if app.candidate.has_resume %}
+                            <a href="{% url 'frontend:candidate_resume_download' app.candidate.id %}" class="btn btn-sm btn-outline-secondary fw-bold py-1.5" style="border-radius: 8px; font-size: 12px;">
                                 <i class="bi bi-download me-1"></i>Download Resume
                             </a>
                         {% endif %}

@@ -149,15 +149,23 @@ def generate_resume_preview_response(candidate):
     """
     Processes the candidate's resume and returns an inline Django HTTP/File Response.
     Supports PDF, DOC, DOCX, RTF, TXT.
+    Handles missing/deleted S3 objects gracefully with a user-friendly error instead of a 500.
     """
-    if not candidate.resume:
+    if not candidate.resume or not candidate.resume.name:
         return HttpResponse(get_error_html_wrapper("No resume file associated with this profile."), status=404)
 
-    if not candidate.resume.storage.exists(candidate.resume.name):
+    try:
+        exists = candidate.resume.storage.exists(candidate.resume.name)
+    except Exception as e_exists:
+        logger.warning(f"Storage exists check failed for {candidate.resume.name}: {e_exists}")
+        exists = False
+
+    if not exists:
         return HttpResponse(get_error_html_wrapper("Resume file was not found in storage."), status=404)
 
     import tempfile
     import os
+    from utils.s3 import get_content_type
     
     file_path = None
     is_temp = False
@@ -177,7 +185,7 @@ def generate_resume_preview_response(candidate):
             is_temp = True
         except Exception as temp_err:
             logger.error(f"Failed to create temporary file for preview: {temp_err}", exc_info=True)
-            return HttpResponse(get_error_html_wrapper("Failed to retrieve resume from cloud storage."), status=500)
+            return HttpResponse(get_error_html_wrapper("Resume file is no longer available in cloud storage."), status=404)
 
     filename = candidate.original_filename or os.path.basename(candidate.resume.name) or "resume"
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
@@ -188,9 +196,9 @@ def generate_resume_preview_response(candidate):
     except Exception:
         file_size_kb = 0.0
         
-    mime_type = candidate.mime_type or f"application/{ext}"
+    mime_type = candidate.mime_type or get_content_type(filename)
     try:
-        download_url = candidate.resume.url if candidate.resume else "#"
+        download_url = candidate.resume_file_url
     except Exception:
         download_url = "#"
     extracted_text = candidate.raw_resume_text or "No extracted text available."
