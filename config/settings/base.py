@@ -40,9 +40,12 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1",
     "http://localhost",
+    "http://0.0.0.0:8000",
+    "http://[::1]:8000",
     "https://talent-vault.in",
     "https://www.talent-vault.in",
     "https://*.onrender.com",
+    "https://*.talent-vault.in",
 ]
 
 env_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS")
@@ -148,6 +151,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.csrf',
                 'apps.notifications.context_processors.unread_notifications',
             ],
         },

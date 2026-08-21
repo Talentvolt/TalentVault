@@ -363,38 +363,94 @@ def repair_pdf_bytes(file_bytes, filename="resume.pdf"):
     logger.error(f"[PDF REPAIR FAILED] All repair strategies failed for {filename}")
     return None, None, None
 
+def is_c2pa_manifest(info=None, doc=None, emb_idx=None, obj_defn=None):
+    """
+    Check if an embedded file entry or xref object is a standard C2PA provenance manifest
+    or Content Credentials metadata rather than a dangerous embedded file attachment.
+    """
+    if info:
+        name = str(info.get('name', '') or '').strip().lower()
+        filename = str(info.get('filename', '') or '').strip().lower()
+        desc = str(info.get('description', '') or '').strip().lower()
+        c2pa_keywords = {'content credentials', 'c2pa', 'c2pa.manifest', 'c2pa_manifest', 'c2pa.jumbf'}
+        if name in c2pa_keywords or desc in c2pa_keywords or filename in c2pa_keywords:
+            return True
+
+    if obj_defn:
+        if any(tag in obj_defn for tag in [
+            '/AFRelationship /C2PA_Manifest',
+            '/AFRelationship/C2PA_Manifest',
+            '/Subtype (application/c2pa)',
+            '/Subtype /application#2Fc2pa',
+            '/Subtype/application#2Fc2pa',
+            '/Desc (Content Credentials)',
+            '/F (Content Credentials)',
+            '/UF (Content Credentials)',
+        ]):
+            return True
+
+    if doc is not None and emb_idx is not None:
+        try:
+            content = doc.embfile_get(emb_idx)
+            # C2PA manifests use the ISO JUMBF container format starting with 'jumb' box
+            if len(content) >= 16 and b'jumb' in content[:32] and (b'c2pa' in content[:64] or b'jumd' in content[:64]):
+                return True
+        except Exception:
+            pass
+
+    return False
+
 def scan_pdf_security(file_bytes):
     """
-    Reject PDFs containing JavaScript, embedded executables, launch actions, suspicious annotations, or embedded files.
+    Reject PDFs containing JavaScript, embedded executables, launch actions, suspicious annotations, or genuine embedded files.
     Xref and structural PDF errors MUST NOT trigger security rejections.
+    Standard document metadata and C2PA provenance credentials (Content Credentials) are safely parsed and accepted.
     """
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         
-        # Embedded files check
+        # 1. Document-level embedded files check (Names/EmbeddedFiles and Associated Files /AF)
         try:
-            if doc.embfile_count() > 0:
-                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.", code="PDF_EMBEDDED_FILES")
+            count = doc.embfile_count()
+            for idx in range(count):
+                info = doc.embfile_info(idx)
+                if not is_c2pa_manifest(info, doc, idx):
+                    raw_name = str(info.get('name', '') or info.get('filename', '') or 'embedded_file')
+                    safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', raw_name)[:64]
+                    file_len = info.get('length', -1)
+                    logger.warning(f"[PDF SECURITY] Genuine embedded file detected: name={safe_name!r}, length={file_len} (emb_index={idx})")
+                    raise SecurityValidationError(
+                        "Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.",
+                        code="PDF_EMBEDDED_FILES"
+                    )
         except SecurityValidationError:
             raise
         except Exception as e:
             logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error reading embedded files count: {e}")
 
-        # Catalog check
+        # 2. Catalog check
         try:
             catalog = doc.pdf_catalog()
             catalog_obj = doc.xref_object(catalog) if catalog else ""
             if '/JavaScript' in catalog_obj:
-                raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript was found in the PDF catalog.", code="PDF_CATALOG_JS")
+                logger.warning(f"[PDF SECURITY] JavaScript in catalog detected (xref={catalog})")
+                raise SecurityValidationError(
+                    "Suspicious PDF content detected. Security validation failed because embedded JavaScript was found in the PDF catalog.",
+                    code="PDF_CATALOG_JS"
+                )
             if '/OpenAction' in catalog_obj:
                 if any(act in catalog_obj for act in ['/JS', '/JavaScript', '/Launch']):
-                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a malicious OpenAction was found in the PDF catalog.", code="PDF_CATALOG_JS")
+                    logger.warning(f"[PDF SECURITY] Malicious OpenAction in catalog detected (xref={catalog})")
+                    raise SecurityValidationError(
+                        "Suspicious PDF content detected. Security validation failed because a malicious OpenAction was found in the PDF catalog.",
+                        code="PDF_CATALOG_JS"
+                    )
         except SecurityValidationError:
             raise
         except Exception as e:
             logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error checking PDF catalog: {e}")
 
-        # Scan objects for suspicious actions
+        # 3. Scan objects for suspicious actions and embedded file objects
         try:
             for xref in range(1, doc.xref_length()):
                 try:
@@ -404,27 +460,73 @@ def scan_pdf_security(file_bytes):
                     continue
                 if not obj_defn:
                     continue
-                if '/JS ' in obj_defn or '/JavaScript' in obj_defn:
-                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded JavaScript (/JS) was detected in object xref.", code="PDF_SUSPICIOUS_OBJ")
-                if '/Launch' in obj_defn:
-                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a Launch Action (/Launch) was detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
-                if '/EmbeddedFiles' in obj_defn:
-                    raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because embedded files (/EmbeddedFiles) were detected in PDF objects.", code="PDF_SUSPICIOUS_OBJ")
+                if '/JS ' in obj_defn or '/JavaScript' in obj_defn or '/S /JavaScript' in obj_defn:
+                    logger.warning(f"[PDF SECURITY] JavaScript detected in object xref={xref}")
+                    raise SecurityValidationError(
+                        "Suspicious PDF content detected. Security validation failed because embedded JavaScript (/JS) was detected in object xref.",
+                        code="PDF_SUSPICIOUS_OBJ"
+                    )
+                if '/Launch' in obj_defn or '/S /Launch' in obj_defn:
+                    logger.warning(f"[PDF SECURITY] Launch action detected in object xref={xref}")
+                    raise SecurityValidationError(
+                        "Suspicious PDF content detected. Security validation failed because a Launch Action (/Launch) was detected in PDF objects.",
+                        code="PDF_SUSPICIOUS_OBJ"
+                    )
+
+                # Check for EmbeddedFile stream objects
+                if ('/Type /EmbeddedFile' in obj_defn or '/Type/EmbeddedFile' in obj_defn) and not is_c2pa_manifest(obj_defn=obj_defn):
+                    logger.warning(f"[PDF SECURITY] EmbeddedFile object detected at xref={xref}")
+                    raise SecurityValidationError(
+                        "Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.",
+                        code="PDF_EMBEDDED_FILES"
+                    )
+
+                # Check for FileSpec dictionary objects (excluding C2PA provenance manifests)
+                if ('/Type /Filespec' in obj_defn or '/Type /FileSpec' in obj_defn or '/Type/Filespec' in obj_defn or '/Type/FileSpec' in obj_defn) and not is_c2pa_manifest(obj_defn=obj_defn):
+                    logger.warning(f"[PDF SECURITY] FileSpec object detected at xref={xref}")
+                    raise SecurityValidationError(
+                        "Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.",
+                        code="PDF_EMBEDDED_FILES"
+                    )
         except SecurityValidationError:
             raise
         except Exception as e:
             logger.warning(f"[PDF STRUCTURAL WARNING] Non-fatal error scanning PDF xref objects: {e}")
 
-        # Scan annotations for active content
+        # 4. Scan annotations for active content and file attachments
         try:
             for page in doc:
                 try:
                     annot = page.first_annot
                     while annot:
                         annot_defn = doc.xref_object(annot.xref)
+                        # Check for FileAttachment annotation
+                        if annot.type[1] == 'FileAttachment' or '/Subtype /FileAttachment' in annot_defn or '/Subtype/FileAttachment' in annot_defn:
+                            logger.warning(f"[PDF SECURITY] FileAttachment annotation detected on page {page.number} (xref={annot.xref})")
+                            raise SecurityValidationError(
+                                "Suspicious PDF content detected. Security validation failed because embedded files were found in the PDF.",
+                                code="PDF_EMBEDDED_FILES"
+                            )
+
+                        # Check for dangerous media annotations
+                        if annot.type[1] in ['RichMedia', '3D', 'Sound', 'Movie', 'Screen'] or any(p in annot_defn for p in ['/Subtype /RichMedia', '/Subtype /3D', '/Subtype /Sound', '/Subtype /Movie', '/Subtype /Screen']):
+                            logger.warning(f"[PDF SECURITY] Dangerous media annotation ({annot.type[1]}) detected on page {page.number} (xref={annot.xref})")
+                            raise SecurityValidationError(
+                                "Suspicious PDF content detected. Security validation failed because dangerous active media was detected in page annotations.",
+                                code="PDF_SUSPICIOUS_ANNOT"
+                            )
+
+                        # Check for active JS or Launch actions in annotations
                         if any(p in annot_defn for p in ['/JS', '/JavaScript', '/Launch']):
-                            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because a dangerous action was detected in page annotations.", code="PDF_SUSPICIOUS_ANNOT")
+                            logger.warning(f"[PDF SECURITY] Dangerous action in annotation detected on page {page.number} (xref={annot.xref})")
+                            raise SecurityValidationError(
+                                "Suspicious PDF content detected. Security validation failed because a dangerous action was detected in page annotations.",
+                                code="PDF_SUSPICIOUS_ANNOT"
+                            )
+
                         annot = annot.next
+                except SecurityValidationError:
+                    raise
                 except Exception:
                     continue
         except SecurityValidationError:
@@ -438,13 +540,15 @@ def scan_pdf_security(file_bytes):
         raise
     except Exception as e:
         err_str = str(e)
-        # Check if raw bytes contain actual active malware tags
+        # Check if raw bytes contain actual active malware execution tags
         has_js = any(tag in file_bytes for tag in [b'/JavaScript', b'/JS ', b'/JS\n', b'/JS\r'])
         has_launch = b'/Launch' in file_bytes
-        has_embed = b'/EmbeddedFiles' in file_bytes
 
-        if has_js or has_launch or has_embed:
-            raise SecurityValidationError("Suspicious PDF content detected. Security validation failed because suspicious raw tags were found in the unopenable PDF.", code="PDF_SCAN_ERROR")
+        if has_js or has_launch:
+            raise SecurityValidationError(
+                "Suspicious PDF content detected. Security validation failed because suspicious raw tags were found in the unopenable PDF.",
+                code="PDF_SCAN_ERROR"
+            )
 
         # Structural / xref errors MUST NOT trigger security rejection!
         logger.warning(f"[PDF STRUCTURAL NOTICE] PyMuPDF open/scan encountered structural issue ({err_str}). Passing security scan for repair phase.")

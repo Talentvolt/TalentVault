@@ -4186,6 +4186,217 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
             else:
                 return JsonResponse({"success": False, "errors": form.errors}, status=400)
 
+        # Check if this is a manual merge request
+        if request.POST.get('action') == 'manual_merge':
+            form = ManualCandidateForm(request.POST, request.FILES)
+            if form.is_valid():
+                candidate_id = request.POST.get('candidate_id')
+                if not candidate_id:
+                    return JsonResponse({"success": False, "message": "Candidate ID is required for merge."}, status=400)
+                try:
+                    profile = CandidateProfile.objects.get(id=candidate_id)
+                    from apps.candidates.utils import merge_candidate_profile_data
+                    
+                    idx = 0
+                    exps_data = []
+                    while True:
+                        company = request.POST.get(f'experience[{idx}][company]')
+                        if company is None:
+                            break
+                        designation = request.POST.get(f'experience[{idx}][designation]')
+                        start_date = request.POST.get(f'experience[{idx}][start_date]')
+                        end_date = request.POST.get(f'experience[{idx}][end_date]')
+                        is_current = request.POST.get(f'experience[{idx}][is_current]') in ('on', 'true', 'checked', True)
+                        employment_type = request.POST.get(f'experience[{idx}][employment_type]', 'Full Time')
+                        location = request.POST.get(f'experience[{idx}][location]', '')
+                        skills_used = request.POST.get(f'experience[{idx}][skills_used]', '')
+                        job_description = request.POST.get(f'experience[{idx}][job_description]', '')
+                        responsibilities = request.POST.get(f'experience[{idx}][responsibilities]', '')
+                        achievements = request.POST.get(f'experience[{idx}][achievements]', '')
+                        
+                        desc_parts = []
+                        if job_description: desc_parts.append(f"Job Description:\n{job_description}")
+                        if responsibilities: desc_parts.append(f"Responsibilities:\n{responsibilities}")
+                        if achievements: desc_parts.append(f"Achievements:\n{achievements}")
+                        description = "\n\n".join(desc_parts)
+                        
+                        exps_data.append({
+                            "company": company,
+                            "designation": designation,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "is_current": is_current,
+                            "description": description
+                        })
+                        idx += 1
+                        
+                    manual_parsed_data = {
+                        "personal_info": {
+                            "name": form.cleaned_data.get('full_name', ''),
+                            "email": form.cleaned_data.get('email', ''),
+                            "phone": form.cleaned_data.get('phone_number', ''),
+                            "location": form.cleaned_data.get('location', ''),
+                            "preferred_location": form.cleaned_data.get('preferred_location', ''),
+                            "current_company": form.cleaned_data.get('current_company', ''),
+                            "current_designation": form.cleaned_data.get('current_designation', ''),
+                            "total_experience": float(form.cleaned_data.get('total_experience') or 0.0),
+                            "relevant_experience": float(form.cleaned_data.get('relevant_experience') or 0.0),
+                            "highest_qualification": form.cleaned_data.get('highest_qualification', ''),
+                            "college_university": form.cleaned_data.get('college_university', ''),
+                            "linkedin_url": form.cleaned_data.get('linkedin_url', ''),
+                            "github_url": form.cleaned_data.get('github_url', ''),
+                            "portfolio_url": form.cleaned_data.get('portfolio_url', ''),
+                        },
+                        "skills": [s.strip() for s in (form.cleaned_data.get('primary_skills') or '').split(',') if s.strip()] +
+                                  [s.strip() for s in (form.cleaned_data.get('secondary_skills') or '').split(',') if s.strip()],
+                        "summary": form.cleaned_data.get('summary', ''),
+                        "experience": exps_data,
+                        "education": [
+                            {
+                                "institution": form.cleaned_data.get('college_university', ''),
+                                "degree": form.cleaned_data.get('highest_qualification', ''),
+                                "field_of_study": "General"
+                            }
+                        ] if (form.cleaned_data.get('highest_qualification') or form.cleaned_data.get('college_university')) else []
+                    }
+                    
+                    resume_file = request.FILES.get('resume')
+                    file_bytes = resume_file.read() if resume_file else None
+                    filename = resume_file.name if resume_file else "manual_entry.pdf"
+                    
+                    profile = merge_candidate_profile_data(
+                        existing_profile=profile,
+                        parsed_data=manual_parsed_data,
+                        info=manual_parsed_data['personal_info'],
+                        file_bytes=file_bytes,
+                        filename=filename,
+                        uploaded_by=request.user,
+                        job_id=request.POST.get('job_id')
+                    )
+                    return JsonResponse({"success": True, "stage": "completed", "candidate_id": str(profile.id), "job_id": request.POST.get('job_id', ''), "message": "Resume merged successfully into existing candidate."})
+                except Exception as e:
+                    logger.error(f"[MANUAL MERGE FAILED] Exception: {str(e)}", exc_info=True)
+                    return JsonResponse({"success": False, "message": f"Merge failed: {str(e)}"}, status=400)
+            else:
+                return JsonResponse({"success": False, "errors": form.errors}, status=400)
+
+        # Check if this is a file merge resume request
+        if request.POST.get('action') == 'merge_resume':
+            candidate_id = request.POST.get('candidate_id')
+            uploaded_file = request.FILES.get('resume') or request.FILES.get('resumes_zip')
+            if not candidate_id:
+                return JsonResponse({"success": False, "message": "Candidate ID is required for merge."}, status=400)
+            if not uploaded_file:
+                return JsonResponse({"success": False, "message": "Resume file is required for merge."}, status=400)
+                
+            from apps.candidates.utils import process_and_merge_resume
+            try:
+                profile = process_and_merge_resume(
+                    file_obj=uploaded_file,
+                    filename=uploaded_file.name,
+                    candidate_profile_id=candidate_id,
+                    uploaded_by=request.user,
+                    job_id=request.POST.get('job_id') or request.GET.get('job_id')
+                )
+                
+                try:
+                    skills_count = profile.skills.count()
+                except Exception:
+                    skills_count = 0
+                try:
+                    edu_count = profile.educations.count()
+                except Exception:
+                    edu_count = 0
+                    
+                skills_list = list(profile.skills.values_list('skill_name', flat=True))
+                education_first = profile.educations.first()
+                personal_info = profile.parsed_json.get('personal_info', {}) if profile.parsed_json else {}
+                relevant_exp = personal_info.get('relevant_experience', 0.0)
+                preferred_loc = personal_info.get('preferred_location', '')
+                github_url = personal_info.get('github_url', '')
+                
+                experiences_list = []
+                parsed_experiences = profile.parsed_json.get('experience', []) if profile.parsed_json else []
+                if parsed_experiences:
+                    for exp in parsed_experiences:
+                        co = exp.get('company') or exp.get('company_name') or ''
+                        des = exp.get('designation') or exp.get('job_title') or ''
+                        sd = exp.get('start_date') or ''
+                        ed = exp.get('end_date') or ''
+                        isc = exp.get('is_current') or False
+                        if not ed and isc:
+                            isc = True
+                        desc = exp.get('description') or ''
+                        loc = exp.get('location') or ''
+                        ind = exp.get('industry') or ''
+                        emp_type = exp.get('employment_type') or 'Full Time'
+                        skills = exp.get('skills_used') or exp.get('key_skills') or ''
+                        if isinstance(skills, list):
+                            skills = ", ".join(skills)
+                        
+                        experiences_list.append({
+                            "company": co,
+                            "designation": des,
+                            "start_date": sd,
+                            "end_date": ed,
+                            "is_current": isc,
+                            "description": desc,
+                            "employment_type": emp_type,
+                            "location": loc,
+                            "industry": ind,
+                            "skills_used": skills
+                        })
+                else:
+                    for exp in profile.experiences.all().order_by('-start_date'):
+                        experiences_list.append({
+                            "company": exp.company_name,
+                            "designation": exp.designation,
+                            "start_date": exp.start_date.strftime('%Y-%m') if exp.start_date else '',
+                            "end_date": exp.end_date.strftime('%Y-%m') if exp.end_date else '',
+                            "is_current": exp.is_current,
+                            "description": exp.description,
+                            "employment_type": "Full Time",
+                            "location": "",
+                            "industry": "",
+                            "skills_used": ""
+                        })
+                
+                return JsonResponse({
+                    "success": True,
+                    "stage": "completed",
+                    "message": "Resume merged successfully into existing candidate.",
+                    "candidate_id": str(profile.id),
+                    "job_id": request.POST.get('job_id', '') or request.GET.get('job_id', ''),
+                    "name": profile.full_name or '',
+                    "email": profile.user.email or '',
+                    "phone": profile.user.phone_number or '',
+                    "experience": float(profile.total_experience or 0.0),
+                    "relevant_experience": float(relevant_exp),
+                    "skills_count": skills_count,
+                    "education_count": edu_count,
+                    "current_company": profile.current_company or '',
+                    "current_designation": profile.current_designation or '',
+                    "location": profile.location or '',
+                    "preferred_location": preferred_loc or '',
+                    "current_salary": float(profile.current_salary / 100000) if profile.current_salary else '',
+                    "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else '',
+                    "notice_period": profile.notice_period or 30,
+                    "highest_qualification": education_first.degree if education_first else '',
+                    "college_university": education_first.institution if education_first else '',
+                    "primary_skills": ", ".join(skills_list[:len(skills_list)//2]) if skills_list else '',
+                    "secondary_skills": ", ".join(skills_list[len(skills_list)//2:]) if skills_list else '',
+                    "linkedin_url": profile.linkedin_url or '',
+                    "github_url": github_url or '',
+                    "portfolio_url": profile.portfolio_url or '',
+                    "summary": profile.summary or '',
+                    "resume_name": profile.original_filename or '',
+                    "confidence": float(profile.ocr_confidence or 95.0),
+                    "experiences": experiences_list
+                })
+            except Exception as e_merge:
+                logger.error(f"[MERGE RESUME FAILED] Error: {e_merge}", exc_info=True)
+                return JsonResponse({"success": False, "message": f"Merge failed: {str(e_merge)}"}, status=400)
+
         # Standard file/ZIP upload action
         overwrite = request.POST.get('overwrite') == 'on'
         file_uploaded = 'resume' in request.FILES or 'resumes_zip' in request.FILES

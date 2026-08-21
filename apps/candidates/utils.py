@@ -765,7 +765,7 @@ def copy_storage_file(source_field, target_path):
 
     return False
 
-def process_resume_file(file_obj, filename, overwrite=False, progress_callback=None, security_data=None, user=None, uploaded_by=None):
+def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_candidate_id=None, progress_callback=None, security_data=None, user=None, uploaded_by=None):
     import time
     import uuid
     import traceback
@@ -1073,6 +1073,30 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
                     if existing_profile:
                         existing_user = existing_profile.user
             
+            if merge or merge_candidate_id:
+                target_profile = None
+                if merge_candidate_id:
+                    target_profile = CandidateProfile.objects.filter(id=merge_candidate_id).first()
+                elif existing_user:
+                    target_profile = getattr(existing_user, 'candidate_profile', None)
+                
+                if target_profile:
+                    merged_profile = merge_candidate_profile_data(
+                        existing_profile=target_profile,
+                        parsed_data=parsed_data,
+                        info=info,
+                        raw_resume_text=text,
+                        file_bytes=file_bytes,
+                        filename=filename,
+                        security_data=security_data,
+                        photo_bytes=photo_bytes,
+                        photo_ext=photo_ext,
+                        uploaded_by=uploaded_by or user
+                    )
+                    if progress_callback:
+                        progress_callback("completed", merged_profile)
+                    return merged_profile, "SUCCESS"
+
             if existing_user and not overwrite and user is None:
                 DuplicateResumeLog.objects.create(
                     email=email,
@@ -1636,7 +1660,7 @@ def process_resume_file(file_obj, filename, overwrite=False, progress_callback=N
         print(f"[PARSER DATABASE SAVE FAILURE] Exception Traceback in process_resume_file:\n{tb}")
         return None, "SAVE_FAILED"
 
-def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None, user=None, uploaded_by=None):
+def handle_resume_upload(uploaded_file, overwrite=False, merge=False, merge_candidate_id=None, progress_callback=None, user=None, uploaded_by=None):
     from utils.security import perform_all_security_validations, log_upload_attempt, SecurityValidationError
     
     if user and not uploaded_by:
@@ -1709,7 +1733,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
                         
                         file_obj = io.BytesIO(sub_bytes)
                         profile, status = process_resume_file(
-                            file_obj, filename, overwrite, progress_callback, security_data=sub_security_data, user=user, uploaded_by=uploaded_by
+                            file_obj, filename, overwrite=overwrite, merge=merge, merge_candidate_id=merge_candidate_id, progress_callback=progress_callback, security_data=sub_security_data, user=user, uploaded_by=uploaded_by
                         )
                         
                         if status == "SUCCESS":
@@ -1727,7 +1751,7 @@ def handle_resume_upload(uploaded_file, overwrite=False, progress_callback=None,
     else:
         file_obj = io.BytesIO(file_bytes)
         profile, status = process_resume_file(
-            file_obj, uploaded_file.name, overwrite, progress_callback, security_data=security_data, user=user, uploaded_by=uploaded_by
+            file_obj, uploaded_file.name, overwrite=overwrite, merge=merge, merge_candidate_id=merge_candidate_id, progress_callback=progress_callback, security_data=security_data, user=user, uploaded_by=uploaded_by
         )
         if status == "SUCCESS":
             results['created'].append(profile)
@@ -1981,3 +2005,485 @@ def extract_profile_photo(file_bytes, filename):
             logger.error(f"Error extracting photo from DOCX: {e}")
 
     return select_best_profile_photo(images_list)
+
+
+def merge_candidate_profile_data(
+    existing_profile,
+    parsed_data,
+    info=None,
+    raw_resume_text="",
+    file_bytes=None,
+    filename="resume.pdf",
+    security_data=None,
+    photo_bytes=None,
+    photo_ext=None,
+    uploaded_by=None,
+    job_id=None
+):
+    """
+    Intelligently merges newly extracted resume data into an existing CandidateProfile.
+    - Preserves all existing candidate information.
+    - Combines skills without duplicates (case-insensitive).
+    - Adds missing education entries without duplicating existing entries.
+    - Adds missing experience entries and enriches existing descriptions without duplication.
+    - Adds missing projects and certifications.
+    - Combines unique languages.
+    - Preserves and enriches professional summary.
+    - Preserves verified contact info unless missing.
+    - Does not overwrite populated fields with null/empty values.
+    - Updates resume storage, versioning, and audit logs.
+    - Recalculates ATS score.
+    - Entire operation runs in an atomic transaction.
+    """
+    from django.db import transaction
+    from services.resume_intelligence import ResumeIntelligenceService
+    from services.candidate_matching_service import CandidateMatchingService
+    from services.candidate_tagging_service import CandidateTaggingService
+
+    with transaction.atomic():
+        if info is None:
+            info = parsed_data.get('personal_info', {}) or {}
+
+        # 1. Skills Merge (combine unique skills)
+        existing_skills = {s.skill_name.strip().lower(): s for s in existing_profile.skills.all()}
+        new_skills_raw = parsed_data.get('skills', [])
+        merged_skills_list = [s.skill_name for s in existing_profile.skills.all()]
+
+        for sk in new_skills_raw:
+            if isinstance(sk, str) and sk.strip():
+                clean_sk = sk.strip()
+                sk_key = clean_sk.lower()
+                if sk_key not in existing_skills:
+                    formatted_name = clean_sk.title()[:100]
+                    new_skill_obj = CandidateSkill.objects.create(
+                        profile=existing_profile,
+                        skill_name=formatted_name
+                    )
+                    existing_skills[sk_key] = new_skill_obj
+                    merged_skills_list.append(formatted_name)
+
+        # 2. Education Merge (preserve existing, add missing)
+        existing_edus = list(existing_profile.educations.all())
+        new_edus_raw = parsed_data.get('education', [])
+
+        def is_same_education(e1_deg, e1_inst, e2_deg, e2_inst):
+            d1 = (e1_deg or '').strip().lower()
+            d2 = (e2_deg or '').strip().lower()
+            i1 = (e1_inst or '').strip().lower()
+            i2 = (e2_inst or '').strip().lower()
+            if not d1 and not d2:
+                return i1 == i2 and bool(i1)
+            if d1 == d2:
+                if not i1 or not i2 or i1 == i2 or i1 in i2 or i2 in i1:
+                    return True
+            if d1 and d2 and (d1 in d2 or d2 in d1):
+                if i1 and i2 and (i1 in i2 or i2 in i1):
+                    return True
+            return False
+
+        for edu in new_edus_raw:
+            if isinstance(edu, dict):
+                n_deg = (edu.get('degree') or '')[:255]
+                n_inst = (edu.get('institution') or '')[:255]
+                n_field = (edu.get('field_of_study') or '')[:255]
+                n_score = str(edu.get('score') or '')[:20] if edu.get('score') else None
+                n_start = parse_date_robust(edu.get('start_date'), None)
+                n_end = parse_date_robust(edu.get('end_date'), None)
+
+                already_exists = False
+                for ex in existing_edus:
+                    if is_same_education(ex.degree, ex.institution, n_deg, n_inst):
+                        already_exists = True
+                        if not ex.field_of_study and n_field:
+                            ex.field_of_study = n_field
+                            ex.save()
+                        if not ex.percentage_or_cgpa and n_score:
+                            ex.percentage_or_cgpa = n_score
+                            ex.save()
+                        if not ex.end_date and n_end:
+                            ex.end_date = n_end
+                            ex.save()
+                        break
+
+                if not already_exists and (n_deg or n_inst):
+                    new_edu = Education.objects.create(
+                        profile=existing_profile,
+                        institution=(n_inst or "Unknown")[:255],
+                        degree=(n_deg or "Degree")[:255],
+                        field_of_study=n_field if n_field else None,
+                        percentage_or_cgpa=n_score,
+                        start_date=n_start,
+                        end_date=n_end
+                    )
+                    existing_edus.append(new_edu)
+
+        # 3. Experience Merge (preserve existing, add missing, enrich sparse)
+        existing_exps = list(existing_profile.experiences.all())
+        new_exps_raw = parsed_data.get('experience', [])
+
+        def is_same_experience(e1_comp, e1_desig, e2_comp, e2_desig):
+            c1 = (e1_comp or '').strip().lower()
+            c2 = (e2_comp or '').strip().lower()
+            d1 = (e1_desig or '').strip().lower()
+            d2 = (e2_desig or '').strip().lower()
+            if not c1 or not c2:
+                return False
+            clean_c1 = re.sub(r'\b(pvt|ltd|limited|inc|llc|technologies|solutions|corp|corporation)\b', '', c1).strip()
+            clean_c2 = re.sub(r'\b(pvt|ltd|limited|inc|llc|technologies|solutions|corp|corporation)\b', '', c2).strip()
+            comp_match = (c1 == c2) or (clean_c1 and clean_c1 == clean_c2) or (clean_c1 in clean_c2) or (clean_c2 in clean_c1)
+            if comp_match:
+                if not d1 or not d2 or d1 == d2 or d1 in d2 or d2 in d1:
+                    return True
+            return False
+
+        for exp in new_exps_raw:
+            if isinstance(exp, dict):
+                n_comp = (exp.get('company') or exp.get('company_name') or '')[:255]
+                n_desig = (exp.get('designation') or exp.get('job_title') or '')[:255]
+                n_desc = exp.get('description') or ''
+                n_desc_html = ResumeIntelligenceService.parse_experience_description_to_html(n_desc)
+                n_start = parse_date_robust(exp.get('start_date'), None)
+                n_end = parse_date_robust(exp.get('end_date'), None)
+                n_curr = exp.get('is_current', False)
+
+                matched_exp = None
+                for ex in existing_exps:
+                    if is_same_experience(ex.company_name, ex.designation, n_comp, n_desig):
+                        matched_exp = ex
+                        break
+
+                if matched_exp:
+                    if (not matched_exp.description or len(matched_exp.description) < len(n_desc_html)) and n_desc_html:
+                        matched_exp.description = n_desc_html
+                        matched_exp.save()
+                    if not matched_exp.start_date and n_start:
+                        matched_exp.start_date = n_start
+                        matched_exp.save()
+                    if not matched_exp.end_date and n_end:
+                        matched_exp.end_date = n_end
+                        matched_exp.save()
+                elif n_comp:
+                    new_exp = Experience.objects.create(
+                        profile=existing_profile,
+                        company_name=n_comp,
+                        designation=n_desig or "Professional",
+                        description=n_desc_html,
+                        start_date=n_start,
+                        end_date=n_end,
+                        is_current=n_curr
+                    )
+                    existing_exps.append(new_exp)
+
+        # 4. Projects Merge
+        existing_projs = list(existing_profile.projects.all())
+        new_projs_raw = parsed_data.get('projects', [])
+
+        for proj in new_projs_raw:
+            if isinstance(proj, dict):
+                p_title = (proj.get('title') or '').strip()
+                p_desc = ResumeIntelligenceService.parse_experience_description_to_html(proj.get('description', ''))
+                p_link = proj.get('link', '') or None
+                if p_title:
+                    match = any(ex.title.strip().lower() == p_title.lower() for ex in existing_projs)
+                    if not match:
+                        new_p = Project.objects.create(
+                            profile=existing_profile,
+                            title=p_title[:255],
+                            description=p_desc,
+                            link=p_link
+                        )
+                        existing_projs.append(new_p)
+
+        # 5. Certifications Merge
+        existing_certs = list(existing_profile.certifications.all())
+        new_certs_raw = parsed_data.get('certifications', [])
+
+        for cert in new_certs_raw:
+            if isinstance(cert, dict):
+                c_name = (cert.get('name') or '').strip()
+                c_org = (cert.get('issuing_organization') or '').strip()[:255]
+                c_date = parse_date_robust(cert.get('issue_date'), None)
+                if c_name:
+                    match = any(ex.name.strip().lower() == c_name.lower() for ex in existing_certs)
+                    if not match:
+                        new_c = Certification.objects.create(
+                            profile=existing_profile,
+                            name=c_name[:255],
+                            issuing_organization=c_org,
+                            issue_date=c_date
+                        )
+                        existing_certs.append(new_c)
+
+        # 6. Languages Merge
+        existing_pj = existing_profile.parsed_json or {}
+        existing_langs = [str(l).strip() for l in existing_pj.get('languages', []) if str(l).strip()]
+        new_langs = [str(l).strip() for l in parsed_data.get('languages', []) if str(l).strip()]
+        merged_langs = list(dict.fromkeys([l.title() for l in existing_langs + new_langs if l]))
+
+        # 7. Summary Merge
+        new_summary = (parsed_data.get('summary') or '').strip()
+        curr_summary = (existing_profile.summary or '').strip()
+
+        if not curr_summary:
+            merged_summary = new_summary
+        elif not new_summary:
+            merged_summary = curr_summary
+        elif new_summary.lower() in curr_summary.lower():
+            merged_summary = curr_summary
+        elif curr_summary.lower() in new_summary.lower():
+            merged_summary = new_summary
+        else:
+            merged_summary = f"{curr_summary}\n\n{new_summary}"
+
+        existing_profile.summary = merged_summary
+
+        # 8. Contact & Profile Info Update (Never overwrite populated fields with empty/null)
+        new_name = (info.get('name') or '').strip()
+        if (not existing_profile.full_name or existing_profile.full_name in ("Unknown Candidate", "Unknown")) and new_name and new_name not in ("Unknown Candidate", "Unknown"):
+            existing_profile.full_name = new_name[:255]
+
+        new_company = (info.get('current_company') or '').strip()
+        if not existing_profile.current_company and new_company:
+            existing_profile.current_company = new_company[:255]
+
+        new_desig = (info.get('current_designation') or '').strip()
+        if (not existing_profile.current_designation or existing_profile.current_designation == "Professional") and new_desig:
+            existing_profile.current_designation = new_desig[:255]
+
+        new_loc = (info.get('location') or '').strip()
+        if (not existing_profile.location or existing_profile.location == "Unknown") and new_loc and new_loc != "Unknown":
+            existing_profile.location = new_loc[:100]
+
+        new_tot_exp = info.get('total_experience')
+        if new_tot_exp is not None and str(new_tot_exp).strip() not in ("", "None", "null"):
+            try:
+                val = Decimal(str(new_tot_exp))
+                if val > (existing_profile.total_experience or Decimal('0.0')):
+                    existing_profile.total_experience = val
+            except Exception:
+                pass
+
+        new_cur_sal = parsed_data.get('current_ctc')
+        if existing_profile.current_salary is None and new_cur_sal is not None and str(new_cur_sal).strip() not in ("", "None", "null"):
+            try:
+                existing_profile.current_salary = Decimal(str(new_cur_sal))
+            except Exception:
+                pass
+
+        new_exp_sal = parsed_data.get('expected_ctc')
+        if existing_profile.expected_salary is None and new_exp_sal is not None and str(new_exp_sal).strip() not in ("", "None", "null"):
+            try:
+                existing_profile.expected_salary = Decimal(str(new_exp_sal))
+            except Exception:
+                pass
+
+        new_notice = parsed_data.get('notice_period')
+        if not existing_profile.notice_period and new_notice:
+            try:
+                existing_profile.notice_period = int(new_notice)
+            except Exception:
+                pass
+
+        new_li = (info.get('linkedin_url') or '').strip()
+        if not existing_profile.linkedin_url and new_li:
+            existing_profile.linkedin_url = new_li[:200]
+
+        new_port = (info.get('portfolio_url') or '').strip()
+        if not existing_profile.portfolio_url and new_port:
+            existing_profile.portfolio_url = new_port[:200]
+
+        # 9. Update parsed_json
+        merged_pj = existing_profile.parsed_json or {}
+        merged_pj['personal_info'] = {
+            "name": existing_profile.full_name,
+            "email": existing_profile.user.email,
+            "phone": existing_profile.user.phone_number or '',
+            "location": existing_profile.location,
+            "preferred_location": info.get('preferred_location') or merged_pj.get('personal_info', {}).get('preferred_location', ''),
+            "current_company": existing_profile.current_company,
+            "current_designation": existing_profile.current_designation,
+            "total_experience": float(existing_profile.total_experience or 0.0),
+            "relevant_experience": float(info.get('relevant_experience') or merged_pj.get('personal_info', {}).get('relevant_experience', 0.0)),
+            "highest_qualification": existing_edus[0].degree if existing_edus else '',
+            "college_university": existing_edus[0].institution if existing_edus else '',
+            "linkedin_url": existing_profile.linkedin_url or '',
+            "github_url": info.get('github_url') or merged_pj.get('personal_info', {}).get('github_url', ''),
+            "portfolio_url": existing_profile.portfolio_url or '',
+        }
+        merged_pj['skills'] = merged_skills_list
+        merged_pj['languages'] = merged_langs
+        merged_pj['summary'] = merged_summary
+        merged_pj['experience'] = [
+            {
+                "company": e.company_name,
+                "designation": e.designation,
+                "description": e.description,
+                "start_date": e.start_date.strftime('%Y-%m') if e.start_date else '',
+                "end_date": e.end_date.strftime('%Y-%m') if e.end_date else '',
+                "is_current": e.is_current
+            }
+            for e in existing_exps
+        ]
+        merged_pj['education'] = [
+            {
+                "institution": ed.institution,
+                "degree": ed.degree,
+                "field_of_study": ed.field_of_study or '',
+                "score": ed.percentage_or_cgpa or '',
+                "start_date": ed.start_date.strftime('%Y-%m') if ed.start_date else '',
+                "end_date": ed.end_date.strftime('%Y-%m') if ed.end_date else ''
+            }
+            for ed in existing_edus
+        ]
+        merged_pj['projects'] = [
+            {
+                "title": p.title,
+                "description": p.description,
+                "link": p.link or ''
+            }
+            for p in existing_projs
+        ]
+        merged_pj['certifications'] = [
+            {
+                "name": c.name,
+                "issuing_organization": c.issuing_organization or '',
+                "issue_date": c.issue_date.strftime('%Y-%m-%d') if c.issue_date else ''
+            }
+            for c in existing_certs
+        ]
+        if raw_resume_text:
+            existing_profile.raw_resume_text = f"{(existing_profile.raw_resume_text or '').strip()}\n\n--- Merged Resume ({filename}) ---\n\n{raw_resume_text}".strip()
+
+        existing_profile.parsed_json = merged_pj
+
+        # 10. File storage & Resume Versions
+        if file_bytes:
+            from services.resume_storage_service import upload_and_verify_resume, copy_and_verify_original_resume
+            save_filename = security_data.get("secure_filename") if (security_data and security_data.get("secure_filename")) else filename
+            try:
+                saved_key, _ = upload_and_verify_resume(file_bytes, save_filename)
+                existing_profile.resume.name = saved_key
+                original_key = copy_and_verify_original_resume(saved_key, save_filename)
+                if original_key:
+                    existing_profile.original_file.name = original_key
+                existing_profile.original_filename = (filename or "")[:255]
+                existing_profile.secure_filename = (save_filename or "")[:255]
+                if security_data and security_data.get('sha256'):
+                    existing_profile.sha256 = security_data.get('sha256')
+            except Exception as e_file:
+                logger.error(f"[MERGE FILE SAVE] Error saving merged resume file: {e_file}")
+
+        # Versioning & Audit Logs
+        v_num = (existing_profile.current_version or 1) + 1
+        existing_profile.current_version = v_num
+        if not existing_profile.resume_versions:
+            existing_profile.resume_versions = {}
+        existing_profile.resume_versions[str(v_num)] = {
+            "version": v_num,
+            "label": f"Merged Resume ({filename})",
+            "data": parsed_data,
+            "created_at": datetime.now().isoformat(),
+            "created_by": getattr(uploaded_by, 'email', 'Recruiter') if uploaded_by else 'Recruiter'
+        }
+
+        if not existing_profile.audit_logs:
+            existing_profile.audit_logs = []
+        existing_profile.audit_logs.append({
+            "action": f"Merged new resume ({filename}) into profile",
+            "timestamp": datetime.now().isoformat(),
+            "user": getattr(uploaded_by, 'email', 'Recruiter') if uploaded_by else 'Recruiter'
+        })
+
+        existing_profile.save()
+
+        # Log DuplicateResumeLog
+        DuplicateResumeLog.objects.create(
+            email=existing_profile.user.email,
+            phone=existing_profile.user.phone_number or '',
+            filename=filename,
+            action_taken='MERGED'
+        )
+
+        # Universal Tagging
+        try:
+            CandidateTaggingService.tag_candidate_profile(existing_profile, source='resume_merge')
+        except Exception as e_tag:
+            logger.warning(f"Tagging on merge failed: {e_tag}")
+
+        # ATS Scoring Recalculation
+        try:
+            CandidateMatchingService.update_ats_scores(candidate_id=existing_profile.id)
+            if job_id:
+                try:
+                    from apps.jobs.models import Job
+                    from apps.applications.models import Application
+                    job = Job.objects.get(id=job_id)
+                    Application.objects.get_or_create(job=job, candidate=existing_profile)
+                    CandidateMatchingService.update_ats_scores(candidate_id=existing_profile.id, job_id=job.id)
+                except Exception as e_job:
+                    logger.warning(f"Job mapping/scoring on merge failed: {e_job}")
+        except Exception as e_ats:
+            logger.error(f"ATS scoring on merge failed: {e_ats}", exc_info=True)
+
+        return existing_profile
+
+
+def process_and_merge_resume(file_obj, filename, candidate_profile_id, uploaded_by=None, job_id=None, security_data=None):
+    """
+    Parses a resume file and merges its content into an existing candidate profile atomically.
+    """
+    if hasattr(file_obj, 'seek'):
+        file_obj.seek(0)
+    file_bytes = file_obj.read()
+
+    if security_data is None:
+        from utils.security import perform_all_security_validations
+        security_data = perform_all_security_validations(file_bytes, filename)
+
+    if security_data and security_data.get("repaired_bytes"):
+        file_bytes = security_data["repaired_bytes"]
+
+    existing_profile = CandidateProfile.objects.get(id=candidate_profile_id)
+
+    # 1. OCR
+    from services.resume_intelligence import ResumeIntelligenceService
+    ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
+    text = clean_extracted_text(ocr_result.get("text", ""))
+
+    # 2. LLM / NLP parse
+    parsed_data = None
+    try:
+        parsed_data = OpenAIResumeParser.parse(text)
+    except Exception as e:
+        logger.warning(f"AI parsing during merge fallback to NLP: {e}")
+
+    if parsed_data is None:
+        parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
+
+    if parsed_data is not None:
+        try:
+            parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
+        except Exception:
+            pass
+
+    info = parsed_data.get('personal_info', {}) if parsed_data else {}
+
+    photo_bytes, photo_ext = None, None
+    try:
+        photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
+    except Exception:
+        pass
+
+    return merge_candidate_profile_data(
+        existing_profile=existing_profile,
+        parsed_data=parsed_data or {},
+        info=info,
+        raw_resume_text=text,
+        file_bytes=file_bytes,
+        filename=filename,
+        security_data=security_data,
+        photo_bytes=photo_bytes,
+        photo_ext=photo_ext,
+        uploaded_by=uploaded_by,
+        job_id=job_id
+    )

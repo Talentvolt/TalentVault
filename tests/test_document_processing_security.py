@@ -154,3 +154,45 @@ def test_fallback_validation_no_magic():
         # Mock scan_pdf_security to avoid parsing invalid pdf bytes
         with patch('utils.security.scan_pdf_security', return_value=True):
             assert validate_single_file_content(b"%PDF-1.4\n", "my_resume.pdf", "pdf") is True
+
+def test_genuine_embedded_file_rejected():
+    """Ensure PDFs with actual embedded files are detected and rejected."""
+    doc = fitz.open()
+    doc.new_page()
+    doc.embfile_add("payload.exe", b"MZ_fake_exe_bytes", filename="payload.exe", desc="malicious attachment")
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    with pytest.raises(SecurityValidationError) as excinfo:
+        scan_pdf_security(pdf_bytes)
+    assert excinfo.value.code == "PDF_EMBEDDED_FILES"
+
+def test_file_attachment_annotation_rejected():
+    """Ensure PDFs with page FileAttachment annotations are detected and rejected."""
+    doc = fitz.open()
+    page = doc.new_page()
+    page.add_file_annot((50, 50), b"malicious_script_content", "script.vbs", desc="script attachment")
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    with pytest.raises(SecurityValidationError) as excinfo:
+        scan_pdf_security(pdf_bytes)
+    assert excinfo.value.code == "PDF_EMBEDDED_FILES"
+
+def test_clean_pdf_without_embedded_files_passes():
+    """Ensure standard PDFs without embedded files pass security scanning."""
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((50, 50), "Jane Doe - Software Engineer")
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    assert scan_pdf_security(pdf_bytes) is True
+
+def test_c2pa_manifest_pdf_passes():
+    """Ensure PDFs with C2PA provenance credentials / Content Credentials pass security scanning."""
+    if os.path.exists("MADHANKUMAR_M_Simple_Parser_Ready.pdf"):
+        with open("MADHANKUMAR_M_Simple_Parser_Ready.pdf", "rb") as f:
+            pdf_bytes = f.read()
+        assert scan_pdf_security(pdf_bytes) is True
+

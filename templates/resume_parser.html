@@ -1302,26 +1302,167 @@ document.addEventListener("DOMContentLoaded", function() {
             
             const dupModal = new bootstrap.Modal(document.getElementById('duplicateModal'));
             
-            document.getElementById("btnUpdateExisting").onclick = function() {
-                document.getElementById("manualCandidateId").value = dup.candidate_id || "";
-                document.getElementById("manualIgnoreDuplicate").value = "false";
-                dupModal.hide();
-                manualSaveForm.dispatchEvent(new Event("submit"));
-            };
+            const btnMerge = document.getElementById("btnMergeResume");
+            if (btnMerge) {
+                btnMerge.disabled = false;
+                btnMerge.onclick = async function() {
+                    dupModal.hide();
+                    
+                    const file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+                    if (file) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Merging Resume...';
+                        
+                        parserStatusContainer.style.display = "block";
+                        successCard.classList.add("d-none");
+                        errorCard.classList.add("d-none");
+                        stages.forEach(s => updateStage(s, "pending"));
+                        updateStage("upload_complete", "done");
+                        updateStage("reading_pdf", "done");
+                        updateStage("extracting_text", "active");
+                        
+                        const formData = new FormData();
+                        formData.append("action", "merge_resume");
+                        formData.append("candidate_id", dup.candidate_id);
+                        formData.append("resume", file);
+                        const jobIdInput = document.getElementById("manualJobId");
+                        if (jobIdInput && jobIdInput.value) {
+                            formData.append("job_id", jobIdInput.value);
+                        }
+                        
+                        try {
+                            const response = await fetch("", {
+                                method: "POST",
+                                body: formData,
+                                headers: {
+                                    "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+                                }
+                            });
+                            
+                            const result = await response.json();
+                            if (response.ok && result.success) {
+                                stages.forEach(s => updateStage(s, "done"));
+                                showSingleSuccess(result);
+                                alert("Resume merged successfully into existing candidate.");
+                            } else {
+                                stages.forEach(s => updateStage(s, "failed"));
+                                showSingleError(result.message || "Failed to merge resume.");
+                            }
+                        } catch (err) {
+                            stages.forEach(s => updateStage(s, "failed"));
+                            showSingleError("Network error occurred during merge.");
+                        } finally {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '<i class="bi bi-lightning-charge me-2"></i> Start Single Parsing';
+                        }
+                    } else {
+                        // Manual form merge fallback
+                        updateExperienceInputNames();
+                        const manualData = new FormData(manualSaveForm);
+                        manualData.set("action", "manual_merge");
+                        manualData.set("candidate_id", dup.candidate_id || "");
+                        
+                        try {
+                            const response = await fetch("", {
+                                method: "POST",
+                                body: manualData,
+                                headers: { "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value }
+                            });
+                            const result = await response.json();
+                            if (response.ok && result.success) {
+                                alert("Resume merged successfully into existing candidate.");
+                                if (result.job_id) window.location.href = `/jobs/${result.job_id}/candidates/`;
+                                else if (result.candidate_id) window.location.href = `/candidates/${result.candidate_id}/`;
+                            } else {
+                                alert(result.message || "Failed to merge candidate.");
+                            }
+                        } catch (e) {
+                            alert("Network error during merge.");
+                        }
+                    }
+                };
+            }
             
-            document.getElementById("btnMergeResume").onclick = function() {
-                document.getElementById("manualCandidateId").value = dup.candidate_id || "";
-                document.getElementById("manualIgnoreDuplicate").value = "false";
-                dupModal.hide();
-                manualSaveForm.dispatchEvent(new Event("submit"));
-            };
+            const btnUpdate = document.getElementById("btnUpdateExisting");
+            if (btnUpdate) {
+                btnUpdate.disabled = false;
+                btnUpdate.onclick = async function() {
+                    dupModal.hide();
+                    const file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+                    if (file) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Updating Candidate...';
+                        parserStatusContainer.style.display = "block";
+                        successCard.classList.add("d-none");
+                        errorCard.classList.add("d-none");
+                        stages.forEach(s => updateStage(s, "pending"));
+                        
+                        const uploadFormEl = document.getElementById("uploadForm");
+                        const formData = new FormData(uploadFormEl);
+                        formData.set("overwrite", "on");
+                        
+                        try {
+                            const response = await fetch("", {
+                                method: "POST",
+                                body: formData,
+                                headers: {
+                                    "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+                                }
+                            });
+                            
+                            if (!response.ok) {
+                                const errText = await response.text();
+                                let errMsg = "Update failed.";
+                                try { errMsg = JSON.parse(errText).message || errMsg; } catch(e) {}
+                                clearInterval(timerInterval);
+                                stages.forEach(s => updateStage(s, "failed"));
+                                showSingleError(errMsg);
+                                return;
+                            }
+                            
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = "";
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                buffer += decoder.decode(value, { stream: true });
+                                const lines = buffer.split("\n");
+                                buffer = lines.pop();
+                                for (const line of lines) {
+                                    const trimmed = line.trim();
+                                    if (!trimmed) continue;
+                                    try {
+                                        const parsedData = JSON.parse(trimmed);
+                                        handleProgressUpdate(parsedData);
+                                    } catch (e) {}
+                                }
+                            }
+                        } catch (err) {
+                            stages.forEach(s => updateStage(s, "failed"));
+                            showSingleError("Network error during update.");
+                        } finally {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '<i class="bi bi-lightning-charge me-2"></i> Start Single Parsing';
+                        }
+                    } else {
+                        document.getElementById("manualCandidateId").value = dup.candidate_id || "";
+                        document.getElementById("manualIgnoreDuplicate").value = "false";
+                        manualSaveForm.dispatchEvent(new Event("submit"));
+                    }
+                };
+            }
             
-            document.getElementById("btnCreateNewAnyway").onclick = function() {
-                document.getElementById("manualCandidateId").value = "";
-                document.getElementById("manualIgnoreDuplicate").value = "true";
-                dupModal.hide();
-                manualSaveForm.dispatchEvent(new Event("submit"));
-            };
+            const btnCreateNew = document.getElementById("btnCreateNewAnyway");
+            if (btnCreateNew) {
+                btnCreateNew.disabled = false;
+                btnCreateNew.onclick = function() {
+                    document.getElementById("manualCandidateId").value = "";
+                    document.getElementById("manualIgnoreDuplicate").value = "true";
+                    dupModal.hide();
+                    manualSaveForm.dispatchEvent(new Event("submit"));
+                };
+            }
             
             dupModal.show();
             return;
@@ -1549,6 +1690,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
 
                 const result = await response.json();
+                if (result.stage === "duplicate") {
+                    handleProgressUpdate(result);
+                    return;
+                }
                 if (response.ok && result.success) {
                     alert(result.message || "Candidate saved successfully.");
                     if (result.job_id) window.location.href = `/jobs/${result.job_id}/candidates/`;

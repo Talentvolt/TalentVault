@@ -322,7 +322,7 @@ class DuplicateResumeLog(BaseAppModel):
     email = models.EmailField(db_index=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     filename = models.CharField(max_length=255)
-    action_taken = models.CharField(max_length=50, choices=[('SKIPPED', 'Skipped'), ('UPDATED', 'Updated')])
+    action_taken = models.CharField(max_length=50, choices=[('SKIPPED', 'Skipped'), ('UPDATED', 'Updated'), ('MERGED', 'Merged')])
     
     class Meta:
         ordering = ['-created_at']

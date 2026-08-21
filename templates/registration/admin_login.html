@@ -338,6 +338,9 @@
 
                     <form method="post" action="{% url 'admin_login' %}">
                         {% csrf_token %}
+                        {% if request.GET.next %}
+                        <input type="hidden" name="next" value="{{ request.GET.next }}">
+                        {% endif %}
                         
                         <!-- Admin Email -->
                         <div class="mb-3">

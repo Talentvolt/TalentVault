@@ -804,6 +804,7 @@ class AdminLoginView(View):
         return render(request, self.template_name, {'form': form})
 
     @method_decorator(never_cache)
+    @method_decorator(ensure_csrf_cookie)
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
         form = LoginForm(request.POST)
@@ -827,6 +828,9 @@ class AdminLoginView(View):
                     request.session.set_expiry(1209600)  # 2 weeks
                 else:
                     request.session.set_expiry(0)
+                next_url = request.POST.get('next') or request.GET.get('next')
+                if next_url and next_url.startswith('/'):
+                    return redirect(next_url)
                 return redirect('frontend:recruiter_dashboard')
             elif user_target.role == User.Role.RECRUITER:
                 form.add_error(None, "This is the Administrator Login. Please use the Recruiter Login.")
