@@ -45,6 +45,10 @@ class ApplicationService:
             if member:
                 recruiter_user = member.user
 
+        screening_answers = kwargs.get('screening_answers')
+        if screening_answers is None:
+            screening_answers = []
+
         with transaction.atomic():
             application = Application.objects.create(
                 job=job,
@@ -66,6 +70,7 @@ class ApplicationService:
                 preferred_locations_info=pref_locs_info,
                 preferred_location=", ".join(pref_locs) if pref_locs else current_loc,
                 key_skills=skills,
+                screening_answers=screening_answers,
                 date_of_birth=kwargs.get('date_of_birth'),
                 note_to_recruiter=kwargs.get('note_to_recruiter'),
                 current_company=candidate.current_company,

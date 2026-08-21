@@ -69,7 +69,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 key_skills=serializer.validated_data['key_skills'],
                 date_of_birth=serializer.validated_data['date_of_birth'],
                 note_to_recruiter=serializer.validated_data.get('note_to_recruiter'),
-                cover_letter=serializer.validated_data.get('cover_letter', '')
+                cover_letter=serializer.validated_data.get('cover_letter', ''),
+                screening_answers=serializer.validated_data.get('screening_answers', [])
             )
             return Response(ApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
         except Exception as e:

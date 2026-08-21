@@ -21,7 +21,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'job', 'job_details', 'candidate', 'candidate_details', 
             'stage', 'match_score', 'cover_letter', 'rejection_reason', 
-            'is_active', 'history', 'created_at'
+            'is_active', 'screening_answers', 'history', 'created_at'
         )
         read_only_fields = ('id', 'stage', 'match_score', 'is_active', 'created_at')
 
@@ -34,6 +34,7 @@ class ApplicationApplySerializer(serializers.Serializer):
     current_location = serializers.CharField(required=True)
     preferred_locations = serializers.JSONField(required=True)
     key_skills = serializers.JSONField(required=True)
+    screening_answers = serializers.JSONField(required=False, default=list)
     date_of_birth = serializers.DateField(required=True)
     note_to_recruiter = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=500)
     cover_letter = serializers.CharField(required=False, allow_blank=True, allow_null=True)

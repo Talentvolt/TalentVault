@@ -135,6 +135,7 @@ class Application(BaseAppModel):
     preferred_locations = models.JSONField(default=list, blank=True, null=True)
     preferred_locations_info = models.JSONField(default=list, blank=True, null=True)
     key_skills = models.JSONField(default=list, blank=True, null=True)
+    screening_answers = models.JSONField(default=list, blank=True)
     preferred_work_mode = models.CharField(max_length=50, blank=True, null=True)
     mobile_number = models.CharField(max_length=20, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -215,6 +216,8 @@ class Application(BaseAppModel):
 
     def save(self, *args, **kwargs):
         from utils.url_helpers import normalize_external_url
+        if self.screening_answers is None:
+            self.screening_answers = []
         if self.linkedin_url:
             self.linkedin_url = normalize_external_url(self.linkedin_url)
         if self.portfolio_url:

@@ -2938,6 +2938,7 @@ class PublicJobApplyView(View):
                     'portfolio_url': portfolio_url,
                     'resume': profile.resume or resume_file,
                     'key_skills': skill_list,
+                    'screening_answers': [],
                 }
             )
 
@@ -3032,7 +3033,7 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
         application, created = Application.objects.get_or_create(
             candidate=candidate,
             job=job,
-            defaults={'stage': 'OPEN', 'in_pipeline': True}
+            defaults={'stage': 'OPEN', 'in_pipeline': True, 'screening_answers': []}
         )
         if not created:
             application.in_pipeline = True
@@ -3117,7 +3118,7 @@ class BulkAddToPipelineView(RecruiterRequiredMixin, View):
                 application, created = Application.objects.get_or_create(
                     candidate=candidate,
                     job=job,
-                    defaults={'stage': 'OPEN', 'in_pipeline': True}
+                    defaults={'stage': 'OPEN', 'in_pipeline': True, 'screening_answers': []}
                 )
                 if created:
                     added_count += 1
@@ -5944,10 +5945,16 @@ class JobApplyView(CandidateRequiredMixin, View):
             preferred_work_mode = request.POST.get('preferred_work_mode', '')
             available_joining_date = request.POST.get('available_joining_date') or None
             
-            screening_answers = {}
-            for i, q in enumerate(job.screening_questions):
-                q_id = f"question_{i}"
-                screening_answers[q.get('question')] = request.POST.get(q_id, '')
+            screening_answers = []
+            if job.screening_questions:
+                for i, q in enumerate(job.screening_questions):
+                    q_id = f"question_{i}"
+                    ans = request.POST.get(q_id, '')
+                    q_text = q.get('question', '') if isinstance(q, dict) else str(q)
+                    screening_answers.append({
+                        'question': q_text,
+                        'answer': ans
+                    })
                 
             ApplicationService.apply_for_job(
                 job_id=str(job.id),
