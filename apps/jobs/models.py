@@ -100,10 +100,10 @@ class Job(BaseAppModel):
 
     @property
     def display_company(self):
-        if self.client and getattr(self.client, 'company_name', None):
-            return self.client.company_name
-        if self.company and getattr(self.company, 'name', None):
-            return self.company.name
+        if self.client and getattr(self.client, 'company_name', None) and self.client.company_name.strip():
+            return self.client.company_name.strip()
+        if self.company and getattr(self.company, 'name', None) and self.company.name.strip():
+            return self.company.name.strip()
         return "N/A"
 
     @property
@@ -114,6 +114,37 @@ class Job(BaseAppModel):
         verbose_name = _('job')
         verbose_name_plural = _('jobs')
         ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.company_id:
+            if self.client and getattr(self.client, 'company_name', None) and self.client.company_name.strip():
+                from apps.companies.models import Company
+                from django.utils.text import slugify
+                comp_name = self.client.company_name.strip()
+                company = Company.objects.filter(name__iexact=comp_name).first()
+                if not company:
+                    base_slug = slugify(comp_name) or 'company'
+                    slug = base_slug
+                    counter = 1
+                    while Company.objects.filter(slug=slug).exists():
+                        slug = f"{base_slug}-{counter}"
+                        counter += 1
+                    company = Company.objects.create(
+                        name=comp_name,
+                        slug=slug,
+                        industry=getattr(self.client, 'industry', '') or 'General',
+                        location=getattr(self.client, 'city', '') or 'India'
+                    )
+                self.company = company
+            elif self.created_by:
+                cm = self.created_by.company_affiliations.select_related('company').first()
+                if cm and cm.company:
+                    self.company = cm.company
+            if not self.company_id:
+                from apps.companies.models import Company
+                company, _ = Company.objects.get_or_create(name="Default Company", defaults={'slug': 'default-company'})
+                self.company = company
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.title} @ {self.display_company}"

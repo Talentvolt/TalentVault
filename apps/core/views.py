@@ -593,8 +593,37 @@ class RecruiterJobsView(RecruiterRequiredMixin, TemplateView):
             description = request.POST.get('description', '').strip()
             ai_matching_enabled = request.POST.get('ai_matching_enabled') == 'on' or request.POST.get('ai_matching_enabled') == 'true'
 
+            client_id = request.POST.get('client_id') or request.POST.get('client')
+            client_obj = None
+            if client_id:
+                from apps.clients.models import Client
+                client_obj = Client.objects.filter(id=client_id).first()
+
+            if client_obj:
+                from apps.companies.models import Company
+                from django.utils.text import slugify
+                comp_name = client_obj.company_name.strip()
+                company_record = Company.objects.filter(name__iexact=comp_name).first()
+                if not company_record:
+                    base_slug = slugify(comp_name) or 'company'
+                    slug = base_slug
+                    counter = 1
+                    while Company.objects.filter(slug=slug).exists():
+                        slug = f"{base_slug}-{counter}"
+                        counter += 1
+                    company_record = Company.objects.create(
+                        name=comp_name,
+                        slug=slug,
+                        industry=getattr(client_obj, 'industry', '') or 'General',
+                        location=client_obj.city or 'India'
+                    )
+                target_company = company_record
+            else:
+                target_company = company
+
             new_job = Job.objects.create(
-                company=company,
+                company=target_company,
+                client=client_obj,
                 created_by=user,
                 title=title,
                 department=department,
@@ -1013,7 +1042,13 @@ class JobsView(ListView):
             # 3. Search by Company
             company = self.request.GET.get('company', '').strip()
             if company:
-                queryset = queryset.filter(Q(company__name__icontains=company) | Q(client__company_name__icontains=company))
+                clean_name = company.replace('-', ' ').strip()
+                queryset = queryset.filter(
+                    Q(client__company_name__icontains=company) |
+                    Q(client__company_name__icontains=clean_name) |
+                    Q(company__name__icontains=company, client__isnull=True) |
+                    Q(company__name__icontains=clean_name, client__isnull=True)
+                )
                 
             # 4. Search by Skills
             skills = self.request.GET.get('skills', '').strip()
@@ -1101,17 +1136,32 @@ class JobsView(ListView):
             company_filter = self.request.GET.get('company', '').strip() or self.request.GET.get('client', '').strip()
             if company_filter:
                 import uuid
+                from apps.clients.models import Client
+                from apps.companies.models import Company
+                
+                target_name = ""
+                comp_uuid = None
                 try:
                     comp_uuid = uuid.UUID(company_filter)
-                    queryset = queryset.filter(Q(company_id=comp_uuid) | Q(client_id=comp_uuid))
+                    client_match = Client.objects.filter(id=comp_uuid).first()
+                    if client_match and client_match.company_name:
+                        target_name = client_match.company_name.strip()
+                    else:
+                        company_match = Company.objects.filter(id=comp_uuid).first()
+                        if company_match and company_match.name:
+                            target_name = company_match.name.strip()
                 except ValueError:
-                    clean_name = company_filter.replace('-', ' ').strip()
+                    target_name = company_filter.replace('-', ' ').strip()
+                
+                if target_name:
                     queryset = queryset.filter(
-                        Q(company__name__icontains=company_filter) |
-                        Q(company__name__icontains=clean_name) |
-                        Q(client__company_name__icontains=company_filter) |
-                        Q(client__company_name__icontains=clean_name)
+                        Q(client__company_name__iexact=target_name) |
+                        Q(client__company_name__icontains=target_name) |
+                        Q(company__name__iexact=target_name, client__isnull=True) |
+                        Q(company__name__icontains=target_name, client__isnull=True)
                     )
+                elif comp_uuid:
+                    queryset = queryset.filter(Q(client_id=comp_uuid) | Q(company_id=comp_uuid, client__isnull=True))
                 
             # Sorting
             sort_by = self.request.GET.get('sort_by', '-created_at').strip()
@@ -1190,27 +1240,37 @@ class JobsView(ListView):
             from apps.companies.models import Company
             from apps.clients.models import Client
 
-            active_companies = list(Company.objects.filter(jobs__status='ACTIVE').distinct())
-            if not active_companies:
-                active_companies = list(Company.objects.filter(is_active=True).order_by('name'))
-
-            client_list = list(Client.objects.filter(status='ACTIVE'))
-
+            tenant_jobs = get_tenant_jobs_qs(self.request.user).select_related('client', 'company')
+            
             company_options = []
-            seen_names = set()
-            for c in active_companies:
-                if c.name and c.name not in seen_names:
-                    company_options.append({'id': str(c.id), 'name': c.name})
-                    seen_names.add(c.name)
-            for cl in client_list:
-                if cl.company_name and cl.company_name not in seen_names:
-                    company_options.append({'id': str(cl.id), 'name': cl.company_name})
-                    seen_names.add(cl.company_name)
+            seen_normalized = set()
+
+            # 1. Collect canonical hiring companies from tenant jobs
+            for j in tenant_jobs:
+                disp_name = j.display_company
+                if disp_name and disp_name != "N/A":
+                    norm_key = disp_name.strip().lower()
+                    if norm_key not in seen_normalized:
+                        opt_id = str(j.client.id) if j.client else str(j.company.id)
+                        company_options.append({'id': opt_id, 'name': disp_name.strip()})
+                        seen_normalized.add(norm_key)
+
+            # 2. Also include active clients accessible to the tenant
+            active_clients = get_tenant_clients_qs(self.request.user).filter(status='ACTIVE')
+            for cl in active_clients:
+                if cl.company_name and cl.company_name.strip():
+                    norm_key = cl.company_name.strip().lower()
+                    if norm_key not in seen_normalized:
+                        company_options.append({'id': str(cl.id), 'name': cl.company_name.strip()})
+                        seen_normalized.add(norm_key)
+
+            # Sort options alphabetically
+            company_options.sort(key=lambda x: x['name'].lower())
 
             context['companies'] = company_options
             context['selected_company'] = self.request.GET.get('company', '') or self.request.GET.get('client', '')
 
-            context['clients'] = Client.objects.filter(status='ACTIVE')
+            context['clients'] = active_clients
             context['selected_client'] = self.request.GET.get('client', '') or self.request.GET.get('company', '')
             
             context['job_types'] = [
@@ -1275,6 +1335,10 @@ class JobCreateView(RecruiterRequiredMixin, CreateView):
                 company, _ = Company.objects.get_or_create(name="Default Company", slug="default-company")
                 form.instance.company = company
             
+        if not form.instance.created_by_id:
+            form.instance.created_by = self.request.user
+        form.instance.updated_by = self.request.user
+
         if 'draft' in self.request.POST:
             form.instance.status = 'DRAFT'
         else:
@@ -1339,6 +1403,8 @@ class JobUpdateView(RecruiterRequiredMixin, UpdateView):
                 )
             form.instance.company = company
             form.instance.client = client
+
+        form.instance.updated_by = self.request.user
 
         if 'draft' in self.request.POST:
             form.instance.status = 'DRAFT'
@@ -5973,7 +6039,7 @@ class JobApplyView(CandidateRequiredMixin, View):
                 available_joining_date=available_joining_date,
                 screening_answers=screening_answers
             )
-            messages.success(request, f"Successfully applied for {job.title} at {job.company.name}")
+            messages.success(request, f"Successfully applied for {job.title} at {job.display_company}")
             return redirect('frontend:candidate_applications')
         except Exception as e:
             messages.error(request, str(e))

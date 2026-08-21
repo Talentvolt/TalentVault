@@ -29,8 +29,13 @@ def get_tenant_jobs_qs(user):
         return Job.objects.filter(status='ACTIVE')
     company = get_user_company(user)
     if company:
-        return Job.objects.filter(Q(company=company) | Q(created_by=user)).distinct()
-    return Job.objects.filter(created_by=user)
+        return Job.objects.filter(
+            Q(created_by__company_affiliations__company=company) |
+            Q(company=company) |
+            Q(created_by=user) |
+            Q(created_by__isnull=True)
+        ).distinct()
+    return Job.objects.filter(Q(created_by=user) | Q(created_by__isnull=True))
 
 def get_tenant_clients_qs(user):
     """Returns tenant-scoped Client queryset."""
@@ -59,9 +64,13 @@ def get_tenant_applications_qs(user):
     company = get_user_company(user)
     if company:
         return Application.objects.filter(
-            Q(job__company=company) | Q(job__created_by=user) | Q(created_by=user)
+            Q(job__created_by__company_affiliations__company=company) |
+            Q(job__company=company) |
+            Q(job__created_by=user) |
+            Q(created_by=user) |
+            Q(job__created_by__isnull=True)
         ).distinct()
-    return Application.objects.filter(Q(job__created_by=user) | Q(created_by=user)).distinct()
+    return Application.objects.filter(Q(job__created_by=user) | Q(created_by=user) | Q(job__created_by__isnull=True)).distinct()
 
 def get_tenant_candidates_qs(user):
     """Returns tenant-scoped CandidateProfile queryset."""
@@ -93,10 +102,12 @@ def get_tenant_interviews_qs(user):
     company = get_user_company(user)
     if company:
         return Interview.objects.filter(
+            Q(application__job__created_by__company_affiliations__company=company) |
             Q(application__job__company=company) |
             Q(application__job__created_by=user) |
-            Q(created_by=user)
+            Q(created_by=user) |
+            Q(application__job__created_by__isnull=True)
         ).distinct()
     return Interview.objects.filter(
-        Q(application__job__created_by=user) | Q(created_by=user)
+        Q(application__job__created_by=user) | Q(created_by=user) | Q(application__job__created_by__isnull=True)
     ).distinct()

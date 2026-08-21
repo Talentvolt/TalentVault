@@ -26,6 +26,11 @@ class Company(BaseAppModel):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        if self.name:
+            self.name = self.name.strip()
+        super().save(*args, **kwargs)
+
 class CompanyMember(BaseAppModel):
     """
     Maps Users (Admins/Recruiters) to Companies.

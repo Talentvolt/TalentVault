@@ -10,16 +10,17 @@ class JobSkillSerializer(serializers.ModelSerializer):
 class JobSerializer(serializers.ModelSerializer):
     skills = JobSkillSerializer(many=True, required=False)
     company_details = CompanySerializer(source='company', read_only=True)
+    display_company = serializers.CharField(read_only=True)
 
     class Meta:
         model = Job
         fields = (
-            'id', 'company', 'company_details', 'title', 'description', 'location', 
+            'id', 'company', 'company_details', 'client', 'display_company', 'title', 'description', 'location', 
             'job_type', 'min_experience', 'max_experience', 
             'min_salary', 'max_salary', 'currency', 'status', 'is_remote', 
             'application_deadline', 'skills', 'created_at'
         )
-        read_only_fields = ('id', 'created_at')
+        read_only_fields = ('id', 'created_at', 'display_company')
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)

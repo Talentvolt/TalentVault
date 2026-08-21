@@ -34,3 +34,14 @@ class ClientForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Add any additional notes about the client...'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
+
+    def clean_company_name(self):
+        name = self.cleaned_data.get('company_name', '').strip()
+        if not name:
+            raise forms.ValidationError("Company name is required.")
+        qs = Client.objects.filter(company_name__iexact=name)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(f"A client with company name '{name}' already exists.")
+        return name

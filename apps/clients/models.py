@@ -70,6 +70,11 @@ class Client(BaseAppModel):
     def __str__(self):
         return self.company_name
 
+    def save(self, *args, **kwargs):
+        if self.company_name:
+            self.company_name = self.company_name.strip()
+        super().save(*args, **kwargs)
+
     @property
     def created_by_display(self):
         if not self.created_by:
