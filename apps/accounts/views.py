@@ -87,6 +87,12 @@ class LoginForm(forms.Form):
         'class': 'form-check-input',
     }))
 
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            email = email.strip().lower()
+        return email
+
 class SignupForm(forms.ModelForm):
     first_name = forms.CharField(max_length=30, required=True, widget=forms.TextInput(attrs={
         'class': 'form-control',
@@ -151,7 +157,7 @@ class SignupForm(forms.ModelForm):
             raise forms.ValidationError("Disposable or fake email addresses are not permitted. Please use a real email provider.")
             
         # Duplicate email check
-        if User.objects.filter(email=email).exists():
+        if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError("An account with this email already exists.")
             
         return email
@@ -197,6 +203,15 @@ class SignupForm(forms.ModelForm):
         if password and confirm_password and password != confirm_password:
             self.add_error('confirm_password', "Passwords do not match.")
         return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get('password')
+        if password:
+            user.set_password(password)
+        if commit:
+            user.save()
+        return user
 
 class CustomLoginView(View):
     template_name = 'registration/login.html'
@@ -453,6 +468,15 @@ class EmployerSignupForm(forms.ModelForm):
 
         return email
 
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get('password')
+        if password:
+            user.set_password(password)
+        if commit:
+            user.save()
+        return user
+
 
 class LoginSelectView(View):
     template_name = 'registration/login_select.html'
@@ -502,19 +526,23 @@ class CandidateLoginView(View):
             
         form = LoginForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data.get('email').strip().lower()
+            email = form.cleaned_data.get('email', '').strip().lower()
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
-            user_check = User.objects.filter(email=email).first()
+            user_check = User.objects.filter(email__iexact=email).first()
             if user_check:
                 if user_check.role != User.Role.CANDIDATE:
                     form.add_error(None, "This workspace is reserved for Candidates. Please use the Recruiter Portal to sign in.")
                     return render(request, self.template_name, {'form': form})
 
+                if not user_check.is_active:
+                    form.add_error(None, "This account is disabled.")
+                    return render(request, self.template_name, {'form': form})
+
                 # Check if OTP was verified for this email
                 if not user_check.is_verified:
-                    if OTPVerification.objects.filter(email=email, verified=True).exists():
+                    if OTPVerification.objects.filter(email__iexact=email, verified=True).exists():
                         complete_user_verification(user_check)
 
                 if not user_check.is_verified:
@@ -522,10 +550,20 @@ class CandidateLoginView(View):
                     return render(request, self.template_name, {'form': form})
 
             user = authenticate(request, username=email, password=password)
+            if user is None:
+                user = authenticate(request, email=email, password=password)
+
             if user is not None:
                 if user.role == User.Role.CANDIDATE:
                     if user.is_active:
-                        login(request, user)
+                        from apps.candidates.models import CandidateProfile
+                        CandidateProfile.objects.get_or_create(
+                            user=user,
+                            defaults={
+                                'full_name': f"{user.first_name} {user.last_name}".strip() or user.email.split('@')[0]
+                            }
+                        )
+                        login(request, user, backend=getattr(user, 'backend', 'django.contrib.auth.backends.ModelBackend'))
                         if remember_me:
                             request.session.set_expiry(1209600)  # 2 weeks
                         else:
@@ -905,7 +943,7 @@ class CandidateForgotPasswordView(View):
         if not email_input:
             return render(request, self.template_name, {'error': 'Registered email address is required.'})
 
-        user = User.objects.filter(email=email_input, role=User.Role.CANDIDATE).first()
+        user = User.objects.filter(email__iexact=email_input, role=User.Role.CANDIDATE).first()
         if not user:
             return render(request, self.template_name, {
                 'error': "No candidate account found with this email address.",
@@ -923,7 +961,7 @@ class CandidateForgotPasswordView(View):
         now = timezone.now()
         expires_at = now + timedelta(minutes=5)
 
-        otp_record = OTPVerification.objects.filter(email=target_email, verified=False).order_by('-created_at').first()
+        otp_record = OTPVerification.objects.filter(email__iexact=target_email, verified=False).order_by('-created_at').first()
         if not otp_record:
             otp_record = OTPVerification(
                 email=target_email,
@@ -990,7 +1028,7 @@ class CandidateOTPVerificationView(View):
             })
 
         OTPVerification.cleanup_expired()
-        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+        otp_record = OTPVerification.objects.filter(email__iexact=email, verified=False).order_by('-created_at').first()
 
         if not otp_record:
             return render(request, self.template_name, {
@@ -1037,7 +1075,7 @@ class CandidateOTPVerificationView(View):
         if pending_signup:
             try:
                 target_email = pending_signup['email'].strip().lower()
-                user = User.objects.filter(email=target_email).first()
+                user = User.objects.filter(email__iexact=target_email).first()
                 if not user:
                     user = User.objects.create_user(
                         email=target_email,
@@ -1105,6 +1143,7 @@ class SendEmailOTPView(View):
         email = data.get('email') or request.session.get('otp_email')
         if not email:
             return JsonResponse({'success': False, 'message': 'Email address is required.'}, status=400)
+        email = email.strip().lower()
 
         OTPVerification.cleanup_expired()
         from apps.accounts.services.email_service import generate_otp, send_email_otp
@@ -1113,7 +1152,7 @@ class SendEmailOTPView(View):
         now = timezone.now()
         expires_at = now + timedelta(minutes=5)
 
-        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+        otp_record = OTPVerification.objects.filter(email__iexact=email, verified=False).order_by('-created_at').first()
         if not otp_record:
             otp_record = OTPVerification(
                 email=email,
@@ -1153,9 +1192,10 @@ class VerifyEmailOTPView(View):
 
         if not email or not otp_entered:
             return JsonResponse({'success': False, 'message': 'Email address and 6-digit OTP are required.'}, status=400)
+        email = email.strip().lower()
 
         OTPVerification.cleanup_expired()
-        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+        otp_record = OTPVerification.objects.filter(email__iexact=email, verified=False).order_by('-created_at').first()
 
         if not otp_record:
             return JsonResponse({'success': False, 'message': 'No active OTP verification session found or code expired.'}, status=400)
@@ -1196,7 +1236,7 @@ class VerifyEmailOTPView(View):
         if pending_signup:
             try:
                 target_email = pending_signup['email'].strip().lower()
-                user = User.objects.filter(email=target_email).first()
+                user = User.objects.filter(email__iexact=target_email).first()
                 if not user:
                     user = User.objects.create_user(
                         email=target_email,
@@ -1246,13 +1286,6 @@ class VerifyEmailOTPView(View):
         })
 
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Email verification successful!',
-            'redirect_url': redirect_url
-        })
-
-
 class ResendEmailOTPView(View):
     def post(self, request, *args, **kwargs):
         if request.content_type == 'application/json':
@@ -1266,9 +1299,10 @@ class ResendEmailOTPView(View):
         email = data.get('email') or request.session.get('otp_email')
         if not email:
             return JsonResponse({'success': False, 'message': 'Email address is required to resend OTP.'}, status=400)
+        email = email.strip().lower()
 
         OTPVerification.cleanup_expired()
-        otp_record = OTPVerification.objects.filter(email=email, verified=False).order_by('-created_at').first()
+        otp_record = OTPVerification.objects.filter(email__iexact=email, verified=False).order_by('-created_at').first()
 
         if otp_record and otp_record.resend_count >= 3:
             return JsonResponse({

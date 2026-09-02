@@ -26,8 +26,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
+        email = validated_data['email'].strip().lower()
         user = User.objects.create_user(
-            email=validated_data['email'],
+            email=email,
             password=validated_data['password'],
             role=validated_data.get('role', User.Role.CANDIDATE),
             phone_number=validated_data.get('phone_number', '')
@@ -35,7 +36,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         
         # Automatically create candidate profile if role is Candidate
         if user.role == User.Role.CANDIDATE:
-            CandidateProfile.objects.create(user=user)
+            CandidateProfile.objects.get_or_create(user=user)
             
         return user
 

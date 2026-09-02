@@ -7,13 +7,33 @@ from apps.core.models import UUIDModel, TimeStampedModel
 class UserManager(BaseUserManager):
     """Define a model manager for User model with no username field."""
 
+    @classmethod
+    def normalize_email(cls, email):
+        """
+        Normalize the email address by trimming whitespace and lowercasing.
+        """
+        if email:
+            email = email.strip().lower()
+        return email or ''
+
+    def get_by_natural_key(self, username):
+        """
+        Case-insensitive lookup by email natural key for authentication backends.
+        """
+        if username:
+            username = username.strip().lower()
+        return self.get(**{f"{self.model.USERNAME_FIELD}__iexact": username})
+
     def _create_user(self, email, password=None, **extra_fields):
         """Create and save a User with the given email and password."""
         if not email:
             raise ValueError('The given email must be set')
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 
@@ -98,6 +118,8 @@ class User(AbstractUser, UUIDModel, TimeStampedModel):
         return f"{self.email} ({self.role})"
 
     def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
         if self.is_superuser or self.is_staff:
             self.role = self.Role.SUPER_ADMIN
             self.recruiter_status = self.RecruiterStatus.ACTIVE
