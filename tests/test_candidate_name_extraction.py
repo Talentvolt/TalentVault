@@ -256,7 +256,7 @@ def test_no_cross_contamination_unrelated_resume():
 
 @pytest.mark.django_db
 @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
-@patch('apps.candidates.utils.OpenAIResumeParser.parse')
+@patch('apps.candidates.utils.parse_resume_via_parseora')
 def test_process_resume_name_priority_list(mock_parser, mock_ocr):
     # Setup mock OCR output
     mock_ocr.return_value = {
@@ -368,7 +368,7 @@ def test_process_resume_name_priority_list(mock_parser, mock_ocr):
 
 @pytest.mark.django_db
 @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
-@patch('apps.candidates.utils.OpenAIResumeParser.parse')
+@patch('apps.candidates.utils.parse_resume_via_parseora')
 def test_new_name_extraction_pipeline(mock_parser, mock_ocr):
     # Setup base mocks
     mock_ocr.return_value = {

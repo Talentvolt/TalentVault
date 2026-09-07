@@ -329,6 +329,10 @@
                         <span>
                             {% if form.non_field_errors %}
                                 {{ form.non_field_errors.0 }}
+                            {% elif form.errors.email %}
+                                {{ form.errors.email.0 }}
+                            {% elif form.errors.password %}
+                                {{ form.errors.password.0 }}
                             {% else %}
                                 Invalid email or password.
                             {% endif %}
@@ -344,9 +348,9 @@
                         
                         <!-- Admin Email -->
                         <div class="mb-3">
-                            <label for="id_email" class="form-label">Admin Email</label>
+                            <label for="id_email" class="form-label">Admin Email or Username</label>
                             <div class="input-group-custom">
-                                <input type="email" name="email" id="id_email" required 
+                                <input type="text" name="email" id="id_email" required 
                                        class="form-control-custom" placeholder="admin@talent-vault.in" 
                                        value="{{ form.email.value|default:'' }}">
                             </div>

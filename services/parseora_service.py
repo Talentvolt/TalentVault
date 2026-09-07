@@ -12,48 +12,48 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-class ParseForgeException(Exception):
-    """Base exception for ParseForge integration errors."""
+class ParseoraException(Exception):
+    """Base exception for Parseora integration errors."""
     def __init__(self, message: str, status_code: Optional[int] = None, request_id: Optional[str] = None):
         super().__init__(message)
         self.status_code = status_code
         self.request_id = request_id
 
 
-class ParseForgeAuthError(ParseForgeException):
-    """Raised when authentication with ParseForge fails."""
+class ParseoraAuthError(ParseoraException):
+    """Raised when authentication with Parseora fails."""
     pass
 
 
-class ParseForgeUnavailableError(ParseForgeException):
-    """Raised when ParseForge API is unreachable or unavailable."""
+class ParseoraUnavailableError(ParseoraException):
+    """Raised when Parseora API is unreachable or unavailable."""
     pass
 
 
-class ParseForgeTimeoutError(ParseForgeException):
-    """Raised when ParseForge API times out."""
+class ParseoraTimeoutError(ParseoraException):
+    """Raised when Parseora API times out."""
     pass
 
 
-class ParseForgeService:
+class ParseoraService:
     """
-    Clean integration service for ParseForge Document Intelligence Platform.
-    Communicates with ParseForge REST API for resume/CV parsing and extracts
+    Clean integration service for Parseora Document Intelligence Platform.
+    Communicates with Parseora REST API for resume/CV parsing and extracts
     structured entities mapped directly to TalentVault Candidate models.
     """
 
     @classmethod
     def get_api_url(cls) -> str:
-        url = getattr(settings, 'PARSEFORGE_API_URL', None) or os.environ.get('PARSEFORGE_API_URL') or "http://127.0.0.1:8001"
+        url = getattr(settings, 'PARSEORA_API_URL', None) or os.environ.get('PARSEORA_API_URL') or "http://127.0.0.1:8001"
         return url.rstrip('/')
 
     @classmethod
     def get_api_key(cls) -> Optional[str]:
-        return getattr(settings, 'PARSEFORGE_API_KEY', None) or os.environ.get('PARSEFORGE_API_KEY')
+        return getattr(settings, 'PARSEORA_API_KEY', None) or os.environ.get('PARSEORA_API_KEY')
 
     @classmethod
     def get_timeout(cls) -> float:
-        return float(getattr(settings, 'PARSEFORGE_TIMEOUT', None) or os.environ.get('PARSEFORGE_TIMEOUT', 45.0))
+        return float(getattr(settings, 'PARSEORA_TIMEOUT', None) or os.environ.get('PARSEORA_TIMEOUT', 45.0))
 
     @classmethod
     def is_configured(cls) -> bool:
@@ -67,10 +67,10 @@ class ParseForgeService:
         timeout: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Sends uploaded CV file as multipart/form-data to POST {PARSEFORGE_API_URL}/api/v1/parse.
+        Sends uploaded CV file as multipart/form-data to POST {PARSEORA_API_URL}/api/v1/parse.
         
         Headers:
-            X-API-Key: {PARSEFORGE_API_KEY}
+            X-API-Key: {PARSEORA_API_KEY}
             
         Form Data:
             document_type=resume
@@ -82,7 +82,7 @@ class ParseForgeService:
             async_job=false
             
         Returns:
-            Structured JSON dictionary returned from ParseForge.
+            Structured JSON dictionary returned from Parseora.
         """
         api_url = cls.get_api_url()
         api_key = cls.get_api_key()
@@ -90,8 +90,8 @@ class ParseForgeService:
         req_timeout = timeout or cls.get_timeout()
 
         if not api_key:
-            logger.error("[PARSEFORGE] PARSEFORGE_API_KEY is not configured.")
-            raise ParseForgeAuthError("ParseForge API Key is not configured.")
+            logger.error("[PARSEORA] PARSEORA_API_KEY is not configured.")
+            raise ParseoraAuthError("Parseora API Key is not configured.")
 
         # Determine MIME type safely
         ext = filename.split('.')[-1].lower() if '.' in filename else 'pdf'
@@ -127,7 +127,7 @@ class ParseForgeService:
             'X-API-Key': api_key
         }
 
-        logger.info(f"[PARSEFORGE REQUEST] Sending resume parsing request to {endpoint} for file: {filename} ({len(file_bytes)} bytes)")
+        logger.info(f"[PARSEORA REQUEST] Sending resume parsing request to {endpoint} for file: {filename} ({len(file_bytes)} bytes)")
         t0 = time.time()
 
         try:
@@ -140,12 +140,12 @@ class ParseForgeService:
             )
         except requests.exceptions.Timeout as e:
             elapsed = time.time() - t0
-            logger.error(f"[PARSEFORGE TIMEOUT] Request timed out after {elapsed:.2f}s for file {filename}")
-            raise ParseForgeTimeoutError(f"ParseForge request timed out after {elapsed:.2f}s.") from e
+            logger.error(f"[PARSEORA TIMEOUT] Request timed out after {elapsed:.2f}s for file {filename}")
+            raise ParseoraTimeoutError(f"Parseora request timed out after {elapsed:.2f}s.") from e
         except (requests.exceptions.ConnectionError, requests.exceptions.RequestException) as e:
             elapsed = time.time() - t0
-            logger.error(f"[PARSEFORGE CONNECTION ERROR] Failed to reach ParseForge at {endpoint} after {elapsed:.2f}s: {type(e).__name__}")
-            raise ParseForgeUnavailableError(f"ParseForge service is unavailable at {api_url}.") from e
+            logger.error(f"[PARSEORA CONNECTION ERROR] Failed to reach Parseora at {endpoint} after {elapsed:.2f}s: {type(e).__name__}")
+            raise ParseoraUnavailableError(f"Parseora service is unavailable at {api_url}.") from e
 
         elapsed = time.time() - t0
         status_code = response.status_code
@@ -158,23 +158,23 @@ class ParseForgeService:
 
         request_id = res_json.get('request_id') or response.headers.get('X-Request-Id')
 
-        logger.info(f"[PARSEFORGE RESPONSE] Status: {status_code} | Request ID: {request_id} | Elapsed: {elapsed:.2f}s | File: {filename}")
+        logger.info(f"[PARSEORA RESPONSE] Status: {status_code} | Request ID: {request_id} | Elapsed: {elapsed:.2f}s | File: {filename}")
 
         if status_code in (401, 403):
-            err_msg = res_json.get('message') or "Invalid, revoked, or expired ParseForge API Key."
-            logger.error(f"[PARSEFORGE AUTH ERROR] Status: {status_code} | Request ID: {request_id} | Message: {err_msg}")
-            raise ParseForgeAuthError(err_msg, status_code=status_code, request_id=request_id)
+            err_msg = res_json.get('message') or "Invalid, revoked, or expired Parseora API Key."
+            logger.error(f"[PARSEORA AUTH ERROR] Status: {status_code} | Request ID: {request_id} | Message: {err_msg}")
+            raise ParseoraAuthError(err_msg, status_code=status_code, request_id=request_id)
 
         if status_code != 200:
-            err_msg = res_json.get('message') or res_json.get('error') or f"ParseForge returned HTTP {status_code}"
-            logger.error(f"[PARSEFORGE API ERROR] Status: {status_code} | Request ID: {request_id} | Message: {err_msg}")
-            raise ParseForgeException(err_msg, status_code=status_code, request_id=request_id)
+            err_msg = res_json.get('message') or res_json.get('error') or f"Parseora returned HTTP {status_code}"
+            logger.error(f"[PARSEORA API ERROR] Status: {status_code} | Request ID: {request_id} | Message: {err_msg}")
+            raise ParseoraException(err_msg, status_code=status_code, request_id=request_id)
 
         return res_json
 
     @staticmethod
     def _extract_scalar(field: Any, default: Any = None) -> Any:
-        """Helper to extract scalar string or numeric value from ParseForge nested entity field."""
+        """Helper to extract scalar string or numeric value from Parseora nested entity field."""
         if field is None:
             return default
         if isinstance(field, dict):
@@ -187,7 +187,7 @@ class ParseForgeService:
     @classmethod
     def map_response_to_talentvault(cls, res_json: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Maps ParseForge structured JSON response directly into TalentVault's standard
+        Maps Parseora structured JSON response directly into TalentVault's standard
         parsed_data candidate schema and model fields.
         """
         cand = res_json.get('candidate') or res_json.get('data', {}).get('candidate') or {}
@@ -243,19 +243,19 @@ class ParseForgeService:
                 total_exp += ResumeIntelligenceService.calculate_experience_years_from_dates(s_date_str, e_date_str)
         total_exp = round(total_exp, 1)
 
-        # Fallback to ParseForge total_experience_years if calculated is 0
-        pf_total_exp = cls._extract_scalar(cand.get('total_experience_years'))
-        if total_exp == 0.0 and pf_total_exp is not None:
+        # Fallback to Parseora total_experience_years if calculated is 0
+        api_total_exp = cls._extract_scalar(cand.get('total_experience_years'))
+        if total_exp == 0.0 and api_total_exp is not None:
             try:
-                total_exp = round(float(pf_total_exp), 1)
+                total_exp = round(float(api_total_exp), 1)
             except (ValueError, TypeError):
                 pass
 
-        pf_rel_exp = cls._extract_scalar(cand.get('relevant_experience_years'))
+        api_rel_exp = cls._extract_scalar(cand.get('relevant_experience_years'))
         relevant_exp = total_exp
-        if pf_rel_exp is not None:
+        if api_rel_exp is not None:
             try:
-                relevant_exp = round(float(pf_rel_exp), 1)
+                relevant_exp = round(float(api_rel_exp), 1)
             except (ValueError, TypeError):
                 relevant_exp = total_exp
 
@@ -479,7 +479,7 @@ class ParseForgeService:
                         b64_data = b64_str
                     photo_bytes = base64.b64decode(b64_data)
                 except Exception as e:
-                    logger.warning(f"[PARSEFORGE] Failed to decode photo base64: {e}")
+                    logger.warning(f"[PARSEORA] Failed to decode photo base64: {e}")
                     photo_bytes = None
 
         personal_info['has_photo'] = bool(photo_bytes)
@@ -514,7 +514,7 @@ class ParseForgeService:
             'photo_ext': photo_ext,
             'photo_info': photo_data if isinstance(photo_data, dict) else {},
             'metadata': {
-                'parsed_by': 'ParseForge',
+                'parsed_by': 'Parseora',
                 'request_id': request_id,
                 'parsed_at': datetime.now().isoformat()
             }

@@ -17,44 +17,44 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.accounts.models import User
 from apps.candidates.models import CandidateProfile
-from services.parseforge_service import ParseForgeService
+from services.parseora_service import ParseoraService
 
 
 def run_verification():
     print("=" * 80)
-    print("TALENTVAULT -> PARSEFORGE INTEGRATION VERIFICATION")
+    print("TALENTVAULT -> PARSEORA INTEGRATION VERIFICATION")
     print("=" * 80)
 
     # 1. Check Configuration
     print("\n[1] CONFIGURATION VERIFICATION:")
-    api_url = ParseForgeService.get_api_url()
-    api_key = ParseForgeService.get_api_key()
-    print(f"  - ParseForge API URL: {api_url}")
-    print(f"  - ParseForge API Key Configured: {bool(api_key)}")
-    print(f"  - ParseForge Timeout: {ParseForgeService.get_timeout()}s")
+    api_url = ParseoraService.get_api_url()
+    api_key = ParseoraService.get_api_key()
+    print(f"  - Parseora API URL: {api_url}")
+    print(f"  - Parseora API Key Configured: {bool(api_key)}")
+    print(f"  - Parseora Timeout: {ParseoraService.get_timeout()}s")
     assert api_url == "http://127.0.0.1:8001", f"Expected URL http://127.0.0.1:8001, got {api_url}"
-    assert api_key, "PARSEFORGE_API_KEY is empty!"
+    assert api_key, "PARSEORA_API_KEY is empty!"
     print("  [PASS] Configuration OK")
 
-    # 2. Live Direct API Call to ParseForge
-    print("\n[2] DIRECT PARSEFORGE API CALL:")
+    # 2. Live Direct API Call to Parseora
+    print("\n[2] DIRECT PARSEORA API CALL:")
     filename = "MADHANKUMAR_M_Simple_Parser_Ready.pdf"
     with open(filename, "rb") as f:
         cv_bytes = f.read()
 
-    pf_resp = ParseForgeService.parse_resume(cv_bytes, filename)
+    pf_resp = ParseoraService.parse_resume(cv_bytes, filename)
     req_id = pf_resp.get("request_id")
     doc_type = pf_resp.get("document_type")
     conf = pf_resp.get("classification_confidence")
-    print(f"  - ParseForge Request ID: {req_id}")
+    print(f"  - Parseora Request ID: {req_id}")
     print(f"  - Document Type: {doc_type}")
     print(f"  - Classification Confidence: {conf}%")
     assert doc_type == "resume", f"Expected resume, got {doc_type}"
-    print("  [PASS] Direct ParseForge call OK")
+    print("  [PASS] Direct Parseora call OK")
 
     # 3. Mapping Test
     print("\n[3] DATA MAPPING VERIFICATION:")
-    mapped = ParseForgeService.map_response_to_talentvault(pf_resp)
+    mapped = ParseoraService.map_response_to_talentvault(pf_resp)
     p_info = mapped["personal_info"]
     print(f"  - Mapped Name: {p_info['name']}")
     print(f"  - Mapped Email: {p_info['email']}")
@@ -104,8 +104,8 @@ def run_verification():
     print(f"  - Stream Completed: candidate_id={completed_event.get('candidate_id')}, name={completed_event.get('name')}")
     print("  [PASS] TalentVault endpoint upload OK")
 
-    # 5. Verify ParseForge Request Logs
-    print("\n[5] PARSEFORGE REQUEST LOGS VERIFICATION:")
+    # 5. Verify Parseora Request Logs
+    print("\n[5] PARSEORA REQUEST LOGS VERIFICATION:")
     usage_res = requests.get(f"{api_url}/api/v1/usage", headers={'X-API-Key': api_key})
     assert usage_res.status_code == 200, f"Failed to fetch usage: {usage_res.status_code}"
     records = usage_res.json().get('usage_records', [])
@@ -118,7 +118,7 @@ def run_verification():
     print(f"  - Timestamp: {latest_log.get('timestamp')}")
     assert latest_log.get('status') == 'success', f"Expected success status, got {latest_log.get('status')}"
     assert latest_log.get('document_type') == 'resume', f"Expected resume, got {latest_log.get('document_type')}"
-    print("  [PASS] ParseForge Request Logs verified")
+    print("  [PASS] Parseora Request Logs verified")
 
     # 6. Verify TalentVault Database Persistence
     print("\n[6] DATABASE CANDIDATE PROFILE VERIFICATION:")
@@ -139,8 +139,8 @@ def run_verification():
     print(f"  - OCR Confidence: {profile.ocr_confidence}")
     print(f"  - Parsed JSON Parsed By: {profile.parsed_json.get('metadata', {}).get('parsed_by')}")
     print(f"  - Parsed JSON Request ID: {profile.parsed_json.get('metadata', {}).get('request_id')}")
-    assert profile.ocr_engine == 'ParseForge', f"Expected OCR Engine ParseForge, got {profile.ocr_engine}"
-    assert profile.parsed_json.get('metadata', {}).get('parsed_by') == 'ParseForge'
+    assert profile.ocr_engine == 'Parseora', f"Expected OCR Engine Parseora, got {profile.ocr_engine}"
+    assert profile.parsed_json.get('metadata', {}).get('parsed_by') == 'Parseora'
     print("  [PASS] Candidate saved and verified in DB")
 
     print("\n" + "=" * 80)

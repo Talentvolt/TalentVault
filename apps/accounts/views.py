@@ -37,6 +37,7 @@ import random
 import time
 import logging
 import json
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +74,10 @@ def is_rate_limited(request, key, max_attempts=5, period=300):
 
 
 class LoginForm(forms.Form):
-    email = forms.EmailField(widget=forms.EmailInput(attrs={
+    email = forms.CharField(widget=forms.TextInput(attrs={
         'class': 'form-control',
         'placeholder': 'name@company.com',
-        'autocomplete': 'email',
+        'autocomplete': 'username',
     }))
     password = forms.CharField(widget=forms.PasswordInput(attrs={
         'class': 'form-control',
@@ -851,8 +852,32 @@ class AdminLoginView(View):
             password = form.cleaned_data.get('password')
             remember_me = form.cleaned_data.get('remember_me')
 
-            user_target = User.objects.filter(email=email).first()
-            if not user_target or not user_target.check_password(password):
+            lookup_candidates = [email]
+            if email == 'admin@talent-vault.in':
+                lookup_candidates.append('admin@talentvault.in')
+            elif email == 'admin@talentvault.in':
+                lookup_candidates.append('admin@talent-vault.in')
+            elif email == 'admin':
+                lookup_candidates.extend(['admin@talentvault.in', 'admin@talent-vault.in'])
+
+            # 1. Use Django's authentication system (checks ModelBackend and allauth)
+            user_target = None
+            for ident in lookup_candidates:
+                user_target = authenticate(request, username=ident, password=password)
+                if user_target is None:
+                    user_target = authenticate(request, email=ident, password=password)
+                if user_target is not None:
+                    break
+
+            # 2. Fallback to direct model password check if needed
+            if user_target is None:
+                for ident in lookup_candidates:
+                    u = User.objects.filter(email__iexact=ident).first()
+                    if u and u.check_password(password):
+                        user_target = u
+                        break
+
+            if not user_target:
                 form.add_error(None, "Invalid email or password.")
                 return render(request, self.template_name, {'form': form})
 
@@ -861,7 +886,8 @@ class AdminLoginView(View):
                 return render(request, self.template_name, {'form': form})
 
             if user_target.role in [User.Role.SUPER_ADMIN, User.Role.COMPANY_ADMIN] or user_target.is_superuser or user_target.is_staff:
-                login(request, user_target, backend='django.contrib.auth.backends.ModelBackend')
+                backend = getattr(user_target, 'backend', 'django.contrib.auth.backends.ModelBackend')
+                login(request, user_target, backend=backend)
                 if remember_me:
                     request.session.set_expiry(1209600)  # 2 weeks
                 else:

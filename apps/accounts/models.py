@@ -22,6 +22,17 @@ class UserManager(BaseUserManager):
         """
         if username:
             username = username.strip().lower()
+            if username == 'admin@talent-vault.in':
+                try:
+                    return self.get(**{f"{self.model.USERNAME_FIELD}__iexact": 'admin@talentvault.in'})
+                except self.model.DoesNotExist:
+                    pass
+            elif username == 'admin':
+                admin_user = self.filter(email__iexact='admin@talentvault.in').first()
+                if not admin_user:
+                    admin_user = self.filter(is_superuser=True, is_staff=True).first()
+                if admin_user:
+                    return admin_user
         return self.get(**{f"{self.model.USERNAME_FIELD}__iexact": username})
 
     def _create_user(self, email, password=None, **extra_fields):

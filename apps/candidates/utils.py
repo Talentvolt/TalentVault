@@ -30,10 +30,8 @@ STRIP_NON_ALPHA_RE = re.compile(r'[^a-z\s]')
 
 _GLOBAL_SPACY_NLP = None
 
-import threading
 import concurrent.futures
 import traceback
-_thread_local_timings = threading.local()
 
 def get_spacy_nlp():
     global _GLOBAL_SPACY_NLP
@@ -406,323 +404,6 @@ def parse_experience_years(text_val):
     return 0.0
 
 
-def convert_llm_data_to_standard_format(llm_data):
-    f = _flatten_field
-    
-    # 1. Experiences
-    experiences = []
-    work_exp = llm_data.get("work_experience", {})
-    if work_exp and isinstance(work_exp.get("value"), list):
-        for item in work_exp["value"]:
-            s_date = f(item.get("start_date"))
-            e_date = f(item.get("end_date"))
-            experiences.append({
-                "designation": (f(item.get("designation")) or "")[:100],
-                "company": (f(item.get("company")) or "")[:100],
-                "location": (f(item.get("location")) or "")[:100],
-                "duration": "",
-                "description": f(item.get("description")) or "",
-                "start_date": s_date or "",
-                "end_date": e_date or ""
-            })
-            
-    # Calculate duration and years of experience
-    from services.resume_intelligence import ResumeIntelligenceService
-    total_exp = 0.0
-    for exp in experiences:
-        s_date_str = ResumeIntelligenceService.normalize_date_to_string(exp["start_date"], is_end=False)
-        e_date_str = ResumeIntelligenceService.normalize_date_to_string(exp["end_date"], is_end=True)
-        if s_date_str:
-            exp["start_date"] = s_date_str
-            exp["end_date"] = e_date_str or "Present"
-            exp["duration"] = ResumeIntelligenceService.get_duration_display(s_date_str, e_date_str)
-            total_exp += ResumeIntelligenceService.calculate_experience_years_from_dates(s_date_str, e_date_str)
-    total_exp = round(total_exp, 1)
-
-    # 2. Educations
-    educations = []
-    education = llm_data.get("education", {})
-    if education and isinstance(education.get("value"), list):
-        for item in education["value"]:
-            s_year = f(item.get("start_year"))
-            e_year = f(item.get("end_year"))
-            
-            # If only one completion year exists, store it as end_date
-            if s_year and not e_year:
-                e_year = s_year
-                s_year = ""
-                
-            educations.append({
-                "degree": (f(item.get("degree")) or "")[:100],
-                "institution": (f(item.get("college")) or f(item.get("university")) or "")[:100],
-                "field_of_study": (f(item.get("branch")) or "General")[:100],
-                "score": (f(item.get("cgpa")) or f(item.get("percentage")) or "N/A")[:20],
-                "start_date": parse_education_date_to_string(s_year),
-                "end_date": parse_education_date_to_string(e_year)
-            })
-
-    # 3. Skills (normalized and merged)
-    tech_skills = f(llm_data.get("technical_skills")) or []
-    soft_skills = f(llm_data.get("soft_skills")) or []
-    skills = normalize_skills(tech_skills + soft_skills)
-
-    # 4. Projects
-    projects = []
-    projects_data = llm_data.get("projects", {})
-    if projects_data and isinstance(projects_data.get("value"), list):
-        for item in projects_data["value"]:
-            projects.append({
-                "title": (f(item.get("title")) or "")[:255],
-                "description": f(item.get("description")) or "",
-                "link": (f(item.get("link")) or "")[:255]
-            })
-
-    # 5. Certifications
-    certifications = []
-    cert_data = llm_data.get("certifications", {})
-    if cert_data and isinstance(cert_data.get("value"), list):
-        for item in cert_data["value"]:
-            certifications.append({
-                "name": (f(item.get("name")) or "")[:255],
-                "issuing_organization": (f(item.get("issuing_organization")) or "")[:255],
-                "issue_date": f(item.get("issue_date")) or ""
-            })
-
-    # 6. Personal Info
-    raw_phone = f(llm_data.get("phone")) or ""
-    phone_digits = re.sub(r'\D', '', raw_phone)
-    phone_clean = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
-    if not phone_clean:
-        phone_match = re.search(r'(?:\+?\d{1,3}[- ]?)?(?:\d[- ]?){9}\d', raw_phone)
-        if phone_match:
-            phone_clean = re.sub(r'\D', '', phone_match.group(0))[-10:]
-
-    raw_email = f(llm_data.get("email")) or ""
-    email_clean = raw_email.strip()[:254]
-
-    raw_name = f(llm_data.get("full_name")) or f(llm_data.get("name")) or f(llm_data.get("candidate_name")) or "Unknown Candidate"
-    name_clean = raw_name.strip()[:255]
-
-    raw_linkedin = f(llm_data.get("linkedin")) or ""
-    linkedin_clean = raw_linkedin.strip()[:200]
-
-    raw_portfolio = f(llm_data.get("portfolio")) or ""
-    portfolio_clean = raw_portfolio.strip()[:200]
-
-    # Clean and parse CTCs, Notice Period, DOB, Gender
-    def clean_ctc(val):
-        if not val:
-            return None
-        val_str = str(val).lower()
-        matches = re.findall(r'[\d\.]+', val_str)
-        if not matches:
-            return None
-        num = float(matches[0])
-        if 'lpa' in val_str or 'lakh' in val_str or num < 100.0:
-            return num * 100000
-        return num
-
-    def clean_notice_period(val):
-        if not val:
-            return 30
-        val_str = str(val).lower()
-        matches = re.findall(r'\d+', val_str)
-        if not matches:
-            return 30
-        return int(matches[0])
-
-    current_ctc_val = clean_ctc(f(llm_data.get("current_ctc")))
-    expected_ctc_val = clean_ctc(f(llm_data.get("expected_ctc")))
-    notice_period_val = clean_notice_period(f(llm_data.get("notice_period")))
-    dob_val = f(llm_data.get("date_of_birth")) or f(llm_data.get("dob"))
-    gender_val = f(llm_data.get("gender"))
-
-    personal_info = {
-        "name": name_clean,
-        "email": email_clean,
-        "phone": phone_clean,
-        "location": (f(llm_data.get("address")) or f(llm_data.get("city")) or "Unknown")[:255],
-        "address": (f(llm_data.get("address")) or "")[:255],
-        "city": (f(llm_data.get("city")) or "")[:255],
-        "linkedin_url": linkedin_clean,
-        "portfolio_url": portfolio_clean,
-        "current_company": (experiences[0]["company"] if experiences else "")[:255],
-        "current_designation": (experiences[0]["designation"] if experiences else "Professional")[:255],
-        "total_experience": total_exp,
-        "current_ctc": current_ctc_val,
-        "expected_ctc": expected_ctc_val,
-        "notice_period": notice_period_val,
-        "date_of_birth": dob_val,
-        "gender": gender_val
-    }
-
-    return {
-        "personal_info": personal_info,
-        "summary": f(llm_data.get("professional_summary")) or "",
-        "skills": skills,
-        "education": educations,
-        "experience": experiences,
-        "projects": projects,
-        "certifications": certifications,
-        "achievements": f(llm_data.get("achievements")) or [],
-        "languages": f(llm_data.get("languages")) or [],
-        "current_ctc": current_ctc_val,
-        "expected_ctc": expected_ctc_val,
-        "notice_period": notice_period_val,
-        "date_of_birth": dob_val,
-        "gender": gender_val,
-        "metadata": {
-            "parsed_by": "OpenAIResumeParser",
-            "parsed_at": datetime.now().isoformat()
-        }
-    }
-
-from typing import List, Optional
-from pydantic import BaseModel, Field
-
-class FastExperienceItem(BaseModel):
-    company: Optional[str] = Field(None, description="Company name")
-    designation: Optional[str] = Field(None, description="Job designation / title")
-    location: Optional[str] = Field(None, description="Work location")
-    employment_type: Optional[str] = Field(None, description="Full-time, part-time, etc.")
-    start_date: Optional[str] = Field(None, description="Start date of employment")
-    end_date: Optional[str] = Field(None, description="End date or Present")
-    description: Optional[str] = Field(None, description="Key duties and accomplishments")
-
-class FastExperience(BaseModel):
-    value: List[FastExperienceItem] = Field(default_factory=list)
-
-class FastEducationItem(BaseModel):
-    degree: Optional[str] = Field(None, description="Name of degree")
-    branch: Optional[str] = Field(None, description="Branch of study")
-    college: Optional[str] = Field(None, description="College name")
-    board: Optional[str] = Field(None, description="Board name")
-    university: Optional[str] = Field(None, description="University name")
-    start_year: Optional[str] = Field(None, description="Start year")
-    end_year: Optional[str] = Field(None, description="End year")
-    cgpa: Optional[str] = Field(None, description="CGPA")
-    percentage: Optional[str] = Field(None, description="Percentage")
-    grade: Optional[str] = Field(None, description="Grade")
-
-class FastEducation(BaseModel):
-    value: List[FastEducationItem] = Field(default_factory=list)
-
-class FastProjectItem(BaseModel):
-    title: Optional[str] = Field(None, description="Project title")
-    description: Optional[str] = Field(None, description="Project description")
-    technologies: Optional[str] = Field(None, description="Technologies used")
-    duration: Optional[str] = Field(None, description="Duration")
-
-class FastProject(BaseModel):
-    value: List[FastProjectItem] = Field(default_factory=list)
-
-class FastCertificationItem(BaseModel):
-    name: Optional[str] = Field(None, description="Certification name")
-    issuing_organization: Optional[str] = Field(None, description="Issuing organization")
-    issue_date: Optional[str] = Field(None, description="Issue date")
-
-class FastCertification(BaseModel):
-    value: List[FastCertificationItem] = Field(default_factory=list)
-
-class FastResumeSchema(BaseModel):
-    candidate_name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    linkedin: Optional[str] = None
-    github: Optional[str] = None
-    portfolio: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    current_designation: Optional[str] = None
-    current_company: Optional[str] = None
-    professional_summary: Optional[str] = None
-    work_experience: FastExperience = Field(default_factory=FastExperience)
-    education: FastEducation = Field(default_factory=FastEducation)
-    projects: FastProject = Field(default_factory=FastProject)
-    technical_skills: List[str] = Field(default_factory=list)
-    soft_skills: List[str] = Field(default_factory=list)
-    languages: List[str] = Field(default_factory=list)
-    certifications: FastCertification = Field(default_factory=FastCertification)
-    awards: List[str] = Field(default_factory=list)
-    achievements: List[str] = Field(default_factory=list)
-    training: List[str] = Field(default_factory=list)
-    interests: List[str] = Field(default_factory=list)
-    strengths: List[str] = Field(default_factory=list)
-    references: List[str] = Field(default_factory=list)
-    expected_ctc: Optional[str] = Field(None, description="Expected CTC / salary")
-    current_ctc: Optional[str] = Field(None, description="Current CTC / salary")
-    notice_period: Optional[str] = Field(None, description="Notice period in days or months")
-    date_of_birth: Optional[str] = Field(None, description="Date of birth")
-    gender: Optional[str] = Field(None, description="Gender")
-
-class OpenAIResumeParser:
-    @staticmethod
-    def parse(text: str) -> dict:
-        import os
-        import time
-        from openai import OpenAI
-        from django.conf import settings
-        
-        api_key = getattr(settings, "OPENAI_API_KEY", None) or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OpenAI API Key is not configured.")
-        
-        model_name = getattr(settings, "OPENAI_MODEL_NAME", "gpt-4.1-mini")
-        client = OpenAI(api_key=api_key, timeout=45.0)
-        
-        system_content = (
-            "You are a professional resume parsing assistant.\n"
-            "Your critical objective is to extract 100% of the resume content without any summarization, omission, or simplification.\n"
-            "- Extract EVERY work experience, education item, project, skill, and certification listed, preserving their original order exactly.\n"
-            "- For work experience and projects descriptions (responsibilities): Do NOT merge separate bullet points, sentences, or responsibilities into one long paragraph.\n"
-            "- Do NOT summarize or condense responsibilities. Convert each responsibility or action item into its own separate line starting with a bullet point character '• '.\n"
-            "- If the resume already has bullets, keep them as separate lines. Each bullet item must be preserved with its exact wording.\n"
-            "- Never combine multiple distinct bullet points or achievements into a single sentence or line."
-        )
-        
-        t0 = time.time()
-        import concurrent.futures
-        def _do_openai_call():
-            return client.beta.chat.completions.parse(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_content},
-                    {"role": "user", "content": text}
-                ],
-                response_format=FastResumeSchema,
-                timeout=45.0
-            )
-
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(_do_openai_call)
-                completion = fut.result(timeout=45.0)
-        except concurrent.futures.TimeoutError:
-            import traceback
-            stack_info = "".join(traceback.format_stack())
-            logger.error(f"HANG DETECTED: OpenAI API parsing call timed out (> 45s).\nStack:\n{stack_info}")
-            print(f"HANG DETECTED: OpenAI API parsing call timed out (> 45s).\nStack:\n{stack_info}")
-            raise TimeoutError("OpenAI API call timed out after 45s.")
-
-        openai_duration = time.time() - t0
-        logger.info(f"[TIMING] OpenAI API call took: {openai_duration:.4f}s")
-        print(f"[TIMING] OpenAI API call took: {openai_duration:.4f}s")
-        
-        t_val = time.time()
-        llm_raw_data = completion.choices[0].message.parsed.model_dump()
-        result = convert_llm_data_to_standard_format(llm_raw_data)
-        validation_duration = time.time() - t_val
-        logger.info(f"[TIMING] JSON validation & conversion took: {validation_duration:.4f}s")
-        print(f"[TIMING] JSON validation & conversion took: {validation_duration:.4f}s")
-        
-        if hasattr(_thread_local_timings, "timings"):
-            _thread_local_timings.timings["openai"] = openai_duration
-            _thread_local_timings.timings["validation"] = validation_duration
-            
-        return result
-
 def copy_storage_file(source_field, target_path):
     """
     Copies a file within the same storage backend (local filesystem or S3)
@@ -764,6 +445,16 @@ def copy_storage_file(source_field, target_path):
         print(f"[LOCAL COPY ERROR] Failed local copy from {source_name} to {target_path}: {e}")
 
     return False
+
+
+def parse_resume_via_parseora(file_bytes, filename):
+    """
+    Sends a resume file to the Parseora API and maps the structured JSON
+    response into TalentVault's standard parsed_data candidate schema.
+    """
+    from services.parseora_service import ParseoraService
+    res_json = ParseoraService.parse_resume(file_bytes, filename)
+    return ParseoraService.map_response_to_talentvault(res_json)
 
 def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_candidate_id=None, progress_callback=None, security_data=None, user=None, uploaded_by=None):
     import time
@@ -832,7 +523,7 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
     
     cached_duplicate = False
     t_ocr = 0.0
-    t_openai = 0.0
+    t_parseora = 0.0
     t_validation = 0.0
     
     if existing_profile and (existing_profile.raw_resume_text or existing_profile.parsed_json) and not overwrite:
@@ -891,26 +582,23 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
         
         # 2. Run AI Parsing and profile photo extraction in parallel!
         t_parallel_start = time.time()
-        logger.info(f"[TIMING] [{request_id}] START Gemini / AI Parsing: {filename}")
-        print(f"[TIMING] [{request_id}] START Gemini / AI Parsing: {filename}")
+        logger.info(f"[TIMING] [{request_id}] START Parseora / AI Parsing: {filename}")
+        print(f"[TIMING] [{request_id}] START Parseora / AI Parsing: {filename}")
         
         parsed_data = None
         photo_bytes = None
         photo_ext = None
-        openai_duration = 0.0
-        validation_duration = 0.0
+        parseora_duration = 0.0
         
-        def run_openai_parser():
-            nonlocal openai_duration, validation_duration
+        def run_parseora_parser():
+            nonlocal parseora_duration
             try:
-                logger.info(f"[PARSER LLM RUNNING] [{request_id}] Attempting AI parsing for: {filename}")
+                logger.info(f"[PARSER LLM RUNNING] [{request_id}] Attempting Parseora parsing for: {filename}")
                 if progress_callback:
                     progress_callback("ai_parsing")
-                clean_text = clean_extracted_text(text)
-                _thread_local_timings.timings = {"openai": 0.0, "validation": 0.0}
-                res = OpenAIResumeParser.parse(clean_text)
-                openai_duration = _thread_local_timings.timings.get("openai", 0.0)
-                validation_duration = _thread_local_timings.timings.get("validation", 0.0)
+                t_api_start = time.time()
+                res = parse_resume_via_parseora(file_bytes, filename)
+                parseora_duration = time.time() - t_api_start
                 return res
             except Exception as e:
                 tb = traceback.format_exc()
@@ -932,11 +620,11 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
         connection.close()
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            future_openai = executor.submit(run_openai_parser)
+            future_parseora = executor.submit(run_parseora_parser)
             future_photo = executor.submit(run_photo_extraction)
             
             try:
-                parsed_data = future_openai.result(timeout=45.0)
+                parsed_data = future_parseora.result(timeout=45.0)
             except concurrent.futures.TimeoutError:
                 stack_info = "".join(traceback.format_stack())
                 logger.error(f"HANG DETECTED: [{request_id}] Step: AI Parsing | File: {filename} | AI Parsing exceeded 45s timeout.\nStack:\n{stack_info}")
@@ -949,11 +637,10 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 photo_bytes, photo_ext = None, None
             
         t_parallel = time.time() - t_parallel_start
-        logger.info(f"[TIMING] [{request_id}] END Gemini / AI Parsing: {filename} (took {t_parallel:.4f}s)")
-        print(f"[TIMING] [{request_id}] END Gemini / AI Parsing: {filename} (took {t_parallel:.4f}s)")
+        logger.info(f"[TIMING] [{request_id}] END Parseora / AI Parsing: {filename} (took {t_parallel:.4f}s)")
+        print(f"[TIMING] [{request_id}] END Parseora / AI Parsing: {filename} (took {t_parallel:.4f}s)")
         
-        t_openai = openai_duration
-        t_validation = validation_duration
+        t_parseora = parseora_duration
 
         if parsed_data is None:
             try:
@@ -1217,17 +904,17 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                         
                     return True
 
-                # 1. OpenAI Name
-                openai_name = None
+                # 1. Parsed Name
+                parsed_name = None
                 for k in ["full_name", "name", "candidate_name"]:
                     val = parsed_data.get(k)
                     if isinstance(val, dict) and "value" in val:
                         val = val["value"]
                     if is_acceptable_name(val):
-                        openai_name = val.strip()
+                        parsed_name = val.strip()
                         break
                 
-                if not openai_name:
+                if not parsed_name:
                     personal = parsed_data.get("personal_info", {})
                     if isinstance(personal, dict):
                         for k in ["full_name", "name", "candidate_name"]:
@@ -1235,13 +922,13 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                             if isinstance(val, dict) and "value" in val:
                                 val = val["value"]
                             if is_acceptable_name(val):
-                                openai_name = val.strip()
+                                parsed_name = val.strip()
                                 break
                 
-                logger.info(f"[NAME] OpenAI Name: {openai_name or 'None'}")
-                print(f"[NAME] OpenAI Name: {openai_name or 'None'}")
-                if openai_name:
-                    return openai_name
+                logger.info(f"[NAME] Parsed Name: {parsed_name or 'None'}")
+                print(f"[NAME] Parsed Name: {parsed_name or 'None'}")
+                if parsed_name:
+                    return parsed_name
 
                 # 2. spaCy / NER Name
                 spacy_name = None
@@ -1643,7 +1330,7 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
             
             # Print exact timing stages as requested
             print(f"OCR: {t_ocr:.2f}s")
-            print(f"OpenAI: {t_openai:.2f}s")
+            print(f"Parseora: {t_parseora:.2f}s")
             print(f"Validation: {t_validation:.2f}s")
             print(f"Database: {t_db:.2f}s")
             print(f"Total: {t_total:.2f}s")
@@ -2450,12 +2137,12 @@ def process_and_merge_resume(file_obj, filename, candidate_profile_id, uploaded_
     ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
     text = clean_extracted_text(ocr_result.get("text", ""))
 
-    # 2. LLM / NLP parse
+    # 2. Parseora / NLP parse
     parsed_data = None
     try:
-        parsed_data = OpenAIResumeParser.parse(text)
+        parsed_data = parse_resume_via_parseora(file_bytes, filename)
     except Exception as e:
-        logger.warning(f"AI parsing during merge fallback to NLP: {e}")
+        logger.warning(f"Parseora parsing during merge fallback to NLP: {e}")
 
     if parsed_data is None:
         parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
