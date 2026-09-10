@@ -130,7 +130,73 @@ class LandingPageView(TemplateView):
             })
             
         context['popular_searches'] = popular_chips
-        
+
+        # Career categories derived from REAL active job departments (dynamic counts)
+        dept_counter = Counter()
+        for job in active_jobs:
+            dept = (job.department or '').strip()
+            if dept:
+                dept_counter[dept] += 1
+
+        def _category_icon(name):
+            n = name.lower()
+            if any(k in n for k in ['software', 'platform', 'cloud', 'data', 'tech', 'engineer', 'it']):
+                return 'bi-cpu'
+            if any(k in n for k in ['sales', 'marketing', 'business', 'growth']):
+                return 'bi-graph-up-arrow'
+            if any(k in n for k in ['finance', 'account', 'bank']):
+                return 'bi-cash-coin'
+            if any(k in n for k in ['health', 'nurs', 'medical', 'pharma']):
+                return 'bi-heart-pulse'
+            if any(k in n for k in ['education', 'teaching', 'academic']):
+                return 'bi-mortarboard'
+            if any(k in n for k in ['support', 'service', 'experience', 'customer']):
+                return 'bi-headset'
+            if any(k in n for k in ['operation', 'logistic', 'supply', 'construction', 'manufactur', 'inspection', 'vehicle', 'aftermarket']):
+                return 'bi-gear-wide-connected'
+            return 'bi-briefcase'
+
+        job_categories = []
+        for dept, count in dept_counter.most_common(8):
+            job_categories.append({
+                'name': dept,
+                'count': count,
+                'query': dept,
+                'icon': _category_icon(dept),
+            })
+        context['job_categories'] = job_categories
+
+        # Top hiring locations derived from REAL active jobs (dynamic counts)
+        loc_counter = Counter()
+        for job in active_jobs:
+            loc = (job.location or '').strip()
+            if not loc:
+                continue
+            base = loc.split(',')[0].strip()
+            if not base:
+                continue
+            if base.islower():
+                base = base.title()
+            loc_counter[base] += 1
+
+        top_locations = []
+        for loc, count in loc_counter.most_common(8):
+            top_locations.append({'name': loc, 'count': count})
+        context['top_locations'] = top_locations
+
+        # Real aggregate counts for trust markers
+        context['active_jobs_count'] = len(active_jobs)
+        context['hiring_companies_count'] = len({job.company_id for job in active_jobs if job.company_id})
+        context['hiring_locations_count'] = len(loc_counter)
+
+        # Hero visual asset (hashed URL when collected, literal static path as fallback)
+        try:
+            from django.templatetags.static import static as _static_url
+            hero_woman_url = _static_url('images/landing/hero-woman.png')
+        except Exception:
+            hero_woman_url = f"{settings.STATIC_URL}images/landing/hero-woman.png"
+        context['hero_woman_url'] = hero_woman_url
+
         # Deduplicated company dataset with 1 card per company identity
         trusted_dataset = [
             {"name": "ShipGlobal", "industry": "Logistics", "logo": "images/client_logos/shipglobal.png", "website": "https://shipglobal.in/"},
