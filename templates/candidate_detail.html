@@ -131,9 +131,11 @@ ul.resume-bullets li, ol.resume-ordered li {
     {% endif %}
     <div class="d-flex gap-1.5 flex-wrap align-items-center">
         <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#shareProfileModal"><i class="bi bi-link-45deg me-1"></i> Share Profile</button>
+        {% if can_edit_candidate %}
         <button class="btn btn-sm btn-outline-info" onclick="previewAIImprovement()"><i class="bi bi-stars me-1"></i> AI Assist</button>
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editResumeJSONModal" onclick="loadResumeForm()"><i class="bi bi-braces me-1"></i> Structured Editor</button>
         <a href="{% url 'frontend:candidate_edit' candidate.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit Profile</a>
+        {% endif %}
         {% if selected_job %}
             <form method="POST" action="{% url 'frontend:candidate_reject' candidate.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to reject this candidate for this job?');">
                 {% csrf_token %}
@@ -148,7 +150,9 @@ ul.resume-bullets li, ol.resume-ordered li {
                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i> Reject</button>
             </form>
         {% endif %}
+        {% if can_delete_candidate %}
         <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCandidateModal"><i class="bi bi-trash me-1"></i> Delete Candidate</button>
+        {% endif %}
         {% if selected_job %}
             {% if is_in_pipeline %}
                 <button class="btn btn-sm btn-success text-white" disabled><i class="bi bi-check-circle-fill me-1"></i> In Pipeline</button>
@@ -177,6 +181,7 @@ ul.resume-bullets li, ol.resume-ordered li {
                 <h6 class="fw-bold text-dark mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i> Duplicate Candidate Found</h6>
                 <p class="text-secondary small mb-0">Similar candidate <strong>{{ dup.duplicate_candidate_name }}</strong> detected. Similarity Score: <strong>{{ dup.similarity_score }}%</strong>. ({{ dup.reasons|join:", " }})</p>
             </div>
+            {% if can_edit_candidate %}
             <div class="d-flex gap-2">
                 <form method="POST" action="{% url 'frontend:candidate_duplicates' candidate.id %}" class="m-0">
                     {% csrf_token %}
@@ -185,6 +190,7 @@ ul.resume-bullets li, ol.resume-ordered li {
                     <button type="submit" name="action" value="ignore" class="btn btn-sm btn-outline-secondary px-3">Ignore</button>
                 </form>
             </div>
+            {% endif %}
         </div>
         {% endfor %}
 
@@ -599,7 +605,7 @@ ul.resume-bullets li, ol.resume-ordered li {
                     <div>
                         {% if candidate.current_version == ver.version %}
                             <span class="badge bg-success text-white x-small">Active</span>
-                        {% else %}
+                        {% elif can_edit_candidate %}
                             <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="m-0 d-inline-block" onclick="event.stopPropagation();">
                                 {% csrf_token %}
                                 <input type="hidden" name="version_id" value="{{ ver.version }}">
@@ -612,7 +618,7 @@ ul.resume-bullets li, ol.resume-ordered li {
             </div>
             
             <div class="d-flex gap-2">
-                {% if has_undo %}
+                {% if has_undo and can_edit_candidate %}
                 <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="flex-grow-1 m-0">
                     {% csrf_token %}
                     <input type="hidden" name="version_id" value="{{ prev_version }}">
@@ -622,7 +628,7 @@ ul.resume-bullets li, ol.resume-ordered li {
                 <button class="btn btn-sm btn-outline-secondary w-100 flex-grow-1" disabled><i class="bi bi-arrow-left"></i> Undo</button>
                 {% endif %}
 
-                {% if has_redo %}
+                {% if has_redo and can_edit_candidate %}
                 <form method="POST" action="{% url 'frontend:candidate_rollback' candidate.id %}" class="flex-grow-1 m-0">
                     {% csrf_token %}
                     <input type="hidden" name="version_id" value="{{ next_version }}">

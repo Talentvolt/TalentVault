@@ -53,6 +53,7 @@
         </div>
     </div>
 
+    {% if is_super_admin %}
     <!-- My Tasks -->
     <div class="col-12 col-lg-4">
         <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 350px;">
@@ -93,6 +94,7 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}
 
     <!-- Mails From Candidates -->
     <div class="col-12 col-lg-4">
@@ -136,6 +138,7 @@
         </div>
     </div>
 
+    {% if is_super_admin %}
     <!-- Recent Applications / Job Applicants -->
     <div class="col-12 col-lg-4">
         <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
@@ -191,7 +194,9 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
+    {% if is_super_admin %}
     <!-- Candidate Signup Overview -->
     <div class="col-12 col-lg-4">
         <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
@@ -303,6 +308,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 

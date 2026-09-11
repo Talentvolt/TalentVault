@@ -279,11 +279,11 @@ def test_candidate_delete_flow():
     )
     candidate_id = profile.id
     
-    # Create recruiter user to perform the action (as CandidateDeleteView has LoginRequiredMixin)
-    recruiter_user = User.objects.create_user(email="recruiter_del@example.com", password="password123", role="RECRUITER")
+    # Candidate deletion is restricted to Admin portal users
+    admin_user = User.objects.create_superuser(email="admin_del@example.com", password="password123", role=User.Role.SUPER_ADMIN)
     
     client = Client()
-    client.force_login(recruiter_user)
+    client.force_login(admin_user)
     
     # 2. Test deleting existing candidate
     delete_url = reverse('frontend:candidate_delete', kwargs={'id': candidate_id})
@@ -500,6 +500,8 @@ def test_structured_resume_editor_save_and_reload_version_selection():
     candidate_user = User.objects.create_user(email="original_candidate@example.com", password="password123", phone_number="1111111111", role="CANDIDATE")
     profile = CandidateProfile.objects.create(
         user=candidate_user,
+        uploaded_by=recruiter,
+        created_by=recruiter,
         full_name="Original Name",
         location="Old Location",
         current_designation="Junior Dev",

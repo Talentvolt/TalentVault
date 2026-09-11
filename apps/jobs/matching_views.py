@@ -6,6 +6,7 @@ from services.candidate_matching_service import CandidateMatchingService
 from services.candidate_search_service import CandidateSearchService
 from permissions.roles import IsRecruiter
 from apps.candidates.serializers import CandidateProfileSerializer
+from utils.tenant import get_tenant_jobs_qs
 
 class MatchingCandidatesView(views.APIView):
     """
@@ -15,7 +16,7 @@ class MatchingCandidatesView(views.APIView):
 
     def get(self, request, job_pk, format=None):
         try:
-            job = Job.objects.get(id=job_pk)
+            job = get_tenant_jobs_qs(request.user).get(id=job_pk)
         except Job.DoesNotExist:
             return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
 

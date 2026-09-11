@@ -36,6 +36,10 @@ from utils.tenant import (
     get_tenant_applications_qs,
     get_tenant_candidates_qs,
     get_tenant_interviews_qs,
+    get_editable_candidates_qs,
+    get_deletable_candidates_qs,
+    can_edit_candidate,
+    is_admin_user,
 )
 
 from apps.core.models import Location
@@ -1013,7 +1017,7 @@ class AdminRecruiterApprovalsView(SuperAdminRequiredMixin, TemplateView):
 
 class JobActionView(RecruiterRequiredMixin, View):
     def post(self, request, pk, action):
-        job = get_object_or_404(Job, pk=pk)
+        job = get_object_or_404(get_tenant_jobs_qs(request.user), pk=pk)
         if action == 'publish':
             job.status = 'ACTIVE'
         elif action == 'pause':
@@ -2363,6 +2367,8 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         
         logger.info(f"[DETAIL_VIEW] Recruiter {self.request.user.email} accessed candidate profile: {self.object.id} ({self.object.full_name})")
+        context['can_edit_candidate'] = can_edit_candidate(self.request.user, self.object)
+        context['can_delete_candidate'] = is_admin_user(self.request.user)
         context['active_jobs'] = get_tenant_jobs_qs(self.request.user).filter(status='ACTIVE')
         context['stage_choices'] = Application.ApplicationStage.choices
         
@@ -2373,7 +2379,7 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
         application_id = None
         
         if job_id:
-            selected_job = Job.objects.filter(id=job_id).first()
+            selected_job = get_tenant_jobs_qs(self.request.user).filter(id=job_id).first()
             if selected_job:
                 from services.candidate_matching_service import CandidateMatchingService
                 match_details = CandidateMatchingService.calculate_job_ats_score(self.object, selected_job)
@@ -2623,7 +2629,7 @@ class CandidateUpdateView(RecruiterRequiredMixin, UpdateView):
     success_url = reverse_lazy('frontend:candidate_search')
 
     def get_queryset(self):
-        return get_tenant_candidates_qs(self.request.user)
+        return get_editable_candidates_qs(self.request.user)
 
     def get_success_url(self):
         return reverse_lazy('frontend:candidate_detail', kwargs={'pk': self.object.pk})
@@ -2636,9 +2642,11 @@ class CandidateUpdateView(RecruiterRequiredMixin, UpdateView):
 
 class CandidateDeleteView(RecruiterRequiredMixin, View):
     def post(self, request, id, *args, **kwargs):
+        if not is_admin_user(request.user):
+            return HttpResponseForbidden("You do not have permission to delete candidates.")
         try:
             with transaction.atomic():
-                queryset = get_tenant_candidates_qs(request.user).select_for_update()
+                queryset = get_deletable_candidates_qs(request.user).select_for_update()
                 candidate = get_object_or_404(queryset, id=id)
                 user = candidate.user
                 if user and user.role == 'CANDIDATE':
@@ -3159,7 +3167,7 @@ class AddToPipelineView(RecruiterRequiredMixin, View):
             messages.error(request, "Please select a job.")
             return redirect('frontend:candidate_detail', pk=pk)
             
-        job = get_object_or_404(Job, id=job_id)
+        job = get_object_or_404(get_tenant_jobs_qs(request.user), id=job_id)
         
         # Prevent duplicate applications
         application, created = Application.objects.get_or_create(
@@ -3238,7 +3246,7 @@ class BulkAddToPipelineView(RecruiterRequiredMixin, View):
                 "message": "Please select a job opening."
             }, status=400)
 
-        job = get_object_or_404(Job, id=job_id)
+        job = get_object_or_404(get_tenant_jobs_qs(request.user), id=job_id)
 
         from django.db import transaction
         added_count = 0
@@ -3295,7 +3303,7 @@ class RemoveFromPipelineView(RecruiterRequiredMixin, View):
             messages.error(request, "Job ID is required.")
             return redirect('frontend:candidate_detail', pk=pk)
             
-        job = get_object_or_404(Job, id=job_id)
+        job = get_object_or_404(get_tenant_jobs_qs(request.user), id=job_id)
         
         application = Application.objects.filter(candidate=candidate, job=job).first()
         if application:
@@ -3990,7 +3998,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
         job_id = self.request.GET.get('job_id') or self.request.POST.get('job_id')
         if job_id:
             try:
-                context['job'] = Job.objects.get(id=job_id)
+                context['job'] = get_tenant_jobs_qs(self.request.user).get(id=job_id)
             except Exception:
                 pass
         
@@ -4929,7 +4937,7 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
     relational lists, updating version history, and recalculating ATS scores.
     """
     def post(self, request, pk, *args, **kwargs):
-        profile = get_object_or_404(CandidateProfile, pk=pk)
+        profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
         try:
             data = json.loads(request.body)
         except Exception:
@@ -5093,7 +5101,7 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         from services.candidate_matching_service import CandidateMatchingService
         
-        profile = get_object_or_404(CandidateProfile, pk=pk)
+        profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
         action = request.POST.get("action", "preview") # preview or accept
         
         improved_data = ResumeIntelligenceService.ai_improve_resume_data(profile.parsed_json)
@@ -5331,7 +5339,7 @@ class CandidateVersionRollbackView(LoginRequiredMixin, View):
     Rollback version tracking supporting Undo, Redo, and selected timeline rollbacks.
     """
     def post(self, request, pk, *args, **kwargs):
-        profile = get_object_or_404(CandidateProfile, pk=pk)
+        profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
         ver_id = request.POST.get("version_id")
         
         if not ver_id or str(ver_id) not in profile.resume_versions:
@@ -5438,7 +5446,7 @@ class CandidateDuplicateView(LoginRequiredMixin, View):
     Handles similarity check listings, ignores, and candidate merge actions.
     """
     def get(self, request, pk, *args, **kwargs):
-        profile = get_object_or_404(CandidateProfile, pk=pk)
+        profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
         duplicates = []
         
         other_candidates = CandidateProfile.objects.exclude(id=profile.id)
@@ -5450,7 +5458,7 @@ class CandidateDuplicateView(LoginRequiredMixin, View):
         return JsonResponse({'status': 'success', 'duplicates': duplicates})
 
     def post(self, request, pk, *args, **kwargs):
-        profile = get_object_or_404(CandidateProfile, pk=pk)
+        profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
         action = request.POST.get("action")
         target_id = request.POST.get("target_id")
         
@@ -5458,7 +5466,7 @@ class CandidateDuplicateView(LoginRequiredMixin, View):
             messages.error(request, "Target candidate ID is required.")
             return redirect('frontend:candidate_detail', pk=profile.id)
             
-        target = get_object_or_404(CandidateProfile, pk=target_id)
+        target = get_object_or_404(get_editable_candidates_qs(request.user), pk=target_id)
         
         if action == 'merge':
             # Merge target details into profile

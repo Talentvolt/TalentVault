@@ -765,7 +765,7 @@
                                 data-reject-url="{% url 'frontend:candidate_reject' app.candidate.id %}"
                                 data-is-rejected="{% if app.candidate_status_display == 'Rejected' %}true{% else %}false{% endif %}"
                                 data-delete-url="{% url 'frontend:candidate_delete' app.candidate.id %}"
-                                data-can-delete="{% if request.user.role == 'SUPER_ADMIN' or request.user.role == 'COMPANY_ADMIN' %}true{% else %}false{% endif %}"
+                                data-can-delete="{% if request.user.role == 'SUPER_ADMIN' or request.user.is_superuser or request.user.is_staff %}true{% else %}false{% endif %}"
                                 type="button" style="padding: 2px 8px;">
                             ⋮
                         </button>
