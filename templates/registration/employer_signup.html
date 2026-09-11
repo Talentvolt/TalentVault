@@ -103,6 +103,45 @@
             box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
         }
 
+        .form-control-custom.has-icon {
+            padding-right: 48px;
+        }
+
+        .required-asterisk {
+            color: #dc2626;
+            font-weight: 700;
+            margin-left: 2px;
+        }
+
+        .input-group-custom {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-icon-btn {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        .input-icon-btn:hover,
+        .input-icon-btn:focus {
+            color: var(--primary-purple);
+            outline: none;
+        }
+
         .form-select-custom {
             appearance: none;
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23475569' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
@@ -200,32 +239,42 @@
 
             <!-- Organization Name -->
             <div class="mb-4">
-                <label for="org_name" class="form-label">Organization Name</label>
+                <label for="org_name" class="form-label">Organization Name <span class="required-asterisk">*</span></label>
                 <input type="text" name="org_name" id="org_name" required class="form-control-custom" placeholder="e.g. Acme Corporation" value="{{ form.org_name.value|default:'' }}">
             </div>
 
             <!-- Official Work Email -->
             <div class="mb-4">
-                <label for="id_email" class="form-label">Official Work Email</label>
+                <label for="id_email" class="form-label">Official Work Email <span class="required-asterisk">*</span></label>
                 <input type="email" name="email" id="id_email" required class="form-control-custom" placeholder="official@company.com" value="{{ form.email.value|default:'' }}">
             </div>
 
             <!-- Phone Number -->
             <div class="mb-4">
-                <label for="id_phone_number" class="form-label">Phone Number</label>
+                <label for="id_phone_number" class="form-label">Phone Number <span class="required-asterisk">*</span></label>
                 <input type="text" name="phone_number" id="id_phone_number" required class="form-control-custom" placeholder="e.g. +1 555 123 4567" value="{{ form.phone_number.value|default:'' }}">
             </div>
 
             <!-- Password -->
             <div class="mb-4">
-                <label for="password_input" class="form-label">Password</label>
-                <input type="password" name="password" id="password_input" required class="form-control-custom" placeholder="••••••••">
+                <label for="password_input" class="form-label">Password <span class="required-asterisk">*</span></label>
+                <div class="input-group-custom">
+                    <input type="password" name="password" id="password_input" required class="form-control-custom has-icon" placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="input-icon-btn" id="togglePasswordBtn" aria-label="Show password">
+                        <i class="bi bi-eye" id="togglePasswordIcon"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Confirm Password -->
             <div class="mb-4">
-                <label for="confirm_password_input" class="form-label">Confirm Password</label>
-                <input type="password" id="confirm_password_input" required class="form-control-custom" placeholder="••••••••">
+                <label for="confirm_password_input" class="form-label">Confirm Password <span class="required-asterisk">*</span></label>
+                <div class="input-group-custom">
+                    <input type="password" id="confirm_password_input" required class="form-control-custom has-icon" placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="input-icon-btn" id="toggleConfirmPasswordBtn" aria-label="Show confirm password">
+                        <i class="bi bi-eye" id="toggleConfirmPasswordIcon"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Hiring Type Radio Buttons (Horizontal aligned) -->
@@ -297,7 +346,44 @@
     </div>
 
     <script>
+        function bindPasswordToggle(buttonId, inputId, iconId) {
+            const button = document.getElementById(buttonId);
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (!button || !input || !icon) return;
+
+            button.addEventListener('click', function () {
+                const isHidden = input.getAttribute('type') === 'password';
+                input.setAttribute('type', isHidden ? 'text' : 'password');
+                icon.classList.toggle('bi-eye', !isHidden);
+                icon.classList.toggle('bi-eye-slash', isHidden);
+                button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+            });
+        }
+
+        bindPasswordToggle('togglePasswordBtn', 'password_input', 'togglePasswordIcon');
+        bindPasswordToggle('toggleConfirmPasswordBtn', 'confirm_password_input', 'toggleConfirmPasswordIcon');
+
         document.getElementById('signup-form').addEventListener('submit', function(e) {
+            const requiredFields = [
+                { id: 'org_name', label: 'Organization Name' },
+                { id: 'id_email', label: 'Official Work Email' },
+                { id: 'id_phone_number', label: 'Phone Number' },
+                { id: 'password_input', label: 'Password' },
+                { id: 'confirm_password_input', label: 'Confirm Password' }
+            ];
+
+            for (const field of requiredFields) {
+                const input = document.getElementById(field.id);
+                if (!input) continue;
+                if (input.value.trim() === '') {
+                    e.preventDefault();
+                    input.focus();
+                    alert(field.label + ' is required.');
+                    return;
+                }
+            }
+
             const passwordVal = document.getElementById('password_input').value;
             const confirmPasswordVal = document.getElementById('confirm_password_input').value;
             if (passwordVal !== confirmPasswordVal) {
