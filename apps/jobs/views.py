@@ -7,7 +7,7 @@ from apps.jobs.models import Job
 from .serializers import JobSerializer
 from permissions.roles import IsRecruiter
 from utils.pagination import StandardResultsSetPagination
-from utils.tenant import get_tenant_jobs_qs
+from utils.tenant import get_tenant_jobs_qs, get_deletable_jobs_qs
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,8 @@ class JobViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
+        if self.action == 'destroy':
+            return get_deletable_jobs_qs(self.request.user)
         return get_tenant_jobs_qs(self.request.user)
 
     def perform_create(self, serializer):

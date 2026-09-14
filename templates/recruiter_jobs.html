@@ -124,12 +124,6 @@
                                         </button>
                                     </form>
                                     {% endif %}
-                                    <form method="post" action="{% url 'frontend:job_delete' job.id %}" class="d-inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Job" onclick="return confirm('Delete this job completely?');">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
                                 </div>
                             </td>
                         </tr>

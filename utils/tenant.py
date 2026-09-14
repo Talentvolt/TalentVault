@@ -31,11 +31,15 @@ def is_admin_user(user):
 
 
 def admin_created_jobs_q():
-    """Q object matching jobs created by an Admin portal user."""
+    """
+    Q object matching jobs created by an Admin portal user or unassigned/system jobs.
+    Admin-created jobs must never be visible to External Recruiters.
+    """
     return (
         Q(created_by__role=User.Role.SUPER_ADMIN) |
         Q(created_by__is_superuser=True) |
-        Q(created_by__is_staff=True)
+        Q(created_by__is_staff=True) |
+        Q(created_by__isnull=True)
     )
 
 
@@ -47,7 +51,8 @@ def get_tenant_jobs_qs(user):
     - Admin users see every job (including external-recruiter-created jobs).
     - Candidates/guests see active jobs only.
     - External Recruiters/Company Admins see jobs owned by them or shared through
-      their existing company relationship, but never jobs created by Admin users.
+      their existing company relationship (if in an established company, not Default Company),
+      but never jobs created by Admin users or unassigned/system jobs.
     """
     if not user or not user.is_authenticated:
         return Job.objects.none()
@@ -56,15 +61,13 @@ def get_tenant_jobs_qs(user):
     if user.role == User.Role.CANDIDATE:
         return Job.objects.filter(status='ACTIVE')
     company = get_user_company(user)
-    if company:
+    if company and company.slug not in ['default-company', ''] and company.name.lower() not in ['default company', 'default']:
         qs = Job.objects.filter(
-            Q(created_by__company_affiliations__company=company) |
-            Q(company=company) |
             Q(created_by=user) |
-            Q(created_by__isnull=True)
+            Q(created_by__company_affiliations__company=company)
         )
     else:
-        qs = Job.objects.filter(Q(created_by=user) | Q(created_by__isnull=True))
+        qs = Job.objects.filter(created_by=user)
     # Admin-created jobs must stay hidden from the external recruiter portal.
     return qs.exclude(admin_created_jobs_q()).distinct()
 
@@ -92,16 +95,13 @@ def get_tenant_applications_qs(user):
         return Application.objects.all()
     if user.role == User.Role.CANDIDATE:
         return Application.objects.filter(candidate__user=user)
-    company = get_user_company(user)
-    if company:
-        return Application.objects.filter(
-            Q(job__created_by__company_affiliations__company=company) |
-            Q(job__company=company) |
-            Q(job__created_by=user) |
-            Q(created_by=user) |
-            Q(job__created_by__isnull=True)
-        ).distinct()
-    return Application.objects.filter(Q(job__created_by=user) | Q(created_by=user) | Q(job__created_by__isnull=True)).distinct()
+    
+    recruiter_jobs = get_tenant_jobs_qs(user)
+    return Application.objects.filter(
+        Q(job__in=recruiter_jobs) | Q(created_by=user)
+    ).exclude(
+        job__in=Job.objects.filter(admin_created_jobs_q())
+    ).distinct()
 
 def get_tenant_candidates_qs(user):
     """Returns tenant-scoped CandidateProfile queryset."""
@@ -181,23 +181,30 @@ def get_deletable_candidates_qs(user):
     return CandidateProfile.objects.none()
 
 
+def get_deletable_jobs_qs(user):
+    """
+    Job queryset the user may delete.
+    Only Admin portal users can delete jobs; external recruiters never can.
+    """
+    if not user or not user.is_authenticated:
+        return Job.objects.none()
+    if is_admin_user(user):
+        return Job.objects.all()
+    return Job.objects.none()
+
+
 def get_tenant_interviews_qs(user):
     """Returns tenant-scoped Interview queryset."""
     if not user or not user.is_authenticated:
         return Interview.objects.none()
-    if user.role == User.Role.SUPER_ADMIN or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+    if is_admin_user(user):
         return Interview.objects.all()
     if user.role == User.Role.CANDIDATE:
         return Interview.objects.filter(application__candidate__user=user)
-    company = get_user_company(user)
-    if company:
-        return Interview.objects.filter(
-            Q(application__job__created_by__company_affiliations__company=company) |
-            Q(application__job__company=company) |
-            Q(application__job__created_by=user) |
-            Q(created_by=user) |
-            Q(application__job__created_by__isnull=True)
-        ).distinct()
+    
+    recruiter_jobs = get_tenant_jobs_qs(user)
     return Interview.objects.filter(
-        Q(application__job__created_by=user) | Q(created_by=user) | Q(application__job__created_by__isnull=True)
+        Q(application__job__in=recruiter_jobs) | Q(created_by=user)
+    ).exclude(
+        application__job__in=Job.objects.filter(admin_created_jobs_q())
     ).distinct()

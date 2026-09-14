@@ -38,6 +38,7 @@ from utils.tenant import (
     get_tenant_interviews_qs,
     get_editable_candidates_qs,
     get_deletable_candidates_qs,
+    get_deletable_jobs_qs,
     can_edit_candidate,
     is_admin_user,
 )
@@ -1041,9 +1042,16 @@ class JobActionView(RecruiterRequiredMixin, View):
             new_job.status = 'DRAFT'
             new_job.closed_at = None
             new_job.closed_by = None
+            new_job.created_by = request.user
+            new_job.updated_by = request.user
             new_job.save()
             return redirect('frontend:job_edit', pk=new_job.pk)
         job.save()
+        referer = request.META.get('HTTP_REFERER')
+        if referer and ('recruiter/jobs' in referer or 'jobs' in referer):
+            return redirect(referer)
+        if not is_admin_user(request.user) and getattr(request.user, 'role', None) in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            return redirect('frontend:recruiter_jobs')
         return redirect('frontend:jobs')
 
 class JobsView(ListView):
@@ -1290,7 +1298,7 @@ class JobsView(ListView):
                 Job.objects.filter(status='ACTIVE').exclude(location=None).exclude(location='').values_list('location', flat=True)
             )))
         else:
-            status_counts = Job.objects.aggregate(
+            status_counts = get_tenant_jobs_qs(self.request.user).aggregate(
                 active=Count('id', filter=Q(status='ACTIVE')),
                 draft=Count('id', filter=Q(status='DRAFT')),
                 on_hold=Count('id', filter=Q(status='ON_HOLD')),
@@ -1364,6 +1372,14 @@ class JobCreateView(RecruiterRequiredMixin, CreateView):
     template_name = 'job_create.html'
     success_url = reverse_lazy('frontend:jobs')
 
+    def get_success_url(self):
+        referer = self.request.META.get('HTTP_REFERER')
+        if referer and 'recruiter/jobs' in referer:
+            return reverse_lazy('frontend:recruiter_jobs')
+        if not is_admin_user(self.request.user) and getattr(self.request.user, 'role', None) in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            return reverse_lazy('frontend:recruiter_jobs')
+        return reverse_lazy('frontend:jobs')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Generate salary choices: 0, 1.0 to 100.0 in 0.5 increments
@@ -1431,6 +1447,14 @@ class JobUpdateView(RecruiterRequiredMixin, UpdateView):
     form_class = JobForm
     template_name = 'job_create.html'
     success_url = reverse_lazy('frontend:jobs')
+
+    def get_success_url(self):
+        referer = self.request.META.get('HTTP_REFERER')
+        if referer and 'recruiter/jobs' in referer:
+            return reverse_lazy('frontend:recruiter_jobs')
+        if not is_admin_user(self.request.user) and getattr(self.request.user, 'role', None) in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            return reverse_lazy('frontend:recruiter_jobs')
+        return reverse_lazy('frontend:jobs')
 
     def get_queryset(self):
         return get_tenant_jobs_qs(self.request.user)
@@ -1502,8 +1526,16 @@ class JobDeleteView(RecruiterRequiredMixin, DeleteView):
     success_url = reverse_lazy('frontend:jobs')
     template_name = 'job_confirm_delete.html'
 
+    def get_success_url(self):
+        referer = self.request.META.get('HTTP_REFERER')
+        if referer and 'recruiter/jobs' in referer:
+            return reverse_lazy('frontend:recruiter_jobs')
+        if not is_admin_user(self.request.user) and getattr(self.request.user, 'role', None) in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
+            return reverse_lazy('frontend:recruiter_jobs')
+        return reverse_lazy('frontend:jobs')
+
     def get_queryset(self):
-        return get_tenant_jobs_qs(self.request.user)
+        return get_deletable_jobs_qs(self.request.user)
 
     def form_valid(self, form):
         messages.success(self.request, "Job deleted successfully.")
@@ -1567,7 +1599,9 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         from apps.candidates.models import RecentCandidateSearch
         
         user = self.request.user
-        base_qs = get_tenant_candidates_qs(user).order_by('-created_at').prefetch_related(
+        base_qs = get_tenant_candidates_qs(user).select_related(
+            'uploaded_by', 'created_by', 'edited_by'
+        ).order_by('-created_at').prefetch_related(
             Prefetch(
                 'job_applications',
                 queryset=get_tenant_applications_qs(user).select_related('job', 'job__company', 'job__client', 'created_by').order_by('-created_at')
@@ -1886,17 +1920,25 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         context['saved_searches'] = SavedCandidateSearch.objects.filter(user=user).order_by('-created_at')[:10]
         context['recent_searches'] = RecentCandidateSearch.objects.filter(user=user).order_by('-created_at')[:8]
 
-        # Counts for tabs
+        # Counts for tabs (computed in a single aggregate query)
+        from django.db.models import Count
         base_all = get_tenant_candidates_qs(user)
         from django.utils import timezone
         import datetime
         week_ago = timezone.now() - datetime.timedelta(days=7)
+        tab_counts = base_all.aggregate(
+            all=Count('id'),
+            shortlisted=Count('id', filter=Q(is_shortlisted=True) | Q(candidate_status='SHORTLISTED')),
+            saved_for_later=Count('id', filter=Q(is_saved_for_later=True) | Q(candidate_status='SAVED_FOR_LATER')),
+            new=Count('id', filter=Q(created_at__gte=week_ago)),
+            modified=Count('id', filter=Q(updated_at__gte=week_ago)),
+        )
         context['tab_counts'] = {
-            'all': base_all.count(),
-            'shortlisted': base_all.filter(Q(is_shortlisted=True) | Q(candidate_status='SHORTLISTED')).count(),
-            'saved_for_later': base_all.filter(Q(is_saved_for_later=True) | Q(candidate_status='SAVED_FOR_LATER')).count(),
-            'new': base_all.filter(created_at__gte=week_ago).count(),
-            'modified': base_all.filter(updated_at__gte=week_ago).count(),
+            'all': tab_counts['all'],
+            'shortlisted': tab_counts['shortlisted'],
+            'saved_for_later': tab_counts['saved_for_later'],
+            'new': tab_counts['new'],
+            'modified': tab_counts['modified'],
         }
 
         candidates_list = list(context.get('candidates') or context.get('object_list') or [])
@@ -2357,7 +2399,11 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
     context_object_name = 'candidate'
 
     def get_queryset(self):
-        return get_tenant_candidates_qs(self.request.user)
+        return get_tenant_candidates_qs(self.request.user).select_related(
+            'user', 'uploaded_by', 'created_by', 'edited_by'
+        ).prefetch_related(
+            'skills', 'experiences', 'educations', 'projects', 'certifications', 'candidate_tags'
+        )
 
     def get_context_data(self, **kwargs):
         from apps.jobs.models import Job
@@ -2393,14 +2439,37 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
         context['is_in_pipeline'] = is_in_pipeline
         context['application_id'] = application_id
         
-        # Check for duplicates
+        # Check for duplicates.
+        # calculate_duplicate_similarity only flags an exact identifier match
+        # (email / phone / LinkedIn / resume hash) as a duplicate, so narrow the
+        # candidate set in the database instead of scanning and scoring every
+        # candidate row in the system.
         from services.resume_intelligence import ResumeIntelligenceService
+        from django.db.models import Q
         duplicates = []
-        other_candidates = CandidateProfile.objects.exclude(id=self.object.id)
-        for c in other_candidates:
-            res = ResumeIntelligenceService.calculate_duplicate_similarity(self.object, c)
-            if res["is_duplicate"]:
-                duplicates.append(res)
+        identifier_q = Q()
+        obj_user = getattr(self.object, 'user', None)
+        if obj_user:
+            if obj_user.email:
+                identifier_q |= Q(user__email__iexact=obj_user.email)
+            if getattr(obj_user, 'phone_number', None):
+                identifier_q |= Q(user__phone_number=obj_user.phone_number)
+        if self.object.linkedin_url and self.object.linkedin_url.strip():
+            identifier_q |= Q(linkedin_url__iexact=self.object.linkedin_url.strip())
+        if self.object.sha256:
+            identifier_q |= Q(sha256=self.object.sha256)
+
+        if identifier_q:
+            other_candidates = (
+                CandidateProfile.objects.exclude(id=self.object.id)
+                .filter(identifier_q)
+                .select_related('user')
+                .prefetch_related('skills')
+            )
+            for c in other_candidates:
+                res = ResumeIntelligenceService.calculate_duplicate_similarity(self.object, c)
+                if res["is_duplicate"]:
+                    duplicates.append(res)
         context['duplicates'] = duplicates
         
         # Determine which version to preview (default to self.object.current_version or latest available)
@@ -4314,7 +4383,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                             from apps.applications.models import Application
                             from services.candidate_matching_service import CandidateMatchingService
                             try:
-                                job = Job.objects.get(id=job_id)
+                                job = get_tenant_jobs_qs(request.user).get(id=job_id)
                                 app, created = Application.objects.get_or_create(job=job, candidate=profile)
                                 CandidateMatchingService.update_ats_scores(candidate_id=profile.id, job_id=job.id)
                             except Exception as e_map:
@@ -4669,7 +4738,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                     from apps.applications.models import Application
                     from services.candidate_matching_service import CandidateMatchingService
                     try:
-                        job = Job.objects.get(id=job_id)
+                        job = get_tenant_jobs_qs(request.user).get(id=job_id)
                         for profile in created_profiles:
                             app, created = Application.objects.get_or_create(job=job, candidate=profile)
                             CandidateMatchingService.update_ats_scores(candidate_id=profile.id, job_id=job.id)
@@ -4761,7 +4830,7 @@ class BulkResumeValidateAPIView(RecruiterRequiredMixin, View):
         job_id = request.POST.get('job_id') or request.GET.get('job_id')
         if job_id:
             try:
-                job_target = Job.objects.get(id=job_id)
+                job_target = get_tenant_jobs_qs(request.user).get(id=job_id)
             except Exception:
                 pass
 
@@ -5110,7 +5179,7 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
         job_id = request.POST.get('job_id') or request.GET.get('job_id')
         job = None
         if job_id:
-            job = Job.objects.filter(id=job_id).first()
+            job = get_tenant_jobs_qs(request.user).filter(id=job_id).first()
         if not job:
             app = Application.objects.filter(candidate=profile).first()
             if app:
