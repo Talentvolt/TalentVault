@@ -2,6 +2,7 @@ import re
 import logging
 from typing import List, Dict, Any, Optional, Set, Tuple
 from decimal import Decimal
+from django.conf import settings
 from django.db.models import Q, QuerySet, Prefetch, Case, When, Value, IntegerField, FloatField
 from django.utils.html import strip_tags
 
@@ -684,6 +685,28 @@ class UniversalCandidateSearchService:
                     expanded_search_skills.add(sr.skill.canonical_name.lower())
             else:
                 expanded_search_skills.add(t_clean)
+
+        # -------------------------------------------------------------
+        # 2b. MEMORY SAFETY (Render OOM / worker-timeout protection)
+        # Only the newest N candidates are scored, and large columns that are
+        # not needed for relevance scoring or the list view are deferred so the
+        # entire candidate table is never loaded into memory at once.
+        # -------------------------------------------------------------
+        max_to_score = getattr(settings, 'CANDIDATE_SEARCH_MAX_SCORED', 1000)
+        if max_to_score and max_to_score > 0:
+            queryset = queryset.order_by('-created_at')[:max_to_score]
+        queryset = queryset.defer(
+            'parsed_json',
+            'resume_versions',
+            'audit_logs',
+            'original_experience_json',
+            'original_skills',
+            'original_summary',
+            'ai_summary',
+            'ai_skills',
+            'ai_experience_rewrite',
+            'work_permit_countries',
+        )
 
         # -------------------------------------------------------------
         # 3. RELEVANCE SCORING & MATCH QUALITY COMPUTATION

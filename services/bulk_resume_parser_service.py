@@ -498,6 +498,9 @@ class BulkResumeParserService:
             
             for item in batch:
                 cls._process_single_item(item, job, user=user, job_target=job_target, overwrite=overwrite)
+                # Yield between files so the web worker can keep serving requests
+                # while a long bulk parse is running in the background thread.
+                time.sleep(0.02)
 
             # Memory management: Garbage collection after each batch
             gc.collect()

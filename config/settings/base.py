@@ -266,6 +266,10 @@ CACHES = {
 # WhiteNoise production caching
 WHITENOISE_MAX_AGE = 31536000
 
+# Safety cap on the number of candidate profiles scored per search request.
+# Prevents loading the entire candidate table into memory (Render OOM / worker timeout).
+CANDIDATE_SEARCH_MAX_SCORED = int(os.environ.get('CANDIDATE_SEARCH_MAX_SCORED', 1000))
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'account_login'

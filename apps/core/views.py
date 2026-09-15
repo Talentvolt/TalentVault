@@ -807,20 +807,21 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
         matched_candidates = []
 
         if selected_job:
-            job_required_skills = {s.strip().lower() for s in selected_job.get_required_skills_list if s.strip()}
+            job_required_skills_list = selected_job.get_required_skills_list
+            job_required_skills = {s.strip().lower() for s in job_required_skills_list if s.strip()}
             TITLE_STOP_WORDS = {'senior', 'junior', 'lead', 'manager', 'associate', 'director', 'intern', 'staff', 'principal', 'vp', 'head', 'executive', 'assistant'}
             job_title_words = set(re.findall(r'\w+', (selected_job.title or '').lower())) - TITLE_STOP_WORDS
 
             for cand in all_candidates:
                 cand_skills = {s.skill_name.strip().lower() for s in cand.skills.all() if s.skill_name and s.skill_name.strip()}
-                matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
-                missing_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() not in cand_skills]
+                matched_skill_names = [s for s in job_required_skills_list if s.strip().lower() in cand_skills]
+                missing_skill_names = [s for s in job_required_skills_list if s.strip().lower() not in cand_skills]
 
                 cand_title_words = set(re.findall(r'\w+', (cand.current_designation or '').lower())) - TITLE_STOP_WORDS
                 title_overlap = bool(job_title_words.intersection(cand_title_words))
 
                 # Exclude unrelated candidates: candidate must have at least 1 matching skill OR title overlap
-                if len(matched_skill_names) == 0 and not title_overlap and selected_job.get_required_skills_list:
+                if len(matched_skill_names) == 0 and not title_overlap and job_required_skills_list:
                     continue
 
                 if search_query:
@@ -838,7 +839,7 @@ class RecruiterCandidatesView(RecruiterRequiredMixin, TemplateView):
                 if location_param and location_param not in (cand.location or '').lower():
                     continue
 
-                total_req = len(selected_job.get_required_skills_list)
+                total_req = len(job_required_skills_list)
                 if total_req > 0:
                     base_calc = int((len(matched_skill_names) / total_req) * 80)
                     score = min(100, base_calc + (20 if title_overlap else 0))
@@ -1942,11 +1943,12 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         }
 
         candidates_list = list(context.get('candidates') or context.get('object_list') or [])
+        selected_job_required_skills = selected_job.get_required_skills_list if selected_job else []
         for candidate in candidates_list:
             if selected_job:
                 cand_skills = {s.skill_name.strip().lower() for s in candidate.skills.all() if s.skill_name and s.skill_name.strip()}
-                matched_skill_names = [s for s in selected_job.get_required_skills_list if s.strip().lower() in cand_skills]
-                total_req = len(selected_job.get_required_skills_list)
+                matched_skill_names = [s for s in selected_job_required_skills if s.strip().lower() in cand_skills]
+                total_req = len(selected_job_required_skills)
                 if total_req > 0:
                     score = min(100, int((len(matched_skill_names) / total_req) * 100))
                 else:
@@ -2393,6 +2395,49 @@ class CandidateProfileWrapper:
     def __str__(self):
         return str(self._original)
 
+
+def find_duplicate_candidates(profile, limit=25):
+    """
+    Bounded duplicate detection.
+
+    Only candidates sharing an exact identifier (email / phone / LinkedIn /
+    resume hash) with `profile` are compared and scored. This avoids scanning
+    and scoring every candidate row on a normal page request, which is a major
+    cause of Render worker timeouts / OOM.
+    """
+    from services.resume_intelligence import ResumeIntelligenceService
+    from django.db.models import Q
+
+    identifier_q = Q()
+    obj_user = getattr(profile, 'user', None)
+    if obj_user:
+        if obj_user.email:
+            identifier_q |= Q(user__email__iexact=obj_user.email)
+        if getattr(obj_user, 'phone_number', None):
+            identifier_q |= Q(user__phone_number=obj_user.phone_number)
+    if profile.linkedin_url and profile.linkedin_url.strip():
+        identifier_q |= Q(linkedin_url__iexact=profile.linkedin_url.strip())
+    if profile.sha256:
+        identifier_q |= Q(sha256=profile.sha256)
+
+    if not identifier_q:
+        return []
+
+    other_candidates = (
+        CandidateProfile.objects.exclude(id=profile.id)
+        .filter(identifier_q)
+        .select_related('user')
+        .prefetch_related('skills')
+        .distinct()[:limit]
+    )
+    duplicates = []
+    for c in other_candidates:
+        res = ResumeIntelligenceService.calculate_duplicate_similarity(profile, c)
+        if res["is_duplicate"]:
+            duplicates.append(res)
+    return duplicates
+
+
 class CandidateDetailView(RecruiterRequiredMixin, DetailView):
     model = CandidateProfile
     template_name = 'candidate_detail.html'
@@ -2439,38 +2484,10 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
         context['is_in_pipeline'] = is_in_pipeline
         context['application_id'] = application_id
         
-        # Check for duplicates.
-        # calculate_duplicate_similarity only flags an exact identifier match
-        # (email / phone / LinkedIn / resume hash) as a duplicate, so narrow the
-        # candidate set in the database instead of scanning and scoring every
-        # candidate row in the system.
-        from services.resume_intelligence import ResumeIntelligenceService
-        from django.db.models import Q
-        duplicates = []
-        identifier_q = Q()
-        obj_user = getattr(self.object, 'user', None)
-        if obj_user:
-            if obj_user.email:
-                identifier_q |= Q(user__email__iexact=obj_user.email)
-            if getattr(obj_user, 'phone_number', None):
-                identifier_q |= Q(user__phone_number=obj_user.phone_number)
-        if self.object.linkedin_url and self.object.linkedin_url.strip():
-            identifier_q |= Q(linkedin_url__iexact=self.object.linkedin_url.strip())
-        if self.object.sha256:
-            identifier_q |= Q(sha256=self.object.sha256)
-
-        if identifier_q:
-            other_candidates = (
-                CandidateProfile.objects.exclude(id=self.object.id)
-                .filter(identifier_q)
-                .select_related('user')
-                .prefetch_related('skills')
-            )
-            for c in other_candidates:
-                res = ResumeIntelligenceService.calculate_duplicate_similarity(self.object, c)
-                if res["is_duplicate"]:
-                    duplicates.append(res)
-        context['duplicates'] = duplicates
+        # Duplicate detection is bounded to exact-identifier matches (see
+        # find_duplicate_candidates) so opening a profile never scans and
+        # scores the entire candidate table.
+        context['duplicates'] = find_duplicate_candidates(self.object)
         
         # Determine which version to preview (default to self.object.current_version or latest available)
         version_param = self.request.GET.get('version')
@@ -5516,15 +5533,7 @@ class CandidateDuplicateView(LoginRequiredMixin, View):
     """
     def get(self, request, pk, *args, **kwargs):
         profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
-        duplicates = []
-        
-        other_candidates = CandidateProfile.objects.exclude(id=profile.id)
-        for c in other_candidates:
-            res = ResumeIntelligenceService.calculate_duplicate_similarity(profile, c)
-            if res["is_duplicate"]:
-                duplicates.append(res)
-                
-        return JsonResponse({'status': 'success', 'duplicates': duplicates})
+        return JsonResponse({'status': 'success', 'duplicates': find_duplicate_candidates(profile)})
 
     def post(self, request, pk, *args, **kwargs):
         profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
