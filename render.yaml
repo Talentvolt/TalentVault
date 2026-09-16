@@ -2,7 +2,12 @@ services:
   - type: web
     name: talentvault
     env: python
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py setup_google_app && python manage.py preload_ocr
+    # System packages required for Word document preview/parsing on Render's
+    # native Python runtime (Debian 12), which does not ship these binaries:
+    #   antiword         -> legacy .doc -> HTML preview (utils/preview.py)
+    #   libreoffice-writer (soffice) -> .doc -> PDF conversion (utils/preview.py)
+    #   libmagic1        -> libmagic backend for python-magic MIME detection
+    buildCommand: apt-get update && apt-get install -y --no-install-recommends antiword libreoffice-writer libmagic1 && pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py setup_google_app && python manage.py preload_ocr
     startCommand: gunicorn config.wsgi:application -c gunicorn.conf.py
     envVars:
       - key: DJANGO_SETTINGS_MODULE
