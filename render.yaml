@@ -9,3 +9,8 @@ services:
         value: config.settings.base
       - key: PYTHON_VERSION
         value: 3.11.9
+      # HireNest Australia employer approvals integration (server-to-server).
+      - key: HIRENEST_API_BASE_URL
+        value: https://hirenest.com.au
+      - key: HIRENEST_ADMIN_API_KEY
+        sync: false

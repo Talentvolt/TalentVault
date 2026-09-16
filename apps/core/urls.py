@@ -11,6 +11,7 @@ from .views import (
     RecruiterCandidatesView,
     AdminDashboardView,
     AdminRecruiterApprovalsView,
+    HirenestEmployerApprovalsView,
     JobsView,
     JobCreateView,
     JobUpdateView,
@@ -105,6 +106,7 @@ urlpatterns = [
     path('dashboard/recruiter/complete-task/', CompleteTaskView.as_view(), name='complete_task'),
     path('dashboard/admin/', AdminDashboardView.as_view(), name='admin_dashboard'),
     path('dashboard/admin/recruiter-approvals/', AdminRecruiterApprovalsView.as_view(), name='admin_recruiter_approvals'),
+    path('dashboard/admin/hirenest-employer-approvals/', HirenestEmployerApprovalsView.as_view(), name='admin_hirenest_employer_approvals'),
     
     path('jobs/', JobsView.as_view(), name='jobs'),
     path('jobs/new/', JobCreateView.as_view(), name='job_create'),

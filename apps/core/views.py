@@ -1017,6 +1017,109 @@ class AdminRecruiterApprovalsView(SuperAdminRequiredMixin, TemplateView):
 
         return redirect('frontend:admin_recruiter_approvals')
 
+
+class HirenestEmployerApprovalsView(SuperAdminRequiredMixin, TemplateView):
+    """
+    Admin-only HireNest Australia employer approvals.
+
+    TalentVault and HireNest keep separate databases. This view never reads or
+    writes HireNest employer records directly; it calls the authenticated
+    HireNest admin API server-side using a shared secret that is read from the
+    server environment and never exposed to the browser. The existing
+    TalentVault recruiter approvals flow is untouched.
+    """
+    template_name = 'admin_hirenest_employer_approvals.html'
+
+    def _api_base(self):
+        return (getattr(settings, 'HIRENEST_API_BASE_URL', '') or '').rstrip('/')
+
+    def _api_key(self):
+        return getattr(settings, 'HIRENEST_ADMIN_API_KEY', '') or ''
+
+    def _api_configured(self):
+        return bool(self._api_base() and self._api_key())
+
+    def _api_headers(self):
+        return {
+            'X-HireNest-Admin-Key': self._api_key(),
+            'Accept': 'application/json',
+        }
+
+    def _fetch_employers(self, status_filter):
+        import requests
+        url = f"{self._api_base()}/api/admin/employer-approvals/?status={status_filter}"
+        response = requests.get(url, headers=self._api_headers(), timeout=15)
+        response.raise_for_status()
+        return response.json().get('employers', [])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        status_filter = self.request.GET.get('status', 'PENDING').upper()
+        if status_filter not in ['PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'ALL']:
+            status_filter = 'PENDING'
+
+        context['status_filter'] = status_filter
+        context['hirenest_configured'] = self._api_configured()
+        context['employers'] = []
+        context['integration_error'] = ''
+        context['pending_count'] = 0
+
+        if context['hirenest_configured']:
+            try:
+                context['employers'] = self._fetch_employers(status_filter)
+                context['pending_count'] = (
+                    len(context['employers']) if status_filter == 'PENDING'
+                    else len(self._fetch_employers('PENDING'))
+                )
+            except Exception as exc:
+                logger.error("HireNest employer approvals integration error: %s", exc)
+                context['integration_error'] = (
+                    "Unable to reach the HireNest Australia approvals service. "
+                    "Please verify the integration configuration and try again."
+                )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user_id = request.POST.get('user_id')
+        action = request.POST.get('action')
+        status_filter = request.POST.get('status', 'PENDING').upper()
+        if status_filter not in ['PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'ALL']:
+            status_filter = 'PENDING'
+
+        redirect_url = f"{reverse('frontend:admin_hirenest_employer_approvals')}?status={status_filter}"
+
+        if not user_id or not action:
+            messages.error(request, "Invalid request parameters.")
+            return redirect(redirect_url)
+
+        if not self._api_configured():
+            messages.error(request, "The HireNest Australia integration is not configured.")
+            return redirect(redirect_url)
+
+        import requests
+        try:
+            url = f"{self._api_base()}/api/admin/employer-approvals/{user_id}/"
+            response = requests.post(
+                url, json={'action': action}, headers=self._api_headers(), timeout=15
+            )
+            if response.status_code == 200:
+                messages.success(request, response.json().get('message', 'Employer updated.'))
+            else:
+                try:
+                    detail = response.json().get('error', '')
+                except Exception:
+                    detail = response.text[:200]
+                messages.error(
+                    request,
+                    f"HireNest rejected the request: {detail or response.status_code}"
+                )
+        except Exception as exc:
+            logger.error("HireNest employer approvals action error: %s", exc)
+            messages.error(request, "Unable to reach the HireNest Australia approvals service.")
+
+        return redirect(redirect_url)
+
+
 class JobActionView(RecruiterRequiredMixin, View):
     def post(self, request, pk, action):
         job = get_object_or_404(get_tenant_jobs_qs(request.user), pk=pk)

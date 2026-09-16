@@ -99,10 +99,14 @@
                 </a>
                 <a href="{% url 'frontend:admin_recruiter_approvals' %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_recruiter_approvals' %}active{% endif %}">
                     <i class="bi bi-shield-check"></i>
-                    <span>Approvals</span>
+                    <span>TalentVault Recruiters</span>
                     {% if pending_recruiters_count %}
                         <span class="badge bg-warning text-dark ms-auto font-bold">{{ pending_recruiters_count }}</span>
                     {% endif %}
+                </a>
+                <a href="{% url 'frontend:admin_hirenest_employer_approvals' %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_hirenest_employer_approvals' %}active{% endif %}">
+                    <i class="bi bi-building-check"></i>
+                    <span>HireNest Australia Employers</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
