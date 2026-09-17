@@ -27,7 +27,8 @@
     <i class="bi bi-plug-fill"></i>
     <div>
         The HireNest Australia integration is not configured. Set
-        <code>HIRENEST_API_BASE_URL</code> and <code>HIRENEST_ADMIN_API_KEY</code> in the server environment.
+        {% for var in hirenest_missing_config %}<code>{{ var }}</code>{% if not forloop.last %} and {% endif %}{% endfor %}
+        in the server environment.
     </div>
 </div>
 {% elif integration_error %}

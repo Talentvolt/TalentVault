@@ -1,0 +1,255 @@
+{% extends "layouts/admin_base.html" %}
+
+{% block title %}HireNest Australia Jobs | Admin Portal | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold m-0 text-dark"><i class="bi bi-briefcase-fill me-2 text-primary"></i>HireNest Australia Jobs</h3>
+        <p class="text-secondary small m-0 mt-1">
+            Create and manage HireNest Australia job postings. Postings are stored in the HireNest
+            database through a secure server-side integration. TalentVault India jobs are never mixed in.
+        </p>
+    </div>
+    <div class="d-flex gap-1.5 flex-wrap">
+        <a href="{% url 'frontend:admin_hirenest_jobs' %}?status=ACTIVE" class="btn btn-sm {% if status_filter == 'ACTIVE' %}btn-success text-white fw-bold shadow-xs{% else %}btn-outline-soft{% endif %}">Active</a>
+        <a href="{% url 'frontend:admin_hirenest_jobs' %}?status=DRAFT" class="btn btn-sm {% if status_filter == 'DRAFT' %}btn-secondary text-white fw-bold shadow-xs{% else %}btn-outline-soft{% endif %}">Draft</a>
+        <a href="{% url 'frontend:admin_hirenest_jobs' %}?status=PAUSED" class="btn btn-sm {% if status_filter == 'PAUSED' %}btn-warning text-dark fw-bold shadow-xs{% else %}btn-outline-soft{% endif %}">Paused</a>
+        <a href="{% url 'frontend:admin_hirenest_jobs' %}?status=CLOSED" class="btn btn-sm {% if status_filter == 'CLOSED' %}btn-dark text-white fw-bold shadow-xs{% else %}btn-outline-soft{% endif %}">Closed</a>
+        <a href="{% url 'frontend:admin_hirenest_jobs' %}?status=ALL" class="btn btn-sm {% if status_filter == 'ALL' %}btn-primary text-white fw-bold shadow-xs{% else %}btn-outline-soft{% endif %}">All</a>
+    </div>
+</div>
+
+{% if not hirenest_configured %}
+<div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-plug-fill"></i>
+    <div>
+        The HireNest Australia integration is not configured. Set
+        {% for var in hirenest_missing_config %}<code>{{ var }}</code>{% if not forloop.last %} and {% endif %}{% endfor %}
+        in the server environment.
+    </div>
+</div>
+{% elif integration_error %}
+<div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-exclamation-octagon-fill"></i>
+    <div>{{ integration_error }}</div>
+</div>
+{% endif %}
+
+{% if messages %}
+<div class="mb-4">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-2" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom py-3">
+        <span class="fw-bold">
+            <i class="bi bi-plus-circle me-2 text-primary"></i>
+            {% if edit_job %}Edit HireNest Job: {{ edit_job.title }}{% else %}Post a New HireNest Australia Job{% endif %}
+        </span>
+        {% if edit_job %}
+        <a href="{% url 'frontend:admin_hirenest_jobs' %}?status={{ status_filter }}" class="btn btn-sm btn-outline-soft float-end">Cancel edit</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <form method="post"
+              action="{% if edit_job %}{% url 'frontend:admin_hirenest_job_detail' edit_job.id %}{% else %}{% url 'frontend:admin_hirenest_jobs' %}{% endif %}">
+            {% csrf_token %}
+            {% if edit_job %}
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            {% endif %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Job Title *</label>
+                    <input type="text" name="title" class="form-control" required
+                           value="{{ edit_job.title|default:'' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Company Name</label>
+                    <input type="text" name="company_name" class="form-control"
+                           value="{{ edit_job.company_name|default:'' }}" placeholder="e.g. Sydney Analytics Group">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Location (Australia) *</label>
+                    <input type="text" name="location" class="form-control" required
+                           value="{{ edit_job.location|default:'' }}" placeholder="e.g. Sydney NSW">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Department / Classification</label>
+                    <input type="text" name="department" class="form-control"
+                           value="{{ edit_job.department|default:'' }}" placeholder="e.g. Engineering">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Status</label>
+                    <select name="status" class="form-select">
+                        {% for value, label in job_statuses %}
+                        <option value="{{ value }}" {% if edit_job.status == value %}selected{% elif not edit_job and value == 'ACTIVE' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Job Type</label>
+                    <select name="job_type" class="form-select">
+                        {% for value, label in job_types %}
+                        <option value="{{ value }}" {% if edit_job.job_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Work Mode</label>
+                    <select name="work_mode" class="form-select">
+                        {% for value, label in work_modes %}
+                        <option value="{{ value }}" {% if edit_job.work_mode == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Min Experience (years)</label>
+                    <input type="number" name="min_experience" min="0" class="form-control"
+                           value="{{ edit_job.min_experience|default:0 }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Max Experience (years)</label>
+                    <input type="number" name="max_experience" min="0" class="form-control"
+                           value="{{ edit_job.max_experience|default:1 }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Min Salary (AUD / year)</label>
+                    <input type="number" name="min_salary" min="0" step="0.01" class="form-control"
+                           value="{{ edit_job.min_salary|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Max Salary (AUD / year)</label>
+                    <input type="number" name="max_salary" min="0" step="0.01" class="form-control"
+                           value="{{ edit_job.max_salary|default:'' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Required Skills (comma separated)</label>
+                    <input type="text" name="required_skills_text" class="form-control"
+                           value="{{ edit_job.required_skills_text|default:'' }}" placeholder="e.g. Python, AWS">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Preferred Skills (comma separated)</label>
+                    <input type="text" name="preferred_skills_text" class="form-control"
+                           value="{{ edit_job.preferred_skills_text|default:'' }}" placeholder="e.g. Kubernetes">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Job Description *</label>
+                    <textarea name="description" rows="6" class="form-control" required>{{ edit_job.description|default:'' }}</textarea>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary fw-bold">
+                    <i class="bi bi-send me-1"></i>
+                    {% if edit_job %}Save Changes{% else %}Post to HireNest Australia{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <span class="fw-bold">
+            <i class="bi bi-briefcase me-2 text-primary"></i>
+            HireNest Australia Job Postings (Filter: {{ status_filter }})
+        </span>
+        <span class="badge bg-light text-dark border">Total: {{ jobs|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3 small text-uppercase fw-bold">Job Title</th>
+                        <th class="py-3 small text-uppercase fw-bold">Company</th>
+                        <th class="py-3 small text-uppercase fw-bold">Location</th>
+                        <th class="py-3 small text-uppercase fw-bold">Type</th>
+                        <th class="py-3 small text-uppercase fw-bold">Salary (AUD)</th>
+                        <th class="py-3 small text-uppercase fw-bold">Status</th>
+                        <th class="px-4 py-3 text-end small text-uppercase fw-bold">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td class="px-4">
+                            <div class="fw-bold text-dark">{{ job.title }}</div>
+                            <span class="text-secondary small">{{ job.department|default:"General" }}</span>
+                        </td>
+                        <td><span class="text-secondary small">{{ job.company_name|default:"N/A" }}</span></td>
+                        <td><span class="text-secondary small">{{ job.location|default:"N/A" }}</span></td>
+                        <td><span class="badge bg-light text-dark border small">{{ job.job_type }}</span></td>
+                        <td><span class="text-secondary small">{{ job.salary_display }}</span></td>
+                        <td>
+                            {% if job.status == 'ACTIVE' %}
+                                <span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle me-1"></i> Active</span>
+                            {% elif job.status == 'DRAFT' %}
+                                <span class="badge bg-secondary px-3 py-2"><i class="bi bi-pencil me-1"></i> Draft</span>
+                            {% elif job.status == 'PAUSED' %}
+                                <span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-pause-circle me-1"></i> Paused</span>
+                            {% elif job.status == 'ON_HOLD' %}
+                                <span class="badge bg-info text-dark px-3 py-2"><i class="bi bi-hourglass-split me-1"></i> On Hold</span>
+                            {% elif job.status == 'CLOSED' %}
+                                <span class="badge bg-dark px-3 py-2"><i class="bi bi-x-circle me-1"></i> Closed</span>
+                            {% else %}
+                                <span class="badge bg-secondary px-3 py-2">{{ job.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 text-end">
+                            <div class="d-inline-flex gap-1">
+                                <a href="{% url 'frontend:admin_hirenest_jobs' %}?status={{ status_filter }}&edit={{ job.id }}"
+                                   class="btn btn-sm btn-outline-primary fw-semibold"><i class="bi bi-pencil"></i> Edit</a>
+                                {% if job.status != 'ACTIVE' %}
+                                <form method="post" action="{% url 'frontend:admin_hirenest_job_detail' job.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="publish">
+                                    <input type="hidden" name="status" value="{{ status_filter }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success fw-semibold"><i class="bi bi-play-circle"></i> Publish</button>
+                                </form>
+                                {% else %}
+                                <form method="post" action="{% url 'frontend:admin_hirenest_job_detail' job.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="pause">
+                                    <input type="hidden" name="status" value="{{ status_filter }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-warning fw-semibold"><i class="bi bi-pause-circle"></i> Pause</button>
+                                </form>
+                                {% endif %}
+                                {% if job.status != 'CLOSED' %}
+                                <form method="post" action="{% url 'frontend:admin_hirenest_job_detail' job.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="close">
+                                    <input type="hidden" name="status" value="{{ status_filter }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-dark fw-semibold"><i class="bi bi-x-circle"></i> Close</button>
+                                </form>
+                                {% endif %}
+                                <form method="post" action="{% url 'frontend:admin_hirenest_job_detail' job.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="status" value="{{ status_filter }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger fw-semibold" onclick="return confirm('Delete this HireNest job posting?');"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-secondary">
+                            <i class="bi bi-inbox fs-2 d-block mb-2 text-muted"></i>
+                            No HireNest Australia jobs found for status '{{ status_filter }}'.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

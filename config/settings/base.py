@@ -4,8 +4,12 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Load .env file
-load_dotenv(BASE_DIR / ".env", override=True)
+# Load .env file.
+# Real environment variables (e.g. HIRENEST_ADMIN_API_KEY set in the server
+# environment) must take precedence over the local .env file. Using
+# override=False keeps the two loaders consistent (manage.py uses the same
+# default) and prevents a blank .env placeholder from clearing a configured key.
+load_dotenv(BASE_DIR / ".env", override=False)
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
