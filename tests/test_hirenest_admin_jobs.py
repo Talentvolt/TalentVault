@@ -303,3 +303,49 @@ class HireNestAdminJobsTests(TestCase):
         self.assertContains(response, 'authentication failed')
         self.assertNotIn(secret, response.content.decode('utf-8'))
         self.assertNotIn(secret, str(mocked_logger.call_args_list))
+
+    # ------------------------------------------------------------------
+    # Live connection hardening
+    # ------------------------------------------------------------------
+    def test_base_url_is_normalized(self):
+        from apps.core.views import HirenestAdminJobsView
+
+        view = HirenestAdminJobsView()
+        with self.settings(HIRENEST_API_BASE_URL='hirenest.com.au/'):
+            self.assertEqual(view._api_base(), 'https://hirenest.com.au')
+        with self.settings(HIRENEST_API_BASE_URL='  https://hirenest.com.au/  '):
+            self.assertEqual(view._api_base(), 'https://hirenest.com.au')
+        with self.settings(HIRENEST_API_BASE_URL=''):
+            # An explicitly blank base still counts as "not configured".
+            self.assertEqual(view._api_base(), '')
+
+    def test_request_failure_logs_clear_backend_error(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch('apps.core.views.logger') as mocked_logger:
+                with mock.patch(
+                    'requests.get',
+                    side_effect=requests.exceptions.ConnectionError('dns failure'),
+                ):
+                    self.client.get(self.list_url)
+
+        logged = str(mocked_logger.error.call_args_list)
+        # The real cause and the endpoint must be visible in the backend logs.
+        self.assertIn('dns failure', logged)
+        self.assertIn('/api/admin/jobs/', logged)
+        self.assertNotIn(TEST_API_KEY, logged)
+
+    def test_http_error_logs_status_and_url(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch('apps.core.views.logger') as mocked_logger:
+                with mock.patch(
+                    'requests.get',
+                    return_value=_fake_response(text='<html>Not Found</html>', status_code=404),
+                ):
+                    self.client.get(self.list_url)
+
+        logged = str(mocked_logger.error.call_args_list)
+        self.assertIn('404', logged)
+        self.assertIn('/api/admin/jobs/', logged)
+        self.assertNotIn(TEST_API_KEY, logged)

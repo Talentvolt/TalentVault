@@ -90,7 +90,22 @@ OPENAI_MODEL_NAME = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 # secure, authenticated HireNest API. The shared secret is read from the server
 # environment and is never exposed to the browser.
 # ==============================================================================
-HIRENEST_API_BASE_URL = os.environ.get("HIRENEST_API_BASE_URL", "https://hirenest.com.au").rstrip("/")
+def _normalize_hirenest_base_url(raw):
+    """
+    Normalize the HireNest API base URL coming from the environment.
+
+    Production/dashboard values are frequently pasted with surrounding
+    whitespace, a missing scheme or a trailing slash. Any of those produce a
+    broken request URL and a misleading "HireNest API unavailable" error, so
+    strip whitespace, default the scheme and drop the trailing slash.
+    """
+    base = (raw or "").strip() or "https://hirenest.com.au"
+    if not base.lower().startswith(("http://", "https://")):
+        base = "https://" + base
+    return base.rstrip("/")
+
+
+HIRENEST_API_BASE_URL = _normalize_hirenest_base_url(os.environ.get("HIRENEST_API_BASE_URL"))
 HIRENEST_ADMIN_API_KEY = os.environ.get("HIRENEST_ADMIN_API_KEY", "").strip()
 
 INSTALLED_APPS = [

@@ -1042,7 +1042,12 @@ class HireNestAdminAPIMixin:
     api_timeout = 15
 
     def _api_base(self):
-        return (getattr(settings, 'HIRENEST_API_BASE_URL', '') or '').rstrip('/')
+        # Normalize the configured base URL so stray whitespace or a missing
+        # scheme cannot turn into a misleading "API unavailable" error.
+        base = (getattr(settings, 'HIRENEST_API_BASE_URL', '') or '').strip()
+        if base and not base.lower().startswith(('http://', 'https://')):
+            base = 'https://' + base
+        return base.rstrip('/')
 
     def _api_key(self):
         return (getattr(settings, 'HIRENEST_ADMIN_API_KEY', '') or '').strip()
@@ -1066,17 +1071,20 @@ class HireNestAdminAPIMixin:
             'Accept': 'application/json',
         }
 
-    def _raise_for_api_status(self, response, context):
+    def _raise_for_api_status(self, response, context, url=''):
         if response.status_code in (401, 403):
             logger.error(
-                "HireNest admin API authentication failed (status=%s, context=%s)",
-                response.status_code, context,
+                "HireNest admin API authentication failed (status=%s, context=%s, url=%s)",
+                response.status_code, context, url,
             )
             raise HireNestAPIAuthError()
         if response.status_code >= 400:
+            # Include a short body snippet so a wrong URL/endpoint (e.g. an HTML
+            # 404) is obvious in the backend logs instead of just "unavailable".
+            body = (getattr(response, 'text', '') or '')[:200].replace('\n', ' ')
             logger.error(
-                "HireNest admin API error (status=%s, context=%s)",
-                response.status_code, context,
+                "HireNest admin API error (status=%s, context=%s, url=%s, body=%s)",
+                response.status_code, context, url, body,
             )
             raise HireNestAPIUnavailable()
 
@@ -1099,11 +1107,14 @@ class HirenestEmployerApprovalsView(SuperAdminRequiredMixin, HireNestAdminAPIMix
         url = f"{self._api_base()}/api/admin/employer-approvals/?status={status_filter}"
         try:
             response = requests.get(url, headers=self._api_headers(), timeout=self.api_timeout)
-        except requests.exceptions.RequestException:
-            logger.error("HireNest admin API unavailable (context=list status=%s)", status_filter)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=list status=%s, url=%s): %s",
+                status_filter, url, exc,
+            )
             raise HireNestAPIUnavailable()
 
-        self._raise_for_api_status(response, f"list status={status_filter}")
+        self._raise_for_api_status(response, f"list status={status_filter}", url)
 
         try:
             payload = response.json()
@@ -1234,14 +1245,21 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
         url = f"{self._api_base()}/api/admin/jobs/?status={status_filter}"
         try:
             response = requests.get(url, headers=self._api_headers(), timeout=self.api_timeout)
-        except requests.exceptions.RequestException:
-            logger.error("HireNest admin API unavailable (context=jobs list status=%s)", status_filter)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=jobs list status=%s, url=%s): %s",
+                status_filter, url, exc,
+            )
             raise HireNestAPIUnavailable()
-        self._raise_for_api_status(response, f"jobs list status={status_filter}")
+        self._raise_for_api_status(response, f"jobs list status={status_filter}", url)
         try:
             return response.json().get('jobs', [])
         except ValueError:
-            logger.error("HireNest admin API returned invalid JSON (context=jobs list status=%s)", status_filter)
+            body = (getattr(response, 'text', '') or '')[:200].replace('\n', ' ')
+            logger.error(
+                "HireNest admin API returned invalid JSON (context=jobs list status=%s, url=%s, body=%s)",
+                status_filter, url, body,
+            )
             raise HireNestAPIUnavailable()
 
     def _job_choices(self):
@@ -1309,13 +1327,13 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
             response = requests.post(
                 url, json=payload, headers=self._api_headers(), timeout=self.api_timeout
             )
-        except requests.exceptions.RequestException:
-            logger.error("HireNest admin API unavailable (context=job create)")
+        except requests.exceptions.RequestException as exc:
+            logger.error("HireNest admin API request failed (context=job create, url=%s): %s", url, exc)
             messages.error(request, "HireNest API unavailable. Please try again later.")
             return redirect(reverse('frontend:admin_hirenest_jobs'))
 
         if response.status_code in (401, 403):
-            logger.error("HireNest admin API authentication failed (context=job create)")
+            logger.error("HireNest admin API authentication failed (context=job create, url=%s)", url)
             messages.error(
                 request,
                 "HireNest integration authentication failed. Please verify the server configuration."
@@ -1331,6 +1349,10 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
                 detail = response.json().get('error', '')
             except Exception:
                 detail = response.text[:200]
+            logger.error(
+                "HireNest admin API rejected job create (status=%s, url=%s): %s",
+                response.status_code, url, detail,
+            )
             messages.error(request, f"HireNest rejected the job: {detail or response.status_code}")
 
         return redirect(reverse('frontend:admin_hirenest_jobs'))
@@ -1369,13 +1391,19 @@ class HirenestAdminJobDetailView(SuperAdminRequiredMixin, HireNestAdminAPIMixin,
                 response = requests.put(
                     url, json=payload, headers=self._api_headers(), timeout=self.api_timeout
                 )
-        except requests.exceptions.RequestException:
-            logger.error("HireNest admin API unavailable (context=job action=%s)", action)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=job action=%s, url=%s): %s",
+                action, url, exc,
+            )
             messages.error(request, "HireNest API unavailable. Please try again later.")
             return redirect(redirect_url)
 
         if response.status_code in (401, 403):
-            logger.error("HireNest admin API authentication failed (context=job action=%s)", action)
+            logger.error(
+                "HireNest admin API authentication failed (context=job action=%s, url=%s)",
+                action, url,
+            )
             messages.error(
                 request,
                 "HireNest integration authentication failed. Please verify the server configuration."
@@ -1391,6 +1419,10 @@ class HirenestAdminJobDetailView(SuperAdminRequiredMixin, HireNestAdminAPIMixin,
                 detail = response.json().get('error', '')
             except Exception:
                 detail = response.text[:200]
+            logger.error(
+                "HireNest admin API rejected job action (action=%s, status=%s, url=%s): %s",
+                action, response.status_code, url, detail,
+            )
             messages.error(request, f"HireNest rejected the request: {detail or response.status_code}")
 
         return redirect(redirect_url)
