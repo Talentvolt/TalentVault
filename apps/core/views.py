@@ -49,6 +49,26 @@ from services.location_service import LocationService
 
 logger = logging.getLogger(__name__)
 
+
+def noindex_response(view_func):
+    """
+    Decorator that marks a response as noindex via the X-Robots-Tag header.
+
+    Used on private/share and resume preview/download endpoints so search
+    engines never index them, regardless of response content type (HTML or
+    binary). Works with both regular and streaming/FileResponse responses.
+    """
+    from functools import wraps
+
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        response = view_func(request, *args, **kwargs)
+        if response is not None and hasattr(response, "headers"):
+            response["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    return _wrapped
+
 class LocationSearchView(View):
     def get(self, request, *args, **kwargs):
         q = request.GET.get('q', '').strip()
@@ -3386,6 +3406,7 @@ class PublicCandidateProfileView(DetailView):
             'skills', 'experiences', 'educations', 'projects', 'certifications'
         )
 
+    @method_decorator(noindex_response)
     def get(self, request, *args, **kwargs):
         try:
             self.object = self.get_object()
@@ -6428,6 +6449,10 @@ class CandidateResumePreviewView(LoginRequiredMixin, View):
     Only displays the original uploaded file stored in CandidateProfile.resume.
     Enforces role/candidate authorization.
     """
+    @method_decorator(noindex_response)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
     def get(self, request, pk, *args, **kwargs):
         candidate = get_object_or_404(CandidateProfile, pk=pk)
         
@@ -6450,6 +6475,10 @@ class CandidateResumeDownloadView(LoginRequiredMixin, View):
     Generates a temporary S3 presigned GET URL (15 minutes expiry) with correct Content-Type and Content-Disposition.
     Enforces role/candidate authorization.
     """
+    @method_decorator(noindex_response)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
     def get(self, request, pk, *args, **kwargs):
         import os
         import mimetypes
@@ -6500,6 +6529,10 @@ class PublicCandidateResumePreviewView(View):
     Renders inline candidate resume publicly in browser.
     Only displays the original uploaded file stored in CandidateProfile.resume.
     """
+    @method_decorator(noindex_response)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
     def get(self, request, pk, *args, **kwargs):
         try:
             candidate = CandidateProfile.objects.filter(pk=pk).first()
@@ -6524,6 +6557,10 @@ class PublicCandidateResumeDownloadView(View):
     Forces public download of candidate resume file stored in CandidateProfile.resume,
     supporting both local media storage and AWS S3 media storage gracefully without error.
     """
+    @method_decorator(noindex_response)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
     def get(self, request, pk, *args, **kwargs):
         import os
         try:
