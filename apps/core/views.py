@@ -3466,13 +3466,32 @@ def _build_meta_description(job):
 def _build_job_json_ld(job):
     plain = re.sub(r'<[^>]+>', ' ', job.description or "")
     plain = re.sub(r'\s+', ' ', plain).strip()
+
+    # Build a structured PostalAddress only from real client location data.
+    client = job.client
+    postal = {}
+    if client is not None:
+        if getattr(client, 'city', None):
+            postal["addressLocality"] = client.city
+        if getattr(client, 'state', None):
+            postal["addressRegion"] = client.state
+        if getattr(client, 'country', None):
+            postal["addressCountry"] = client.country
+
+    is_remote = bool(job.is_remote) or (job.work_mode == 'REMOTE')
+    if postal and not is_remote:
+        postal["@type"] = "PostalAddress"
+        job_location = {"@type": "Place", "address": postal}
+    else:
+        job_location = {"@type": "Place", "address": job.location or ""}
+
     data = {
         "@context": "https://schema.org",
         "@type": "JobPosting",
         "title": job.title,
         "description": plain[:1000],
         "hiringOrganization": {"@type": "Organization", "name": job.display_company},
-        "jobLocation": {"@type": "Place", "address": job.location or ""},
+        "jobLocation": job_location,
     }
     if job.job_type:
         _schema_emp = {
@@ -3498,13 +3517,11 @@ def _build_job_json_ld(job):
         if job.max_salary is not None:
             base["maxValue"] = float(job.max_salary)
         data["baseSalary"] = base
-    if job.min_experience is not None or job.max_experience is not None:
-        exp_req = {"@type": "OccupationalExperienceRequirements"}
-        if job.min_experience is not None:
-            exp_req["minExperience"] = job.min_experience
-        if job.max_experience is not None:
-            exp_req["maxExperience"] = job.max_experience
-        data["experienceRequirements"] = exp_req
+    if job.min_experience:
+        data["experienceRequirements"] = {
+            "@type": "OccupationalExperienceRequirements",
+            "monthsOfExperience": int(job.min_experience) * 12,
+        }
     return data
 
 
