@@ -1,12 +1,11 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.contrib.sitemaps.views import sitemap
 from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from django.conf import settings
 from django.views.static import serve
-from .sitemaps import sitemaps
+from .sitemaps import sitemaps, talentvault_sitemap_view
 
 from apps.companies.views import CompanyViewSet, CompanyMemberViewSet
 from apps.jobs.views import JobViewSet
@@ -70,7 +69,7 @@ urlpatterns = [
     # SEO / Sitemaps
     path(
         "sitemap.xml",
-        sitemap,
+        talentvault_sitemap_view,
         {"sitemaps": sitemaps},
         name="django.contrib.sitemaps"
     ),
