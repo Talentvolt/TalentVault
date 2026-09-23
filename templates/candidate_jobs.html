@@ -3,7 +3,21 @@
 
 {% block mobile_page_title %}Jobs{% endblock %}
 
-{% block title %}Explore Jobs — TalentVault{% endblock %}
+{% block title %}{{ seo_title|default:"Explore Jobs — TalentVault" }}{% endblock %}
+
+{% block seo_meta %}
+    <meta name="description" content="{{ seo_description }}">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{{ canonical_url }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TalentVault">
+    <meta property="og:title" content="{{ seo_title }}">
+    <meta property="og:description" content="{{ seo_description }}">
+    <meta property="og:url" content="{{ canonical_url }}">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ seo_title }}">
+    <meta name="twitter:description" content="{{ seo_description }}">
+{% endblock %}
 
 {% block extra_css %}
 <style>

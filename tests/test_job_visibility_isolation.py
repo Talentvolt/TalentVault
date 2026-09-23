@@ -128,7 +128,7 @@ def test_admin_dashboard_keeps_all_widgets_and_clients(visibility_data):
     client.force_login(visibility_data['admin'])
     html = client.get(reverse('frontend:recruiter_dashboard')).content.decode('utf-8')
 
-    assert 'My Tasks' in html
+    assert 'Recruiter Candidate Upload Activity' in html
     assert 'Recent Applications' in html
     assert 'Candidate Signup Overview' in html
     assert reverse('clients:client_list') in html

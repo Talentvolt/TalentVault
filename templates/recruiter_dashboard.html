@@ -19,6 +19,31 @@
     .hover-primary:hover {
         color: var(--primary-color) !important;
     }
+    .activity-date-input {
+        width: 100%;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        padding: 0.35rem 0.6rem;
+        font-size: 0.8rem;
+        color: var(--text-color);
+        background: #fff;
+    }
+    .activity-range-toggle {
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-color);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .activity-range-toggle:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
 </style>
 {% endblock %}
 
@@ -30,289 +55,18 @@
         <p class="text-secondary small m-0 mt-1">Here's what's happening with your recruitment today.</p>
     </div>
     <div>
-        <span class="text-secondary small fw-medium bg-white border px-3 py-1.5 rounded-pill shadow-xs"><i class="bi bi-calendar3 me-1 text-primary"></i> {{ timezone_now|date:"l, M d, Y" }}</span>
+        <form method="GET" action="{% url 'frontend:recruiter_dashboard' %}" class="m-0">
+            <label class="text-secondary small fw-medium bg-white border px-3 py-1.5 rounded-pill shadow-xs d-inline-flex align-items-center gap-2 position-relative" style="cursor: pointer;" title="Select dashboard date">
+                <i class="bi bi-calendar3 me-1 text-primary"></i>
+                <span>{{ activity_end_date|date:"l, d M Y" }}</span>
+                <input type="date" name="end" value="{{ activity_end_iso }}" class="position-absolute top-0 start-0 w-100 h-100 opacity-0" style="cursor: pointer;" onchange="this.form.submit()" aria-label="Select dashboard date">
+            </label>
+        </form>
     </div>
-</div>
-
-<!-- 3x2 Grid Layout -->
-<!-- Top Row -->
-<div class="row g-4 mb-4 fade-in">
-    <!-- Total Interviews -->
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 350px;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">Total Interviews</h6>
-                <a href="{% url 'frontend:interviews' %}" class="text-primary text-decoration-none small fw-medium">View All</a>
-            </div>
-            <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4">
-                <div class="d-flex align-items-center justify-content-center bg-primary bg-opacity-10 text-primary rounded-circle mb-3" style="width: 72px; height: 72px;">
-                    <i class="bi bi-calendar3 fs-1"></i>
-                </div>
-                <p class="text-secondary small mb-0 fw-medium">No interviews scheduled</p>
-            </div>
-        </div>
-    </div>
-
-    {% if is_super_admin %}
-    <!-- My Tasks -->
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 350px;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">My Tasks</h6>
-                <a href="#" class="text-primary text-decoration-none small fw-medium">View All</a>
-            </div>
-            
-            {% if recruiter_tasks %}
-            <div class="d-flex flex-column gap-2.5 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
-                {% for task in recruiter_tasks %}
-                <div class="d-flex align-items-center gap-3 p-2 border-bottom" style="border-color: #f1f5f9 !important;">
-                    <div class="flex-shrink-0">
-                        <form method="POST" action="{% url 'frontend:complete_task' %}" class="m-0">
-                            {% csrf_token %}
-                            <input type="hidden" name="task_type" value="{{ task.task_type }}">
-                            <input type="hidden" name="object_id" value="{{ task.object_id }}">
-                            <input type="checkbox" class="form-check-input check-complete-task" onchange="this.form.submit()" style="cursor: pointer; width: 1.1rem; height: 1.1rem; border-radius: 4px;">
-                        </form>
-                    </div>
-                    <div class="flex-grow-1 overflow-hidden text-start">
-                        <div class="fw-bold text-truncate small text-dark" style="font-size: 0.8rem;">{{ task.title }}</div>
-                        <div class="text-secondary text-truncate x-small" style="font-size: 0.7rem;">{{ task.subtitle }}</div>
-                    </div>
-                    <div class="flex-shrink-0">
-                        <span class="badge {{ task.badge_class }} rounded px-1.5 py-0.5 x-small" style="font-size: 0.65rem;">{{ task.badge }}</span>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4">
-                <div class="d-flex align-items-center justify-content-center bg-success bg-opacity-10 text-success rounded-circle mb-3" style="width: 72px; height: 72px;">
-                    <i class="bi bi-check2-circle fs-1"></i>
-                </div>
-                <p class="text-secondary small mb-0 fw-medium">No tasks left! You are all caught up.</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Mails From Candidates -->
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 350px;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">Mails From Candidates</h6>
-                <a href="{% url 'frontend:email_campaigns' %}" class="text-primary text-decoration-none small fw-medium">View All</a>
-            </div>
-            <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4">
-                <div class="d-flex align-items-center justify-content-center bg-warning bg-opacity-10 text-warning rounded-circle mb-3" style="width: 72px; height: 72px;">
-                    <i class="bi bi-envelope-paper fs-1"></i>
-                </div>
-                <p class="text-secondary small mb-0 fw-medium">No emails from candidates found</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Bottom Row -->
-<div class="row g-4 fade-in">
-    <!-- Applicant Status (Pipeline) -->
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
-            <h6 class="fw-bold mb-3 text-dark">Applicant Status (Pipeline)</h6>
-            
-            <div class="position-relative d-flex justify-content-center mb-3" style="height: 140px;">
-                <canvas id="pipelineDoughnutChart"></canvas>
-            </div>
-            
-            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
-                {% for item in pipeline_counts %}
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-1.5" style="border-color: #f1f5f9 !important;">
-                    <span class="small text-secondary d-flex align-items-center" style="font-size: 0.8rem;">
-                        <i class="bi bi-circle-fill me-2" style="font-size: 0.55rem; color: #2563eb;"></i>
-                        {{ item.label }}
-                    </span>
-                    <span class="badge rounded-pill" style="font-size: 0.72rem; padding: 0.25em 0.6em; background-color: #f1f5f9; color: #475569;">{{ item.count }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
-    {% if is_super_admin %}
-    <!-- Recent Applications / Job Applicants -->
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">Recent Applications</h6>
-                <a href="{% url 'frontend:ats_pipeline' %}" class="text-primary text-decoration-none small fw-medium">View All</a>
-            </div>
-            
-            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
-                {% for app in recent_applications|slice:":5" %}
-                <div class="p-2.5 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc;">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ app.job.id }}" class="text-decoration-none text-dark fw-bold small hover-primary" style="font-size: 0.85rem;">
-                                {{ app.candidate.full_name|default:app.candidate.user.email }}
-                            </a>
-                            <div class="text-secondary x-small mt-0.5" style="font-size: 0.72rem;">For {{ app.job.title }}</div>
-                        </div>
-                        <span class="badge {% if app.match_score >= 75 %}bg-success{% elif app.match_score >= 60 %}bg-warning text-dark{% else %}bg-secondary{% endif %} rounded px-1.5 py-0.5" style="font-size: 0.65rem;">
-                            ATS {{ app.match_score|floatformat:0 }}%
-                        </span>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top" style="border-color: #e2e8f0 !important;">
-                        <span class="badge {{ app.badge_class }} rounded px-1.5 py-0.5" style="font-size: 0.65rem;">{{ app.candidate_status_display }}</span>
-
-                        <div class="d-flex align-items-center gap-1">
-                            {% if app.candidate.has_resume %}
-                            <a href="{% url 'frontend:candidate_resume_download' app.candidate.id %}" class="btn btn-xs btn-outline-secondary p-1" style="font-size: 0.7rem;" title="Download Resume">
-                                <i class="bi bi-download"></i>
-                            </a>
-                            {% endif %}
-
-                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ app.job.id }}" class="btn btn-xs btn-primary p-1 text-white" style="font-size: 0.7rem;" title="View Profile">
-                                <i class="bi bi-person"></i>
-                            </a>
-
-                            {% if not app.in_pipeline %}
-                            <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="d-inline m-0">
-                                {% csrf_token %}
-                                <input type="hidden" name="job_id" value="{{ app.job.id }}">
-                                <button type="submit" class="btn btn-xs btn-success p-1 text-white" style="font-size: 0.7rem;" title="Shortlist">
-                                    <i class="bi bi-check-lg"></i>
-                                </button>
-                            </form>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="text-center py-5 text-secondary small">No recent applications found</div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if is_super_admin %}
-    <!-- Candidate Signup Overview -->
-    <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold m-0 text-dark">Candidate Signup Overview</h6>
-                <a href="{% url 'frontend:candidate_search' %}" class="btn btn-xs btn-outline-primary fw-semibold rounded-pill px-2 py-0.5" style="font-size: 0.7rem;">
-                    <i class="bi bi-people me-1"></i> View All Candidates
-                </a>
-            </div>
-
-            <!-- 5 Statistic Counters -->
-            <div class="row g-1 mb-3 text-center">
-                <!-- Today -->
-                <div class="col" style="flex: 1 0 18%;">
-                    <div class="p-1.5 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-10">
-                        <div class="text-primary x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Today">
-                            <i class="bi bi-person-plus-fill me-0.5"></i>Today
-                        </div>
-                        <div class="fw-black text-primary fs-6 mb-0">{{ candidate_signup_stats.today|default:0 }}</div>
-                    </div>
-                </div>
-                <!-- Yesterday -->
-                <div class="col" style="flex: 1 0 18%;">
-                    <div class="p-1.5 rounded-3 bg-info bg-opacity-10 border border-info border-opacity-10">
-                        <div class="text-info x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Yesterday">
-                            <i class="bi bi-clock-history me-0.5"></i>Yest
-                        </div>
-                        <div class="fw-black text-info fs-6 mb-0">{{ candidate_signup_stats.yesterday|default:0 }}</div>
-                    </div>
-                </div>
-                <!-- This Week -->
-                <div class="col" style="flex: 1 0 18%;">
-                    <div class="p-1.5 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-10">
-                        <div class="text-success x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="This Week">
-                            <i class="bi bi-graph-up-arrow me-0.5"></i>Week
-                        </div>
-                        <div class="fw-black text-success fs-6 mb-0">{{ candidate_signup_stats.this_week|default:0 }}</div>
-                    </div>
-                </div>
-                <!-- MTD -->
-                <div class="col" style="flex: 1 0 18%;">
-                    <div class="p-1.5 rounded-3 border" style="background-color: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2) !important;">
-                        <div class="x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem; color: #7c3aed;" title="Month To Date">
-                            <i class="bi bi-calendar-check-fill me-0.5"></i>MTD
-                        </div>
-                        <div class="fw-black fs-6 mb-0" style="color: #7c3aed;">{{ candidate_signup_stats.mtd|default:0 }}</div>
-                    </div>
-                </div>
-                <!-- Total Candidates -->
-                <div class="col" style="flex: 1 0 18%;">
-                    <div class="p-1.5 rounded-3 bg-dark bg-opacity-10 border border-dark border-opacity-10">
-                        <div class="text-dark x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Total Candidates">
-                            <i class="bi bi-people-fill me-0.5"></i>Total
-                        </div>
-                        <div class="fw-black text-dark fs-6 mb-0">{{ candidate_signup_stats.total|default:0 }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Recent Candidate Activity Section Header -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="x-small fw-bold text-secondary text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">
-                    <i class="bi bi-activity me-1 text-primary"></i>Recent Candidate Activity
-                </span>
-            </div>
-
-            <!-- Activity List -->
-            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
-                {% for cand in recent_candidate_activity %}
-                <div class="p-2 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc;">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="overflow-hidden pe-1">
-                            <a href="{% url 'frontend:candidate_detail' cand.id %}" class="text-decoration-none text-dark fw-bold small hover-primary text-truncate d-block" style="font-size: 0.82rem;">
-                                {{ cand.name }}
-                            </a>
-                            <div class="text-secondary x-small text-truncate" style="font-size: 0.7rem;">
-                                <i class="bi bi-envelope me-1"></i>{{ cand.email }}
-                            </div>
-                        </div>
-                        {% if cand.applied_job %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded px-1.5 py-0.5 x-small text-truncate" style="font-size: 0.65rem; max-width: 110px;" title="{{ cand.applied_job.title }}">
-                            <i class="bi bi-briefcase me-0.5"></i>{{ cand.applied_job.title }}
-                        </span>
-                        {% else %}
-                        <span class="badge bg-light text-secondary border rounded px-1.5 py-0.5 x-small" style="font-size: 0.65rem;">
-                            No Job Applied
-                        </span>
-                        {% endif %}
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top" style="border-color: #e2e8f0 !important; font-size: 0.68rem;">
-                        <span class="text-secondary">
-                            <strong class="text-dark">Registered:</strong> {{ cand.registered_date_formatted }}
-                        </span>
-                        <span class="text-secondary">
-                            <strong class="text-dark">Last Login:</strong> {{ cand.last_login_formatted }}
-                        </span>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4 text-secondary small">
-                    <div class="d-flex align-items-center justify-content-center bg-light text-secondary rounded-circle mb-2" style="width: 48px; height: 48px;">
-                        <i class="bi bi-person-x fs-4"></i>
-                    </div>
-                    <span>No candidate registrations yet.</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
 <!-- Recruiter Candidate Upload Activity -->
-<div class="row g-4 mt-0 fade-in">
+<div class="row g-4 mb-4 fade-in">
     <div class="col-12">
         <div class="card border-0 shadow-sm p-4" style="border-radius: 16px;">
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
@@ -320,7 +74,31 @@
                     <h6 class="fw-bold m-0 text-dark">Recruiter Candidate Upload Activity</h6>
                     <p class="text-secondary x-small m-0 mt-1" style="font-size: 0.72rem;">Candidate uploads by recruiter and date</p>
                 </div>
-                <span class="text-secondary small fw-medium bg-white border px-3 py-1 rounded-pill shadow-xs"><i class="bi bi-calendar3 me-1 text-primary"></i> Last 7 days</span>
+
+                <!-- Date Range Picker -->
+                <div class="dropdown">
+                    <button class="activity-range-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-calendar3 text-primary"></i> {{ activity_range_label }}
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end shadow-sm border p-3" style="min-width: 320px; border-radius: 14px;">
+                        <div class="text-uppercase text-secondary fw-semibold" style="font-size: 0.65rem; letter-spacing: 0.4px;">Quick Select</div>
+                        <div class="d-flex flex-column gap-1 mt-2 mb-2">
+                            {% for r in activity_quick_ranges %}
+                            <a class="dropdown-item rounded small fw-medium {% if r.start == activity_start_iso and r.end == activity_end_iso %}active{% endif %}" href="{% url 'frontend:recruiter_dashboard' %}?start={{ r.start }}&amp;end={{ r.end }}">{{ r.label }}</a>
+                            {% endfor %}
+                        </div>
+                        <hr class="dropdown-divider">
+                        <div class="text-uppercase text-secondary fw-semibold" style="font-size: 0.65rem; letter-spacing: 0.4px;">Custom Range</div>
+                        <form method="GET" action="{% url 'frontend:recruiter_dashboard' %}" class="mt-2 mb-0">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <input type="date" name="start" class="activity-date-input" value="{{ activity_start_iso }}" required>
+                                <span class="text-muted small">→</span>
+                                <input type="date" name="end" class="activity-date-input" value="{{ activity_end_iso }}" required>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary w-100 fw-semibold">Apply Range</button>
+                        </form>
+                    </div>
+                </div>
             </div>
 
             {% if recruiter_upload_has_data %}
@@ -398,6 +176,199 @@
         </div>
     </div>
 </div>
+
+<!-- Remaining Dashboard Cards -->
+<div class="row g-4 fade-in">
+    <!-- Applicant Status (Pipeline) -->
+    <div class="col-12 col-lg-4">
+        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
+            <h6 class="fw-bold mb-3 text-dark">Applicant Status (Pipeline)</h6>
+
+            <div class="position-relative d-flex justify-content-center mb-3" style="height: 140px;">
+                <canvas id="pipelineDoughnutChart"></canvas>
+            </div>
+
+            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
+                {% for item in pipeline_counts %}
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-1.5" style="border-color: #f1f5f9 !important;">
+                    <span class="small text-secondary d-flex align-items-center" style="font-size: 0.8rem;">
+                        <i class="bi bi-circle-fill me-2" style="font-size: 0.55rem; color: #2563eb;"></i>
+                        {{ item.label }}
+                    </span>
+                    <span class="badge rounded-pill" style="font-size: 0.72rem; padding: 0.25em 0.6em; background-color: #f1f5f9; color: #475569;">{{ item.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if is_super_admin %}
+    <!-- Recent Applications / Job Applicants -->
+    <div class="col-12 col-lg-4">
+        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold m-0 text-dark">Recent Applications</h6>
+                <a href="{% url 'frontend:ats_pipeline' %}" class="text-primary text-decoration-none small fw-medium">View All</a>
+            </div>
+
+            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
+                {% for app in recent_applications|slice:":5" %}
+                <div class="p-2.5 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ app.job.id }}" class="text-decoration-none text-dark fw-bold small hover-primary" style="font-size: 0.85rem;">
+                                {{ app.candidate.full_name|default:app.candidate.user.email }}
+                            </a>
+                            <div class="text-secondary x-small mt-0.5" style="font-size: 0.72rem;">For {{ app.job.title }}</div>
+                        </div>
+                        <span class="badge {% if app.match_score >= 75 %}bg-success{% elif app.match_score >= 60 %}bg-warning text-dark{% else %}bg-secondary{% endif %} rounded px-1.5 py-0.5" style="font-size: 0.65rem;">
+                            ATS {{ app.match_score|floatformat:0 }}%
+                        </span>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top" style="border-color: #e2e8f0 !important;">
+                        <span class="badge {{ app.badge_class }} rounded px-1.5 py-0.5" style="font-size: 0.65rem;">{{ app.candidate_status_display }}</span>
+
+                        <div class="d-flex align-items-center gap-1">
+                            {% if app.candidate.has_resume %}
+                            <a href="{% url 'frontend:candidate_resume_download' app.candidate.id %}" class="btn btn-xs btn-outline-secondary p-1" style="font-size: 0.7rem;" title="Download Resume">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% endif %}
+
+                            <a href="{% url 'frontend:candidate_detail' app.candidate.id %}?job_id={{ app.job.id }}" class="btn btn-xs btn-primary p-1 text-white" style="font-size: 0.7rem;" title="View Profile">
+                                <i class="bi bi-person"></i>
+                            </a>
+
+                            {% if not app.in_pipeline %}
+                            <form method="POST" action="{% url 'frontend:add_to_pipeline' app.candidate.id %}" class="d-inline m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="job_id" value="{{ app.job.id }}">
+                                <button type="submit" class="btn btn-xs btn-success p-1 text-white" style="font-size: 0.7rem;" title="Shortlist">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-5 text-secondary small">No recent applications found</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_super_admin %}
+    <!-- Candidate Signup Overview -->
+    <div class="col-12 col-lg-4">
+        <div class="card border-0 shadow-sm p-4 d-flex flex-column" style="border-radius: 16px; height: 380px;">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold m-0 text-dark">Candidate Signup Overview</h6>
+                <a href="{% url 'frontend:candidate_search' %}" class="btn btn-xs btn-outline-primary fw-semibold rounded-pill px-2 py-0.5" style="font-size: 0.7rem;">
+                    <i class="bi bi-people me-1"></i> View All Candidates
+                </a>
+            </div>
+
+            <!-- 5 Statistic Counters -->
+            <div class="row g-1 mb-3 text-center">
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-10">
+                        <div class="text-primary x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Today">
+                            <i class="bi bi-person-plus-fill me-0.5"></i>Today
+                        </div>
+                        <div class="fw-black text-primary fs-6 mb-0">{{ candidate_signup_stats.today|default:0 }}</div>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-info bg-opacity-10 border border-info border-opacity-10">
+                        <div class="text-info x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Yesterday">
+                            <i class="bi bi-clock-history me-0.5"></i>Yest
+                        </div>
+                        <div class="fw-black text-info fs-6 mb-0">{{ candidate_signup_stats.yesterday|default:0 }}</div>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-10">
+                        <div class="text-success x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="This Week">
+                            <i class="bi bi-graph-up-arrow me-0.5"></i>Week
+                        </div>
+                        <div class="fw-black text-success fs-6 mb-0">{{ candidate_signup_stats.this_week|default:0 }}</div>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 border" style="background-color: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2) !important;">
+                        <div class="x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem; color: #7c3aed;" title="Month To Date">
+                            <i class="bi bi-calendar-check-fill me-0.5"></i>MTD
+                        </div>
+                        <div class="fw-black fs-6 mb-0" style="color: #7c3aed;">{{ candidate_signup_stats.mtd|default:0 }}</div>
+                    </div>
+                </div>
+                <div class="col" style="flex: 1 0 18%;">
+                    <div class="p-1.5 rounded-3 bg-dark bg-opacity-10 border border-dark border-opacity-10">
+                        <div class="text-dark x-small fw-bold text-uppercase text-truncate" style="font-size: 0.6rem;" title="Total Candidates">
+                            <i class="bi bi-people-fill me-0.5"></i>Total
+                        </div>
+                        <div class="fw-black text-dark fs-6 mb-0">{{ candidate_signup_stats.total|default:0 }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Candidate Activity Section Header -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="x-small fw-bold text-secondary text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">
+                    <i class="bi bi-activity me-1 text-primary"></i>Recent Candidate Activity
+                </span>
+            </div>
+
+            <!-- Activity List -->
+            <div class="d-flex flex-column gap-2 flex-grow-1" style="overflow-y: auto; padding-right: 4px;">
+                {% for cand in recent_candidate_activity %}
+                <div class="p-2 border rounded-3 d-flex flex-column gap-1" style="border-color: #f1f5f9 !important; background-color: #f8fafc;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="overflow-hidden pe-1">
+                            <a href="{% url 'frontend:candidate_detail' cand.id %}" class="text-decoration-none text-dark fw-bold small hover-primary text-truncate d-block" style="font-size: 0.82rem;">
+                                {{ cand.name }}
+                            </a>
+                            <div class="text-secondary x-small text-truncate" style="font-size: 0.7rem;">
+                                <i class="bi bi-envelope me-1"></i>{{ cand.email }}
+                            </div>
+                        </div>
+                        {% if cand.applied_job %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded px-1.5 py-0.5 x-small text-truncate" style="font-size: 0.65rem; max-width: 110px;" title="{{ cand.applied_job.title }}">
+                            <i class="bi bi-briefcase me-0.5"></i>{{ cand.applied_job.title }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-light text-secondary border rounded px-1.5 py-0.5 x-small" style="font-size: 0.65rem;">
+                            No Job Applied
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top" style="border-color: #e2e8f0 !important; font-size: 0.68rem;">
+                        <span class="text-secondary">
+                            <strong class="text-dark">Registered:</strong> {{ cand.registered_date_formatted }}
+                        </span>
+                        <span class="text-secondary">
+                            <strong class="text-dark">Last Login:</strong> {{ cand.last_login_formatted }}
+                        </span>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-center py-4 text-secondary small">
+                    <div class="d-flex align-items-center justify-content-center bg-light text-secondary rounded-circle mb-2" style="width: 48px; height: 48px;">
+                        <i class="bi bi-person-x fs-4"></i>
+                    </div>
+                    <span>No candidate registrations yet.</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -438,34 +409,36 @@
         updateDynamicGreeting();
 
         // Doughnut Chart (Pipeline stage distribution)
-        const doughnutCtx = document.getElementById('pipelineDoughnutChart').getContext('2d');
-        const doughnutLabels = [{% for item in pipeline_counts %}'{{ item.label }}',{% endfor %}];
-        const doughnutData = [{% for item in pipeline_counts %}{{ item.count }},{% endfor %}];
-        
-        new Chart(doughnutCtx, {
-            type: 'doughnut',
-            data: {
-                labels: doughnutLabels,
-                datasets: [{
-                    data: doughnutData,
-                    backgroundColor: [
-                        '#2563eb', '#06b6d4', '#10b981', '#f59e0b',
-                        '#8b5cf6', '#ec4899', '#3b82f6', '#111827',
-                        '#6b7280', '#14b8a6', '#059669', '#b91c1c'
-                    ],
-                    borderWidth: 2,
-                    hoverOffset: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
+        const doughnutCtx = document.getElementById('pipelineDoughnutChart');
+        if (doughnutCtx) {
+            const doughnutLabels = [{% for item in pipeline_counts %}'{{ item.label }}',{% endfor %}];
+            const doughnutData = [{% for item in pipeline_counts %}{{ item.count }},{% endfor %}];
+
+            new Chart(doughnutCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: doughnutLabels,
+                    datasets: [{
+                        data: doughnutData,
+                        backgroundColor: [
+                            '#2563eb', '#06b6d4', '#10b981', '#f59e0b',
+                            '#8b5cf6', '#ec4899', '#3b82f6', '#111827',
+                            '#6b7280', '#14b8a6', '#059669', '#b91c1c'
+                        ],
+                        borderWidth: 2,
+                        hoverOffset: 4
+                    }]
                 },
-                cutout: '72%'
-            }
-        });
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    cutout: '72%'
+                }
+            });
+        }
     });
 </script>
 {% endblock %}

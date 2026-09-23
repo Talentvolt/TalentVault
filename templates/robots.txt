@@ -1,4 +1,33 @@
 User-agent: *
 Allow: /
 
+# Private recruiter / admin / candidate areas
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /candidates/
+Disallow: /talent-search/
+Disallow: /pipeline/
+Disallow: /analytics/
+Disallow: /settings/
+Disallow: /resume-parser/
+Disallow: /email-campaigns/
+Disallow: /recruiter/
+Disallow: /profile/
+Disallow: /applications/
+Disallow: /jobs/saved/
+Disallow: /jobs/recommended/
+Disallow: /clients/
+Disallow: /interviews/
+Disallow: /messages/
+Disallow: /taxonomy/
+Disallow: /export/
+
+# Auth, API and internal endpoints
+Disallow: /accounts/
+Disallow: /api/
+Disallow: /location-search/
+
+# Public candidate share pages are not intended for indexing
+Disallow: /share/candidate/
+
 Sitemap: https://talent-vault.in/sitemap.xml

@@ -1,3 +1,3 @@
-from .sitemaps import sitemaps, JobSitemap, CandidateProfileSitemap, StaticViewSitemap
+from .sitemaps import sitemaps, JobSitemap, StaticViewSitemap
 
-__all__ = ['sitemaps', 'JobSitemap', 'CandidateProfileSitemap', 'StaticViewSitemap']
+__all__ = ['sitemaps', 'JobSitemap', 'StaticViewSitemap']

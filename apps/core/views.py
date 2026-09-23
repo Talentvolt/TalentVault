@@ -389,7 +389,6 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         from apps.candidates.models import CandidateProfile
         from apps.applications.models import Application
         from apps.notifications.models import EmailLog
-        from apps.interviews.models import Interview
         from django.utils import timezone as django_timezone
         from django.db.models import Count, Q, Avg, Prefetch
         
@@ -399,7 +398,6 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         
         jobs_qs = get_tenant_jobs_qs(user)
         apps_qs = get_tenant_applications_qs(user)
-        interviews_qs = get_tenant_interviews_qs(user)
         candidates_qs = get_tenant_candidates_qs(user)
         
         context['total_candidates_count'] = candidates_qs.count()
@@ -416,9 +414,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         context['applications_today_count'] = apps_qs.filter(created_at__gte=today_start).count()
         context['total_pipeline_count'] = apps_qs.count()
         
-        # Interviews scheduled for today
         today_date = django_timezone.now().date()
-        context['interviews_today_count'] = interviews_qs.filter(start_time__date=today_date).count()
         
         # Recent Job Openings
         context['recent_jobs'] = jobs_qs.filter(status='ACTIVE').order_by('-created_at')[:5]
@@ -441,56 +437,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
             })
         context['candidates_by_day'] = candidates_by_day
         
-        # 1. Total Interviews (Scheduled Interviews)
-        context['upcoming_interviews'] = interviews_qs.filter(
-            status='SCHEDULED'
-        ).select_related('application__candidate__user', 'application__job').order_by('start_time')[:10]
-        context['total_interviews_count'] = interviews_qs.filter(status='SCHEDULED').count()
-        
-        # 2. My Tasks (Recruiter Actionable Items + Admin pending approvals)
-        tasks = []
-        if is_super_admin:
-            pending_rec_count = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').count()
-            if pending_rec_count > 0:
-                tasks.append({
-                    'title': f"Verify {pending_rec_count} Recruiter Account Registration{'s' if pending_rec_count > 1 else ''}",
-                    'subtitle': "Company Verification Pending",
-                    'due': "Today",
-                    'badge': "Admin Priority",
-                    'badge_class': "bg-danger-subtle text-danger",
-                    'task_type': 'admin_approval',
-                    'object_id': 'pending_recruiters'
-                })
-
-        pending_screening = apps_qs.filter(stage__in=['OPEN', 'SYSTEM_SUBMITTED', 'SCREENING_FEEDBACK_PENDING']).select_related('candidate__user', 'job')
-        for app in pending_screening:
-            tasks.append({
-                'title': f"Screen {app.candidate.full_name or app.candidate.user.email}",
-                'subtitle': f"For Job: {app.job.title}",
-                'due': app.created_at.strftime("%b %d"),
-                'badge': "Pending Screen",
-                'badge_class': "bg-warning-subtle text-warning",
-                'task_type': 'screen',
-                'object_id': str(app.id)
-            })
-            
-        for interview in context['upcoming_interviews']:
-            tasks.append({
-                'title': f"Conduct {interview.round or 'Interview'} with {interview.application.candidate.full_name or interview.application.candidate.user.email}",
-                'subtitle': f"Job: {interview.application.job.title}",
-                'due': interview.start_time.strftime("%b %d"),
-                'badge': "Interview",
-                'badge_class': "bg-primary-subtle text-primary",
-                'task_type': 'interview',
-                'object_id': str(interview.id)
-            })
-        context['recruiter_tasks'] = tasks
-        context['total_tasks_count'] = len(tasks)
-        
-        # 3. Mails From Candidates (Latest Candidate messages/logs)
-        context['candidate_mails'] = EmailLog.objects.all().order_by('-created_at')[:10]
-        
-        # 4. Applicant Status (Single aggregated query for pipeline stats counts)
+        # 1. Applicant Status (Single aggregated query for pipeline stats counts)
         stage_counts_dict = dict(
             apps_qs.values('stage').annotate(cnt=Count('id')).values_list('stage', 'cnt')
         )
@@ -603,12 +550,42 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         # 8. Recent Job Applications
         context['recent_applications'] = apps_qs.select_related('candidate__user', 'job').order_by('-created_at')[:10]
 
-        # 8b. Recruiter Candidate Upload Activity (last 7 days, grouped by recruiter & date)
+        # 8b. Recruiter Candidate Upload Activity (grouped by recruiter & date, date-range aware)
         from django.db.models.functions import Coalesce, TruncDate
         from utils.date_helpers import KOLKATA_TZ
 
-        activity_today = django_timezone.localtime(django_timezone.now(), KOLKATA_TZ).date()
-        activity_start = activity_today - django_timezone.timedelta(days=6)
+        today_kolkata = django_timezone.localtime(django_timezone.now(), KOLKATA_TZ).date()
+
+        def _parse_date_param(raw):
+            from datetime import date as _date
+            if not raw:
+                return None
+            try:
+                return _date.fromisoformat(raw)
+            except (ValueError, TypeError):
+                return None
+
+        start_date = _parse_date_param(self.request.GET.get('start'))
+        end_date = _parse_date_param(self.request.GET.get('end'))
+
+        if end_date is None and start_date is None:
+            end_date = today_kolkata
+            start_date = today_kolkata - django_timezone.timedelta(days=6)
+        elif end_date is None:
+            end_date = start_date
+        elif start_date is None:
+            start_date = end_date - django_timezone.timedelta(days=6)
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        # Safety cap to keep the table/breakdown usable for extreme ranges.
+        if (end_date - start_date).days > 90:
+            start_date = end_date - django_timezone.timedelta(days=89)
+
+        activity_start = start_date
+        activity_today = end_date
+
         activity_start_dt = django_timezone.make_aware(
             datetime.combine(activity_start, datetime.min.time()), KOLKATA_TZ
         )
@@ -656,7 +633,8 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
                 return parts[0][:2].upper()
             return (parts[0][0] + parts[-1][0]).upper()
 
-        activity_dates = [activity_today - django_timezone.timedelta(days=i) for i in range(6, -1, -1)]
+        num_days = (activity_today - activity_start).days
+        activity_dates = [activity_today - django_timezone.timedelta(days=i) for i in range(num_days, -1, -1)]
         activity_dates_desc = list(reversed(activity_dates))
 
         owner_totals = {}
@@ -718,6 +696,31 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
         context['recruiter_upload_rows'] = recruiter_upload_rows
         context['recruiter_upload_activity_by_date'] = recruiter_upload_activity_by_date
         context['recruiter_upload_has_data'] = bool(recruiter_upload_rows)
+
+        # Date range controls for the dashboard date picker
+        context['activity_start_date'] = activity_start
+        context['activity_end_date'] = activity_today
+        context['activity_start_iso'] = activity_start.isoformat()
+        context['activity_end_iso'] = activity_today.isoformat()
+        context['activity_start_label'] = activity_start.strftime('%d %b %Y')
+        context['activity_end_label'] = activity_today.strftime('%d %b %Y')
+        if activity_start == activity_today:
+            context['activity_range_label'] = activity_today.strftime('%d %b %Y')
+        else:
+            context['activity_range_label'] = (
+                f"{activity_start.strftime('%d %b %Y')} \u2192 {activity_today.strftime('%d %b %Y')}"
+            )
+
+        _quick_ranges = [
+            ('Today', today_kolkata, today_kolkata),
+            ('Yesterday', today_kolkata - django_timezone.timedelta(days=1), today_kolkata - django_timezone.timedelta(days=1)),
+            ('Last 7 Days', today_kolkata - django_timezone.timedelta(days=6), today_kolkata),
+            ('Last 30 Days', today_kolkata - django_timezone.timedelta(days=29), today_kolkata),
+        ]
+        context['activity_quick_ranges'] = [
+            {'label': label, 'start': s.isoformat(), 'end': e.isoformat()}
+            for label, s, e in _quick_ranges
+        ]
 
         # 9. Super Admin specific data
         if is_super_admin:
@@ -1822,7 +1825,35 @@ class JobsView(ListView):
             context['selected_job_type'] = self.request.GET.get('job_type', '')
             context['selected_work_mode'] = self.request.GET.get('work_mode', '')
             context['selected_sort'] = self.request.GET.get('sort_by', 'newest')
-            
+
+            # --- SEO context for the public job listing page ---
+            from urllib.parse import urlencode
+            _loc_display = (loc_val or '').strip()
+            _q_display = (q_val or '').strip()
+
+            if _loc_display:
+                context['seo_title'] = f"Jobs in {_loc_display} | Latest Job Vacancies | TalentVault"
+                context['seo_description'] = (
+                    f"Find the latest job vacancies in {_loc_display}. Search {_loc_display} jobs across IT, "
+                    f"software, fresher, remote and work from home roles and apply online on TalentVault."
+                )
+                _canonical = f"{self.request.build_absolute_uri(reverse('frontend:jobs'))}?{urlencode({'location': _loc_display})}"
+            elif _q_display:
+                context['seo_title'] = f"{_q_display} Jobs | TalentVault"
+                context['seo_description'] = (
+                    f"Find {_q_display} jobs on TalentVault. Browse verified {_q_display} openings and apply online."
+                )
+                _canonical = f"{self.request.build_absolute_uri(reverse('frontend:jobs'))}?{urlencode({'search': _q_display})}"
+            else:
+                context['seo_title'] = "Latest Jobs in India 2026 | Find Jobs Online | TalentVault"
+                context['seo_description'] = (
+                    "Search and apply for the latest jobs in India on TalentVault — IT jobs, software jobs, "
+                    "fresher jobs, remote and work from home jobs from verified employers."
+                )
+                _canonical = self.request.build_absolute_uri(reverse('frontend:jobs'))
+
+            context['canonical_url'] = _canonical
+
             context['unique_locations'] = sorted(list(set(
                 Job.objects.filter(status='ACTIVE').exclude(location=None).exclude(location='').values_list('location', flat=True)
             )))
@@ -3444,9 +3475,22 @@ def _build_job_json_ld(job):
         "jobLocation": {"@type": "Place", "address": job.location or ""},
     }
     if job.job_type:
-        data["employmentType"] = job.get_job_type_display()
+        _schema_emp = {
+            'FULL_TIME': 'FULL_TIME',
+            'PART_TIME': 'PART_TIME',
+            'CONTRACT': 'CONTRACTOR',
+            'FREELANCE': 'CONTRACTOR',
+            'ON_SITE': 'FULL_TIME',
+            'HYBRID': 'FULL_TIME',
+            'WORK_FROM_HOME': 'FULL_TIME',
+        }.get(job.job_type)
+        data["employmentType"] = _schema_emp or job.get_job_type_display()
     if job.created_at:
         data["datePosted"] = job.created_at.isoformat()
+    if job.application_deadline:
+        data["validThrough"] = job.application_deadline.isoformat()
+    elif job.closed_at:
+        data["validThrough"] = job.closed_at.isoformat()
     if job.min_salary is not None or job.max_salary is not None:
         base = {"@type": "MonetaryAmount", "currency": job.currency or "INR"}
         if job.min_salary is not None:
@@ -3454,6 +3498,13 @@ def _build_job_json_ld(job):
         if job.max_salary is not None:
             base["maxValue"] = float(job.max_salary)
         data["baseSalary"] = base
+    if job.min_experience is not None or job.max_experience is not None:
+        exp_req = {"@type": "OccupationalExperienceRequirements"}
+        if job.min_experience is not None:
+            exp_req["minExperience"] = job.min_experience
+        if job.max_experience is not None:
+            exp_req["maxExperience"] = job.max_experience
+        data["experienceRequirements"] = exp_req
     return data
 
 
