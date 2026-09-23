@@ -119,9 +119,11 @@ def test_public_job_share_ux_elements(client):
 
     # Share Buttons
     assert 'btn_copy_link' in html
-    assert 'Share on WhatsApp' in html
-    assert 'Share via Email' in html
-    assert 'Open in New Tab' in html
+    assert 'Share with someone awesome' in html
+    assert 'LinkedIn' in html
+    assert 'WhatsApp' in html
+    assert 'Email' in html
+    assert 'Copy Link' in html
 
 @pytest.mark.django_db
 def test_candidate_find_jobs_renders_view_details_instead_of_direct_easy_apply(client):

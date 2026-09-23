@@ -3396,6 +3396,130 @@ class PublicCandidateProfileView(DetailView):
         context['resume_missing'] = resume_missing
         return context
 
+def _experience_display(job):
+    mn = job.min_experience or 0
+    mx = job.max_experience or 0
+    if mx and mn != mx:
+        return f"{mn}\u2013{mx} Years"
+    if mx:
+        return f"{mx} Years"
+    return f"{mn} Years"
+
+
+def _job_is_open(job):
+    if job.status != Job.JobStatus.ACTIVE:
+        return False
+    if job.closed_at is not None:
+        return False
+    if job.application_deadline and job.application_deadline < timezone.now():
+        return False
+    return True
+
+
+def _build_meta_description(job):
+    company = job.display_company or ""
+    if company:
+        desc = f"Apply for the {job.title} position at {company}."
+    else:
+        desc = f"Apply for the {job.title} position."
+    if job.location:
+        desc += f" Location: {job.location}."
+    exp = _experience_display(job)
+    if exp:
+        desc += f" Experience: {exp}."
+    if job.department:
+        desc += f" Department: {job.department}."
+    return desc[:300]
+
+
+def _build_job_json_ld(job):
+    plain = re.sub(r'<[^>]+>', ' ', job.description or "")
+    plain = re.sub(r'\s+', ' ', plain).strip()
+    data = {
+        "@context": "https://schema.org",
+        "@type": "JobPosting",
+        "title": job.title,
+        "description": plain[:1000],
+        "hiringOrganization": {"@type": "Organization", "name": job.display_company},
+        "jobLocation": {"@type": "Place", "address": job.location or ""},
+    }
+    if job.job_type:
+        data["employmentType"] = job.get_job_type_display()
+    if job.created_at:
+        data["datePosted"] = job.created_at.isoformat()
+    if job.min_salary is not None or job.max_salary is not None:
+        base = {"@type": "MonetaryAmount", "currency": job.currency or "INR"}
+        if job.min_salary is not None:
+            base["minValue"] = float(job.min_salary)
+        if job.max_salary is not None:
+            base["maxValue"] = float(job.max_salary)
+        data["baseSalary"] = base
+    return data
+
+
+def _format_job_description(raw):
+    """Render a job description (plain text or HTML) as clean HTML for the public page."""
+    import html as _html
+    if not raw:
+        return ""
+    text = raw.strip()
+    if not text:
+        return ""
+    if re.search(r'<[a-zA-Z][^>]*>', text):
+        return text
+
+    known_headings = {
+        'about us', 'about the company', 'about the role', 'job overview',
+        'job description', 'key responsibilities', 'responsibilities',
+        'roles and responsibilities', 'requirements', 'key requirements',
+        'skills', 'required skills', 'preferred skills', 'education',
+        'qualifications', 'benefits', 'additional information',
+        'why join us', 'what we offer',
+    }
+    bullet_re = re.compile(r'^(\d+[.)]\s|[-*\u2022\u00b7\u2023\u25aa\u25e6]\s*)')
+
+    out = []
+    para = []
+    list_items = []
+
+    def flush_para():
+        if para:
+            out.append('<p>' + _html.escape(' '.join(para)) + '</p>')
+            para.clear()
+
+    def flush_list():
+        if list_items:
+            items = ''.join('<li>' + _html.escape(i) + '</li>' for i in list_items)
+            out.append('<ul>' + items + '</ul>')
+            list_items.clear()
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            flush_list()
+            flush_para()
+            continue
+
+        low = stripped.lower().rstrip(':').strip()
+        if stripped.endswith(':') and len(stripped) <= 60 and low in known_headings:
+            flush_list()
+            flush_para()
+            out.append('<h3>' + _html.escape(stripped.rstrip(':')) + '</h3>')
+            continue
+
+        if bullet_re.match(stripped):
+            flush_para()
+            list_items.append(bullet_re.sub('', stripped, count=1))
+            continue
+
+        flush_list()
+        para.append(stripped)
+
+    flush_list()
+    flush_para()
+    return ''.join(out)
+
+
 class PublicJobShareView(DetailView):
     model = Job
     template_name = 'public_job_share.html'
@@ -3476,6 +3600,66 @@ class PublicJobShareView(DetailView):
                             context['jd_docx_html'] = "".join(paras)
                     except Exception:
                         context['jd_docx_html'] = None
+
+        # --- Public page redesign context ---
+        company = job.company
+        about_text = ""
+        if company and getattr(company, 'description', None):
+            comp_desc = (company.description or "").strip()
+            name_lower = (company.name or "").strip().lower()
+            if comp_desc and comp_desc.lower() not in {
+                name_lower,
+                f"{name_lower} (organization)",
+                "default company",
+            }:
+                about_text = comp_desc
+        context['about_text'] = about_text
+
+        context['experience_display'] = _experience_display(job)
+
+        hero_meta_items = []
+        if context['experience_display']:
+            hero_meta_items.append(context['experience_display'])
+        if job.job_type:
+            hero_meta_items.append(job.get_job_type_display())
+        if job.location:
+            hero_meta_items.append(job.location)
+        if job.work_mode:
+            hero_meta_items.append(job.get_work_mode_display())
+        if job.department:
+            hero_meta_items.append(job.department)
+        context['hero_meta_items'] = hero_meta_items
+
+        context['is_accepting_applications'] = _job_is_open(job)
+        context['job_description_html'] = _format_job_description(job.description)
+
+        skills_list = []
+        seen = set()
+        for s in job.get_required_skills_list:
+            if s and s not in seen:
+                seen.add(s)
+                skills_list.append(s)
+        for s in job.get_preferred_skills_list:
+            if s and s not in seen:
+                seen.add(s)
+                skills_list.append(s)
+        if not skills_list:
+            for sk in job.skills.all():
+                if sk.skill_name and sk.skill_name not in seen:
+                    seen.add(sk.skill_name)
+                    skills_list.append(sk.skill_name)
+        context['skills_list'] = skills_list
+        context['education'] = (job.education or "").strip()
+
+        similar_qs = Job.objects.filter(status=Job.JobStatus.ACTIVE).exclude(pk=job.pk)
+        if job.department:
+            dept_similar = similar_qs.filter(department__iexact=job.department)
+            if dept_similar.exists():
+                similar_qs = dept_similar
+        context['similar_jobs'] = similar_qs.select_related('company', 'client').order_by('-created_at')[:5]
+
+        context['meta_description'] = _build_meta_description(job)
+        context['job_json_ld'] = json.dumps(_build_job_json_ld(job), ensure_ascii=False)
 
         return context
 
