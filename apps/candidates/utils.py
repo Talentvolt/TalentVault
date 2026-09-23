@@ -76,6 +76,57 @@ def sanitize_text(value, path="", print_on_nul=True):
     # strip whitespace
     return value.strip()
 
+# Reserved internal domain used only as a login identifier for candidates whose
+# CV genuinely contains no email address. It is never a real candidate contact
+# and is filtered out of the candidate-facing UI.
+INTERNAL_LOGIN_EMAIL_DOMAIN = "no-email.talentvault.internal"
+
+PLACEHOLDER_EMAIL_RE = re.compile(
+    r'(?:^unknown[_\.\-]|^candidate@example\.com$|'
+    r'@no-email\.talentvault\.internal$|^noreply@|^no-reply@)',
+    re.IGNORECASE,
+)
+
+VALID_EMAIL_RE = re.compile(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$')
+
+
+def is_placeholder_email(email) -> bool:
+    """True when an email is a generated placeholder / non-contact value."""
+    if not email or not isinstance(email, str):
+        return True
+    return bool(PLACEHOLDER_EMAIL_RE.search(email.strip()))
+
+
+def extract_valid_email(text: str) -> str:
+    """Validated fallback extractor for a single missing email field."""
+    if not text or not isinstance(text, str):
+        return ""
+    for candidate in re.findall(r'[\w\.\-+]+@[\w\.\-]+\.\w{2,}', text):
+        candidate = candidate.strip().strip('.,;:')
+        if is_placeholder_email(candidate):
+            continue
+        if VALID_EMAIL_RE.match(candidate):
+            return candidate[:254]
+    return ""
+
+
+def extract_valid_phone(text: str) -> str:
+    """Validated fallback extractor for a single missing phone field."""
+    if not text or not isinstance(text, str):
+        return ""
+    for match in re.findall(r'(?:\+?\d{1,3}[\s\-]?)?(?:\(?\d{3,5}\)?[\s\-]?)\d{3}[\s\-]?\d{3,4}', text):
+        digits = re.sub(r'\D', '', match)
+        if 10 <= len(digits) <= 13:
+            return digits[-10:]
+    return ""
+
+
+def make_internal_login_email(seed: str) -> str:
+    """Deterministic, non-contact login identifier for a CV with no email."""
+    digest = hashlib.sha256((seed or "candidate").encode("utf-8", "ignore")).hexdigest()[:16]
+    return f"candidate.{digest}@{INTERNAL_LOGIN_EMAIL_DOMAIN}"
+
+
 def sanitize_recursive(data, path=""):
     if isinstance(data, dict):
         sanitized = {}
@@ -89,6 +140,16 @@ def sanitize_recursive(data, path=""):
             current_path = f"{path}[{idx}]"
             sanitized.append(sanitize_recursive(item, current_path))
         return sanitized
+    elif isinstance(data, (bytes, bytearray, memoryview)):
+        # Never stringify raw binary into a JSON field. Preserve only a
+        # lightweight metadata reference so the payload stays serializable.
+        return {
+            "available": True,
+            "type": "binary",
+            "serialized": False,
+            "byte_length": len(bytes(data)),
+            "source": path or "unknown",
+        }
     elif isinstance(data, str):
         return sanitize_text(data, path)
     elif data is None:
@@ -656,17 +717,33 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 print(f"File: {filename} | Request ID: {request_id} | Type: {type(e).__name__}: {str(e)}")
                 print(tb)
 
-        # ai_improve step (only if NLP succeeded; still guarded individually)
+        # Parseora is the PRIMARY source of truth. Extract its raw photo bytes
+        # before JSON sanitization so binary data never enters parsed_data.
+        api_photo_bytes = None
+        api_photo_ext = 'jpg'
+        if isinstance(parsed_data, dict):
+            api_photo_bytes = parsed_data.pop('photo_bytes', None)
+            api_photo_ext = parsed_data.pop('photo_ext', 'jpg') or 'jpg'
+        if api_photo_bytes:
+            photo_bytes, photo_ext = api_photo_bytes, api_photo_ext
+
+        # AI improvement is a best-effort refinement. If it fails we KEEP the
+        # original Parseora structured result; we never fall back to the old
+        # parser and never discard a successful Parseora response.
         if parsed_data is not None:
             try:
                 t_improve_start = time.time()
-                parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
-                info = parsed_data['personal_info']
+                improved = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
+                if isinstance(improved, dict) and improved:
+                    parsed_data = improved
+                info = parsed_data.get('personal_info', {})
                 t_validation += time.time() - t_improve_start
                 logger.info(f"[TIMING] AI improve took: {time.time() - t_improve_start:.4f}s")
             except Exception as e:
                 logger.error(f"[PARSER AI_IMPROVE FAILURE] ai_improve_resume_data raised: {str(e)}", exc_info=True)
-                info = parsed_data.get('personal_info', {})
+                # parsed_data intentionally retains the original structured
+                # Parseora (or NLP) result untouched.
+                info = parsed_data.get('personal_info', {}) if isinstance(parsed_data, dict) else {}
     else:
         # If it was duplicate, we still need to run photo extraction
         try:
@@ -719,21 +796,36 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
     text = sanitize_text(text, "raw_resume_text")
     info = parsed_data.get('personal_info', {})
     
-    email = info.get('email', '')
-    phone = info.get('phone', '')
-    
-    # Normalize placeholders
-    if email == "candidate@example.com":
+    # Contact resolution: Parseora fields are primary. A validated fallback
+    # extractor is used ONLY for the specific missing field. Synthetic/fake
+    # candidate contact values are never created.
+    email = (info.get('email') or '').strip()
+    phone = (info.get('phone') or '').strip()
+
+    if is_placeholder_email(email):
         email = ""
     if phone == "9876543210":
         phone = ""
-        
-    if not email:
-        email = f"unknown_{abs(hash(text or filename))}@example.com"
 
-    logger.info(f"[PARSER CONTACTS] Extracted Email: {email}, Extracted Phone: {phone}")
-    print(f"[PARSER CONTACTS] Extracted Email: {email}, Extracted Phone: {phone}")
-        
+    if not email:
+        email = extract_valid_email(text)
+    if not phone:
+        phone = extract_valid_phone(text)
+
+    # Reflect the true (possibly empty) contact values back into parsed_data so
+    # the persisted payload and the UI never expose a fabricated placeholder.
+    if isinstance(info, dict):
+        info['email'] = email
+        info['phone'] = phone
+        if photo_bytes:
+            info['has_photo'] = True
+
+    logger.info(f"[PARSER CONTACTS] Extracted Email: {email or '(none)'}, Extracted Phone: {phone or '(none)'}")
+    print(f"[PARSER CONTACTS] Extracted Email: {email or '(none)'}, Extracted Phone: {phone or '(none)'}")
+
+    # Unique login identifier (never exposed as candidate contact).
+    login_email = email if email else make_internal_login_email(sha256 or filename)
+
     try:
         from django.db import transaction
         t_db_start = time.time()
@@ -786,7 +878,7 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
 
             if existing_user and not overwrite and user is None:
                 DuplicateResumeLog.objects.create(
-                    email=email,
+                    email=login_email,
                     phone=phone,
                     filename=filename,
                     action_taken='SKIPPED'
@@ -800,7 +892,7 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                     user.phone_number = phone
                 user.save()
                 DuplicateResumeLog.objects.create(
-                    email=email,
+                    email=login_email,
                     phone=phone,
                     filename=filename,
                     action_taken='UPDATED'
@@ -808,8 +900,11 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 logger.info(f"[PARSER DUPLICATE] Candidate already exists (overwriting): {email}")
                 print(f"[PARSER DUPLICATE] Candidate already exists (overwriting): {email}")
             else:
+                # A user record needs a unique login identifier. When the CV has
+                # no real email, use a reserved non-contact internal identifier;
+                # the candidate's contact email stays empty.
                 user, created_user = User.objects.get_or_create(
-                    email=email,
+                    email=login_email,
                     defaults={'role': User.Role.CANDIDATE, 'phone_number': phone if phone else None}
                 )
                 if created_user:
@@ -891,11 +986,23 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                         'solutions', 'industries', 'group', 'corp', 'hospital', 'university', 'college', 'institute',
                         'school', 'bank', 'unknown', 'hometown', 'residence', 'nationality', 'gender', 'about', 'hr',
                         'recruiter', 'team', 'page', 'phone', 'email', 'address', 'contact', 'mobile', 'cv', 'resume',
-                        'biodata', 'curriculum', 'vitae'
+                        'biodata', 'curriculum', 'vitae',
+                        # Address / location / personal-detail labels
+                        'district', 'taluk', 'taluka', 'tehsil', 'village', 'post', 'po', 'pin', 'pincode', 'zip',
+                        'street', 'road', 'lane', 'block', 'sector', 'state', 'country', 'city', 'town', 'area',
+                        'locality', 'landmark', 'house', 'flat', 'apartment', 'building', 'floor', 'near', 'opposite',
+                        'dob', 'birth', 'birthday', 'marital', 'married', 'single', 'father', 'mother', 'spouse',
+                        'religion', 'caste', 'category', 'signature', 'declaration', 'reference', 'references',
                     }
                     if any(w in blacklisted_words for w in words_to_check):
                         return False
-                        
+
+                    # A genuine name must contain at least one purely-alphabetic
+                    # token of length >= 2. Rejects fragments like "District -".
+                    alpha_tokens = [w for w in words if w.isalpha() and len(w) >= 2]
+                    if not alpha_tokens:
+                        return False
+
                     if ' ' not in name_clean and len(name_clean) > 12:
                         return False
                         
@@ -1068,28 +1175,9 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 if email_name:
                     return email_name
 
-                # 6. Filename Fallback
-                filename_name = None
-                if filename:
-                    base_fname = os.path.splitext(os.path.basename(filename))[0]
-                    clean_fname = re.sub(r'[\._\-]+', ' ', base_fname)
-                    non_name_words = {
-                        'resume', 'cv', 'profile', 'bio', 'updated', 'final', 'latest', 'draft',
-                        'document', 'scanned', 'only', 'test', 'sample', 'dummy', 'file', 'temp',
-                        'image', 'scan', 'copy', 'new', 'doc', 'pdf', 'docx', 'secure'
-                    }
-                    parts = [w for w in clean_fname.split() if w.isalpha() and len(w) >= 2 and w.lower() not in non_name_words]
-                    if len(parts) >= 1:
-                        fname_cand = " ".join(parts).title()
-                        if is_acceptable_name(fname_cand):
-                            filename_name = fname_cand
-
-                logger.info(f"[NAME] Filename Fallback: {filename_name or 'None'}")
-                print(f"[NAME] Filename Fallback: {filename_name or 'None'}")
-                if filename_name:
-                    return filename_name
-
-                return "Unknown Candidate"
+                # 6. No valid name anywhere: do NOT use the filename and do NOT
+                # invent a placeholder. Store empty/null instead.
+                return ""
 
             candidate_name = get_priority_name()[:255]
             profile.full_name = candidate_name
@@ -1728,6 +1816,14 @@ def merge_candidate_profile_data(
     from services.candidate_tagging_service import CandidateTaggingService
 
     with transaction.atomic():
+        # Never let raw binary enter a JSONField / version snapshot.
+        if isinstance(parsed_data, dict):
+            parsed_data = dict(parsed_data)
+            parsed_data.pop('photo_bytes', None)
+            parsed_data.pop('photo_ext', None)
+        else:
+            parsed_data = {}
+
         if info is None:
             info = parsed_data.get('personal_info', {}) or {}
 
@@ -2060,6 +2156,20 @@ def merge_candidate_profile_data(
             except Exception as e_file:
                 logger.error(f"[MERGE FILE SAVE] Error saving merged resume file: {e_file}")
 
+        # Persist a genuine candidate photo when the merged CV provides one and
+        # the profile does not already have a photo.
+        if photo_bytes and not existing_profile.profile_photo:
+            try:
+                ext = (photo_ext or 'jpg').lstrip('.').lower()
+                existing_profile.profile_photo.save(
+                    f"photo_{existing_profile.id}.{ext}",
+                    ContentFile(photo_bytes),
+                    save=False,
+                )
+                logger.info("[MERGE PHOTO SAVE SUCCESS] Persisted merged candidate photo.")
+            except Exception as e_photo:
+                logger.error(f"[MERGE PHOTO SAVE] Error saving merged candidate photo: {e_photo}")
+
         # Versioning & Audit Logs
         v_num = (existing_profile.current_version or 1) + 1
         existing_profile.current_version = v_num
@@ -2147,19 +2257,28 @@ def process_and_merge_resume(file_obj, filename, candidate_profile_id, uploaded_
     if parsed_data is None:
         parsed_data = ResumeIntelligenceService.parse_resume_nlp(text, parsed_name=ocr_result.get("largest_bold_name"))
 
+    # Parseora photo bytes are primary; pop them before JSON handling.
+    api_photo_bytes, api_photo_ext = None, 'jpg'
+    if isinstance(parsed_data, dict):
+        api_photo_bytes = parsed_data.pop('photo_bytes', None)
+        api_photo_ext = parsed_data.pop('photo_ext', 'jpg') or 'jpg'
+
     if parsed_data is not None:
         try:
-            parsed_data = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
-        except Exception:
-            pass
+            improved = ResumeIntelligenceService.ai_improve_resume_data(parsed_data)
+            if isinstance(improved, dict) and improved:
+                parsed_data = improved
+        except Exception as e:
+            logger.error(f"[MERGE AI_IMPROVE FAILURE] Keeping original structured data: {e}", exc_info=True)
 
     info = parsed_data.get('personal_info', {}) if parsed_data else {}
 
-    photo_bytes, photo_ext = None, None
-    try:
-        photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
-    except Exception:
-        pass
+    photo_bytes, photo_ext = api_photo_bytes, api_photo_ext
+    if not photo_bytes:
+        try:
+            photo_bytes, photo_ext = extract_profile_photo(file_bytes, filename)
+        except Exception:
+            photo_bytes, photo_ext = None, None
 
     return merge_candidate_profile_data(
         existing_profile=existing_profile,

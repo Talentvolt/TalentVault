@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 
     <!-- Premium Loading Screen -->
     <div id="loading-screen" class="loading-overlay">
@@ -37,24 +37,21 @@
     </div>
 
     <!-- Sidebar -->
+    {% block sidebar %}
     <aside class="sidebar">
-        <!-- Vector Brand Card Header -->
-        <div class="sidebar-header p-3 border-bottom" style="border-color: rgba(255, 255, 255, 0.08) !important;">
+        <!-- SaaS Recruiter Sidebar Header -->
+        <div class="sidebar-header">
             <button class="sidebar-close-btn" id="sidebar-close-btn" type="button" aria-label="Close navigation sidebar">
                 <i class="bi bi-x-lg"></i>
             </button>
-            <div class="branding-card text-center p-3" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px;">
-                <a href="/" class="d-inline-block text-decoration-none mb-2">
-                    <div class="tv-monogram mx-auto d-flex align-items-center justify-content-center fw-bold" 
-                         style="width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%); color: #ffffff; font-size: 1.3rem; letter-spacing: -0.04em; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35); border: 1px solid rgba(255, 255, 255, 0.15);">
-                        TV
-                    </div>
+            <div class="sidebar-branding">
+                <a href="{% if request.user.role == 'CANDIDATE' %}{% url 'frontend:candidate_dashboard' %}{% else %}{% url 'frontend:recruiter_dashboard' %}{% endif %}" class="sidebar-logo-link">
+                    <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault" class="sidebar-logo-img">
                 </a>
-                <div class="d-flex flex-column align-items-center">
-                    <span class="fw-bold text-white lh-tight" style="font-size: 1.18rem; letter-spacing: -0.025em;">TalentVault</span>
-                    <span class="fw-semibold mt-0.5" style="font-size: 0.76rem; color: #60a5fa;">Recruiter Workspace</span>
-                    <span class="badge rounded-pill mt-2.5 px-2.5 py-1 fw-medium" style="font-size: 0.64rem; background: rgba(37, 99, 235, 0.15); color: #93c5fd; border: 1px solid rgba(96, 165, 250, 0.25);">
-                        <i class="bi bi-shield-check me-1 text-primary-light"></i>Enterprise ATS Platform
+                <div class="sidebar-sub-branding">
+                    <span class="sidebar-workspace-name">{% if request.user.role == 'CANDIDATE' %}Candidate Workspace{% else %}Recruiter Workspace{% endif %}</span>
+                    <span class="sidebar-enterprise-badge">
+                        <i class="bi bi-shield-check me-1 text-primary"></i>Enterprise ATS Platform
                     </span>
                 </div>
             </div>
@@ -65,11 +62,11 @@
                 <!-- CANDIDATE SIDEBAR -->
                 <div class="sidebar-section-label">MAIN</div>
                 <a href="{% url 'frontend:candidate_dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'candidate_dashboard' %}active{% endif %}">
-                    <i class="bi bi-grid-1x2-fill"></i>
+                    <i class="bi bi-grid"></i>
                     <span>Dashboard</span>
                 </a>
                 <a href="#" class="sidebar-link">
-                    <i class="bi bi-person-fill"></i>
+                    <i class="bi bi-person"></i>
                     <span>My Profile</span>
                 </a>
                 <a href="{% url 'frontend:jobs' %}" class="sidebar-link">
@@ -77,24 +74,24 @@
                     <span>Jobs</span>
                 </a>
                 <a href="#" class="sidebar-link">
-                    <i class="bi bi-file-earmark-text-fill"></i>
+                    <i class="bi bi-file-earmark-text"></i>
                     <span>Applications</span>
                 </a>
                 <a href="{% url 'frontend:interviews' %}" class="sidebar-link">
-                    <i class="bi bi-calendar-event-fill"></i>
+                    <i class="bi bi-calendar-event"></i>
                     <span>Interviews</span>
                 </a>
                 <div class="sidebar-section-label mt-3">HELP</div>
                 <a href="#" class="sidebar-link">
-                    <i class="bi bi-question-circle-fill"></i>
-                    <span>Help & Support</span>
+                    <i class="bi bi-question-circle"></i>
+                    <span>Help &amp; Support</span>
                 </a>
 
             {% elif request.user.role == "SUPER_ADMIN" or request.user.is_superuser or request.user.is_staff %}
                 <!-- ADMIN SIDEBAR (Master Control) -->
                 <div class="sidebar-section-label">MAIN</div>
                 <a href="{% url 'frontend:recruiter_dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'recruiter_dashboard' %}active{% endif %}">
-                    <i class="bi bi-grid-1x2-fill"></i>
+                    <i class="bi bi-grid"></i>
                     <span>Dashboard</span>
                 </a>
                 <a href="{% url 'frontend:admin_recruiter_approvals' %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_recruiter_approvals' %}active{% endif %}">
@@ -109,57 +106,57 @@
                     <span>HireNest Australia Employers</span>
                 </a>
                 <a href="{% url 'frontend:admin_hirenest_jobs' %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_hirenest_jobs' %}active{% endif %}">
-                    <i class="bi bi-briefcase-fill"></i>
+                    <i class="bi bi-briefcase"></i>
                     <span>HireNest Australia Jobs</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
-                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
-                    <i class="bi bi-people-fill"></i>
+                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
+                    <i class="bi bi-people"></i>
                     <span>Candidates</span>
                 </a>
-                <a href="{% url 'frontend:jobs' %}" class="sidebar-link {% if request.resolver_match.url_name == 'jobs' %}active{% endif %}">
-                    <i class="bi bi-briefcase-fill"></i>
+                <a href="{% url 'frontend:jobs' %}" class="sidebar-link {% if request.resolver_match.url_name in 'jobs,recruiter_jobs' %}active{% endif %}">
+                    <i class="bi bi-briefcase"></i>
                     <span>Jobs</span>
                 </a>
                 <a href="{% url 'clients:client_list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'clients' %}active{% endif %}">
-                    <i class="bi bi-building-fill"></i>
+                    <i class="bi bi-building"></i>
                     <span>Clients</span>
                 </a>
                 <a href="{% url 'frontend:candidate_search' %}?pool=true" class="sidebar-link {% if request.GET.pool %}active{% endif %}">
-                    <i class="bi bi-database-fill"></i>
+                    <i class="bi bi-database"></i>
                     <span>Talent Pool</span>
                 </a>
                 <a href="{% url 'frontend:ats_pipeline' %}" class="sidebar-link {% if request.resolver_match.url_name == 'ats_pipeline' %}active{% endif %}">
-                    <i class="bi bi-kanban-fill"></i>
+                    <i class="bi bi-kanban"></i>
                     <span>Pipeline</span>
                 </a>
                 <a href="{% url 'frontend:interviews' %}" class="sidebar-link {% if request.resolver_match.url_name == 'interviews' %}active{% endif %}">
-                    <i class="bi bi-calendar-event-fill"></i>
+                    <i class="bi bi-calendar-event"></i>
                     <span>Interviews</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">TALENT INTELLIGENCE</div>
                 <a href="{% url 'frontend:talent_search' %}" class="sidebar-link {% if request.resolver_match.url_name == 'talent_search' %}active{% endif %}">
-                    <i class="bi bi-search-heart-fill"></i>
+                    <i class="bi bi-search"></i>
                     <span>Talent Search</span>
                 </a>
                 <a href="{% url 'taxonomy:taxonomy_dashboard' %}" class="sidebar-link {% if request.resolver_match.namespace == 'taxonomy' or request.resolver_match.app_name == 'taxonomy' %}active{% endif %}">
-                    <i class="bi bi-tags-fill"></i>
+                    <i class="bi bi-tags"></i>
                     <span>Taxonomy &amp; Tagging</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">ANALYTICS</div>
                 <a href="{% url 'frontend:email_campaigns' %}" class="sidebar-link {% if request.resolver_match.url_name == 'email_campaigns' %}active{% endif %}">
-                    <i class="bi bi-envelope-paper-fill"></i>
+                    <i class="bi bi-envelope"></i>
                     <span>Campaigns</span>
                 </a>
                 <a href="{% url 'frontend:resume_parser' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resume_parser' %}active{% endif %}">
-                    <i class="bi bi-file-earmark-arrow-up-fill"></i>
+                    <i class="bi bi-file-earmark-arrow-up"></i>
                     <span>Resume Parser</span>
                 </a>
                 <a href="{% url 'frontend:analytics' %}" class="sidebar-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
-                    <i class="bi bi-graph-up-arrow"></i>
+                    <i class="bi bi-graph-up"></i>
                     <span>Analytics</span>
                 </a>
 
@@ -169,7 +166,7 @@
                     <span>Users</span>
                 </a>
                 <a href="{% url 'frontend:settings' %}" class="sidebar-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-                    <i class="bi bi-gear-fill"></i>
+                    <i class="bi bi-gear"></i>
                     <span>Settings</span>
                 </a>
 
@@ -177,77 +174,89 @@
                 <!-- RECRUITER WORKSPACE SIDEBAR -->
                 <div class="sidebar-section-label">MAIN</div>
                 <a href="{% url 'frontend:recruiter_dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'recruiter_dashboard' %}active{% endif %}">
-                    <i class="bi bi-grid-1x2-fill"></i>
+                    <i class="bi bi-grid"></i>
                     <span>Dashboard</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
+                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
+                    <i class="bi bi-people"></i>
+                    <span>Candidates</span>
+                </a>
                 <a href="{% url 'frontend:recruiter_jobs' %}" class="sidebar-link {% if request.resolver_match.url_name in 'recruiter_jobs,jobs' %}active{% endif %}">
-                    <i class="bi bi-briefcase-fill"></i>
+                    <i class="bi bi-briefcase"></i>
                     <span>Jobs</span>
                 </a>
+                <a href="{% url 'clients:client_list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'clients' %}active{% endif %}">
+                    <i class="bi bi-building"></i>
+                    <span>Clients</span>
+                </a>
+                <a href="{% url 'frontend:candidate_search' %}?pool=true" class="sidebar-link {% if request.GET.pool %}active{% endif %}">
+                    <i class="bi bi-database"></i>
+                    <span>Talent Pool</span>
+                </a>
                 <a href="{% url 'frontend:ats_pipeline' %}" class="sidebar-link {% if request.resolver_match.url_name == 'ats_pipeline' %}active{% endif %}">
-                    <i class="bi bi-kanban-fill"></i>
+                    <i class="bi bi-kanban"></i>
                     <span>Pipeline</span>
                 </a>
                 <a href="{% url 'frontend:interviews' %}" class="sidebar-link {% if request.resolver_match.url_name == 'interviews' %}active{% endif %}">
-                    <i class="bi bi-calendar-event-fill"></i>
+                    <i class="bi bi-calendar-event"></i>
                     <span>Interviews</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">TALENT INTELLIGENCE</div>
                 <a href="{% url 'frontend:talent_search' %}" class="sidebar-link {% if request.resolver_match.url_name == 'talent_search' %}active{% endif %}">
-                    <i class="bi bi-search-heart-fill"></i>
+                    <i class="bi bi-search"></i>
                     <span>Talent Search</span>
                 </a>
                 <a href="{% url 'taxonomy:taxonomy_dashboard' %}" class="sidebar-link {% if request.resolver_match.namespace == 'taxonomy' or request.resolver_match.app_name == 'taxonomy' %}active{% endif %}">
-                    <i class="bi bi-tags-fill"></i>
+                    <i class="bi bi-tags"></i>
                     <span>Taxonomy &amp; Tagging</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">ANALYTICS</div>
                 <a href="{% url 'frontend:email_campaigns' %}" class="sidebar-link {% if request.resolver_match.url_name == 'email_campaigns' %}active{% endif %}">
-                    <i class="bi bi-envelope-paper-fill"></i>
+                    <i class="bi bi-envelope"></i>
                     <span>Campaigns</span>
                 </a>
                 <a href="{% url 'frontend:resume_parser' %}" class="sidebar-link {% if request.resolver_match.url_name == 'resume_parser' %}active{% endif %}">
-                    <i class="bi bi-file-earmark-arrow-up-fill"></i>
+                    <i class="bi bi-file-earmark-arrow-up"></i>
                     <span>Resume Parser</span>
                 </a>
                 <a href="{% url 'frontend:analytics' %}" class="sidebar-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
-                    <i class="bi bi-graph-up-arrow"></i>
+                    <i class="bi bi-graph-up"></i>
                     <span>Analytics</span>
                 </a>
 
                 <div class="sidebar-section-label mt-3">SETTINGS</div>
                 <a href="{% url 'frontend:settings' %}" class="sidebar-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-                    <i class="bi bi-gear-fill"></i>
+                    <i class="bi bi-gear"></i>
                     <span>Settings</span>
                 </a>
             {% endif %}
         </nav>
         
-        <!-- Enterprise Bottom Profile Card -->
+        <!-- SaaS Enterprise Bottom Profile Card -->
         <div class="sidebar-footer">
             <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-2.5 overflow-hidden">
-                    <img src="{% if request.user.is_authenticated and request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email|urlencode }}{% else %}Guest{% endif %}{% endif %}" class="rounded-circle border border-2 border-primary border-opacity-50 flex-shrink-0" width="40" height="40" alt="Avatar">
+                    <img src="{% if request.user.is_authenticated and request.user.profile_picture %}{{ request.user.profile_picture }}{% else %}https://ui-avatars.com/api/?background=2563eb&color=fff&name={% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email|urlencode }}{% else %}Guest{% endif %}{% endif %}" class="sidebar-user-avatar rounded-circle flex-shrink-0" width="38" height="38" alt="Avatar">
                     <div class="d-flex flex-column text-start overflow-hidden">
-                        <span class="fw-bold text-white lh-sm text-truncate" style="font-size: 0.85rem;">{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email }}{% else %}Guest{% endif %}</span>
-                        <span class="text-secondary small text-truncate" style="font-size: 0.72rem; color: #94a3b8 !important;">{% if request.user.is_authenticated %}{{ request.user.company_affiliations.first.company.name|default:"TalentVault Technologies" }}{% else %}TalentVault{% endif %}</span>
-                        <span class="text-secondary x-small text-truncate" style="font-size: 0.68rem; color: #64748b !important;">{% if request.user.is_authenticated %}{{ request.user.email }}{% endif %}</span>
+                        <span class="sidebar-user-name fw-bold text-truncate">{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.email }}{% else %}Guest{% endif %}</span>
+                        <span class="sidebar-user-role text-truncate">{% if request.user.is_authenticated %}{{ request.user.company_affiliations.first.company.name|default:"TalentVault Technologies" }}{% else %}TalentVault{% endif %}</span>
+                        <span class="sidebar-user-email text-truncate">{% if request.user.is_authenticated %}{{ request.user.email }}{% endif %}</span>
                     </div>
                 </div>
                 <div class="dropdown flex-shrink-0 ms-1">
-                    <button class="btn btn-sm text-secondary border-0 p-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-three-dots-vertical text-white-50 fs-6"></i>
+                    <button class="btn btn-sm btn-icon border-0 p-1 text-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="User Options">
+                        <i class="bi bi-three-dots-vertical fs-6 text-muted"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0" style="background: #1e293b; border: 1px solid rgba(255,255,255,0.1) !important;">
-                        <li><a class="dropdown-item text-white-50" href="{% url 'frontend:settings' %}"><i class="bi bi-person me-2"></i> My Profile</a></li>
-                        <li><a class="dropdown-item text-white-50" href="{% url 'frontend:settings' %}"><i class="bi bi-gear me-2"></i> Settings</a></li>
-                        <li><hr class="dropdown-divider border-secondary opacity-25"></li>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border mt-1" style="background: #ffffff; border-color: #e2e8f0 !important; border-radius: 12px; min-width: 175px;">
+                        <li><a class="dropdown-item py-2 text-dark" href="{% url 'frontend:settings' %}"><i class="bi bi-person me-2 text-primary"></i> My Profile</a></li>
+                        <li><a class="dropdown-item py-2 text-dark" href="{% url 'frontend:settings' %}"><i class="bi bi-gear me-2 text-primary"></i> Settings</a></li>
+                        <li><hr class="dropdown-divider my-1 border-light-subtle"></li>
                         <li>
-                            <a class="dropdown-item text-danger" href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                            <a class="dropdown-item py-2 text-danger" href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                                 <i class="bi bi-box-arrow-right me-2"></i> Logout
                             </a>
                         </li>
@@ -256,13 +265,15 @@
             </div>
         </div>
     </aside>
+    {% endblock sidebar %}
 
     <!-- Sidebar Backdrop Overlay for Mobile/Tablet -->
     <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
     <!-- Main Wrapper -->
-    <div class="main-wrapper">
+    <div class="main-wrapper {% block main_wrapper_class %}{% endblock %}">
         <!-- Top Navbar -->
+        {% block top_header %}
         <header class="top-navbar">
             <div class="d-flex align-items-center gap-2.5">
                 <button id="sidebar-toggle-btn" class="navbar-toggle-btn" type="button" aria-label="Toggle Navigation Sidebar">
@@ -317,9 +328,10 @@
                 </div>
             </div>
         </header>
+        {% endblock top_header %}
 
         <!-- Content Area -->
-        <main class="content-area">
+        <main class="content-area {% block content_area_class %}{% endblock %}">
             {% if messages %}
             <div class="messages-container mb-4">
                 {% for message in messages %}
@@ -337,24 +349,13 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Theme switching logic
+        // Theme switching logic (null-safe: optional theme-toggle elements may be absent)
         const themeToggleBtn = document.getElementById('theme-toggle');
         const themeIconLight = document.getElementById('theme-icon-light');
         const themeIconDark = document.getElementById('theme-icon-dark');
-        
-        // Initial setup
-        const activeTheme = document.documentElement.getAttribute('data-theme') || 'light';
-        updateThemeIcons(activeTheme);
-
-        themeToggleBtn.addEventListener('click', () => {
-            const currentActive = document.documentElement.getAttribute('data-theme') || 'light';
-            const newTheme = currentActive === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeIcons(newTheme);
-        });
 
         function updateThemeIcons(theme) {
+            if (!themeIconLight || !themeIconDark) return;
             if (theme === 'dark') {
                 themeIconLight.classList.add('d-none');
                 themeIconDark.classList.remove('d-none');
@@ -364,15 +365,33 @@
             }
         }
 
-        // Fading Splash Screen logic
-        window.addEventListener('DOMContentLoaded', () => {
-            const loader = document.getElementById('loading-screen');
-            if (loader) {
-                setTimeout(() => {
-                    loader.classList.add('fade-out');
-                }, 500); // 500ms premium fade-out animation
-            }
+        // Initial setup
+        const activeTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        updateThemeIcons(activeTheme);
 
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', () => {
+                const currentActive = document.documentElement.getAttribute('data-theme') || 'light';
+                const newTheme = currentActive === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateThemeIcons(newTheme);
+            });
+        }
+
+        // Dismiss the splash/loading screen based on actual page readiness.
+        function hideLoadingScreen() {
+            const loader = document.getElementById('loading-screen');
+            if (!loader || loader.classList.contains('fade-out')) return;
+            loader.classList.add('fade-out');
+            loader.addEventListener('transitionend', function onFadeEnd() {
+                loader.removeEventListener('transitionend', onFadeEnd);
+                loader.style.display = 'none';
+            });
+        }
+
+        // App shell initialisation (mobile sidebar navigation).
+        function initAppShell() {
             // Mobile Drawer Navigation Handler
             const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
             const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
@@ -423,7 +442,28 @@
                     });
                 });
             }
-        });
+        }
+
+        function onPageReady() {
+            // Dismiss once the document is parsed and the profile content is available.
+            hideLoadingScreen();
+
+            // Safety net: also dismiss on window load (images/iframes finished) in case
+            // the overlay was re-shown or DOM ready had already fired.
+            window.addEventListener('load', hideLoadingScreen, { once: true });
+        }
+
+        if (document.readyState === 'loading') {
+            // DOMContentLoaded has not fired yet.
+            document.addEventListener('DOMContentLoaded', function () {
+                initAppShell();
+                onPageReady();
+            }, { once: true });
+        } else {
+            // DOMContentLoaded (or load) already fired before this script attached its listener.
+            initAppShell();
+            onPageReady();
+        }
     </script>
 
     <!-- TalentVault Global Dropdown & Layering Manager -->

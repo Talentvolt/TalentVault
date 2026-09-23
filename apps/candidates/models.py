@@ -149,6 +149,18 @@ class CandidateProfile(BaseAppModel):
             return False
 
     @property
+    def contact_email(self):
+        """Candidate contact email. Internal login placeholders are hidden."""
+        email = self.user.email if self.user else ""
+        from apps.candidates.utils import is_placeholder_email
+        return "" if is_placeholder_email(email) else email
+
+    @property
+    def contact_phone(self):
+        """Candidate contact phone (never a generated placeholder)."""
+        return (self.user.phone_number or "") if self.user else ""
+
+    @property
     def has_resume(self):
         return bool(self.resume and self.resume.name)
 
@@ -342,9 +354,10 @@ class CandidateProfile(BaseAppModel):
             
             if hasattr(self, 'user') and self.user:
                 if "email" not in version_data["personal_info"] or not version_data["personal_info"]["email"]:
-                    version_data["personal_info"]["email"] = self.user.email
+                    # Never leak the internal login placeholder as candidate contact.
+                    version_data["personal_info"]["email"] = self.contact_email
                 if "phone" not in version_data["personal_info"] or not version_data["personal_info"]["phone"]:
-                    version_data["personal_info"]["phone"] = self.user.phone_number or ""
+                    version_data["personal_info"]["phone"] = self.contact_phone
             
             self.resume_versions[version_str]["data"] = version_data
             self.parsed_json = version_data

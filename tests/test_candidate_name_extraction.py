@@ -139,8 +139,8 @@ def test_process_resume_scanned_ocr_fallback(mock_ocr):
 
     assert status == "SUCCESS"
     assert profile is not None
-    # Fallback name "Unknown Candidate" is used because all lines are invalid
-    assert profile.full_name == "Unknown Candidate"
+    # No genuine name exists: store empty rather than inventing a placeholder.
+    assert not profile.full_name
 
 
 # --- Regression Tests for Major Headings ---
@@ -347,7 +347,8 @@ def test_process_resume_name_priority_list(mock_parser, mock_ocr):
     profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
     assert profile.full_name == "John Doe"
 
-    # Case 7: Email username is generic (e.g. recruit@example.com), falls back to "Unknown Candidate"
+    # Case 7: Email username is generic (e.g. recruit@example.com) and no other
+    # valid name exists: store empty rather than inventing a placeholder.
     mock_ocr.return_value = {
         "text": "+91 98765 43211\nrecruit@example.com",
         "engine": "pdfplumber",
@@ -363,7 +364,7 @@ def test_process_resume_name_priority_list(mock_parser, mock_ocr):
         }
     }
     profile, status = process_resume_file(file_obj, "resume.pdf", overwrite=True)
-    assert profile.full_name == "Unknown Candidate"
+    assert not profile.full_name
 
 
 @pytest.mark.django_db

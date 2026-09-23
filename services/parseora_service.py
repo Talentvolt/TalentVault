@@ -184,6 +184,96 @@ class ParseoraService:
             return default
         return field
 
+    # Section headings / contact markers that must never be stored as a
+    # structured record (education degree, etc.).
+    _NON_RECORD_TEXT_RE = re.compile(
+        r'@|https?://|www\.|linkedin|github|'
+        r'\b(?:gmail|yahoo|outlook|hotmail)\b|'
+        r'\b(?:summary|objective|profile|experience|education|skills|certifications?|'
+        r'languages?|interests?|hobbies|personal\s+details?|declaration|references?|'
+        r'achievements?|projects?)\b',
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _is_contact_or_heading(cls, text: str) -> bool:
+        """True when a value is contact/header text or a section heading rather
+        than a genuine structured record field."""
+        if not text:
+            return False
+        s = str(text).strip()
+        if not s:
+            return False
+        if cls._NON_RECORD_TEXT_RE.search(s):
+            return True
+        if '|' in s:
+            return True
+        if re.search(r'\+?\d[\d\s\-()]{7,}', s):
+            return True
+        # A long prose sentence is not a degree/institution.
+        if len(s.split()) > 8 and s.rstrip().endswith('.'):
+            return True
+        return False
+
+    # Labels that must never be accepted as a candidate name.
+    _NON_NAME_LABELS = {
+        'district', 'taluk', 'taluka', 'tehsil', 'village', 'post', 'po', 'pin',
+        'pincode', 'zip', 'street', 'road', 'lane', 'block', 'sector', 'state',
+        'country', 'city', 'town', 'area', 'locality', 'landmark', 'house', 'flat',
+        'apartment', 'building', 'floor', 'near', 'opposite', 'address', 'contact',
+        'email', 'phone', 'mobile', 'dob', 'birth', 'birthday', 'marital', 'married',
+        'single', 'father', 'mother', 'spouse', 'religion', 'caste', 'category',
+        'signature', 'declaration', 'reference', 'references', 'summary', 'objective',
+        'profile', 'experience', 'education', 'skills', 'certifications',
+        'achievements', 'projects', 'languages', 'interests', 'hobbies',
+        'curriculum', 'vitae', 'resume', 'cv', 'unknown', 'candidate', 'none', 'null',
+    }
+
+    @classmethod
+    def _is_plausible_person_name(cls, name: Any) -> bool:
+        """Generic guard: reject address/section labels and non-name fragments."""
+        if not name or not isinstance(name, str):
+            return False
+        clean = " ".join(name.strip().split())
+        if not clean:
+            return False
+        if '@' in clean or 'http' in clean.lower():
+            return False
+        if clean.replace(' ', '').replace('-', '').isdigit():
+            return False
+        alpha_tokens = [
+            re.sub(r'[^A-Za-z]', '', tok)
+            for tok in re.split(r'\s+', clean)
+        ]
+        alpha_tokens = [tok for tok in alpha_tokens if len(tok) >= 2]
+        if not alpha_tokens:
+            return False
+        if all(tok.lower() in cls._NON_NAME_LABELS for tok in alpha_tokens):
+            return False
+        return True
+
+    @classmethod
+    def _is_valid_skill(cls, skill: str) -> bool:
+        """Rejects responsibility sentences / bullet-merged blobs masquerading as skills."""
+        if not skill:
+            return False
+        s = str(skill).strip().strip('•●○■◆▪-*\u2022\uf0b7\uf0d8\uf0a7')
+        if not s or len(s) < 2:
+            return False
+        if '@' in s or 'http' in s.lower():
+            return False
+        if '•' in s:
+            return False
+        words = s.split()
+        if len(words) > 6:
+            return False
+        if s.rstrip().endswith('.'):
+            return False
+        if re.search(r'\b(?:responsible|managed|handled|developed|ensured|maintained|'
+                     r'coordinated|assisted|worked|achieved|delivered)\b', s, re.IGNORECASE):
+            return False
+        return True
+
     @classmethod
     def map_response_to_talentvault(cls, res_json: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -281,6 +371,13 @@ class ParseoraService:
                     e_year = s_year
                     s_year = ""
 
+                # Never let contact/header text or a section heading become an
+                # education record (e.g. a stray email/phone line).
+                if cls._is_contact_or_heading(deg) and cls._is_contact_or_heading(inst):
+                    continue
+                if cls._is_contact_or_heading(deg) and not str(inst).strip():
+                    continue
+
                 educations.append({
                     'degree': str(deg)[:100],
                     'institution': str(inst)[:100],
@@ -311,6 +408,9 @@ class ParseoraService:
                     all_skills_list.append(str(sk['name']).strip())
                 elif isinstance(sk, str):
                     all_skills_list.append(sk.strip())
+
+        # Never turn a responsibility sentence / bullet blob into a skill.
+        all_skills_list = [s for s in all_skills_list if cls._is_valid_skill(s)]
 
         normalized_skills = normalize_skills(all_skills_list)
 
@@ -357,7 +457,13 @@ class ParseoraService:
         email_clean = raw_email.strip()[:254]
 
         raw_name = str(cls._extract_scalar(cand.get('name')) or '').strip()
-        name_clean = raw_name[:255] if raw_name else "Unknown Candidate"
+        # Never invent a candidate name and never accept an address/section
+        # label. If Parseora has no usable name, leave it empty so the
+        # downstream validated fallbacks can run (and may legitimately end up
+        # null). Placeholder labels are treated as missing.
+        if not cls._is_plausible_person_name(raw_name):
+            raw_name = ""
+        name_clean = raw_name[:255] if raw_name else ""
 
         linkedin_clean = str(cls._extract_scalar(cand.get('linkedin')) or '').strip()[:200]
         portfolio_clean = str(cls._extract_scalar(cand.get('portfolio')) or cls._extract_scalar(cand.get('website')) or '').strip()[:200]
@@ -451,40 +557,83 @@ class ParseoraService:
             'expected_ctc': expected_ctc_val,
         }
 
-        # 7. Extract Profile Photo
+        # 7. Extract Profile Photo (genuine candidate portrait only).
+        # Raw bytes are kept OUT of the JSON payload; only a metadata reference
+        # travels with parsed_data.
         photo_bytes: Optional[bytes] = None
         photo_ext: str = 'jpg'
+        photo_info: Dict[str, Any] = {'available': False}
         photo_data = (
-            cand.get('photo') or 
-            cand.get('profile_photo') or 
-            res_json.get('photo') or 
-            res_json.get('data', {}).get('photo') or 
+            cand.get('photo') or
+            cand.get('profile_photo') or
+            res_json.get('photo') or
+            res_json.get('data', {}).get('photo') or
             res_json.get('data', {}).get('candidate', {}).get('photo') or
             {}
         )
-        if isinstance(photo_data, dict) and photo_data.get('available'):
-            b64_str = photo_data.get('base64') or ''
-            if b64_str:
-                try:
-                    import base64
-                    if ',' in b64_str:
-                        header, b64_data = b64_str.split(',', 1)
-                        if 'png' in header.lower():
-                            photo_ext = 'png'
-                        elif 'webp' in header.lower():
-                            photo_ext = 'webp'
-                        else:
-                            photo_ext = 'jpg'
-                    else:
-                        b64_data = b64_str
-                    photo_bytes = base64.b64decode(b64_data)
-                except Exception as e:
-                    logger.warning(f"[PARSEORA] Failed to decode photo base64: {e}")
-                    photo_bytes = None
 
-        personal_info['has_photo'] = bool(photo_bytes)
-        if isinstance(photo_data, dict) and photo_data.get('url'):
-            personal_info['photo_url'] = photo_data.get('url')
+        # Accept either a structured object, a base64 data string or a URL.
+        if isinstance(photo_data, str) and photo_data.strip():
+            candidate_str = photo_data.strip()
+            if candidate_str.lower().startswith(('http://', 'https://')):
+                photo_data = {'available': True, 'url': candidate_str}
+            else:
+                photo_data = {'available': True, 'base64': candidate_str}
+
+        if isinstance(photo_data, dict):
+            asset_type = str(
+                photo_data.get('type') or photo_data.get('kind') or photo_data.get('category') or ''
+            ).strip().lower()
+            rejected_asset_types = {
+                'logo', 'icon', 'avatar', 'signature', 'qr', 'qrcode', 'qr_code',
+                'graphic', 'decoration', 'decorative', 'banner', 'watermark', 'stamp',
+            }
+            declared_available = bool(photo_data.get('available', True))
+            reference_url = photo_data.get('url') or photo_data.get('storage_url')
+            reference_path = (
+                photo_data.get('storage_path') or photo_data.get('path') or photo_data.get('key')
+            )
+            is_genuine = declared_available and asset_type not in rejected_asset_types
+
+            if is_genuine:
+                b64_str = photo_data.get('base64') or photo_data.get('data') or ''
+                if isinstance(b64_str, (bytes, bytearray, memoryview)):
+                    photo_bytes = bytes(b64_str)
+                elif isinstance(b64_str, str) and b64_str:
+                    try:
+                        import base64
+                        b64_data = b64_str
+                        if ',' in b64_str:
+                            header, b64_data = b64_str.split(',', 1)
+                            header_lower = header.lower()
+                            if 'png' in header_lower:
+                                photo_ext = 'png'
+                            elif 'webp' in header_lower:
+                                photo_ext = 'webp'
+                            elif 'jpeg' in header_lower or 'jpg' in header_lower:
+                                photo_ext = 'jpg'
+                        photo_bytes = base64.b64decode(b64_data)
+                    except Exception as e:
+                        logger.warning(f"[PARSEORA] Failed to decode photo base64: {e}")
+                        photo_bytes = None
+
+            has_reference = bool(reference_url or reference_path)
+            photo_info = {
+                'available': bool(is_genuine and (photo_bytes or has_reference)),
+                'source': photo_data.get('source') or 'parseora',
+                'page': photo_data.get('page'),
+                'bounding_box': photo_data.get('bounding_box') or photo_data.get('bbox'),
+                'confidence': photo_data.get('confidence'),
+                'url': reference_url,
+                'storage_path': reference_path,
+                'asset_type': asset_type or 'portrait',
+            }
+
+        personal_info['has_photo'] = bool(photo_info.get('available'))
+        if photo_info.get('url'):
+            personal_info['photo_url'] = photo_info['url']
+        if photo_info.get('storage_path'):
+            personal_info['photo_reference'] = photo_info['storage_path']
 
         # Format achievements and languages
         achievements_raw = res_json.get('achievements') or res_json.get('awards') or []
@@ -512,7 +661,7 @@ class ParseoraService:
             'gender': gender_val,
             'photo_bytes': photo_bytes,
             'photo_ext': photo_ext,
-            'photo_info': photo_data if isinstance(photo_data, dict) else {},
+            'photo_info': photo_info,
             'metadata': {
                 'parsed_by': 'Parseora',
                 'request_id': request_id,

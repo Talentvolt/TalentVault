@@ -1,0 +1,58 @@
+{
+  "request_id": "req_pipeline_photo_001",
+  "candidate": {
+    "name": "Priya Nair",
+    "email": "priya.nair@mailhost.test",
+    "phone": "+91 90123 45678",
+    "current_company": "Northwind Analytics Pvt Ltd",
+    "current_designation": "Data Analyst",
+    "current_location": "Pune",
+    "linkedin": "https://www.linkedin.com/in/priyanair",
+    "summary": "Data analyst with 4 years of experience turning business data into actionable insights using SQL and Python.",
+    "date_of_birth": "1995-03-11",
+    "gender": "Female",
+    "photo": {
+      "available": true,
+      "type": "portrait",
+      "source": "parseora",
+      "page": 1,
+      "bounding_box": [420, 40, 560, 180],
+      "confidence": 0.97,
+      "base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAgElEQVR4nNXOQREAIAzAsFLVCEMYEhCxB9coyNrnUiZxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEidxEufvwNQDCT4CnPBnnkMAAAAASUVORK5CYII="
+    }
+  },
+  "skills": {
+    "technical_skills": ["SQL", "Python", "Power BI", "Excel"],
+    "soft_skills": ["Stakeholder Communication"]
+  },
+  "experience": [
+    {
+      "company_name": "Northwind Analytics Pvt Ltd",
+      "job_title": "Data Analyst",
+      "start_date": "2022-04-01",
+      "end_date": "",
+      "location": "Pune",
+      "responsibilities": ["Built sales dashboards", "Automated weekly reporting"]
+    },
+    {
+      "company_name": "Bluepeak Services",
+      "job_title": "Junior Analyst",
+      "start_date": "2020-06-01",
+      "end_date": "2022-03-31",
+      "location": "Mumbai",
+      "responsibilities": ["Cleaned datasets for the operations team"]
+    }
+  ],
+  "education": [
+    {
+      "degree": "B.Sc",
+      "college": "Savitribai Phule University",
+      "field_of_study": "Statistics",
+      "end_year": "2018"
+    }
+  ],
+  "projects": [],
+  "certifications": [],
+  "languages": ["English", "Hindi"],
+  "achievements": []
+}

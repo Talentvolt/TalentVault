@@ -1,0 +1,862 @@
+{
+  "candidate": {
+    "name": {
+      "value": "Sreeharsha G R",
+      "original_value": "Sreeharsha G R",
+      "translated_value": "Sreeharsha G R",
+      "normalized_value": "Sreeharsha G R",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 99,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Sreeharsha G R"
+    },
+    "email": {
+      "value": "sreeharsha369@gmail.com",
+      "original_value": "sreeharsha369@gmail.com",
+      "translated_value": "sreeharsha369@gmail.com",
+      "normalized_value": "sreeharsha369@gmail.com",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 99,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "sreeharsha369@gmail.com"
+    },
+    "phone": {
+      "value": "+91 9731111092",
+      "original_value": "+91 9731111092",
+      "translated_value": "+91 9731111092",
+      "normalized_value": "+91 9731111092",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 95,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "+91 9731111092"
+    },
+    "alternate_phone": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "address": {
+      "value": "Bangalore, Karnataka",
+      "original_value": "Bangalore, Karnataka",
+      "translated_value": "Bangalore, Karnataka",
+      "normalized_value": "Bangalore, Karnataka",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 85,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Bangalore, Karnataka"
+    },
+    "current_location": {
+      "value": "Bangalore",
+      "original_value": "Bangalore",
+      "translated_value": "Bangalore",
+      "normalized_value": "Bangalore",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Bangalore"
+    },
+    "city": {
+      "value": "Bangalore",
+      "original_value": "Bangalore",
+      "translated_value": "Bangalore",
+      "normalized_value": "Bangalore",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Bangalore"
+    },
+    "state": {
+      "value": "Karnataka",
+      "original_value": "Karnataka",
+      "translated_value": "Karnataka",
+      "normalized_value": "Karnataka",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Karnataka"
+    },
+    "country": {
+      "value": "India",
+      "original_value": "India",
+      "translated_value": "India",
+      "normalized_value": "India",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 92,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "India"
+    },
+    "pincode": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "linkedin": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "github": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "portfolio": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "website": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "date_of_birth": {
+      "value": "14 August 1983",
+      "original_value": "14 August 1983",
+      "translated_value": "14 August 1983",
+      "normalized_value": "14 August 1983",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "14 August 1983"
+    },
+    "driving_license": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "gender": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "nationality": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "notice_period": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "current_ctc": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "expected_ctc": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "preferred_location": {
+      "value": null,
+      "original_value": null,
+      "translated_value": null,
+      "normalized_value": null,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "summary": {
+      "value": "Results-driven Sales & Marketing professional with 21+ years of progressive experience across Indian and multinational\norganizations, with strong exposure to building materials, hardware, PVC electrical casing, capping and conduit pipes. Proven\ntrack record in regional sales leadership, distributor and dealer network expansion, key account management, team leadership\nand revenue growth. Strong at converting strategic plans into on-ground execution, achieving time-bound targets, strengthening\ncustomer relationships and building market presence across Karnataka.",
+      "original_value": "Results-driven Sales & Marketing professional with 21+ years of progressive experience across Indian and multinational\norganizations, with strong exposure to building materials, hardware, PVC electrical casing, capping and conduit pipes. Proven\ntrack record in regional sales leadership, distributor and dealer network expansion, key account management, team leadership\nand revenue growth. Strong at converting strategic plans into on-ground execution, achieving time-bound targets, strengthening\ncustomer relationships and building market presence across Karnataka.",
+      "translated_value": "Results-driven Sales & Marketing professional with 21+ years of progressive experience across Indian and multinational\norganizations, with strong exposure to building materials, hardware, PVC electrical casing, capping and conduit pipes. Proven\ntrack record in regional sales leadership, distributor and dealer network expansion, key account management, team leadership\nand revenue growth. Strong at converting strategic plans into on-ground execution, achieving time-bound targets, strengthening\ncustomer relationships and building market presence across Karnataka.",
+      "normalized_value": "Results-driven Sales & Marketing professional with 21+ years of progressive experience across Indian and multinational\norganizations, with strong exposure to building materials, hardware, PVC electrical casing, capping and conduit pipes. Proven\ntrack record in regional sales leadership, distributor and dealer network expansion, key account management, team leadership\nand revenue growth. Strong at converting strategic plans into on-ground execution, achieving time-bound targets, strengthening\ncustomer relationships and building market presence across Karnataka.",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Results-driven Sales & Marketing professional with 21+ years of progressive experience across Indian and multinational\norganizations, with strong exposure to building materials, hardware, PVC electrical casing, capping and conduit pipes. Proven\ntrack record in regional sales leadership, distributor and dealer network expansion, key account management, team leadership\nand revenue growth. Strong at converting strategic plans into on-ground execution, achieving time-bound targets, strengthening\ncustomer relationships and building market presence across Karnataka."
+    },
+    "objective": {
+      "value": "",
+      "original_value": "",
+      "translated_value": "",
+      "normalized_value": "",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 0,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": ""
+    },
+    "current_designation": {
+      "value": "Regional Sales Manager – Karnataka",
+      "original_value": "Regional Sales Manager – Karnataka",
+      "translated_value": "Regional Sales Manager – Karnataka",
+      "normalized_value": "Regional Sales Manager – Karnataka",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 95,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "Regional Sales Manager – Karnataka"
+    },
+    "current_company": {
+      "value": "LINK LOCKS PVT LTD",
+      "original_value": "LINK LOCKS PVT LTD",
+      "translated_value": "LINK LOCKS PVT LTD",
+      "normalized_value": "LINK LOCKS PVT LTD",
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "LINK LOCKS PVT LTD"
+    },
+    "previous_companies": {
+      "value": [
+        "MODI PIPES PVT LTD",
+        "LEON SHING DONGA ELECTRICAL PVT LTD",
+        "SRF LIMITED"
+      ],
+      "original_value": [
+        "MODI PIPES PVT LTD",
+        "LEON SHING DONGA ELECTRICAL PVT LTD",
+        "SRF LIMITED"
+      ],
+      "translated_value": [
+        "MODI PIPES PVT LTD",
+        "LEON SHING DONGA ELECTRICAL PVT LTD",
+        "SRF LIMITED"
+      ],
+      "normalized_value": [
+        "MODI PIPES PVT LTD",
+        "LEON SHING DONGA ELECTRICAL PVT LTD",
+        "SRF LIMITED"
+      ],
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "native_extractor",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "['MODI PIPES PVT LTD', 'LEON SHING DONGA ELECTRICAL PVT LTD', 'SRF LIMITED']"
+    },
+    "total_experience_years": {
+      "value": 22.2,
+      "original_value": 22.2,
+      "translated_value": 22.2,
+      "normalized_value": 22.2,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "calculator",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "22.2"
+    },
+    "total_experience_months": {
+      "value": 266,
+      "original_value": 266,
+      "translated_value": 266,
+      "normalized_value": 266,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "calculator",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "266"
+    },
+    "relevant_experience_years": {
+      "value": 22.2,
+      "original_value": 22.2,
+      "translated_value": 22.2,
+      "normalized_value": 22.2,
+      "original_language": "en",
+      "script": "latin",
+      "language": "en",
+      "confidence": 90,
+      "source": "calculator",
+      "page": 1,
+      "bounding_box": {},
+      "evidence": "22.2"
+    },
+    "photo": {
+      "available": false,
+      "confidence": 0,
+      "page": null,
+      "source": null
+    },
+    "profile_photo": {
+      "available": false,
+      "confidence": 0,
+      "page": null,
+      "source": null
+    }
+  },
+  "experience": [
+    {
+      "job_title": "Regional Sales Manager – Karnataka",
+      "normalized_job_title": "Regional Sales Manager – Karnataka",
+      "company_name": "LINK LOCKS PVT LTD",
+      "employment_type": null,
+      "start_date": "2024-07-01",
+      "end_date": "Present",
+      "is_current": true,
+      "duration": "2 yrs 3 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 27,
+      "duration_formatted": "2 yrs 3 mos",
+      "location": null,
+      "responsibilities": [
+        "Head Karnataka State operations with complete regional P&L; responsibility.",
+        "Lead and mentor ASMs and Sales Executives, driving performance and execution.",
+        "Manage distributors and direct dealers through structured channel strategies.",
+        "Drive annual sales targets with consistent performance against assigned goals.",
+        "Strengthen B2B sales, key accounts and CRM processes for smooth business operations.",
+        "Build long-term customer relationships through value selling and solution-based approaches.",
+        "Present sales performance, revenue reports, expense analysis and forecasts to senior management."
+      ]
+    },
+    {
+      "job_title": "Head – Branch Sales & Marketing, Karnataka (State Head)",
+      "normalized_job_title": "Head – Branch Sales & Marketing, Karnataka (State Head)",
+      "company_name": "MODI PIPES PVT LTD",
+      "employment_type": null,
+      "start_date": "2011-04-01",
+      "end_date": "2024-06-01",
+      "is_current": false,
+      "duration": "13 yrs 3 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 159,
+      "duration_formatted": "13 yrs 3 mos",
+      "location": null,
+      "responsibilities": [
+        "Owned end-to-end sales operations across Karnataka State.",
+        "Led a multi-level sales team comprising ASMs, Executives and Trainees.",
+        "Managed distributors, channel partners, dealers, retailers, consultants, contractors and builders.",
+        "Planned and executed dealer meets and company-led events across the state.",
+        "Delivered product presentations and technical training to dealers, engineers and internal teams."
+      ]
+    },
+    {
+      "job_title": "Senior Executive – Business Development",
+      "normalized_job_title": "Senior Executive – Business Development",
+      "company_name": "LEON SHING DONGA ELECTRICAL PVT LTD",
+      "employment_type": null,
+      "start_date": "2006-07-01",
+      "end_date": "2011-03-01",
+      "is_current": false,
+      "duration": "4 yrs 9 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 57,
+      "duration_formatted": "4 yrs 9 mos",
+      "location": null,
+      "responsibilities": [
+        "Developed business through dealers, corporate accounts and retail channels.",
+        "Engaged architects, interior professionals and electrical consultants for product approvals.",
+        "Conducted product demonstrations and technical presentations.",
+        "Organized trade events, dealer meets and promotional programs.",
+        "Contributed to consistent business growth in the building materials sector.",
+        "SHGR Page 1"
+      ]
+    },
+    {
+      "job_title": "Territory In Charge – Karnataka",
+      "normalized_job_title": "Territory In Charge – Karnataka",
+      "company_name": "SRF LIMITED",
+      "employment_type": null,
+      "start_date": "2004-08-01",
+      "end_date": "2006-06-01",
+      "is_current": false,
+      "duration": "1 yrs 11 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 23,
+      "duration_formatted": "1 yrs 11 mos",
+      "location": null,
+      "responsibilities": [
+        "Managed distributors and dealers across the Karnataka territory.",
+        "Handled small-scale and large-scale requirements for coated fabric products.",
+        "Delivered technical product presentations to improve product adoption.",
+        "Managed retail branding, shop visibility and promotional campaigns.",
+        "Handled petty cash and supported regional marketing operations."
+      ]
+    }
+  ],
+  "work_experience": [
+    {
+      "job_title": "Regional Sales Manager – Karnataka",
+      "normalized_job_title": "Regional Sales Manager – Karnataka",
+      "company_name": "LINK LOCKS PVT LTD",
+      "employment_type": null,
+      "start_date": "2024-07-01",
+      "end_date": "Present",
+      "is_current": true,
+      "duration": "2 yrs 3 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 27,
+      "duration_formatted": "2 yrs 3 mos",
+      "location": null,
+      "responsibilities": [
+        "Head Karnataka State operations with complete regional P&L; responsibility.",
+        "Lead and mentor ASMs and Sales Executives, driving performance and execution.",
+        "Manage distributors and direct dealers through structured channel strategies.",
+        "Drive annual sales targets with consistent performance against assigned goals.",
+        "Strengthen B2B sales, key accounts and CRM processes for smooth business operations.",
+        "Build long-term customer relationships through value selling and solution-based approaches.",
+        "Present sales performance, revenue reports, expense analysis and forecasts to senior management."
+      ]
+    },
+    {
+      "job_title": "Head – Branch Sales & Marketing, Karnataka (State Head)",
+      "normalized_job_title": "Head – Branch Sales & Marketing, Karnataka (State Head)",
+      "company_name": "MODI PIPES PVT LTD",
+      "employment_type": null,
+      "start_date": "2011-04-01",
+      "end_date": "2024-06-01",
+      "is_current": false,
+      "duration": "13 yrs 3 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 159,
+      "duration_formatted": "13 yrs 3 mos",
+      "location": null,
+      "responsibilities": [
+        "Owned end-to-end sales operations across Karnataka State.",
+        "Led a multi-level sales team comprising ASMs, Executives and Trainees.",
+        "Managed distributors, channel partners, dealers, retailers, consultants, contractors and builders.",
+        "Planned and executed dealer meets and company-led events across the state.",
+        "Delivered product presentations and technical training to dealers, engineers and internal teams."
+      ]
+    },
+    {
+      "job_title": "Senior Executive – Business Development",
+      "normalized_job_title": "Senior Executive – Business Development",
+      "company_name": "LEON SHING DONGA ELECTRICAL PVT LTD",
+      "employment_type": null,
+      "start_date": "2006-07-01",
+      "end_date": "2011-03-01",
+      "is_current": false,
+      "duration": "4 yrs 9 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 57,
+      "duration_formatted": "4 yrs 9 mos",
+      "location": null,
+      "responsibilities": [
+        "Developed business through dealers, corporate accounts and retail channels.",
+        "Engaged architects, interior professionals and electrical consultants for product approvals.",
+        "Conducted product demonstrations and technical presentations.",
+        "Organized trade events, dealer meets and promotional programs.",
+        "Contributed to consistent business growth in the building materials sector.",
+        "SHGR Page 1"
+      ]
+    },
+    {
+      "job_title": "Territory In Charge – Karnataka",
+      "normalized_job_title": "Territory In Charge – Karnataka",
+      "company_name": "SRF LIMITED",
+      "employment_type": null,
+      "start_date": "2004-08-01",
+      "end_date": "2006-06-01",
+      "is_current": false,
+      "duration": "1 yrs 11 mos",
+      "process": null,
+      "project": null,
+      "tools": null,
+      "client": null,
+      "company_source": "experience_block",
+      "duration_months": 23,
+      "duration_formatted": "1 yrs 11 mos",
+      "location": null,
+      "responsibilities": [
+        "Managed distributors and dealers across the Karnataka territory.",
+        "Handled small-scale and large-scale requirements for coated fabric products.",
+        "Delivered technical product presentations to improve product adoption.",
+        "Managed retail branding, shop visibility and promotional campaigns.",
+        "Handled petty cash and supported regional marketing operations."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "M.A",
+      "raw_degree": "M.A. (English) KSOU, Mysore University English 2009",
+      "college": null,
+      "university": "Mysore University",
+      "field": "English",
+      "passing_year": 2009,
+      "start_year": null,
+      "end_year": 2009,
+      "cgpa": null,
+      "percentage": null,
+      "grade": null
+    },
+    {
+      "degree": "B.A",
+      "raw_degree": "B.A. Sahyadri College, Kuvempu University Journalism, English, Linguistics 2001–2004",
+      "college": "Sahyadri College",
+      "university": null,
+      "field": null,
+      "passing_year": 2004,
+      "start_year": 2001,
+      "end_year": 2004,
+      "cgpa": null,
+      "percentage": null,
+      "grade": null
+    },
+    {
+      "degree": "P.U.C",
+      "raw_degree": "P.U.C",
+      "college": "DVS PU College",
+      "university": null,
+      "field": null,
+      "passing_year": 2000,
+      "start_year": 1999,
+      "end_year": 2000,
+      "cgpa": null,
+      "percentage": null,
+      "grade": null
+    }
+  ],
+  "skills": {
+    "technical_skills": [
+      "Account Management",
+      "Brand Management",
+      "Business Development",
+      "Customer Relationship Management",
+      "MS Office",
+      "Microsoft PowerPoint",
+      "Performance Management",
+      "Product Demonstrations",
+      "Target Oriented"
+    ],
+    "frameworks": [],
+    "libraries": [],
+    "databases": [],
+    "cloud_skills": [],
+    "tools": [],
+    "soft_skills": [],
+    "domain_skills": [
+      "Account Management",
+      "Brand Management",
+      "Business Development",
+      "Customer Relationship Management",
+      "Performance Management",
+      "Product Demonstrations",
+      "Target Oriented"
+    ],
+    "all_skills": [
+      {
+        "name": "Performance Management",
+        "category": "hr",
+        "type": "management"
+      },
+      {
+        "name": "Customer Relationship Management",
+        "category": "sales",
+        "type": "tools"
+      },
+      {
+        "name": "Account Management",
+        "category": "sales",
+        "type": "sales"
+      },
+      {
+        "name": "Product Demonstrations",
+        "category": "sales",
+        "type": "sales"
+      },
+      {
+        "name": "Business Development",
+        "category": "sales",
+        "type": "sales"
+      },
+      {
+        "name": "Target Oriented",
+        "category": "sales",
+        "type": "sales"
+      },
+      {
+        "name": "Microsoft PowerPoint",
+        "category": "design",
+        "type": "tool"
+      },
+      {
+        "name": "MS Office",
+        "category": "management",
+        "type": "tools"
+      },
+      {
+        "name": "Brand Management",
+        "category": "marketing",
+        "type": "domain"
+      },
+      {
+        "name": "Regional Sales Leadership",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "B2B & Channel Sales",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Distributor / Dealer Network Expansion",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Target Achievement & Revenue Growth",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Team Leadership & Performance Management",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Key Account Management",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Market Penetration & Business Development",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Product Demonstrations & Technical Presentations",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "CRM, Forecasting & Sales Reporting",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Brand Building & Promotional Activities",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "MS Office (Word, Excel, PowerPoint)",
+        "category": "general",
+        "type": "other"
+      },
+      {
+        "name": "Sales Reporting & MIS",
+        "category": "general",
+        "type": "other"
+      }
+    ]
+  },
+  "projects": [],
+  "certifications": [],
+  "achievements": [
+    "Academic project: Government project titled “Research Centre for Media” at Shimoga district during final year.",
+    "Participated in State Level Basketball Competition and inter-college / university meets."
+  ],
+  "awards": [
+    "Academic project: Government project titled “Research Centre for Media” at Shimoga district during final year.",
+    "Participated in State Level Basketball Competition and inter-college / university meets."
+  ],
+  "languages": [
+    "English",
+    "Hindi",
+    "Kannada",
+    "Tamil",
+    "Telugu"
+  ],
+  "photo": {
+    "available": false,
+    "confidence": 0,
+    "page": null,
+    "source": null
+  },
+  "request_id": "sreeharsha_fixture"
+}

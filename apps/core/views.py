@@ -1,6 +1,7 @@
 import os
 import random
 import json
+import re
 import logging
 from decimal import Decimal
 from datetime import datetime
@@ -601,7 +602,123 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
 
         # 8. Recent Job Applications
         context['recent_applications'] = apps_qs.select_related('candidate__user', 'job').order_by('-created_at')[:10]
-        
+
+        # 8b. Recruiter Candidate Upload Activity (last 7 days, grouped by recruiter & date)
+        from django.db.models.functions import Coalesce, TruncDate
+        from utils.date_helpers import KOLKATA_TZ
+
+        activity_today = django_timezone.localtime(django_timezone.now(), KOLKATA_TZ).date()
+        activity_start = activity_today - django_timezone.timedelta(days=6)
+        activity_start_dt = django_timezone.make_aware(
+            datetime.combine(activity_start, datetime.min.time()), KOLKATA_TZ
+        )
+        activity_end_dt = django_timezone.make_aware(
+            datetime.combine(activity_today + django_timezone.timedelta(days=1), datetime.min.time()), KOLKATA_TZ
+        )
+
+        upload_rows = list(
+            candidates_qs.filter(created_at__gte=activity_start_dt, created_at__lt=activity_end_dt)
+            .annotate(
+                activity_date=TruncDate('created_at', tzinfo=KOLKATA_TZ),
+                owner_id=Coalesce('uploaded_by_id', 'created_by_id'),
+            )
+            .values('owner_id', 'activity_date')
+            .annotate(cnt=Count('id'))
+            .order_by()
+        )
+
+        owner_ids = {row['owner_id'] for row in upload_rows if row['owner_id'] is not None}
+        owner_map = {}
+        if owner_ids:
+            owner_map = {
+                u.id: u
+                for u in User.objects.filter(id__in=owner_ids).only('id', 'first_name', 'last_name', 'email')
+            }
+
+        def _recruiter_display_name(user_obj):
+            full = (user_obj.get_full_name() or '').strip()
+            if full:
+                return full
+            email = (user_obj.email or '').strip()
+            if email:
+                local = email.split('@')[0]
+                clean = re.sub(r'[._\d+]+', ' ', local).strip().title()
+                if clean and len(clean) >= 3:
+                    return clean
+                return email
+            return 'Unassigned'
+
+        def _initials(name):
+            parts = name.strip().split()
+            if not parts:
+                return '?'
+            if len(parts) == 1:
+                return parts[0][:2].upper()
+            return (parts[0][0] + parts[-1][0]).upper()
+
+        activity_dates = [activity_today - django_timezone.timedelta(days=i) for i in range(6, -1, -1)]
+        activity_dates_desc = list(reversed(activity_dates))
+
+        owner_totals = {}
+        for row in upload_rows:
+            oid = row['owner_id']
+            key = oid if oid is not None else 'unassigned'
+            entry = owner_totals.setdefault(key, {
+                'user': owner_map.get(oid) if oid is not None else None,
+                'counts': {},
+            })
+            entry['counts'][row['activity_date']] = entry['counts'].get(row['activity_date'], 0) + row['cnt']
+
+        recruiter_upload_rows = []
+        for key, entry in owner_totals.items():
+            if entry['user'] is not None:
+                name = _recruiter_display_name(entry['user'])
+                is_unassigned = False
+            else:
+                name = 'Unassigned'
+                is_unassigned = True
+            counts = {d: entry['counts'].get(d, 0) for d in activity_dates}
+            recruiter_upload_rows.append({
+                'name': name,
+                'initials': _initials(name),
+                'is_unassigned': is_unassigned,
+                'counts': counts,
+                'total': sum(counts.values()),
+            })
+        recruiter_upload_rows.sort(key=lambda r: (-r['total'], r['name'].lower()))
+        for r in recruiter_upload_rows:
+            r['cells'] = [r['counts'].get(d, 0) for d in activity_dates_desc]
+
+        recruiter_upload_activity_by_date = []
+        for d in activity_dates_desc:
+            entries = []
+            for r in recruiter_upload_rows:
+                c = r['counts'].get(d, 0)
+                if c > 0:
+                    entries.append({
+                        'name': r['name'],
+                        'initials': r['initials'],
+                        'is_unassigned': r['is_unassigned'],
+                        'count': c,
+                    })
+            if entries:
+                max_in_date = max(e['count'] for e in entries)
+                for e in entries:
+                    e['bar_pct'] = round((e['count'] / max_in_date) * 100) if max_in_date else 0
+                recruiter_upload_activity_by_date.append({
+                    'date': d,
+                    'label': d.strftime('%d %b %Y'),
+                    'entries': entries,
+                })
+
+        context['recruiter_upload_dates'] = [
+            {'date': d, 'label': d.strftime('%d %b'), 'full_label': d.strftime('%d %b %Y')}
+            for d in activity_dates_desc
+        ]
+        context['recruiter_upload_rows'] = recruiter_upload_rows
+        context['recruiter_upload_activity_by_date'] = recruiter_upload_activity_by_date
+        context['recruiter_upload_has_data'] = bool(recruiter_upload_rows)
+
         # 9. Super Admin specific data
         if is_super_admin:
             context['pending_recruiters_count'] = User.objects.filter(role__in=[User.Role.RECRUITER, User.Role.COMPANY_ADMIN], recruiter_status='PENDING').count()

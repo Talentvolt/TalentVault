@@ -35,6 +35,63 @@ _PADDLE_AVAILABLE_CACHE = None
 _PADDLE_LOCK = threading.Lock()
 _OCR_CACHE = {}
 
+_BYTE_LIKE_TYPES = (bytes, bytearray, memoryview)
+
+
+def make_json_safe(value, _key: str = ""):
+    """
+    Recursively convert an arbitrary payload into a JSON-serializable structure.
+
+    Byte-like objects (raw photo / image / file / PDF bytes) are NEVER serialized
+    directly. They are replaced by a lightweight reference describing the asset
+    (availability, byte length, origin) so binary data can never break
+    ``json.dumps`` while still preserving the fact that the asset exists.
+
+    This is intentionally generic: it does not special-case any filename,
+    candidate or field name.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+
+    if isinstance(value, _BYTE_LIKE_TYPES):
+        return {
+            "available": True,
+            "type": "binary",
+            "serialized": False,
+            "byte_length": len(bytes(value)),
+            "source": _key or "unknown",
+        }
+
+    if isinstance(value, Decimal):
+        return float(value)
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, dict):
+        safe = {}
+        for k, v in value.items():
+            child_key = f"{_key}.{k}" if _key else str(k)
+            key = k if isinstance(k, str) else str(k)
+            safe[key] = make_json_safe(v, child_key)
+        return safe
+
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [make_json_safe(v, f"{_key}[{i}]") for i, v in enumerate(value)]
+
+    # Django FieldFile / uploaded file objects expose a ``name`` (storage path).
+    storage_path = getattr(value, "name", None)
+    if storage_path is not None:
+        return {
+            "available": bool(storage_path),
+            "type": "file",
+            "serialized": False,
+            "storage_path": str(storage_path),
+            "source": _key or "unknown",
+        }
+
+    return str(value)
+
 def get_paddle_ocr_instance(timeout_seconds=8):
     global GLOBAL_PADDLE_OCR, _PADDLE_AVAILABLE_CACHE
     if _PADDLE_AVAILABLE_CACHE is False:
@@ -455,7 +512,8 @@ class ResumeIntelligenceService:
         if norm in common_headings:
             return False
             
-        # Reject standalone blacklisted words
+        # Reject standalone blacklisted words (roles, companies, address parts,
+        # section headings, personal-detail labels). These must never be a name.
         words = name_clean.lower().split()
         blacklisted_words = {
             'manager', 'developer', 'executive', 'engineer', 'lead', 'associate', 'specialist', 'director', 
@@ -466,11 +524,24 @@ class ResumeIntelligenceService:
             'solutions', 'industries', 'group', 'corp', 'hospital', 'university', 'college', 'institute',
             'school', 'bank', 'unknown', 'hometown', 'residence', 'nationality', 'gender', 'about', 'hr',
             'recruiter', 'team', 'page', 'phone', 'email', 'address', 'contact', 'mobile', 'cv', 'resume',
-            'biodata', 'curriculum', 'vitae'
+            'biodata', 'curriculum', 'vitae',
+            # Address / location / personal-detail labels
+            'district', 'taluk', 'taluka', 'tehsil', 'village', 'post', 'po', 'pin', 'pincode', 'zip',
+            'street', 'road', 'lane', 'block', 'sector', 'state', 'country', 'city', 'town', 'area',
+            'locality', 'landmark', 'house', 'flat', 'apartment', 'building', 'floor', 'near', 'opposite',
+            'dob', 'birth', 'birthday', 'marital', 'married', 'single', 'father', 'mother', 'spouse',
+            'religion', 'caste', 'category', 'signature', 'declaration', 'reference', 'references',
         }
         if any(w in blacklisted_words for w in words):
             return False
-            
+
+        # A genuine name must contain at least one purely-alphabetic token of
+        # length >= 2. This rejects fragments such as "District -" where the
+        # only real token is an address label.
+        alpha_tokens = [w for w in words if w.isalpha() and len(w) >= 2]
+        if not alpha_tokens:
+            return False
+        
         # Must not be a single long run-on word without spaces (e.g. CURRICULUMVITAE)
         if ' ' not in name_clean and len(name_clean) > 12:
             return False
@@ -2528,34 +2599,62 @@ class ResumeIntelligenceService:
         AI Assist processor that cleans common OCR typos, deduplicates skills,
         normalizes entities, suggests missing items, and rewrites experiences
         using professional ATS STAR format.
-        """
-        improved = json.loads(json.dumps(data)) # Deep copy
 
-        # 1. Clean Name/Contact
-        info = improved["personal_info"]
-        info["name"] = info["name"].strip().title()
-        
+        The payload is sanitized before serialization so byte-like objects
+        (raw photo/image/file bytes) can never raise
+        ``Object of type bytes is not JSON serializable``. Source fields are
+        preserved: this processor only refines values, it never deletes
+        structured data produced by the primary parser (Parseora).
+        """
+        if not isinstance(data, dict):
+            return data
+
+        # Deep copy through a byte-safe serialization boundary. Raw bytes are
+        # replaced by metadata references, never embedded in JSON.
+        improved = json.loads(json.dumps(make_json_safe(data)))
+
+        # 1. Clean Name/Contact (never overwrite a real name with an empty one)
+        info = improved.get("personal_info")
+        if not isinstance(info, dict):
+            info = {}
+            improved["personal_info"] = info
+        raw_name = info.get("name")
+        if raw_name is None:
+            raw_name = ""
+        if not isinstance(raw_name, str):
+            raw_name = str(raw_name)
+        info["name"] = raw_name.strip().title()
+
         # 2. Normalize company names
         for exp in improved.get("experience", []):
+            if not isinstance(exp, dict):
+                continue
             comp = exp.get("company", "")
-            exp["company"] = comp.title()
-            
+            exp["company"] = comp.title() if isinstance(comp, str) else str(comp or "")
+
             # Preserve the exact description formatting produced by parse_resume_nlp.
             # Do NOT strip bullets and re-prefix them — that destroys paragraph formatting.
             desc = exp.get("description", "")
+            if not isinstance(desc, str):
+                desc = str(desc or "")
             # Do not filter out blank lines to preserve original spacing
             cleaned_desc_lines = [l for l in desc.split('\n')]
             exp["description"] = "\n".join(cleaned_desc_lines)
 
-        # Update current designation and company in info dictionary if experiences exist
+        # Update current designation and company in info dictionary if experiences
+        # exist. Never overwrite an existing source value with an empty one.
         if improved.get("experience"):
             first_exp = improved["experience"][0]
-            info["current_company"] = first_exp.get("company", "")
-            info["current_designation"] = first_exp.get("designation", "")
+            if first_exp.get("company"):
+                info["current_company"] = first_exp.get("company")
+            if first_exp.get("designation"):
+                info["current_designation"] = first_exp.get("designation")
 
         # Improve current designation using summary context if available
         current_desig = info.get('current_designation') or ''
         summary_clean = data.get("summary", "")
+        if not isinstance(summary_clean, str):
+            summary_clean = str(summary_clean or "")
         if summary_clean and current_desig:
             summary_clean = " ".join(summary_clean.split())
             # Look for patterns like "experience as a Marketing Executive and in Floor Management"
@@ -2573,7 +2672,10 @@ class ResumeIntelligenceService:
 
         # 3. Normalize degrees
         for edu in improved.get("education", []):
-            deg = edu.get("degree", "").lower()
+            if not isinstance(edu, dict):
+                continue
+            raw_deg = edu.get("degree", "")
+            deg = raw_deg.lower() if isinstance(raw_deg, str) else str(raw_deg or "").lower()
             if "btech" in deg or "b.tech" in deg or "b.e." in deg or "bachelor of technology" in deg:
                 edu["degree"] = "B.Tech"
             elif "mtech" in deg or "m.tech" in deg or "master" in deg:
@@ -2586,32 +2688,35 @@ class ResumeIntelligenceService:
                 edu["degree"] = "Intermediate"
             elif "high school" in deg or "10th" in deg or "ssc" in deg or "school" in deg:
                 edu["degree"] = "High School"
-            inst = edu.get("institution", "").strip()
+            raw_inst = edu.get("institution", "")
+            inst = raw_inst.strip() if isinstance(raw_inst, str) else str(raw_inst or "").strip()
             if "icai" in inst.lower():
                 edu["institution"] = "ICAI"
             else:
                 edu["institution"] = inst.title()
 
-        # 4. Generate professional Summary if not present or improve it
-        current_desig = info.get('current_designation') or 'Professional'
-        if current_desig.lower() == 'professional':
-            current_desig = 'Professional'
-            
+        # 4. Improve the existing summary only. NEVER fabricate a summary when
+        # the source did not contain one (source data > generated data).
         orig_summary = data.get("summary", "")
+        if not isinstance(orig_summary, str):
+            orig_summary = str(orig_summary or "")
         cand_name = info.get("name", "")
-        
-        if orig_summary:
+
+        if orig_summary.strip():
             clean_summary = orig_summary
             if cand_name:
                 clean_summary = re.sub(rf'\b{re.escape(cand_name)}\b', '', clean_summary, flags=re.I).strip()
                 clean_summary = re.sub(r'^\s*[-–—,.:;]\s*', '', clean_summary)
             improved["summary"] = clean_summary
         else:
-            skills_str = ", ".join(improved.get("skills", [])[:5])
-            improved["summary"] = f"Results-driven {current_desig} with {info.get('total_experience', 2)} years of experience. Highly skilled in {skills_str}, with a proven track record of delivering high-quality results."
+            # Preserve an explicitly empty summary instead of inventing one.
+            improved["summary"] = ""
 
         # 5. Deduplicate skills (Do not suggest fake/missing skills)
-        skills_set = {s.strip().title() for s in improved.get("skills", [])}
+        skills_set = set()
+        for s in improved.get("skills", []) or []:
+            if isinstance(s, str) and s.strip():
+                skills_set.add(s.strip().title())
         improved["skills"] = sorted(list(skills_set))
 
         # 6. Certifications (Do not suggest fake/missing certifications)
