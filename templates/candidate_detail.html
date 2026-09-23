@@ -1072,6 +1072,57 @@ body.candidate-saas-body {
                         </div>
                     </div>
                 </div>
+
+                <!-- RESUME SECTION (main content area) -->
+                <div class="saas-card">
+                    <div class="saas-card-header flex-wrap gap-2">
+                        <h5 class="saas-card-title"><i class="bi bi-file-earmark-text text-primary"></i> Resume</h5>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if resume_exists %}
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#resumePreviewModal">
+                                <i class="bi bi-eye me-1"></i> Preview
+                            </button>
+                            <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-download me-1"></i> Download
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if resume_exists %}
+                    <div class="mb-3 d-flex flex-wrap align-items-center gap-2 text-muted" style="font-size: 0.8rem;">
+                        <span class="badge bg-light text-secondary border px-2.5 py-1">
+                            <i class="bi bi-file-earmark-text me-1"></i>{{ resume_filename|default:"Candidate_Resume.pdf" }}
+                        </span>
+                        <span class="badge bg-light text-secondary border px-2.5 py-1 text-uppercase">{{ resume_extension|default:"File" }}</span>
+                    </div>
+
+                    <div class="border rounded overflow-hidden bg-light">
+                        {% if resume_extension == 'pdf' or resume_extension == 'docx' or resume_extension == 'doc' %}
+                        <iframe src="{% url 'frontend:candidate_resume_preview' candidate.id %}" style="border: none; width: 100%; height: 700px; max-height: 80vh; display: block;" title="Resume Preview"></iframe>
+                        {% elif resume_extension == 'jpg' or resume_extension == 'jpeg' or resume_extension == 'png' %}
+                        <div class="p-3 text-center">
+                            <img src="{% url 'frontend:candidate_resume_preview' candidate.id %}" class="img-fluid border rounded" alt="Resume Preview" style="max-width: 100%; height: auto;">
+                        </div>
+                        {% else %}
+                        <div class="p-5 text-center">
+                            <div class="fs-1 text-warning mb-3"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                            <h5 class="fw-bold">Preview not available for this file type ({{ resume_extension|upper }})</h5>
+                            <p class="text-muted">You can download the file directly to view its contents.</p>
+                            <a href="{% url 'frontend:candidate_resume_download' candidate.id %}" class="btn btn-success">
+                                <i class="bi bi-download me-2"></i>Download {{ resume_filename }}
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5 bg-light rounded-3 border">
+                        <i class="bi bi-file-earmark-x fs-1 mb-2 d-block text-secondary opacity-50"></i>
+                        <h6 class="fw-bold">No Resume File Available</h6>
+                        <p class="small text-muted mb-0">The resume file has not been uploaded or is currently unavailable.</p>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
 
             <!-- RIGHT COLUMN -->
