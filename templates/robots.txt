@@ -27,7 +27,7 @@ Disallow: /accounts/
 Disallow: /api/
 Disallow: /location-search/
 
-# Public candidate share pages are not intended for indexing
-Disallow: /share/candidate/
+# Candidate share pages and resume preview/download (crawl allowed so noindex directive is observed)
+Allow: /share/candidate/
 
 Sitemap: https://talent-vault.in/sitemap.xml

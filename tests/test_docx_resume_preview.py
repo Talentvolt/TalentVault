@@ -99,10 +99,19 @@ def test_public_profile_embeds_docx_iframe_not_unavailable_message():
     response = Client().get(reverse('frontend:public_candidate_profile', kwargs={'pk': profile.pk}))
 
     assert response.status_code == 200
+    assert response.headers.get('X-Robots-Tag') == 'noindex, nofollow'
     body = response.content.decode('utf-8')
     # The DOCX branch now embeds the server-rendered preview.
     assert f'/share/candidate/{profile.pk}/resume-preview/' in body
     assert 'Preview not available for this file type (DOCX)' not in body
+    assert '<meta name="robots" content="noindex, nofollow">' in body
+
+    # Also test the resume-preview endpoint itself
+    preview_res = Client().get(reverse('frontend:share_resume_preview', kwargs={'pk': profile.pk}))
+    assert preview_res.status_code == 200
+    assert preview_res.headers.get('X-Robots-Tag') == 'noindex, nofollow'
+    preview_body = preview_res.content.decode('utf-8')
+    assert '<meta name="robots" content="noindex, nofollow">' in preview_body
 
 
 @pytest.mark.django_db

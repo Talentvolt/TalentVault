@@ -44,6 +44,7 @@ def get_premium_html_wrapper(content_body, title="Resume Preview"):
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="robots" content="noindex, nofollow">
     <title>{escape(title)}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -104,6 +105,7 @@ def get_error_html_wrapper(error_message):
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="robots" content="noindex, nofollow">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {{
