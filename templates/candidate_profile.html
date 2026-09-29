@@ -51,9 +51,22 @@
                     <circle class="text-slate-100 dark:text-slate-800" stroke-width="4" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56"/>
                     <circle class="text-primary" stroke-width="4" stroke-dasharray="289.02" stroke-dashoffset="72.25" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56"/>
                 </svg>
-                <div class="absolute w-20 h-20 rounded-full border border-slate-100 dark:border-slate-800 overflow-hidden shadow-md">
-                    <img src="https://ui-avatars.com/api/?name=Rajeev&background=6d4aff&color=fff&bold=true" id="profile-avatar-img" class="w-full h-full object-cover">
+                <div class="absolute w-20 h-20 rounded-full border border-slate-100 dark:border-slate-800 overflow-hidden shadow-md bg-white dark:bg-slate-800">
+                    {% if request.user.candidate_profile.has_profile_photo and request.user.candidate_profile.profile_photo %}
+                        <img src="{{ request.user.candidate_profile.profile_photo_url }}" id="profile-avatar-img" class="w-full h-full object-cover" alt="Profile photo">
+                    {% else %}
+                        <div id="profile-avatar-initials" class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white font-black text-2xl">{{ request.user.candidate_profile.full_name|default:request.user.get_full_name|slice:":2"|upper|default:"CV" }}</div>
+                    {% endif %}
+                    <button type="button" onclick="document.getElementById('hidden-photo-upload').click()" class="absolute bottom-0 right-0 w-6 h-6 bg-white/90 dark:bg-slate-700/90 border border-slate-200 dark:border-slate-600 rounded-full flex items-center justify-center shadow-md hover:bg-white dark:hover:bg-slate-600 transition-all" title="Upload photo">
+                        <i class="bi bi-camera-fill text-primary text-[11px]"></i>
+                    </button>
+                    {% if request.user.candidate_profile.has_profile_photo %}
+                    <button type="button" onclick="removeProfilePhoto()" class="absolute top-0 right-0 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-md hover:bg-rose-600 transition-all" title="Remove photo">
+                        <i class="bi bi-x-lg text-[10px]"></i>
+                    </button>
+                    {% endif %}
                 </div>
+                <input type="file" id="hidden-photo-upload" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadProfilePhoto(this)">
                 <span class="absolute bottom-1 right-3 w-6 h-6 bg-brandGreen text-white rounded-full flex items-center justify-center border border-white dark:border-slate-900 shadow-md text-xs" title="Verified Profile">
                     <i class="bi bi-patch-check-fill text-[10px]"></i>
                 </span>
@@ -154,47 +167,50 @@
                 </h3>
 
                 <!-- Upload details -->
-                <div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center bg-slate-50/[0.3] dark:bg-slate-950/20 w-full" id="resume-container">
+                <div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-left bg-slate-50/[0.3] dark:bg-slate-950/20 w-full" id="resume-container">
                     {% if request.user.candidate_profile.has_resume %}
-                        <div class="flex items-center gap-4 text-left">
-                            <i class="bi bi-file-earmark-pdf text-4xl text-primary"></i>
-                            <div class="flex-1 min-w-0">
-                                <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{{ request.user.candidate_profile.original_filename|default:"resume.pdf" }}</h4>
-                                <div class="text-[10px] text-slate-400 font-semibold mt-0.5 space-x-2">
-                                    <span>{{ request.user.candidate_profile.resume_size_display }}</span>
-                                    <span>•</span>
-                                    <span>{{ request.user.candidate_profile.updated_at|date:"M d, Y" }}</span>
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div class="flex items-center gap-4 min-w-0 flex-1">
+                                <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                                    <i class="bi bi-file-earmark-pdf text-2xl"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{{ request.user.candidate_profile.original_filename|default:"resume.pdf" }}</h4>
+                                    <div class="text-[11px] text-slate-400 font-semibold mt-1 flex items-center gap-1.5 flex-wrap">
+                                        <span>{{ request.user.candidate_profile.resume_size_display }}</span>
+                                        <span class="text-slate-300 dark:text-slate-600">•</span>
+                                        <span>{{ request.user.candidate_profile.updated_at|date:"M d, Y" }}</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 w-full">
-                            <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
-                                <i class="bi bi-eye"></i> Preview
-                            </a>
-                            <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="h-10 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
-                                <i class="bi bi-download"></i> Download
-                            </a>
-                            <button type="button" onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-10 px-3 bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
-                                <i class="bi bi-arrow-repeat"></i> Replace
-                            </button>
-                            <button type="button" onclick="deleteResume('{{ request.user.candidate_profile.id }}')" class="h-10 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 w-full text-center">
-                                <i class="bi bi-trash"></i> Delete
-                            </button>
-                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,application/pdf" onchange="uploadResumeFile(this)">
+
+                            <div class="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
+                                <a href="{% url 'frontend:candidate_resume_preview' pk=request.user.candidate_profile.pk %}" target="_blank" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+                                    <i class="bi bi-eye"></i> Preview
+                                </a>
+                                <a href="{% url 'frontend:candidate_resume_download' pk=request.user.candidate_profile.pk %}" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                                <button type="button" onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-9 px-3 bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+                                    <i class="bi bi-arrow-repeat"></i> Replace
+                                </button>
+                                <button type="button" onclick="deleteResume('{{ request.user.candidate_profile.id }}')" class="h-9 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </div>
                         </div>
                     {% else %}
-                        <i class="bi bi-file-earmark-pdf text-4xl text-slate-300 block mb-2"></i>
-                        <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{% if request.user.candidate_profile.resume %}Resume not available{% else %}No Resume Uploaded{% endif %}</h4>
-                        <div class="mt-4 w-full">
+                        <div class="flex flex-col items-center text-center">
+                            <i class="bi bi-file-earmark-pdf text-4xl text-slate-300 block mb-2"></i>
+                            <h4 class="font-extrabold text-xs text-slate-700 dark:text-slate-350 truncate">{% if request.user.candidate_profile.resume %}Resume not available{% else %}No Resume Uploaded{% endif %}</h4>
                             {% if edit_mode %}
-                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="h-11 w-full bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-primary/20">
+                            <button onclick="document.getElementById('hidden-resume-upload-profile').click()" class="mt-4 h-11 w-full max-w-xs bg-primary hover:bg-accent text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-primary/20">
                                 <i class="bi bi-upload"></i> Upload Resume
                             </button>
-                            <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,application/pdf" onchange="uploadResumeFile(this)">
                             {% endif %}
                         </div>
                     {% endif %}
+                    <input type="file" id="hidden-resume-upload-profile" class="hidden" accept=".pdf,application/pdf" onchange="uploadResumeFile(this)">
                 </div>
             </div>
 
@@ -711,7 +727,7 @@
         .then(async response => {
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.detail || errData.title?.[0] || 'Failed to save project');
+                throw new Error(errData.detail || errData.title?.[0] || errData.link?.[0] || errData.description?.[0] || 'Failed to save project');
             }
             return response.json();
         })
@@ -878,7 +894,7 @@
             body: JSON.stringify({
                 skill_name: skillName,
                 years_of_experience: 1,
-                proficiency: 'Intermediate'
+                proficiency: 'INTERMEDIATE'
             })
         })
         .then(response => {
@@ -1001,6 +1017,84 @@
         })
         .catch(err => {
             showToast("Error uploading resume: " + err.message);
+        });
+    }
+
+    function uploadProfilePhoto(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+            showToast("Please choose a JPG, PNG or WEBP image.");
+            input.value = '';
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            showToast("Image must be smaller than 5 MB.");
+            input.value = '';
+            return;
+        }
+
+        showToast("Uploading photo... Please wait.");
+
+        const formData = new FormData();
+        formData.append('profile_photo', file);
+
+        fetch("{% url 'frontend:candidate_profile_photo_upload_ajax' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Upload failed.');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            const img = document.getElementById('profile-avatar-img');
+            if (img) {
+                img.src = data.photo_url + '?t=' + Date.now();
+            }
+            const initials = document.getElementById('profile-avatar-initials');
+            if (initials) initials.remove();
+            showToast("Profile photo updated successfully!");
+            setTimeout(() => { window.location.reload(); }, 800);
+        })
+        .catch(err => {
+            showToast("Error uploading photo: " + err.message);
+        })
+        .finally(() => {
+            input.value = '';
+        });
+    }
+
+    function removeProfilePhoto() {
+        showToast("Removing photo...");
+        fetch("{% url 'frontend:candidate_profile_photo_delete_ajax' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to remove photo.');
+                });
+            }
+            return response.json();
+        })
+        .then(() => {
+            showToast("Profile photo removed.");
+            setTimeout(() => { window.location.reload(); }, 800);
+        })
+        .catch(err => {
+            showToast("Error removing photo: " + err.message);
         });
     }
 </script>

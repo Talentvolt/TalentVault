@@ -6753,6 +6753,90 @@ class CandidateResumeDeleteView(CandidateRequiredMixin, View):
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
+class CandidateProfilePhotoUploadView(CandidateRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        if 'profile_photo' not in request.FILES:
+            return JsonResponse({'success': False, 'message': 'No photo uploaded.'}, status=400)
+
+        photo_file = request.FILES['profile_photo']
+
+        try:
+            profile = request.user.candidate_profile
+        except CandidateProfile.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Candidate profile not found.'}, status=400)
+
+        import os
+        import uuid
+        import io
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+
+        ALLOWED_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+        ext = os.path.splitext(photo_file.name or '')[1].lower()
+        if ext not in ALLOWED_EXTS:
+            return JsonResponse({'success': False, 'message': 'Only JPG, PNG or WEBP images are allowed.'}, status=400)
+
+        content_type = (photo_file.content_type or '').lower()
+        if content_type and not content_type.startswith('image/'):
+            return JsonResponse({'success': False, 'message': 'Uploaded file is not a valid image.'}, status=400)
+
+        if photo_file.size > 5 * 1024 * 1024:
+            return JsonResponse({'success': False, 'message': 'Image must be smaller than 5 MB.'}, status=400)
+
+        try:
+            photo_file.seek(0)
+            file_bytes = photo_file.read()
+        except Exception:
+            return JsonResponse({'success': False, 'message': 'Could not read uploaded photo.'}, status=400)
+
+        if not file_bytes:
+            return JsonResponse({'success': False, 'message': 'Uploaded photo is empty.'}, status=400)
+
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(file_bytes))
+            img.verify()
+        except Exception:
+            return JsonResponse({'success': False, 'message': 'Uploaded file is not a valid image.'}, status=400)
+
+        old_photo = profile.profile_photo.name if (profile.profile_photo and profile.profile_photo.name) else None
+        filename = f"{uuid.uuid4().hex}{ext}"
+
+        try:
+            profile.profile_photo.save(filename, ContentFile(file_bytes), save=True)
+        except Exception as e:
+            logger.error(f"Error saving candidate profile photo: {e}")
+            return JsonResponse({'success': False, 'message': 'Failed to save photo. Please try again.'}, status=400)
+
+        if old_photo and old_photo != profile.profile_photo.name:
+            try:
+                default_storage.delete(old_photo)
+            except Exception:
+                pass
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Profile photo updated successfully!',
+            'photo_url': profile.profile_photo_url,
+        })
+
+
+class CandidateProfilePhotoDeleteView(CandidateRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        try:
+            profile = request.user.candidate_profile
+            if profile.profile_photo:
+                try:
+                    profile.profile_photo.delete(save=False)
+                except Exception:
+                    pass
+                profile.profile_photo = None
+                profile.save(update_fields=['profile_photo'])
+            return JsonResponse({'success': True, 'message': 'Profile photo removed.'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
 class CandidateOnboardingUpdateView(CandidateRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         try:

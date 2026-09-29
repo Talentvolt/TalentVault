@@ -149,6 +149,28 @@ class CandidateProfile(BaseAppModel):
             return False
 
     @property
+    def profile_photo_url(self):
+        """
+        Publicly-loadable URL for the candidate's profile photo.
+        Uses a temporary S3 presigned URL when objects are private, and the
+        direct media URL for local filesystem storage.
+        """
+        if not self.has_profile_photo:
+            return ""
+        from django.conf import settings
+        from utils.s3 import get_presigned_url
+
+        is_local = getattr(settings, 'USE_LOCAL_STORAGE', '0') == '1' or hasattr(self.profile_photo.storage, 'path')
+        if is_local:
+            try:
+                return self.profile_photo.url
+            except Exception:
+                return ""
+
+        url = get_presigned_url(self.profile_photo, expires_in=3600, as_attachment=False)
+        return url or ""
+
+    @property
     def contact_email(self):
         """Candidate contact email. Internal login placeholders are hidden."""
         email = self.user.email if self.user else ""

@@ -18,6 +18,12 @@ class EducationSerializer(serializers.ModelSerializer):
         fields = ('id', 'institution', 'degree', 'field_of_study', 'start_date', 'end_date', 'percentage_or_cgpa')
 
 class ProjectSerializer(serializers.ModelSerializer):
+    link = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_link(self, value):
+        from utils.url_helpers import normalize_external_url
+        return normalize_external_url(value)
+
     class Meta:
         model = Project
         fields = ('id', 'title', 'description', 'link')
@@ -48,10 +54,11 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CandidateProfile
         fields = (
-            'id', 'user', 'summary', 'resume', 'location', 'total_experience',
-            'current_salary', 'expected_salary', 'notice_period', 'is_immediate_joiner',
-            'linkedin_url', 'portfolio_url', 'skills', 'experiences', 'educations', 
-            'projects', 'certifications', 'profile_photo', 'created_at'
+            'id', 'user', 'summary', 'resume', 'location', 'current_designation',
+            'total_experience', 'current_salary', 'expected_salary', 'notice_period',
+            'is_immediate_joiner', 'linkedin_url', 'portfolio_url', 'skills',
+            'experiences', 'educations', 'projects', 'certifications', 'profile_photo',
+            'created_at'
         )
         read_only_fields = ('id', 'created_at')
 
