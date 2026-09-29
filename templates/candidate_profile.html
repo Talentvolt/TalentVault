@@ -52,10 +52,10 @@
                     <circle class="text-primary" stroke-width="4" stroke-dasharray="289.02" stroke-dashoffset="72.25" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56"/>
                 </svg>
                 <div class="absolute w-20 h-20 rounded-full border border-slate-100 dark:border-slate-800 overflow-hidden shadow-md bg-white dark:bg-slate-800">
-                    {% if request.user.candidate_profile.has_profile_photo and request.user.candidate_profile.profile_photo %}
+                    {% if request.user.is_authenticated and request.user.candidate_profile.has_profile_photo and request.user.candidate_profile.profile_photo %}
                         <img src="{{ request.user.candidate_profile.profile_photo_url }}" id="profile-avatar-img" class="w-full h-full object-cover" alt="Profile photo">
                     {% else %}
-                        <div id="profile-avatar-initials" class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white font-black text-2xl">{{ request.user.candidate_profile.full_name|default:request.user.get_full_name|slice:":2"|upper|default:"CV" }}</div>
+                        <div id="profile-avatar-initials" class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white font-black text-2xl">{{ request.user|user_initials }}</div>
                     {% endif %}
                     <button type="button" onclick="document.getElementById('hidden-photo-upload').click()" class="absolute bottom-0 right-0 w-6 h-6 bg-white/90 dark:bg-slate-700/90 border border-slate-200 dark:border-slate-600 rounded-full flex items-center justify-center shadow-md hover:bg-white dark:hover:bg-slate-600 transition-all" title="Upload photo">
                         <i class="bi bi-camera-fill text-primary text-[11px]"></i>

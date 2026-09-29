@@ -141,3 +141,32 @@ def test_profile_page_renders_avatar_and_resume_actions(local_media, candidate_u
     assert "Download" in html
     assert "Replace" in html
     assert "Delete" in html
+
+
+@pytest.mark.django_db
+def test_user_initials_filter_safe_for_anonymous():
+    from django.contrib.auth.models import AnonymousUser
+    from apps.core.templatetags.core_tags import user_initials
+
+    assert user_initials(AnonymousUser()) == "CV"
+
+    user = User.objects.create_user(
+        email="anon.safe@example.com",
+        password="password123",
+        first_name="Rajeev",
+        last_name="Kumar",
+        role=User.Role.CANDIDATE,
+    )
+    assert user_initials(user) == "RA"
+
+    # A user with no candidate profile and no name falls back safely
+    nameless = User(email="nameless@example.com")
+    assert user_initials(nameless) == "CV"
+
+
+@pytest.mark.django_db
+def test_anonymous_jobs_page_renders_without_crash(client):
+    resp = client.get("/jobs/")
+    assert resp.status_code == 200
+    html = resp.content.decode("utf-8")
+    assert "CV" in html
