@@ -57,6 +57,99 @@ def clean_extracted_text(text: str) -> str:
     return "".join(c for c in text if c.isprintable() or c in "\n\r\t").strip()
 
 
+_ERROR_TEXT_MARKERS = (
+    "parse error",
+    "could not open document",
+    "empty or unparseable",
+    "extraction failed",
+    "conversion failed",
+    "not found or failed",
+    "failed to execute",
+    "no usable text",
+    "headless conversion is disabled",
+)
+
+
+def is_parser_error_text(text: str) -> bool:
+    """True when extracted text is actually a parser/converter error message."""
+    if not text:
+        return False
+    low = " ".join(text.split()).lower()
+    if not low:
+        return False
+    if len(low) < 6:
+        return False
+    return any(marker in low for marker in _ERROR_TEXT_MARKERS)
+
+
+def reconcile_with_raw_text(parsed_data, text: str):
+    """
+    Cross-check an AI parsed result against the raw extracted resume text.
+
+    The AI is an extraction assistant, not the final authority. If the AI
+    returned no (or fewer) experience/education records than the raw text
+    supports, or a missing/implausible summary/name, recover those sections
+    from the deterministic NLP parser operating on the raw text.
+    """
+    if not text or not text.strip():
+        return parsed_data
+    if not isinstance(parsed_data, dict):
+        return parsed_data
+
+    from services.resume_intelligence import ResumeIntelligenceService
+
+    try:
+        nlp = ResumeIntelligenceService.parse_resume_nlp(
+            text, parsed_name=(parsed_data.get('personal_info') or {}).get('name')
+        )
+    except Exception as e:
+        logger.warning(f"[RECONCILE] NLP cross-check failed: {e}")
+        return parsed_data
+
+    # Experience: recover when AI missed records the raw text supports.
+    ai_exp = parsed_data.get('experience') or []
+    nlp_exp = nlp.get('experience') or []
+    if len(nlp_exp) > len(ai_exp):
+        parsed_data['experience'] = nlp_exp
+        logger.info(f"[RECONCILE] Recovered {len(nlp_exp)} experience records from raw text (AI had {len(ai_exp)}).")
+
+    # Reflect the recovered current role when the AI left it empty/placeholder.
+    pi_after_exp = parsed_data.get('personal_info') or {}
+    if parsed_data.get('experience'):
+        first = parsed_data['experience'][0]
+        if not (pi_after_exp.get('current_designation') or '').strip():
+            pi_after_exp['current_designation'] = first.get('designation') or ''
+        if not (pi_after_exp.get('current_company') or '').strip():
+            pi_after_exp['current_company'] = first.get('company') or ''
+        parsed_data['personal_info'] = pi_after_exp
+
+    # Education: recover when AI missed records.
+    ai_edu = parsed_data.get('education') or []
+    nlp_edu = nlp.get('education') or []
+    if len(nlp_edu) > len(ai_edu):
+        parsed_data['education'] = nlp_edu
+        logger.info(f"[RECONCILE] Recovered {len(nlp_edu)} education records from raw text (AI had {len(ai_edu)}).")
+
+    # Summary: fill a missing summary from raw text (only if AI has none).
+    if not (parsed_data.get('summary') or '').strip():
+        nlp_summary = (nlp.get('summary') or '').strip()
+        if nlp_summary:
+            parsed_data['summary'] = nlp_summary
+
+    # Name: fill a missing/blank name from raw text evidence, but never
+    # override an existing usable name key (full_name/name/candidate_name).
+    pi = parsed_data.get('personal_info') or {}
+    existing_name_keys = ('full_name', 'name', 'candidate_name')
+    has_usable_name = any((pi.get(k) or '').strip() for k in existing_name_keys)
+    if not has_usable_name:
+        nlp_name = ((nlp.get('personal_info') or {}).get('name') or '').strip()
+        if nlp_name and nlp_name.lower() not in ('john doe', 'unknown candidate', ''):
+            pi['name'] = nlp_name
+            parsed_data['personal_info'] = pi
+
+    return parsed_data
+
+
 def sanitize_text(value, path="", print_on_nul=True):
     if value is None:
         return ""
@@ -508,13 +601,16 @@ def copy_storage_file(source_field, target_path):
     return False
 
 
-def parse_resume_via_parseora(file_bytes, filename):
+def parse_resume_via_parseora(file_bytes, filename, raw_text=None):
     """
     Sends a resume file to the Parseora API and maps the structured JSON
     response into TalentVault's standard parsed_data candidate schema.
+
+    ``raw_text`` is the OCR-recovered text for scanned/image-only documents and
+    is forwarded to Parseora so it parses the recovered content directly.
     """
     from services.parseora_service import ParseoraService
-    res_json = ParseoraService.parse_resume(file_bytes, filename)
+    res_json = ParseoraService.parse_resume(file_bytes, filename, raw_text=raw_text)
     return ParseoraService.map_response_to_talentvault(res_json)
 
 def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_candidate_id=None, progress_callback=None, security_data=None, user=None, uploaded_by=None):
@@ -612,16 +708,25 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 progress_callback("reading_pdf")
                 progress_callback("extracting_text")
             
-            # Execute with 12s total OCR timeout guard
+            # Execute with 90s total OCR timeout guard (scanned PDFs may render
+            # several high-DPI pages and OCR them sequentially)
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 fut = pool.submit(ResumeIntelligenceService.run_ocr_pipeline, file_bytes, filename)
-                ocr_result = fut.result(timeout=12.0)
+                ocr_result = fut.result(timeout=90.0)
                 
             text = ocr_result["text"]
             t_ocr = time.time() - t_ocr_start
             logger.info(f"[PARSER OCR SUCCESS] [{request_id}] Engine: {ocr_result['engine']}, Confidence: {ocr_result['confidence']}%")
             logger.info(f"[TIMING] [{request_id}] END OCR / Extract Text: {filename} (took {t_ocr:.4f}s)")
             print(f"[TIMING] [{request_id}] END OCR / Extract Text: {filename} (took {t_ocr:.4f}s)")
+
+            # Normalize the raw extraction and reject parser/converter error
+            # strings so they never flow into Parseora / NLP / the DB as resume
+            # text. Binary garbage and error messages are treated as empty.
+            text = clean_extracted_text(text or "")
+            if is_parser_error_text(text):
+                logger.warning(f"[RESUME PARSER] [{request_id}] Extraction produced an error string for {filename}; treating as empty.")
+                text = ""
         except concurrent.futures.TimeoutError:
             t_ocr = time.time() - t_ocr_start
             logger.warning(f"[RESUME PARSER] OCR timeout for {filename}")
@@ -658,7 +763,23 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 if progress_callback:
                     progress_callback("ai_parsing")
                 t_api_start = time.time()
-                res = parse_resume_via_parseora(file_bytes, filename)
+                if ext == 'doc':
+                    # Legacy .doc (OLE2 binary) must never be sent to Parseora
+                    # as raw bytes. If text extraction failed we skip Parseora
+                    # entirely (the downstream guard then reports the upload as
+                    # a parsing failure). Otherwise Parseora receives only the
+                    # clean extracted text, never the binary .doc bytes.
+                    if not text or not text.strip():
+                        logger.warning(f"[PARSER DOC] [{request_id}] No clean text extracted from {filename}; skipping Parseora.")
+                        return None
+                    res = parse_resume_via_parseora(
+                        text.encode("utf-8"), "extracted.txt", raw_text=text
+                    )
+                else:
+                    # Forward OCR-recovered text so Parseora parses scanned/
+                    # image-only PDFs from the recovered content instead of the
+                    # raw image bytes.
+                    res = parse_resume_via_parseora(file_bytes, filename, raw_text=(text or None))
                 parseora_duration = time.time() - t_api_start
                 return res
             except Exception as e:
@@ -744,6 +865,12 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 # parsed_data intentionally retains the original structured
                 # Parseora (or NLP) result untouched.
                 info = parsed_data.get('personal_info', {}) if isinstance(parsed_data, dict) else {}
+
+        # Reconcile the AI result against raw resume evidence: never trust an
+        # AI result that is missing or contradicts content clearly present in
+        # the extracted text (e.g. empty experience, location-as-name).
+        if parsed_data is not None and text:
+            parsed_data = reconcile_with_raw_text(parsed_data, text)
     else:
         # If it was duplicate, we still need to run photo extraction
         try:
@@ -825,6 +952,49 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
 
     # Unique login identifier (never exposed as candidate contact).
     login_email = email if email else make_internal_login_email(sha256 or filename)
+
+    # Guard: never save an apparently-successful candidate when OCR and AI
+    # parsing both produced no usable structured content. A scanned PDF whose
+    # OCR failed (or whose Parseora/NLP parsing failed) must be reported as a
+    # failure instead of persisting an empty name/experience record.
+    def _parsed_data_has_usable_content(pd):
+        if not isinstance(pd, dict):
+            return False
+        p_info = pd.get('personal_info') or {}
+        name = (p_info.get('name') or '').strip()
+        email = (p_info.get('email') or '').strip()
+        phone = (p_info.get('phone') or '').strip()
+        summary = (pd.get('summary') or '').strip()
+        experience = pd.get('experience') or []
+        skills = pd.get('skills') or []
+        education = pd.get('education') or []
+
+        # Reject fabricated/placeholder identity values produced by fallbacks.
+        placeholder_names = {
+            '', 'unknown', 'unknown candidate', 'john doe', 'candidate',
+            'null', 'none', 'placeholder', 'not specified',
+        }
+        name_is_real = name.lower() not in placeholder_names
+        email_is_real = bool(email) and not is_placeholder_email(email)
+        phone_is_real = bool(phone) and phone != '9876543210'
+
+        return bool(
+            (name_is_real and bool(name))
+            or email_is_real
+            or phone_is_real
+            or summary
+            or experience
+            or skills
+            or education
+        )
+
+    if not _parsed_data_has_usable_content(parsed_data):
+        logger.error(
+            f"[PARSER FAILURE] [{request_id}] OCR + AI parsing produced no usable "
+            f"candidate content for {filename}. Not saving an empty candidate record."
+        )
+        print(f"[PARSER FAILURE] [{request_id}] OCR + AI parsing produced no usable content for {filename}.")
+        return None, "AUTOMATIC_PARSING_FAILED"
 
     try:
         from django.db import transaction
@@ -996,6 +1166,15 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                     }
                     if any(w in blacklisted_words for w in words_to_check):
                         return False
+
+                    # Reject skill/tech/company/marketing names (e.g. "Google Ads",
+                    # "Digital Marketing") that are made entirely of non-name tokens.
+                    try:
+                        from services.resume_intelligence import ResumeIntelligenceService
+                        if ResumeIntelligenceService.is_non_person_name(name_clean):
+                            return False
+                    except Exception:
+                        pass
 
                     # A genuine name must contain at least one purely-alphabetic
                     # token of length >= 2. Rejects fragments like "District -".
@@ -1216,7 +1395,7 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
                 profile.total_experience = Decimal("0.0")
             
             profile.current_company = (info.get('current_company') or "")[:255]
-            profile.current_designation = (info.get('current_designation') or "Professional")[:255]
+            profile.current_designation = (info.get('current_designation') or "")[:255]
             profile.linkedin_url = (info.get('linkedin_url') or "")[:200] or None
             profile.portfolio_url = (info.get('portfolio_url') or "")[:200] or None
 
@@ -1415,6 +1594,20 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
             t_total = time.time() - t_process_start
             logger.info(f"[TIMING] [{request_id}] END Parser: {filename} (TOTAL took {t_total:.4f}s)")
             print(f"[TIMING] [{request_id}] END Parser: {filename} (TOTAL took {t_total:.4f}s)")
+
+            # Structured, non-sensitive parse summary for production monitoring.
+            logger.info(
+                "[RESUME PARSER] FILE=%s TYPE=%s ENGINE=%s TEXT_LEN=%d OCR=%s "
+                "AI=%s VALIDATION=%s STATUS=%s",
+                filename,
+                ext,
+                ocr_result.get("engine") or "None",
+                len(text or ""),
+                "yes" if (ocr_result.get("engine") or "").lower() not in ("none", "") else "no",
+                "Parseora" if t_parseora > 0 else "NLP",
+                "usable" if _parsed_data_has_usable_content(parsed_data) else "unusable",
+                "SUCCESS",
+            )
             
             # Print exact timing stages as requested
             print(f"OCR: {t_ocr:.2f}s")
@@ -1949,7 +2142,7 @@ def merge_candidate_profile_data(
                     new_exp = Experience.objects.create(
                         profile=existing_profile,
                         company_name=n_comp,
-                        designation=n_desig or "Professional",
+                        designation=n_desig or "",
                         description=n_desc_html,
                         start_date=n_start,
                         end_date=n_end,

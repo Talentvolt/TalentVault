@@ -52,6 +52,9 @@
                                     </a>
                                 </h3>
                                 <p class="text-xs text-slate-550 font-semibold mt-0.5">{{ rec.job.display_company }} • {{ rec.job.location }}</p>
+                                {% if rec.reason %}
+                                <p class="text-[11px] text-primary/90 dark:text-purple-300 font-semibold mt-1.5"><i class="bi bi-stars me-1"></i>{{ rec.reason }}</p>
+                                {% endif %}
                             </div>
                         </div>
                         <span class="text-xs {{ rec.badge_class }} px-2.5 py-1 rounded-full font-bold">{{ rec.match_score }}% Match</span>

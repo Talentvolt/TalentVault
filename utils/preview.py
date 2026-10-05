@@ -10,31 +10,205 @@ from django.utils.html import escape
 
 logger = logging.getLogger(__name__)
 
+def _resolve_candidates(names_and_paths):
+    """
+    Resolve an ordered list of executable names / absolute paths to concrete
+    invocations, deduplicated and preserving order.
+
+    Bare names are resolved via PATH (``shutil.which``) but are kept even when
+    ``which`` finds nothing, so ``subprocess`` can attempt its own PATH search.
+    Absolute paths are kept only if the file actually exists.
+    """
+    import shutil
+
+    resolved = []
+    seen = set()
+    for cand in names_and_paths:
+        if not cand:
+            continue
+        if os.path.sep in cand or (os.altsep and os.altsep in cand):
+            loc = cand if os.path.isfile(cand) else None
+        else:
+            loc = shutil.which(cand) or cand
+        if loc and loc not in seen:
+            seen.add(loc)
+            resolved.append(loc)
+    return resolved
+
+
+def _antiword_candidates():
+    """antiword executable candidates for Windows and Linux."""
+    return _resolve_candidates([
+        "antiword",
+        "antiword.exe",
+        "/usr/bin/antiword",
+        "/usr/local/bin/antiword",
+        r"C:\antiword\antiword.exe",
+    ])
+
+
+def _catdoc_candidates():
+    """catdoc executable candidates for Windows and Linux."""
+    return _resolve_candidates([
+        "catdoc",
+        "catdoc.exe",
+        "/usr/bin/catdoc",
+        "/usr/local/bin/catdoc",
+    ])
+
+
+def _libreoffice_candidates():
+    """
+    LibreOffice (soffice) executable candidates for Windows and Linux.
+
+    Checks the configured ``SOFFICE_PATH``, PATH (``soffice``/``libreoffice``),
+    the standard Windows install directories, and common Linux install paths.
+    """
+    cands = []
+    soffice_setting = getattr(settings, 'SOFFICE_PATH', None)
+    if soffice_setting:
+        cands.append(soffice_setting)
+    cands += [
+        "soffice",
+        "libreoffice",
+        "soffice.exe",
+        "libreoffice.exe",
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        "/usr/bin/soffice",
+        "/usr/bin/libreoffice",
+        "/usr/local/bin/soffice",
+        "/usr/local/bin/libreoffice",
+        "/opt/libreoffice/program/soffice",
+        "/opt/libreoffice24.2/program/soffice",
+    ]
+    return _resolve_candidates(cands)
+
+
 def convert_doc_to_pdf(doc_path, output_dir):
     """
     Converts a DOC file to PDF using headless LibreOffice.
     """
-    soffice_path = getattr(settings, 'SOFFICE_PATH', 'soffice')
-    possible_paths = [
-        soffice_path,
-        r"C:\Program Files\LibreOffice\program\soffice.exe",
-        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-    ]
-    
-    success = False
-    for path in possible_paths:
+    # LibreOffice needs a writable HOME (its user profile) even in headless
+    # mode. On managed hosts HOME may be unset/read-only, so point it at a
+    # per-call temp dir that we clean up afterwards.
+    import tempfile
+
+    env = os.environ.copy()
+    home_tmp = None
+    if not env.get("HOME") or not os.path.isdir(env.get("HOME", "")):
         try:
-            cmd = [path, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, doc_path]
-            # Use shell=True on Windows if soffice is a batch/cmd file or in path, otherwise list is fine
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=30)
-            success = True
-            break
-        except Exception as e:
-            logger.debug(f"LibreOffice run failed with path {path}: {e}")
-            continue
-            
+            home_tmp = tempfile.mkdtemp(prefix="soffice_home_")
+            env["HOME"] = home_tmp
+        except Exception:
+            home_tmp = None
+
+    success = False
+    try:
+        for path in _libreoffice_candidates():
+            try:
+                cmd = [path, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, doc_path]
+                # Use shell=True on Windows if soffice is a batch/cmd file or in path, otherwise list is fine
+                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=30, env=env)
+                success = True
+                break
+            except Exception as e:
+                logger.debug(f"LibreOffice run failed with path {path}: {e}")
+                continue
+    finally:
+        if home_tmp:
+            try:
+                import shutil
+                shutil.rmtree(home_tmp, ignore_errors=True)
+            except Exception:
+                pass
+
     if not success:
         raise Exception("LibreOffice soffice was not found or failed to execute. Headless conversion is disabled.")
+
+
+def _run_doc_extractor(cmd, name):
+    """
+    Runs a single .doc text extractor and returns clean text, or "" on failure.
+    Non-printable characters (raw binary) are stripped so garbage is never
+    returned as resume text.
+    """
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    except Exception as e:
+        logger.debug(f"{name} DOC extraction failed: {e}")
+        return ""
+    if res.returncode != 0:
+        return ""
+    text = res.stdout.decode("utf-8", errors="ignore")
+    text = "".join(c for c in text if c.isprintable() or c in "\n\r\t")
+    return text.strip()
+
+
+def extract_text_from_doc(file_bytes):
+    """
+    Extracts plain text from a legacy .doc (OLE2 binary) file.
+
+    Legacy .doc is a binary format that cannot be read as UTF-8 text and
+    cannot be parsed by python-docx/mammoth. This helper centralises the
+    available converters and returns clean text (never raw binary bytes and
+    never an error string). Order of preference:
+
+      1. antiword   -- installed in production (render.yaml), no LibreOffice
+      2. catdoc     -- plain-text fallback
+      3. LibreOffice -> PDF -> PyMuPDF text (existing conversion architecture)
+
+    Returns the extracted text, or "" when every converter failed or yielded
+    no usable content.
+    """
+    import tempfile
+
+    if not file_bytes:
+        return ""
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+
+        # 1. antiword
+        for antiword in _antiword_candidates():
+            candidate = _run_doc_extractor([antiword, tmp_path], "antiword")
+            if candidate:
+                return candidate
+
+        # 2. catdoc
+        for catdoc in _catdoc_candidates():
+            candidate = _run_doc_extractor([catdoc, tmp_path], "catdoc")
+            if candidate:
+                return candidate
+
+        # 3. LibreOffice -> PDF -> text
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                convert_doc_to_pdf(tmp_path, tmpdir)
+                pdfs = [f for f in os.listdir(tmpdir) if f.lower().endswith(".pdf")]
+                if pdfs:
+                    pdf_path = os.path.join(tmpdir, pdfs[0])
+                    import fitz
+                    doc = fitz.open(pdf_path)
+                    try:
+                        candidate = "\n".join(page.get_text() for page in doc).strip()
+                    finally:
+                        doc.close()
+                    if candidate:
+                        return candidate
+        except Exception as e:
+            logger.debug(f"LibreOffice DOC text extraction failed: {e}")
+
+        return ""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 def get_premium_html_wrapper(content_body, title="Resume Preview"):
     """

@@ -64,14 +64,20 @@ class ParseoraService:
         cls,
         file_bytes: bytes,
         filename: str,
-        timeout: Optional[float] = None
+        timeout: Optional[float] = None,
+        raw_text: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Sends uploaded CV file as multipart/form-data to POST {PARSEORA_API_URL}/api/v1/parse.
-        
+
+        When ``raw_text`` is provided (e.g. OCR-recovered text for a scanned/
+        image-only PDF), it is sent alongside the file so Parseora can parse the
+        recovered text instead of attempting its own extraction of an
+        image-heavy document (which otherwise times out).
+
         Headers:
             X-API-Key: {PARSEORA_API_KEY}
-            
+
         Form Data:
             document_type=resume
             target_language=en
@@ -80,7 +86,8 @@ class ParseoraService:
             extract_evidence=true
             ocr_mode=auto
             async_job=false
-            
+            raw_text=<recovered text>
+
         Returns:
             Structured JSON dictionary returned from Parseora.
         """
@@ -122,6 +129,9 @@ class ParseoraService:
             'ocr_mode': 'auto',
             'async_job': 'false'
         }
+
+        if raw_text:
+            data['raw_text'] = raw_text
 
         headers = {
             'X-API-Key': api_key
@@ -241,6 +251,16 @@ class ParseoraService:
             return False
         if clean.replace(' ', '').replace('-', '').isdigit():
             return False
+
+        # Reject skill/tech/company/marketing phrases (e.g. "Google Ads",
+        # "Digital Marketing") that the AI may mistake for a name.
+        try:
+            from services.resume_intelligence import ResumeIntelligenceService
+            if ResumeIntelligenceService.is_non_person_name(clean):
+                return False
+        except Exception:
+            pass
+
         alpha_tokens = [
             re.sub(r'[^A-Za-z]', '', tok)
             for tok in re.split(r'\s+', clean)
@@ -275,6 +295,157 @@ class ParseoraService:
         return True
 
     @classmethod
+    def _is_plausible_experience_entry(cls, company: str, designation: str,
+                                       start_date: str, end_date: str,
+                                       duration: str, description: str) -> bool:
+        """
+        True when an experience record has real employment evidence.
+
+        Rejects empty entries and skill/heading fragments that the AI may emit
+        as jobs (e.g. "Social Media Campaigns", "Google Ads", "SEO") so they
+        never become fake employment records.
+        """
+        company = (company or "").strip()
+        designation = (designation or "").strip()
+        start_date = (start_date or "").strip()
+        end_date = (end_date or "").strip()
+        duration = (duration or "").strip()
+        description = (description or "").strip()
+
+        has_anchor = bool(company or start_date or end_date or duration or description)
+        # No identifying information at all -> not a job.
+        if not has_anchor:
+            return False
+
+        # Section headings / contact fragments are never jobs.
+        if designation and cls._is_contact_or_heading(designation):
+            return False
+        if company and cls._is_contact_or_heading(company):
+            return False
+
+        # A designation that is just a skill/technology (no company, dates or
+        # description) is not an employment record.
+        if (designation and cls._is_valid_skill(designation)
+                and not company and not (start_date or end_date) and not description):
+            return False
+
+        return True
+
+    # Accepted field names for the professional summary, in priority order.
+    # ``objective`` is intentionally lower priority (checked separately) and
+    # address/contact fields are never accepted.
+    _SUMMARY_FIELD_NAMES = (
+        'career_objective',
+        'career_objective_text',
+        'professional_summary',
+        'summary',
+        'profile_summary',
+        'about',
+    )
+
+    @staticmethod
+    def _coerce_text_value(value: Any) -> str:
+        """Flatten a nested Parseora field (dict / list / scalar) into a string."""
+        if value is None:
+            return ""
+        if isinstance(value, dict):
+            for key in ('value', 'normalized_value', 'original_value', 'translated_value'):
+                v = value.get(key)
+                if v:
+                    return ParseoraService._coerce_text_value(v)
+            return ""
+        if isinstance(value, (list, tuple)):
+            return " ".join(ParseoraService._coerce_text_value(v) for v in value).strip()
+        return str(value).strip()
+
+    @classmethod
+    def _is_address_like(cls, text: str) -> bool:
+        """
+        True when a value is a postal address / contact string rather than a
+        genuine career objective or professional summary.
+        """
+        if not text:
+            return False
+        s = " ".join(text.split()).strip()
+        if not s:
+            return False
+        low = s.lower()
+
+        # Contact markers
+        if '@' in s or 'http' in low or 'linkedin' in low or 'github' in low:
+            return True
+        if re.search(r'\+?\d[\d\s\-()]{7,}', s):
+            return True
+
+        # Care-of / postal markers
+        if re.search(r'\bc/?o\b', low) or 'care of' in low:
+            return True
+        if re.search(r'\b(?:pincode|pin\s*code|zip\s*code|postal\s*code)\b', low):
+            return True
+        if re.search(r'\b\d{6}\b', s):
+            return True
+        if re.search(r'\(\s*[a-z]{2,}\s*\)', low):
+            return True
+
+        # Leading address labels
+        if re.match(
+            r'^(address|residence|hometown|location|house\s*no|h\.?\s*no|flat|'
+            r'street|road|near|opposite|post\b|po\b|pin\b|village|district)',
+            low,
+        ):
+            return True
+
+        # Short, comma/slash fragmented line with a numeric token (e.g.
+        # "X, Y, City, 842001") is a postal address, not a summary.
+        tokens = [t.strip() for t in re.split(r'[,/]', s) if t.strip()]
+        if len(tokens) >= 3 and len(s.split()) <= 12 and any(re.search(r'\d', t) for t in tokens):
+            return True
+
+        return False
+
+    @classmethod
+    def _resolve_professional_summary(cls, cand: Dict[str, Any], res_json: Dict[str, Any]) -> str:
+        """
+        Resolve the professional summary from all accepted field names and
+        nesting shapes, in priority order:
+
+          1. career_objective / career_objective_text / professional_summary /
+             summary / profile_summary / about
+          2. objective
+          3. raw_parsed_data equivalents
+
+        Address / location / phone / email / contact values are never returned.
+        """
+        sources = []
+        if isinstance(cand, dict):
+            sources.append(cand)
+        if isinstance(res_json, dict):
+            sources.append(res_json)
+            data = res_json.get('data')
+            if isinstance(data, dict):
+                sources.append(data)
+                nested = data.get('raw_parsed_data')
+                if isinstance(nested, dict):
+                    sources.append(nested)
+            raw = res_json.get('raw_parsed_data')
+            if isinstance(raw, dict):
+                sources.append(raw)
+
+        for field in cls._SUMMARY_FIELD_NAMES:
+            for src in sources:
+                text = cls._coerce_text_value(src.get(field))
+                if text and not cls._is_address_like(text):
+                    return text
+
+        # Lower-priority objective field.
+        for src in sources:
+            text = cls._coerce_text_value(src.get('objective'))
+            if text and not cls._is_address_like(text):
+                return text
+
+        return ""
+
+    @classmethod
     def map_response_to_talentvault(cls, res_json: Dict[str, Any]) -> Dict[str, Any]:
         """
         Maps Parseora structured JSON response directly into TalentVault's standard
@@ -284,11 +455,17 @@ class ParseoraService:
 
         # 1. Experiences
         experiences: List[Dict[str, Any]] = []
+        # Accept every response shape the parser may emit: top-level, nested
+        # under ``data``, or wrapped in ``raw_parsed_data``.
         raw_exp = (
             res_json.get('experience') or 
             res_json.get('work_experience') or 
             res_json.get('data', {}).get('experience') or 
             res_json.get('data', {}).get('work_experience') or 
+            res_json.get('raw_parsed_data', {}).get('experience') or
+            res_json.get('raw_parsed_data', {}).get('work_experience') or
+            res_json.get('data', {}).get('raw_parsed_data', {}).get('experience') or
+            res_json.get('data', {}).get('raw_parsed_data', {}).get('work_experience') or
             []
         )
         if isinstance(raw_exp, list):
@@ -308,6 +485,13 @@ class ParseoraService:
                 if isinstance(resps, list) and resps:
                     bullet_desc = '\n'.join([f"• {r.strip()}" for r in resps if isinstance(r, str) and r.strip()])
                     desc = bullet_desc if not desc else f"{desc}\n{bullet_desc}"
+                if not desc:
+                    process = cls._extract_scalar(item.get('process'))
+                    if process:
+                        desc = str(process)
+
+                if not cls._is_plausible_experience_entry(comp, desig, s_date, e_date, dur, desc):
+                    continue
 
                 experiences.append({
                     'designation': str(desig)[:100],
@@ -317,7 +501,9 @@ class ParseoraService:
                     'description': str(desc),
                     'start_date': str(s_date) if s_date else '',
                     'end_date': str(e_date) if e_date else '',
-                    'is_current': is_curr
+                    'is_current': is_curr,
+                    'confidence': cls._extract_scalar(item.get('confidence')) or 1.0,
+                    'evidence': str(cls._extract_scalar(item.get('evidence')) or ''),
                 })
 
         # Calculate experience years and durations using TalentVault intelligence
@@ -377,6 +563,16 @@ class ParseoraService:
                     continue
                 if cls._is_contact_or_heading(deg) and not str(inst).strip():
                     continue
+                # Never let an employment date-range / company fragment become
+                # an education record (education contamination bug).
+                edu_blob = f"{deg} {inst} {fos}"
+                if re.search(
+                    r'\b(?:19\d\d|20\d\d|present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)'
+                    r'[\w/]*\s*[-–—to till until]{1,3}\s*'
+                    r'(?:19\d\d|20\d\d|present|current)\b',
+                    edu_blob, re.IGNORECASE,
+                ):
+                    continue
 
                 educations.append({
                     'degree': str(deg)[:100],
@@ -384,7 +580,9 @@ class ParseoraService:
                     'field_of_study': str(fos)[:100],
                     'score': str(score)[:20],
                     'start_date': s_year,
-                    'end_date': e_year
+                    'end_date': e_year,
+                    'confidence': cls._extract_scalar(item.get('confidence')) or 1.0,
+                    'evidence': str(cls._extract_scalar(item.get('evidence')) or ''),
                 })
 
         # 3. Skills (Normalized and Deduplicated)
@@ -478,13 +676,22 @@ class ParseoraService:
         ).strip()[:255]
         pref_loc = str(cls._extract_scalar(cand.get('preferred_location')) or '').strip()[:255]
 
+        # Placeholder / non-informative current-role values are not real data.
+        _PLACEHOLDER_ROLE = ('professional', 'confidential', 'professional / confidential', '')
+
+        def _clean_role(val):
+            v = str(val or '').strip()
+            return '' if v.lower() in _PLACEHOLDER_ROLE else v
+
+        raw_curr_comp = _clean_role(cls._extract_scalar(cand.get('current_company')))
+        raw_curr_desig = _clean_role(cls._extract_scalar(cand.get('current_designation')))
         curr_comp = str(
-            cls._extract_scalar(cand.get('current_company')) or 
+            raw_curr_comp or
             (experiences[0]['company'] if experiences else '')
         ).strip()[:255]
         curr_desig = str(
-            cls._extract_scalar(cand.get('current_designation')) or 
-            (experiences[0]['designation'] if experiences else 'Professional')
+            raw_curr_desig or
+            (experiences[0]['designation'] if experiences else '')
         ).strip()[:255]
 
         # Clean CTCs
@@ -521,12 +728,10 @@ class ParseoraService:
         dob_val = cls._extract_scalar(cand.get('date_of_birth'))
         gender_val = cls._extract_scalar(cand.get('gender'))
 
-        summary = str(
-            cls._extract_scalar(cand.get('summary')) or 
-            cls._extract_scalar(cand.get('objective')) or 
-            cls._extract_scalar(res_json.get('summary')) or 
-            ''
-        ).strip()
+        # Never fabricate a summary. If the resume has no genuine career
+        # objective / professional summary, leave it empty (NULL) and let the
+        # raw-text reconciliation stage recover it from the actual resume text.
+        summary = cls._resolve_professional_summary(cand, res_json)
 
         highest_qual = educations[0]['degree'] if educations else ''
         college_uni = educations[0]['institution'] if educations else ''
@@ -665,6 +870,15 @@ class ParseoraService:
             'metadata': {
                 'parsed_by': 'Parseora',
                 'request_id': request_id,
-                'parsed_at': datetime.now().isoformat()
+                'parsed_at': datetime.now().isoformat(),
+                'confidence': {
+                    'name': cls._extract_scalar(cand.get('name', {}).get('confidence') if isinstance(cand.get('name'), dict) else None) if cand.get('name') else None,
+                    'email': cls._extract_scalar(cand.get('email', {}).get('confidence') if isinstance(cand.get('email'), dict) else None) if cand.get('email') else None,
+                    'phone': cls._extract_scalar(cand.get('phone', {}).get('confidence') if isinstance(cand.get('phone'), dict) else None) if cand.get('phone') else None,
+                    'summary': cls._extract_scalar(cand.get('summary', {}).get('confidence') if isinstance(cand.get('summary'), dict) else None) if cand.get('summary') else None,
+                    'experience': round(sum(float(e.get('confidence') or 1.0) for e in experiences) / len(experiences), 3) if experiences else None,
+                    'education': round(sum(float(e.get('confidence') or 1.0) for e in educations) / len(educations), 3) if educations else None,
+                    'skills': round(sum(float(s.get('confidence') or 1.0) for s in skills_raw.get('all_skills', []) if isinstance(s, dict)) / len([s for s in skills_raw.get('all_skills', []) if isinstance(s, dict)]), 3) if isinstance(skills_raw, dict) and [s for s in skills_raw.get('all_skills', []) if isinstance(s, dict)] else None,
+                },
             }
         }

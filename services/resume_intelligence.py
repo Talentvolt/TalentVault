@@ -37,6 +37,88 @@ _OCR_CACHE = {}
 
 _BYTE_LIKE_TYPES = (bytes, bytearray, memoryview)
 
+# Terms that are essentially never a human name. Used to reject AI/parser
+# mistakes such as "Google Ads", "Digital Marketing" or "Python" becoming the
+# candidate name. A name composed entirely of these tokens is rejected.
+NON_NAME_TERMS = frozenset({
+    # tech brands / companies / platforms
+    'google', 'amazon', 'microsoft', 'facebook', 'meta', 'apple', 'flipkart',
+    'adobe', 'oracle', 'sap', 'infosys', 'tcs', 'wipro', 'accenture', 'ibm',
+    'intel', 'cisco', 'nvidia', 'netflix', 'uber', 'zomato', 'swiggy', 'paytm',
+    'linkedin', 'github', 'whatsapp', 'instagram', 'twitter', 'youtube', 'ola',
+    'byjus', 'unacademy', 'myntra', 'snapdeal',
+    # marketing / business / content terms
+    'ads', 'adwords', 'seo', 'sem', 'smm', 'ppc', 'marketing', 'digital',
+    'analytics', 'branding', 'sales', 'business', 'content', 'media',
+    'ecommerce', 'commerce', 'advertising', 'campaign', 'social', 'growth',
+    # skills / technologies / domains
+    'python', 'java', 'javascript', 'typescript', 'sql', 'mysql', 'react',
+    'node', 'django', 'android', 'ios', 'excel', 'powerpoint', 'word',
+    'wordpress', 'html', 'css', 'php', 'ruby', 'aws', 'azure', 'gcp', 'cloud',
+    'devops', 'docker', 'kubernetes', 'git', 'linux', 'windows', 'machine',
+    'learning', 'artificial', 'intelligence', 'data', 'science', 'blockchain',
+    'iot', 'flutter', 'swift', 'kotlin', 'scala', 'spring', 'hibernate',
+    'mongodb', 'postgresql', 'tensorflow', 'pytorch', 'tableau', 'powerbi',
+    'tally', 'autocad', 'photoshop', 'illustrator', 'figma', 'canva',
+    # generic non-name
+    'resume', 'curriculum', 'vitae', 'biodata', 'profile', 'portfolio',
+    'project', 'projects', 'summary', 'objective', 'skills', 'experience',
+    'education', 'contact', 'address', 'email', 'phone', 'mobile', 'name',
+    'candidate', 'applicant', 'details', 'information', 'page',
+})
+
+NON_NAME_PHRASES = frozenset({
+    'digital marketing', 'social media', 'google ads', 'meta ads',
+    'facebook ads', 'business development', 'data science', 'data analytics',
+    'machine learning', 'deep learning', 'software engineer', 'software developer',
+    'senior developer', 'web developer', 'artificial intelligence',
+    'human resources', 'customer service', 'customer relationship',
+    'project manager', 'team lead', 'technical skills', 'professional summary',
+    'professional experience', 'personal details', 'career objective',
+    'digital marketing executive', 'marketing executive', 'sales executive',
+    'employment history', 'career history', 'work history', 'work experience',
+    'employment details', 'experience details', 'career summary', 'professional profile',
+    'professional objective', 'career goal', 'personal statement',
+    'professional background', 'employment record', 'job history',
+    'academic qualification', 'career profile', 'executive summary',
+    'professional overview', 'career overview', 'profile summary',
+})
+
+# City / state / country names and postal fragments that must never be a name.
+NON_NAME_LOCATIONS = frozenset({
+    # countries
+    'india', 'usa', 'uk', 'uae', 'nepal', 'bangladesh', 'australia', 'canada',
+    'america', 'england', 'singapore', 'malaysia', 'pakistan', 'srilanka', 'qatar',
+    'oman', 'germany', 'france', 'china', 'japan', 'dubai', 'kenya', 'nigeria',
+    # Indian states
+    'bihar', 'karnataka', 'maharashtra', 'uttar', 'pradesh', 'gujarat', 'rajasthan',
+    'tamil', 'nadu', 'kerala', 'punjab', 'haryana', 'telangana', 'andhra',
+    'west', 'bengal', 'assam', 'odisha', 'jharkhand', 'chhattisgarh', 'madhya',
+    'goa', 'delhi', 'sikkim', 'manipur', 'meghalaya', 'tripura', 'mizoram',
+    'nagaland', 'arunachal', 'uttarakhand', 'himachal',
+    # Indian cities / metros
+    'noida', 'mumbai', 'bangalore', 'bengaluru', 'pune', 'hyderabad', 'chennai',
+    'kolkata', 'gurgaon', 'gurugram', 'lucknow', 'jaipur', 'ahmedabad', 'surat',
+    'nagpur', 'indore', 'bhopal', 'patna', 'ghaziabad', 'faridabad', 'thane',
+    'vadodara', 'kochi', 'coimbatore', 'visakhapatnam', 'chandigarh', 'dehradun',
+    'mysore', 'mysuru', 'raipur', 'ranchi', 'jamshedpur', 'nashik', 'aurangabad',
+    'kanpur', 'agra', 'varanasi', 'allahabad', 'prayagraj', 'meerut', 'greater',
+    'gwalior', 'jodhpur', 'udaipur', 'amritsar', 'ludhiana', 'mohali', 'guwahati',
+    'bhubaneswar', 'gandhinagar', 'rajkot', 'salem', 'tiruchirappalli', 'madurai',
+    'vijayawada', 'guntur', 'nellore', 'warangal', 'kakinada', 'panvel', 'navi',
+    'thane', 'kalyan', 'dombivli', 'vasai', 'virar', 'mira', 'bhiwandi',
+    'muzaffarpur', 'begusarai', 'samastipur', 'patna', 'gaya', 'bhagalpur',
+    'darbhanga', 'siwan', 'chhapra', 'motihari', 'bettiah', 'hajipur',
+})
+
+def _name_tokens_reject(name_lower: str) -> bool:
+    """True when every alphabetic token of a name is a known non-name term or a
+    location (used to reject 'Google Ads', 'Noida India', 'Digital Marketing')."""
+    tokens = re.findall(r'[a-z]+', name_lower)
+    if not tokens:
+        return True
+    return all(t in NON_NAME_TERMS or t in NON_NAME_LOCATIONS for t in tokens)
+
 
 def make_json_safe(value, _key: str = ""):
     """
@@ -92,7 +174,7 @@ def make_json_safe(value, _key: str = ""):
 
     return str(value)
 
-def get_paddle_ocr_instance(timeout_seconds=8):
+def get_paddle_ocr_instance(timeout_seconds=90):
     global GLOBAL_PADDLE_OCR, _PADDLE_AVAILABLE_CACHE
     if _PADDLE_AVAILABLE_CACHE is False:
         return None
@@ -461,13 +543,42 @@ class ResumeIntelligenceService:
         return joined_html
 
     @staticmethod
+    def is_non_person_name(name: str) -> bool:
+        """
+        True when a value is clearly NOT a human name (a skill, technology,
+        company, marketing term, section heading, or phrase composed entirely of
+        such tokens) even though it is made of alphabetic words.
+        """
+        if not name or not isinstance(name, str):
+            return True
+        clean = " ".join(name.strip().split())
+        if not clean:
+            return True
+        low = clean.lower()
+        if low in NON_NAME_PHRASES:
+            return True
+        tokens = re.findall(r'[a-z]+', low)
+        if not tokens:
+            return True
+        # Every alphabetic token is a known non-name term or a location
+        # (e.g. "Google Ads", "Noida India", "Digital Marketing").
+        if all(t in NON_NAME_TERMS or t in NON_NAME_LOCATIONS for t in tokens):
+            return True
+        return False
+
+    @staticmethod
     def is_valid_name(name: str) -> bool:
         if not name or not isinstance(name, str):
             return False
         name_clean = " ".join(name.strip().split())
         if not name_clean:
             return False
-            
+
+        # Reject known skill/tech/company/marketing phrases and names composed
+        # entirely of non-name tokens (e.g. "Google Ads", "Digital Marketing").
+        if ResumeIntelligenceService.is_non_person_name(name_clean):
+            return False
+
         # Reject digits/phone patterns
         if name_clean.isdigit():
             return False
@@ -596,9 +707,14 @@ class ResumeIntelligenceService:
             return None
         
         # Exact or close matching
-        if l in ["profile summary", "professional summary", "summary", "career objective", "objective", "profile", "about me", "career profile", "executive summary"]:
+        if l in ["profile summary", "professional summary", "summary", "career objective", "objective", "profile", "about me", "career profile", "executive summary",
+                  "career summary", "professional profile", "about", "personal statement", "career overview",
+                  "professional objective", "career goal", "objective statement", "career objective statement",
+                  "profile objective", "professional overview"]:
             return "SUMMARY"
-        if l in ["work experience", "experience", "employment history", "work history", "professional experience", "professional history", "employment", "career history"]:
+        if l in ["work experience", "experience", "employment history", "work history", "professional experience", "professional history", "employment", "career history",
+                  "employment details", "experience details", "work record", "employment record", "job history",
+                  "professional background", "experience history"]:
             return "WORK"
         if l in ["education", "academic qualification", "academic qualifications", "academic background", "qualification", "qualifications", "education history"]:
             return "EDU"
@@ -606,7 +722,9 @@ class ResumeIntelligenceService:
             return "SKILLS"
         if l in ["projects", "personal projects", "academic projects", "key projects", "recent projects"]:
             return "PROJECT"
-        if l in ["certifications", "certification", "courses", "credentials", "licenses & certifications", "certifications & licenses"]:
+        if l in ["certifications", "certification", "courses", "credentials", "licenses & certifications", "certifications & licenses",
+                  "certificates", "certificates and achievements", "certifications and achievements",
+                  "certificates & achievements", "awards and achievements"]:
             return "CERT"
         if l in ["languages", "languages known", "language profile"]:
             return "LANGUAGES"
@@ -622,7 +740,9 @@ class ResumeIntelligenceService:
             return "VOLUNTEER"
         if l in ["extracurricular", "extracurricular activities", "co-curricular activities", "interests", "hobbies"]:
             return "EXTRACURRICULAR"
-        if l in ["personal details", "personal profile", "personal summary", "personal info"]:
+        if l in ["personal details", "personal profile", "personal summary", "personal info",
+                  "address", "residence", "hometown", "contact", "contact information",
+                  "contact details", "current address", "permanent address", "postal address"]:
             return "PERSONAL"
             
         return None
@@ -1397,7 +1517,7 @@ class ResumeIntelligenceService:
             except Exception as e:
                 logger.error(f"ZIP extraction/parsing failed: {e}", exc_info=True)
             return {
-                "text": "Empty or unparseable ZIP file content",
+                "text": "",
                 "engine": "zipfile-error",
                 "confidence": 0.0,
                 "resume_type": "UNKNOWN",
@@ -1408,7 +1528,16 @@ class ResumeIntelligenceService:
             try:
                 extracted_text = file_bytes.decode('utf-8', errors='ignore')
             except Exception as e:
-                extracted_text = f"TXT Parse Error: {str(e)}"
+                logger.error(f"TXT text extraction failed: {e}", exc_info=True)
+                extracted_text = ""
+            if not (extracted_text or "").strip():
+                return {
+                    "text": "",
+                    "engine": "text-decode-failed",
+                    "confidence": 0.0,
+                    "resume_type": "TEXT",
+                    "largest_bold_name": None
+                }
             return {
                 "text": extracted_text,
                 "engine": "text-decode",
@@ -1423,7 +1552,16 @@ class ResumeIntelligenceService:
                 rtf_content = file_bytes.decode('utf-8', errors='ignore')
                 extracted_text = rtf_to_text(rtf_content)
             except Exception as e:
-                extracted_text = f"RTF Parse Error: {str(e)}"
+                logger.error(f"RTF text extraction failed: {e}", exc_info=True)
+                extracted_text = ""
+            if not (extracted_text or "").strip():
+                return {
+                    "text": "",
+                    "engine": "striprtf-failed",
+                    "confidence": 0.0,
+                    "resume_type": "RTF",
+                    "largest_bold_name": None
+                }
             return {
                 "text": extracted_text,
                 "engine": "striprtf",
@@ -1433,26 +1571,36 @@ class ResumeIntelligenceService:
             }
 
         if resume_type == 'DOC':
-            import tempfile
-            from utils.preview import convert_doc_to_pdf
+            # Legacy .doc (OLE2 binary) cannot be decoded as UTF-8 text nor
+            # parsed by python-docx. Convert it to plain text using the shared
+            # converter chain (antiword -> catdoc -> LibreOffice -> PDF text).
+            # If no converter produced usable text, report an explicit failure
+            # (empty text + zero confidence) instead of persisting an error
+            # string or raw binary bytes as resume content.
+            from utils.preview import extract_text_from_doc
             try:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    doc_path = os.path.join(tmpdir, "temp.doc")
-                    with open(doc_path, "wb") as tmp_doc:
-                        tmp_doc.write(file_bytes)
-                    convert_doc_to_pdf(doc_path, tmpdir)
-                    pdf_path = os.path.join(tmpdir, "temp.pdf")
-                    if os.path.exists(pdf_path):
-                        with open(pdf_path, "rb") as tmp_pdf:
-                            pdf_bytes = tmp_pdf.read()
-                        return ResumeIntelligenceService.run_ocr_pipeline(pdf_bytes, "temp.pdf")
+                extracted_text = extract_text_from_doc(file_bytes)
             except Exception as e:
-                logger.error(f"DOC to PDF text extraction failed: {e}", exc_info=True)
-                extracted_text = f"DOC Parse Error: {str(e)}"
+                logger.error(f"DOC text extraction failed: {e}", exc_info=True)
+                extracted_text = ""
+
+            extracted_text = (extracted_text or "").strip()
+            if not extracted_text:
+                logger.warning(
+                    "DOC text extraction produced no usable text; reporting DOC "
+                    "conversion failure so the upload is not saved as success."
+                )
+                return {
+                    "text": "",
+                    "engine": "doc-conversion-failed",
+                    "confidence": 0.0,
+                    "resume_type": "EDITABLE_DOC",
+                    "largest_bold_name": None
+                }
             return {
                 "text": extracted_text,
-                "engine": "soffice-pdf-fallback",
-                "confidence": 50.0,
+                "engine": "doc-text-extractor",
+                "confidence": 100.0,
                 "resume_type": "EDITABLE_DOC",
                 "largest_bold_name": None
             }
@@ -1482,7 +1630,16 @@ class ResumeIntelligenceService:
                             largest_bold_name = cleaned_p
                             break
             except Exception as e:
-                extracted_text = f"DOCX Parse Error: {str(e)}"
+                logger.error(f"DOCX text extraction failed: {e}", exc_info=True)
+                extracted_text = ""
+            if not (extracted_text or "").strip():
+                return {
+                    "text": "",
+                    "engine": "python-docx-failed",
+                    "confidence": 0.0,
+                    "resume_type": "EDITABLE_DOCX",
+                    "largest_bold_name": None
+                }
             return {
                 "text": extracted_text,
                 "engine": "python-docx",
@@ -1642,12 +1799,10 @@ class ResumeIntelligenceService:
         image_list = []
         try:
             if resume_type == 'PDF' or filename.lower().endswith('.pdf'):
-                import pypdfium2
                 import fitz
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
-                pdf = pypdfium2.PdfDocument(file_bytes)
                 # Limit scanned PDF page processing to at most 3 pages to prevent worker timeout
-                max_pages_to_scan = min(3, len(pdf))
+                max_pages_to_scan = min(3, len(doc))
                 for i in range(max_pages_to_scan):
                     fitz_page = doc[i]
                     total_text_len = len(fitz_page.get_text().strip())
@@ -1659,19 +1814,22 @@ class ResumeIntelligenceService:
                         # Skip OCR if there are no images on the page
                         has_images = len(fitz_page.get_images()) > 0
                         if has_images or total_text_len == 0:
-                            page = pdf[i]
-                            bitmap = page.render(scale=1.5)
-                            image_list.append((i, "image", bitmap.to_pil()))
+                            # Render at 300 DPI for OCR legibility (scanned pages)
+                            pix = fitz_page.get_pixmap(dpi=300, alpha=False)
+                            img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+                            image_list.append((i, "image", img))
                         else:
                             image_list.append((i, "blank", ""))
             else:
                 image_list.append((0, "image", Image.open(io.BytesIO(file_bytes))))
         except Exception as e:
-            logger.error(f"Image rendering/loading failed: {e}")
-            return {"text": extracted_text or "Could not open document.", "engine": "Error / Fallback Text", "confidence": 50.0, "resume_type": "CORRUPTED", "largest_bold_name": None}
+            logger.error(f"Image rendering/loading failed: {e}", exc_info=True)
+            return {"text": "", "engine": "image-render-failed", "confidence": 0.0, "resume_type": "CORRUPTED", "largest_bold_name": None}
 
-        # Local helper for image compression
-        def compress_image_for_ocr(img, max_size=1200):
+        # Local helper for image compression. Keep the image large enough for
+        # OCR (300 DPI render is ~2481px wide); 3500px preserves full resolution
+        # for a standard A4/Letter page while still bounding memory usage.
+        def compress_image_for_ocr(img, max_size=3500):
             try:
                 w, h = img.size
                 if not isinstance(w, (int, float)) or not isinstance(h, (int, float)):
@@ -1693,12 +1851,12 @@ class ResumeIntelligenceService:
                 cached = _OCR_CACHE[img_hash]
                 return p_idx, cached["text"], cached["engine"], cached["confidence"]
 
-            img_compressed = compress_image_for_ocr(img, max_size=1200)
+            img_compressed = compress_image_for_ocr(img, max_size=3500)
             img_preproc = ResumeIntelligenceService.preprocess_image_for_ocr(img_compressed)
             
             page_text, engine_success, used_engine_name, page_confidence = "", False, "", 0.0
             
-            # Try PaddleOCR safely (lazy-loaded, memory-optimized with 20s timeout)
+            # Try PaddleOCR safely (lazy-loaded, memory-optimized with 45s timeout)
             paddle_inst = get_paddle_ocr_instance()
             if paddle_inst is not None:
                 def _do_paddle(img_arr):
@@ -1709,7 +1867,7 @@ class ResumeIntelligenceService:
                         img_arr = np.array(img_preproc.convert('RGB'))
                         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                             fut = pool.submit(_do_paddle, img_arr)
-                            res = fut.result(timeout=20.0)
+                            res = fut.result(timeout=45.0)
                         if res and res[0]:
                             lines = [line[1][0] for line in res[0] if line and len(line) > 1 and line[1]]
                             confs = [line[1][1] * 100 for line in res[0] if line and len(line) > 1 and line[1]]
@@ -1722,8 +1880,8 @@ class ResumeIntelligenceService:
                     except concurrent.futures.TimeoutError:
                         import traceback
                         stack_info = "".join(traceback.format_stack())
-                        logger.error(f"HANG DETECTED: PaddleOCR page {p_idx} execution timed out (> 20s).\nStack:\n{stack_info}")
-                        print(f"HANG DETECTED: PaddleOCR page {p_idx} execution timed out (> 20s).\nStack:\n{stack_info}")
+                        logger.error(f"HANG DETECTED: PaddleOCR page {p_idx} execution timed out (> 45s).\nStack:\n{stack_info}")
+                        print(f"HANG DETECTED: PaddleOCR page {p_idx} execution timed out (> 45s).\nStack:\n{stack_info}")
                         break
                     except (Exception, BaseException) as e:
                         logger.warning(f"PaddleOCR execution failed on page {p_idx} (attempt {attempt+1}): {e}")
@@ -1780,9 +1938,10 @@ class ResumeIntelligenceService:
         if ocr_tasks:
             ocr_start_time = time.time()
             for idx, img in ocr_tasks:
-                # 10 second total time budget guard for OCR tasks
-                if time.time() - ocr_start_time > 10.0:
-                    logger.warning(f"[OCR TIMEOUT GUARD] Exceeded 10s OCR budget. Skipping remaining {len(ocr_tasks)} OCR pages.")
+                # Total time budget guard for OCR tasks (allows ~3 pages of
+                # PaddleOCR without silently dropping the remaining pages).
+                if time.time() - ocr_start_time > 90.0:
+                    logger.warning(f"[OCR TIMEOUT GUARD] Exceeded 90s OCR budget. Skipping remaining {len(ocr_tasks)} OCR pages.")
                     break
                 try:
                     p_idx, page_text, used_engine_name, page_confidence = process_single_page_ocr(idx, img)
@@ -2040,7 +2199,18 @@ class ResumeIntelligenceService:
         try:
             summary_lines = [l["text"] for l in sections["SUMMARY"]]
             if summary_lines:
-                summary = "\n".join(summary_lines).strip()
+                # Drop address / contact lines that bled into the summary
+                # section so a postal address is never shown as the summary.
+                def _is_addr_line(ln):
+                    low = ln.lower()
+                    return bool(
+                        re.search(r'\bc/?o\b', low)
+                        or re.search(r'\b\d{6}\b', ln)
+                        or re.search(r'\(\s*[a-z]{2,}\s*\)', low)
+                        or re.search(r'\b(?:pincode|pin\s*code|postal\s*code|zip\s*code)\b', low)
+                        or re.match(r'^(address|residence|hometown|location)[:\-\s]*', low)
+                    )
+                summary = "\n".join(ln for ln in summary_lines if not _is_addr_line(ln)).strip()
             else:
                 # Fallback: find first paragraph in PERSONAL section
                 for line in sections["PERSONAL"]:
@@ -2048,7 +2218,7 @@ class ResumeIntelligenceService:
                     if len(text_val) > 80 and not any(kw in text_val.lower() for kw in ["phone", "email", "github", "linkedin", "contact"]):
                         summary = text_val
                         break
-            
+
             if name and summary:
                 summary = re.sub(rf'\b{re.escape(name)}\b', '', summary, flags=re.I).strip()
                 summary = re.sub(r'^\s*[-–—,.:;]\s*', '', summary)
@@ -2072,18 +2242,32 @@ class ResumeIntelligenceService:
             }
 
             job_blocks = []
+
+            def _is_desc_line(l):
+                t = l["text"]
+                if l["indent"] > 2 or t.startswith(('-', '•', '*', '+', '●', '■')):
+                    return True
+                t_lower_clean = re.sub(r'[:\-\s]+$', '', t.strip().lower())
+                if t_lower_clean in {
+                    'key result areas', 'key result area', 'kra', 'kras',
+                    'roles and responsibilities', 'roles & responsibilities',
+                    'responsibilities', 'responsibility', 'duties', 'key responsibilities',
+                    'achievements', 'key achievements', 'notable achievements', 'accomplishments',
+                }:
+                    return True
+                words = re.sub(r'[^a-zA-Z\s]', ' ', t).lower().split()
+                return any(w in responsibility_keywords for w in words)
+
             current_block = []
             in_bullets = False
-
             for line in sections["WORK"]:
                 text_val = line["text"]
                 has_date = bool(date_range_regex.search(text_val))
                 is_bullet = text_val.startswith(('-', '•', '*', '+', '●', '■')) or line["indent"] > 2
-                
-                # Check if this is a heading inside work section that we should skip entirely
+
                 l_lower = text_val.lower()
                 if any(h in l_lower for h in ["achievements", "certifications", "competencies", "key skills", "interests"]):
-                    in_bullets = True # Ignore sub-sections in bullets
+                    in_bullets = True
                     continue
 
                 is_new_job = False
@@ -2092,12 +2276,23 @@ class ResumeIntelligenceService:
                     if has_date and (current_has_date or in_bullets):
                         is_new_job = True
                     elif in_bullets and line["is_bold"] and not is_bullet and text_val:
-                        # Bold line after descriptions starts a new job
                         is_new_job = True
 
                 if is_new_job:
+                    # Move trailing header lines (designation/company that belong
+                    # to the next job, e.g. "Role / Company / Date" layouts) out
+                    # of the current block into the new block.
+                    dangling_header = []
+                    if current_block:
+                        date_idxs = [k for k, item in enumerate(current_block) if date_range_regex.search(item["text"])]
+                        last_date = max(date_idxs) if date_idxs else -1
+                        if last_date >= 0:
+                            tail = current_block[last_date + 1:]
+                            if tail and all(not _is_desc_line(it) for it in tail):
+                                dangling_header = tail
+                                current_block = current_block[:last_date + 1]
                     job_blocks.append(current_block)
-                    current_block = [line]
+                    current_block = dangling_header + [line]
                     in_bullets = False
                 else:
                     current_block.append(line)
@@ -2280,21 +2475,47 @@ class ResumeIntelligenceService:
 
             edu_blocks = []
             current_edu = []
+            # Detect year-first layouts ("2010 / Degree / Institution") where a
+            # new entry starts at a standalone year line, vs institution-first
+            # layouts ("Institution / Degree") where a new entry starts at a new
+            # institution after a completed degree+institution.
+            standalone_year_lines = any(
+                re.fullmatch(r'\s*(?:19\d\d|20\d\d)\s*', l["text"])
+                for l in sections["EDU"] if l["text"].strip()
+            )
             for line in sections["EDU"]:
                 text_val = line["text"]
                 if not text_val:
                     continue
                 words = re.sub(r'[^a-zA-Z\s]', ' ', text_val).lower().split()
-                has_deg = any(w in edu_degree_keywords for w in words)
+                has_deg = any(w in edu_degree_keywords for w in words) or bool(
+                    re.search(r'\b(?:b\.?tech|m\.?tech|b\.?e|b\.?sc|m\.?sc|b\.?com|m\.?com|b\.?a|m\.?a|bca|mca|ph\.?d|m\.?b\.?a)\b', text_val.lower())
+                )
                 has_inst = any(w in ['university', 'college', 'school', 'institute', 'academy', 'icai', 'board'] for w in words)
                 has_year = bool(re.search(r'\b(19\d\d|20\d\d)\b', text_val))
 
                 is_new_edu = False
                 if current_edu:
                     current_has_year = any(re.search(r'\b(19\d\d|20\d\d)\b', l["text"]) for l in current_edu)
-                    current_has_deg = any(any(w in edu_degree_keywords for w in re.sub(r'[^a-zA-Z\s]', ' ', l["text"]).lower().split()) for l in current_edu)
-                    if (has_deg and current_has_deg) or (has_year and current_has_year):
-                        is_new_edu = True
+                    def _line_has_deg(t):
+                        w = re.sub(r'[^a-zA-Z\s]', ' ', t).lower().split()
+                        return any(x in edu_degree_keywords for x in w) or bool(
+                            re.search(r'\b(?:b\.?tech|m\.?tech|b\.?e|b\.?sc|m\.?sc|b\.?com|m\.?com|b\.?a|m\.?a|bca|mca|ph\.?d|m\.?b\.?a)\b', t.lower())
+                        )
+                    current_has_deg = any(_line_has_deg(l["text"]) for l in current_edu)
+                    current_has_inst = any(any(w in ['university', 'college', 'school', 'institute', 'academy', 'icai', 'board'] for w in re.sub(r'[^a-zA-Z\s]', ' ', l["text"]).lower().split()) for l in current_edu)
+                    current_complete = current_has_deg and current_has_inst
+                    # A new degree or institution after a completed entry starts a
+                    # new education record (handles both "institution / degree" and
+                    # "degree / institution" orders without absorbing the next entry).
+                    if standalone_year_lines:
+                        is_new_edu = (has_deg and current_has_deg) or (has_year and current_has_year)
+                    else:
+                        is_new_edu = (
+                            (has_deg and current_complete)
+                            or (has_inst and current_complete)
+                            or (has_year and current_has_year)
+                        )
 
                 if is_new_edu:
                     edu_blocks.append(current_edu)

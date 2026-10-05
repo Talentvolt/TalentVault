@@ -1714,6 +1714,22 @@ class JobsView(ListView):
             if work_mode:
                 queryset = queryset.filter(work_mode=work_mode)
 
+            # Record candidate job-search intent for smart recommendations.
+            if self.request.user.is_authenticated and getattr(self.request.user, 'role', None) == 'CANDIDATE':
+                from services.candidate_matching_service import CandidateMatchingService
+                CandidateMatchingService.record_job_search_intent(
+                    self.request.user,
+                    query=q or self.request.GET.get('title', ''),
+                    filters={
+                        'title': self.request.GET.get('title', ''),
+                        'location': loc,
+                        'skills': skills,
+                        'job_type': job_type,
+                        'work_mode': work_mode,
+                        'experience': experience,
+                    }
+                )
+
             queryset = queryset.distinct()
                 
             # 9. Sorting
@@ -3099,6 +3115,21 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
                     selected_version_id = self.object.current_version or 1
             else:
                 # Reconstruct version data from database fields if versions are empty
+                reconstructed_experiences = [
+                    {
+                        "company": e.company_name,
+                        "designation": e.designation,
+                        "start_date": e.start_date.strftime("%Y-%m-%d") if e.start_date else "",
+                        "end_date": e.end_date.strftime("%Y-%m-%d") if e.end_date else ("Present" if e.is_current else ""),
+                        "description": e.description,
+                    } for e in self.object.experiences.all()
+                ]
+                if not reconstructed_experiences and isinstance(self.object.parsed_json, dict):
+                    reconstructed_experiences = (
+                        self.object.parsed_json.get('experience')
+                        or self.object.parsed_json.get('work_experience')
+                        or []
+                    )
                 version_data = {
                     "personal_info": {
                         "name": self.object.full_name,
@@ -3109,15 +3140,7 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
                     },
                     "summary": self.object.summary,
                     "skills": [s.skill_name for s in self.object.skills.all()],
-                    "experience": [
-                        {
-                            "company": e.company_name,
-                            "designation": e.designation,
-                            "start_date": e.start_date.strftime("%Y-%m-%d") if e.start_date else "",
-                            "end_date": e.end_date.strftime("%Y-%m-%d") if e.end_date else ("Present" if e.is_current else ""),
-                            "description": e.description,
-                        } for e in self.object.experiences.all()
-                    ],
+                    "experience": reconstructed_experiences,
                     "education": [
                         {
                             "institution": ed.institution,
@@ -3159,15 +3182,41 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
                 from apps.candidates.utils import parse_date_robust
                 return parse_date_robust(date_str, None)
 
+        # The parser emits experience records using the keys
+        # ``company_name`` / ``job_title`` / ``responsibilities`` / ``process``
+        # and may nest them under either ``experience`` or ``work_experience``.
+        # Normalize every accepted source/field name into the shape the
+        # template renders so existing records are never dropped.
+        raw_experiences = (
+            version_data.get('experience')
+            or version_data.get('work_experience')
+            or []
+        )
         display_experiences = []
-        for exp in version_data.get('experience', []):
+        for exp in raw_experiences:
+            if not isinstance(exp, dict):
+                continue
             s_date = str_to_date(exp.get('start_date'))
             e_date = str_to_date(exp.get('end_date'))
             is_curr = exp.get('end_date') == 'Present' or e_date is None
+
+            description = exp.get('description') or ''
+            if not description:
+                responsibilities = exp.get('responsibilities')
+                if isinstance(responsibilities, list):
+                    description = '\n'.join(
+                        f"\u2022 {r}" for r in responsibilities
+                        if isinstance(r, str) and r.strip()
+                    )
+                elif isinstance(responsibilities, str):
+                    description = responsibilities
+            if not description:
+                description = exp.get('process') or ''
+
             display_experiences.append({
                 'company_name': exp.get('company') or exp.get('company_name') or '',
-                'designation': exp.get('designation') or exp.get('title') or '',
-                'description': exp.get('description') or '',
+                'designation': exp.get('designation') or exp.get('title') or exp.get('job_title') or '',
+                'description': description,
                 'start_date': s_date,
                 'end_date': e_date,
                 'is_current': is_curr,
@@ -6726,7 +6775,11 @@ class CandidateResumeUploadView(CandidateRequiredMixin, View):
             profile = request.user.candidate_profile
             from services.resume_storage_service import save_candidate_resume_atomic, ResumeUploadError
             save_candidate_resume_atomic(profile, uploaded_file, uploaded_file.name, is_replacement=True, user=request.user)
-            
+
+            # Recalculate recommendations so the dashboard reflects the new resume intent.
+            from services.candidate_matching_service import CandidateMatchingService
+            CandidateMatchingService.invalidate_recommendations(profile)
+
             return JsonResponse({
                 'success': True, 
                 'message': 'Resume uploaded successfully!',
@@ -6891,6 +6944,10 @@ class CandidateOnboardingUpdateView(CandidateRequiredMixin, View):
                 profile.summary = data.get('summary').strip()
 
             profile.save()
+
+            # Recalculate recommendations after profile/preferences change.
+            from services.candidate_matching_service import CandidateMatchingService
+            CandidateMatchingService.invalidate_recommendations(profile)
 
             # Update Skills
             skills_data = data.get('skills', [])

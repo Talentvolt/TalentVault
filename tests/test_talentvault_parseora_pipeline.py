@@ -433,3 +433,141 @@ def test_candidate_detail_hides_internal_placeholder_email(local_media):
     html = response.content.decode("utf-8")
     assert "no-email.talentvault.internal" not in html
     assert "Rahul Verma" in html
+
+
+@pytest.mark.django_db
+def test_candidate_detail_renders_native_parser_experience_fields(local_media):
+    """
+    The resume parser emits experience records using the native keys
+    ``company_name`` / ``job_title`` / ``responsibilities`` / ``process`` and
+    may nest them under either ``experience`` or ``work_experience``. The
+    Candidate Detail UI must still render those records (never "0 Positions").
+    """
+    from django.test import Client
+    from django.urls import reverse
+
+    user = User.objects.create_user(
+        email="native_fields@talentvault.in",
+        password="Password123!",
+        role=User.Role.CANDIDATE,
+    )
+    parsed = {
+        "personal_info": {"name": "Native Fields", "current_company": "Acme",
+                          "current_designation": "Engineer", "total_experience": 3.0,
+                          "location": "Pune"},
+        "summary": "Test",
+        "skills": [],
+        "work_experience": [
+            {"company_name": "Acme Corp", "job_title": "Engineer",
+             "start_date": "2020-01-01", "end_date": "2021-01-01",
+             "responsibilities": ["did a", "did b"]},
+            {"company_name": "Beta Ltd", "job_title": "Senior Engineer",
+             "start_date": "2021-02-01", "end_date": "2022-02-01",
+             "process": "built things"},
+            {"company_name": "Gamma Inc", "job_title": "Lead",
+             "start_date": "2022-03-01", "end_date": "Present",
+             "responsibilities": ["lead team"]},
+        ],
+        "education": [],
+        "projects": [],
+        "certifications": [],
+    }
+    profile = CandidateProfile.objects.create(
+        user=user,
+        full_name="Native Fields",
+        summary="Test",
+        location="Pune",
+        current_company="Acme",
+        current_designation="Engineer",
+        total_experience=3.0,
+        parsed_json=parsed,
+        resume_versions={"1": {"version": 1, "label": "Original", "data": parsed}},
+        current_version=1,
+    )
+
+    admin = User.objects.create_superuser(
+        email="native_fields_admin@talentvault.in",
+        password="Password123!",
+        role=User.Role.SUPER_ADMIN,
+    )
+    client = Client()
+    client.force_login(admin)
+    response = client.get(
+        reverse("frontend:candidate_detail", kwargs={"pk": profile.pk})
+    )
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+
+    assert "3 Positions" in html
+    assert "No work experience history recorded" not in html
+    assert "Acme Corp" in html
+    assert "Beta Ltd" in html
+    assert "Gamma Inc" in html
+    assert "Engineer" in html
+    assert "did a" in html
+    assert "built things" in html
+    assert "lead team" in html
+
+
+@pytest.mark.django_db
+def test_candidate_detail_reconstructs_experience_from_parsed_json(local_media):
+    """
+    When resume_versions and the Experience table are empty but parsed_json
+    still holds the extracted records, the detail view must not fall back to
+    "0 Positions".
+    """
+    from django.test import Client
+    from django.urls import reverse
+
+    user = User.objects.create_user(
+        email="reconstruct_fields@talentvault.in",
+        password="Password123!",
+        role=User.Role.CANDIDATE,
+    )
+    parsed = {
+        "personal_info": {"name": "Reconstruct", "current_company": "X",
+                          "current_designation": "Y", "total_experience": 2.0,
+                          "location": "Noida"},
+        "summary": "Test",
+        "skills": [],
+        "experience": [
+            {"company_name": "CompA", "job_title": "Dev", "start_date": "2020-01-01",
+             "end_date": "2021-01-01", "responsibilities": ["a"]},
+            {"company_name": "CompB", "job_title": "Sr Dev", "start_date": "2021-01-01",
+             "end_date": "2022-01-01", "responsibilities": ["b"]},
+            {"company_name": "CompC", "job_title": "Lead", "start_date": "2022-01-01",
+             "end_date": "2023-01-01", "responsibilities": ["c"]},
+        ],
+        "education": [],
+    }
+    profile = CandidateProfile.objects.create(
+        user=user,
+        full_name="Reconstruct",
+        summary="Test",
+        location="Noida",
+        current_company="X",
+        current_designation="Y",
+        total_experience=2.0,
+        parsed_json=parsed,
+        resume_versions={},
+        current_version=1,
+    )
+
+    admin = User.objects.create_superuser(
+        email="reconstruct_fields_admin@talentvault.in",
+        password="Password123!",
+        role=User.Role.SUPER_ADMIN,
+    )
+    client = Client()
+    client.force_login(admin)
+    response = client.get(
+        reverse("frontend:candidate_detail", kwargs={"pk": profile.pk})
+    )
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+
+    assert "3 Positions" in html
+    assert "No work experience history recorded" not in html
+    assert "CompA" in html
+    assert "CompB" in html
+    assert "CompC" in html
