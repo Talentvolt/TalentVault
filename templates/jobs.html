@@ -7,14 +7,9 @@
     /* Styling to improve table UI & make it smooth like Workable */
     .jobs-table-card {
         border-radius: 16px;
-        overflow: visible !important; /* Allow dropdown to overflow */
         border: none;
         box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
         background: #ffffff;
-    }
-    
-    .table-responsive {
-        overflow: visible !important; /* Ensure dropdown menus are visible */
     }
     
     .jobs-table tbody tr {
@@ -288,7 +283,7 @@
                                 </div>
                             {% else %}
                                 <div class="dropdown table-actions">
-                                    <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown">
+                                    <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" data-bs-popper-config='{"strategy":"fixed"}'>
                                         <i class="bi bi-three-dots-vertical"></i>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="border-radius: 12px; min-width: 160px;">
@@ -415,6 +410,38 @@
 
 {% block extra_js %}
 <script>
+// Keep the jobs table kebab dropdown menus outside the scrollable table wrapper
+// so they are never clipped by the .table-responsive overflow container. Popper
+// still positions them relative to their toggle button (strategy: fixed), so they
+// stay attached to the correct row and flip to stay inside the viewport.
+document.addEventListener('DOMContentLoaded', function() {
+    function portalJobsDropdownMenu(toggle) {
+        const menu = toggle.parentElement.querySelector('.dropdown-menu');
+        if (!menu) return;
+        if (!menu.__jobsPortalParent) {
+            menu.__jobsPortalParent = menu.parentElement;
+        }
+        if (menu.parentElement !== document.body) {
+            document.body.appendChild(menu);
+        }
+    }
+
+    document.addEventListener('show.bs.dropdown', function(event) {
+        if (event.target.closest && event.target.closest('.jobs-table')) {
+            portalJobsDropdownMenu(event.target);
+        }
+    });
+
+    document.addEventListener('hidden.bs.dropdown', function(event) {
+        if (!event.target.closest || !event.target.closest('.jobs-table')) return;
+        const instance = bootstrap.Dropdown.getInstance(event.target);
+        const menu = instance && instance._menu;
+        if (menu && menu.__jobsPortalParent && menu.parentElement === document.body) {
+            menu.__jobsPortalParent.appendChild(menu);
+        }
+    });
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     const shareJobModal = document.getElementById('shareJobModal');
     if (shareJobModal) {
