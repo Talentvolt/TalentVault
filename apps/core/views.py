@@ -5687,10 +5687,10 @@ class BulkResumeValidateAPIView(RecruiterRequiredMixin, View):
         from apps.jobs.models import Job
 
         zip_file = request.FILES.get('resumes_zip')
-        if not zip_file:
-            return JsonResponse({"success": False, "message": "Please upload a ZIP file containing resumes."}, status=400)
-
         excel_file = request.FILES.get('candidates_excel')
+
+        if not zip_file and not excel_file:
+            return JsonResponse({"success": False, "message": "Please select a ZIP file of resumes or an Excel file of candidate data."}, status=400)
         overwrite = request.POST.get('overwrite') in ['true', '1', 'on', True]
         
         job_target = None

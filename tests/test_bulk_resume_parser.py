@@ -10,7 +10,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.accounts.models import User
 from apps.candidates.models import (
-    CandidateProfile, DuplicateResumeLog, BulkResumeJob, BulkResumeItem
+    CandidateProfile, DuplicateResumeLog, BulkResumeJob, BulkResumeItem,
+    Education, Experience, CandidateSkill
 )
 from services.bulk_resume_parser_service import BulkResumeParserService
 
@@ -284,3 +285,406 @@ class TestBulkResumeParser(TestCase):
         self.assertIn("Bulk Resume Parser", html)
         self.assertIn("Single Resume / Manual", html)
         self.assertIn("Manual Resume Parsing", html)
+
+    def test_excel_only_import_creates_candidates(self):
+        """Excel-only upload (no ZIP) is accepted and imports candidates from rows."""
+        excel_file = self._create_sample_excel([
+            ["Acme Corp", "Engineer", "Bangalore", "Whitefield", "John Excel", "9811223344", "", ""],
+            ["Globex", "Lead", "Hyderabad", "Hitec City", "Jane Excel", "9811223355", "", ""],
+        ])
+        response = self.client.post('/api/bulk-resume/validate/', {
+            'candidates_excel': excel_file,
+            'overwrite': 'false'
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['valid_resumes'], 0)
+        self.assertEqual(data['excel_rows'], 2)
+
+        job = BulkResumeJob.objects.get(job_number=data['job_id'])
+        self.assertEqual(job.total_files, 2)
+        self.assertEqual(job.items.count(), 2)
+
+        start_resp = self.client.post('/api/bulk-resume/start/', {
+            'job_id': data['job_id'],
+            'overwrite': 'false',
+            'sync': 'true'
+        })
+        self.assertEqual(start_resp.status_code, 200)
+        self.assertTrue(start_resp.json()['success'])
+
+        job.refresh_from_db()
+        self.assertEqual(job.successful_count, 2)
+        self.assertTrue(User.objects.filter(phone_number='9811223344').exists())
+        self.assertTrue(User.objects.filter(phone_number='9811223355').exists())
+
+    def test_validate_requires_zip_or_excel(self):
+        """Validation returns 400 only when neither ZIP nor Excel is provided."""
+        response = self.client.post('/api/bulk-resume/validate/', {})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()['success'])
+
+    def test_excel_only_full_candidate_creation_from_real_file(self):
+        """Excel-only import reads a real .xlsx file and creates full candidate DB records."""
+        import tempfile
+
+        headers = ["Company Name", "Role", "Location", "Name", "Contact Number", "Email"]
+        rows = [
+            ["Acme Corp", "Engineer", "Bangalore", "John Doe", "9811223344", "john.doe@example.com"],
+            ["Globex", "Lead", "Hyderabad", "Jane Roe", "9811223355", "jane.roe@example.com"],
+        ]
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(headers)
+        for r in rows:
+            ws.append(r)
+
+        # Write a real .xlsx file to disk and upload it from disk (real fixture).
+        fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+        os.close(fd)
+        try:
+            wb.save(tmp_path)
+            with open(tmp_path, "rb") as f:
+                excel_file = SimpleUploadedFile(
+                    "candidates.xlsx",
+                    f.read(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+            resp = self.client.post('/api/bulk-resume/validate/', {'candidates_excel': excel_file})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data['success'])
+            self.assertEqual(data['excel_rows'], 2)
+            self.assertIn("Email", data['column_mapping'])
+            self.assertIn("Contact Number", data['column_mapping'])
+
+            start_resp = self.client.post('/api/bulk-resume/start/', {
+                'job_id': data['job_id'],
+                'sync': 'true'
+            })
+            self.assertEqual(start_resp.status_code, 200)
+            self.assertTrue(start_resp.json()['success'])
+
+            # Verify FINAL candidate DB records.
+            john = User.objects.get(email='john.doe@example.com')
+            jane = User.objects.get(email='jane.roe@example.com')
+            self.assertEqual(john.phone_number, '9811223344')
+            self.assertEqual(jane.phone_number, '9811223355')
+
+            john_profile = CandidateProfile.objects.get(user=john)
+            self.assertEqual(john_profile.full_name, 'John Doe')
+            self.assertEqual(john_profile.current_company, 'Acme Corp')
+            self.assertEqual(john_profile.current_designation, 'Engineer')
+            self.assertEqual(john_profile.location, 'Bangalore')
+        finally:
+            os.unlink(tmp_path)
+
+    def test_excel_only_empty_file_returns_error(self):
+        """Validation does not fake success when zero Excel rows are loaded."""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Company Name", "Role", "Name", "Email"])  # header only, no data rows
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        excel_file = SimpleUploadedFile(
+            "empty.xlsx",
+            buf.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response = self.client.post('/api/bulk-resume/validate/', {'candidates_excel': excel_file})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()['success'])
+
+    def test_excel_exact_structure_semantic_field_mapping_regression(self):
+        """
+        Regression test using the exact uploaded Excel structure:
+        - Candidate Name -> Candidate Name
+        - Resume Title -> Professional Summary
+        - Contact No. -> Phone
+        - Email -> Email
+        - Work Exp -> Total Experience
+        - Annual Salary -> Current/Annual CTC
+        - Current Location -> Current Location
+        - Preferred Location -> Preferred Location
+        - Current Employer -> Current Company
+        - Designation -> Current Designation
+        - U.G. Course -> Education / Undergraduate
+        - P.G. Course -> Education / Postgraduate
+        - Post P.G. Course -> Education / Postgraduate/Additional Education
+        - remaining relevant columns -> appropriate candidate fields
+
+        Validates final DB record and candidate profile:
+        - Do not put Resume Title into job designation.
+        - Do not put U.G./P.G. course into summary.
+        - Do not lose Annual Salary.
+        - Populates CandidateRecord and related Experience/Education/Skills fields.
+        - Preserves full Excel data.
+        """
+        import tempfile
+
+        headers = [
+            "Candidate Name",
+            "Resume Title",
+            "Contact No.",
+            "Email",
+            "Work Exp",
+            "Annual Salary",
+            "Current Location",
+            "Preferred Location",
+            "Current Employer",
+            "Designation",
+            "U.G. Course",
+            "P.G. Course",
+            "Post P.G. Course",
+            "Key Skills",
+            "Notice Period",
+            "Vendor Notes"  # Non-standard column to test preservation
+        ]
+        row = [
+            "Rahul Sharma",
+            "Senior Full Stack Python Developer with 6+ years experience",
+            "9876543210",
+            "rahul.sharma@example.com",
+            "6.5 Years",
+            "18,00,000",
+            "Bengaluru",
+            "Hyderabad",
+            "Acme Technologies",
+            "Senior Software Engineer",
+            "B.Tech Computer Science",
+            "M.Tech Software Systems",
+            "Executive PG Diploma in Machine Learning",
+            "Python, Django, AWS, React, Docker",
+            "30 Days",
+            "Recommended by recruitment partner"
+        ]
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(headers)
+        ws.append(row)
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+        os.close(fd)
+        try:
+            wb.save(tmp_path)
+            with open(tmp_path, "rb") as f:
+                excel_file = SimpleUploadedFile(
+                    "candidates_exact.xlsx",
+                    f.read(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+            # 1. Validate endpoint
+            validate_resp = self.client.post('/api/bulk-resume/validate/', {
+                'candidates_excel': excel_file,
+                'overwrite': 'true'
+            })
+            self.assertEqual(validate_resp.status_code, 200)
+            v_data = validate_resp.json()
+            self.assertTrue(v_data['success'])
+            self.assertEqual(v_data['excel_rows'], 1)
+
+            # Check semantic mapping display
+            cmap = v_data['column_mapping']
+            self.assertEqual(cmap.get("Candidate Name"), "Candidate Name")
+            self.assertEqual(cmap.get("Resume Title"), "Professional Summary")
+            self.assertEqual(cmap.get("Contact No."), "Phone")
+            self.assertEqual(cmap.get("Email"), "Email")
+            self.assertEqual(cmap.get("Work Exp"), "Total Experience")
+            self.assertEqual(cmap.get("Annual Salary"), "Annual Salary")
+            self.assertEqual(cmap.get("Current Location"), "Current Location")
+            self.assertEqual(cmap.get("Preferred Location"), "Preferred Location")
+            self.assertEqual(cmap.get("Current Employer"), "Current Company")
+            self.assertEqual(cmap.get("Designation"), "Current Designation")
+            self.assertEqual(cmap.get("U.G. Course"), "UG Course")
+            self.assertEqual(cmap.get("P.G. Course"), "PG Course")
+            self.assertEqual(cmap.get("Post P.G. Course"), "Post PG Course")
+            self.assertEqual(cmap.get("Key Skills"), "Skills")
+            self.assertEqual(cmap.get("Notice Period"), "Notice Period")
+
+            # 2. Start import synchronously
+            start_resp = self.client.post('/api/bulk-resume/start/', {
+                'job_id': v_data['job_id'],
+                'overwrite': 'true',
+                'sync': 'true'
+            })
+            self.assertEqual(start_resp.status_code, 200)
+            self.assertTrue(start_resp.json()['success'])
+
+            # 3. Validate FINAL database records
+            user = User.objects.get(email="rahul.sharma@example.com")
+            self.assertEqual(user.phone_number, "9876543210")
+
+            profile = CandidateProfile.objects.get(user=user)
+
+            # Candidate Name -> Candidate Name
+            self.assertEqual(profile.full_name, "Rahul Sharma")
+
+            # Resume Title -> Professional Summary
+            self.assertEqual(profile.summary, "Senior Full Stack Python Developer with 6+ years experience")
+            # Do NOT put Resume Title into job designation
+            self.assertNotEqual(profile.current_designation, profile.summary)
+            # Designation -> Current Designation
+            self.assertEqual(profile.current_designation, "Senior Software Engineer")
+
+            # Do NOT put U.G./P.G. course into summary
+            self.assertNotIn("B.Tech", profile.summary)
+            self.assertNotIn("M.Tech", profile.summary)
+
+            # Work Exp -> Total Experience
+            self.assertEqual(float(profile.total_experience), 6.5)
+
+            # Annual Salary -> Current/Annual CTC (Do NOT lose Annual Salary!)
+            self.assertIsNotNone(profile.current_salary)
+            self.assertEqual(profile.current_salary, Decimal('1800000.00'))
+
+            # Current Location -> Current Location
+            self.assertEqual(profile.location, "Bengaluru")
+
+            # Preferred Location -> Preferred Location
+            self.assertEqual(profile.preferred_location, "Hyderabad")
+
+            # Current Employer -> Current Company
+            self.assertEqual(profile.current_company, "Acme Technologies")
+
+            # Notice Period
+            self.assertEqual(profile.notice_period, 30)
+
+            # U.G. Course -> Education / Undergraduate
+            ug_edu = profile.educations.filter(qualification_level=Education.QualificationLevel.UG).first()
+            self.assertIsNotNone(ug_edu)
+            self.assertEqual(ug_edu.degree, "B.Tech Computer Science")
+
+            # P.G. Course -> Education / Postgraduate
+            pg_edu = profile.educations.filter(qualification_level=Education.QualificationLevel.PG).first()
+            self.assertIsNotNone(pg_edu)
+            self.assertEqual(pg_edu.degree, "M.Tech Software Systems")
+
+            # Post P.G. Course -> Education / Postgraduate/Additional Education
+            ppg_edu = profile.educations.filter(degree="Executive PG Diploma in Machine Learning").first()
+            self.assertIsNotNone(ppg_edu)
+
+            # Experience record populated
+            exp = profile.experiences.filter(is_current=True).first()
+            self.assertIsNotNone(exp)
+            self.assertEqual(exp.company_name, "Acme Technologies")
+            self.assertEqual(exp.designation, "Senior Software Engineer")
+
+            # Skills populated
+            skill_names = set(profile.skills.values_list('skill_name', flat=True))
+            self.assertTrue(skill_names.issuperset({"Python", "Django", "Aws", "React", "Docker"}))
+
+            # Full Excel data preserved
+            self.assertIn('raw_excel_data', profile.parsed_json)
+            raw = profile.parsed_json['raw_excel_data']
+            self.assertEqual(raw.get("Annual Salary"), "18,00,000")
+            self.assertEqual(raw.get("Vendor Notes"), "Recommended by recruitment partner")
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    def test_excel_header_variations_semantic_matching(self):
+        """
+        Tests handling variations like 'UG', 'U.G.', 'Graduate', 'PG', 'P.G.',
+        'Post Graduate', 'Salary', 'CTC', etc., and verifies final DB records.
+        """
+        import tempfile
+
+        headers = [
+            "Name",
+            "Headline",
+            "Mobile",
+            "Email Address",
+            "Total Exp",
+            "CTC",
+            "Location",
+            "Pref Location",
+            "Employer",
+            "Role",
+            "U.G.",
+            "P.G.",
+            "Doctorate",
+            "Skills"
+        ]
+        row = [
+            "Priya Verma",
+            "Lead AI Researcher and Data Scientist",
+            "9811223344",
+            "priya.verma@example.com",
+            "5 Yrs 6 Months",
+            "25 LPA",
+            "Mumbai",
+            "Pune",
+            "DataCorp Labs",
+            "Lead Scientist",
+            "B.Sc Statistics",
+            "M.Sc Computer Science",
+            "Ph.D Artificial Intelligence",
+            "Python, PyTorch, Transformers"
+        ]
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(headers)
+        ws.append(row)
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+        os.close(fd)
+        try:
+            wb.save(tmp_path)
+            with open(tmp_path, "rb") as f:
+                excel_file = SimpleUploadedFile(
+                    "variations.xlsx",
+                    f.read(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+            resp = self.client.post('/api/bulk-resume/validate/', {
+                'candidates_excel': excel_file,
+                'overwrite': 'true'
+            })
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data['success'])
+
+            start_resp = self.client.post('/api/bulk-resume/start/', {
+                'job_id': data['job_id'],
+                'sync': 'true'
+            })
+            self.assertEqual(start_resp.status_code, 200)
+
+            user = User.objects.get(email="priya.verma@example.com")
+            self.assertEqual(user.phone_number, "9811223344")
+
+            profile = CandidateProfile.objects.get(user=user)
+            self.assertEqual(profile.full_name, "Priya Verma")
+            self.assertEqual(profile.summary, "Lead AI Researcher and Data Scientist")
+            self.assertEqual(profile.current_designation, "Lead Scientist")
+            self.assertEqual(profile.current_company, "DataCorp Labs")
+            self.assertEqual(profile.location, "Mumbai")
+            self.assertEqual(profile.preferred_location, "Pune")
+            self.assertEqual(float(profile.total_experience), 5.5)
+            self.assertEqual(profile.current_salary, Decimal('2500000.00'))
+
+            # Education variations
+            ug_edu = profile.educations.filter(qualification_level=Education.QualificationLevel.UG).first()
+            self.assertIsNotNone(ug_edu)
+            self.assertEqual(ug_edu.degree, "B.Sc Statistics")
+
+            pg_edu = profile.educations.filter(qualification_level=Education.QualificationLevel.PG).first()
+            self.assertIsNotNone(pg_edu)
+            self.assertEqual(pg_edu.degree, "M.Sc Computer Science")
+
+            doc_edu = profile.educations.filter(degree="Ph.D Artificial Intelligence").first()
+            self.assertIsNotNone(doc_edu)
+            self.assertEqual(doc_edu.qualification_level, Education.QualificationLevel.DOCTORATE)
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+

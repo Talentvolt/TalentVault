@@ -18,6 +18,7 @@ from apps.candidates.views import (
     ProjectViewSet,
     CertificationViewSet
 )
+from apps.candidates.import_views import CandidateImportAPIView
 from apps.applications.views import ApplicationViewSet
 from apps.interviews.views import InterviewViewSet
 from apps.taxonomy.views import (
@@ -119,6 +120,7 @@ urlpatterns = [
     
     # API Version 1
     path('api/v1/auth/', include('apps.accounts.urls')),
+    path('api/v1/candidates/import/', CandidateImportAPIView.as_view(), name='api_candidate_import'),
     path('api/v1/', include(router.urls)),
     path('taxonomy/', include('apps.taxonomy.urls', namespace='taxonomy')),
     

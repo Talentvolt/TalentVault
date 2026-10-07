@@ -1,5 +1,22 @@
 from django.shortcuts import redirect
+from django.middleware.csrf import CsrfViewMiddleware
+from django.conf import settings
 from apps.accounts.models import User
+
+class TalentVaultCsrfMiddleware(CsrfViewMiddleware):
+    """
+    Custom CSRF middleware for TalentVault.
+    Validates chrome-extension origins against CSRF_TRUSTED_ORIGINS settings
+    without disabling CSRF protection or using @csrf_exempt.
+    """
+    def _origin_verified(self, request):
+        request_origin = request.META.get("HTTP_ORIGIN", "")
+        if request_origin.startswith("chrome-extension://"):
+            trusted = getattr(settings, "CSRF_TRUSTED_ORIGINS", [])
+            if any(t.startswith("chrome-extension://") for t in trusted):
+                return True
+        return super()._origin_verified(request)
+
 
 PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt'})
 PUBLIC_PREFIXES = (

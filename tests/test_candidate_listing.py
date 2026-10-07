@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
 from apps.accounts.models import User
-from apps.companies.models import Company
+from apps.companies.models import Company, CompanyMember
 from apps.clients.models import Client
 from apps.jobs.models import Job
 from apps.candidates.models import CandidateProfile
@@ -15,6 +15,7 @@ def test_candidate_listing_displays_client_name(client):
         role=User.Role.RECRUITER
     )
     comp, _ = Company.objects.get_or_create(name="TalentVault Test Company")
+    CompanyMember.objects.get_or_create(user=recruiter, company=comp, defaults={'role': 'ADMIN'})
     client_obj = Client.objects.create(
         company_name="Tech Mahindra",
         spoc_name="Rahul HR"
@@ -27,7 +28,8 @@ def test_candidate_listing_displays_client_name(client):
         title="Customer Support",
         location="Dehradun",
         work_mode="ONSITE",
-        status="ACTIVE"
+        status="ACTIVE",
+        created_by=recruiter
     )
 
     cand_user = User.objects.create_user(

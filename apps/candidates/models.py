@@ -52,6 +52,7 @@ class CandidateProfile(BaseAppModel):
     preferred_location = models.CharField(max_length=255, blank=True, null=True)
     linkedin_url = models.URLField(blank=True, null=True)
     portfolio_url = models.URLField(blank=True, null=True)
+    source = models.CharField(max_length=50, blank=True, null=True, default='', db_index=True)
     ats_score = models.PositiveIntegerField(default=0, db_index=True, help_text="Calculated ATS suitability score (0-100)")
     profile_photo = models.ImageField(upload_to='candidate_photos/', null=True, blank=True)
     recruiter_notes = models.TextField(blank=True, default="")

@@ -39,6 +39,11 @@ SESSION_COOKIE_NAME = 'sessionid'
 CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_HTTPONLY = True
 
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^chrome-extension://hneceobjjiehhicimdfdeheodcoklgec$",
+]
+
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
@@ -50,6 +55,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://www.talent-vault.in",
     "https://*.onrender.com",
     "https://*.talent-vault.in",
+    "chrome-extension://hneceobjjiehhicimdfdeheodcoklgec",
 ]
 
 env_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS")
@@ -160,7 +166,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'config.middleware.TalentVaultCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

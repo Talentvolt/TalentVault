@@ -140,7 +140,7 @@
                                     <div class="badge bg-light text-dark border px-2.5 py-1 mb-2">
                                         Supported: <strong>PDF • DOC • DOCX</strong>
                                     </div>
-                                    <input type="file" name="resumes_zip" id="bulkZipInput" class="form-control form-control-sm mt-2" accept=".zip" required>
+                                    <input type="file" name="resumes_zip" id="bulkZipInput" class="form-control form-control-sm mt-2" accept=".zip">
                                     <div class="form-text mt-1 text-muted" style="font-size: 0.75rem;">Max safe archive size: 500MB</div>
                                 </div>
                             </div>
@@ -776,9 +776,10 @@ document.getElementById("bulkValidateForm")?.addEventListener("submit", async fu
     e.preventDefault();
     const btn = document.getElementById("bulkValidateBtn");
     const zipInput = document.getElementById("bulkZipInput");
+    const excelInput = document.getElementById("bulkExcelInput");
 
-    if (!zipInput.files.length) {
-        alert("Please select a ZIP file containing resumes.");
+    if (!zipInput.files.length && !excelInput.files.length) {
+        alert("Please select a ZIP file of resumes or an Excel file of candidate data.");
         return;
     }
 
@@ -798,7 +799,7 @@ document.getElementById("bulkValidateForm")?.addEventListener("submit", async fu
 
         const data = await res.json();
         if (!res.ok || !data.success) {
-            alert(data.message || "Validation failed. Please check your ZIP file.");
+            alert(data.message || "Validation failed. Please check your files.");
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-shield-check me-2"></i> Validate Files &amp; Prepare Batch';
             return;

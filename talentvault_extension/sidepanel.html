@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TalentVault Candidate Importer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <div class="logo-icon">TV</div>
+      <div>
+        <div class="brand-title">TalentVault</div>
+        <div class="brand-subtitle">Candidate Importer</div>
+      </div>
+    </div>
+    <div class="endpoint-badge" id="apiEndpointBadge">API: Active</div>
+  </div>
+
+  <div class="mode-switcher">
+    <button type="button" id="parsingModeBtn" class="mode-tab active">
+      <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+      Parsing Mode
+    </button>
+    <button type="button" id="manualModeBtn" class="mode-tab">
+      <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+      Manual Mode
+    </button>
+  </div>
+
+  <div class="container">
+    <div id="statusAlert" class="alert hidden"></div>
+
+    <div id="extractCard" class="card action-card">
+      <button id="importBtn" class="btn btn-primary btn-block">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        1. Extract Candidate Data
+      </button>
+    </div>
+
+    <form id="candidateForm" class="hidden">
+      <div class="card">
+        <div class="card-header">
+          <span>Candidate Information</span>
+          <span id="sourceBadge" class="source-tag">Source: LINKEDIN</span>
+        </div>
+
+        <div class="form-group">
+          <label for="fieldName">Full Name *</label>
+          <input type="text" id="fieldName" placeholder="e.g. Ananya Deshmukh">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="fieldEmail">Email</label>
+            <input type="email" id="fieldEmail" placeholder="e.g. candidate@example.com">
+          </div>
+          <div class="form-group flex-1">
+            <label for="fieldPhone">Phone Number</label>
+            <input type="text" id="fieldPhone" placeholder="e.g. +91 9876543210">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="fieldHeadline">Headline / Designation</label>
+          <input type="text" id="fieldHeadline" placeholder="e.g. Principal AI Architect">
+        </div>
+
+        <div class="form-group">
+          <label for="fieldCurrentCompany">Current Company</label>
+          <input type="text" id="fieldCurrentCompany" placeholder="e.g. NVIDIA">
+        </div>
+
+        <div class="form-group">
+          <label for="fieldLocation">Location</label>
+          <input type="text" id="fieldLocation" placeholder="e.g. Bengaluru, Karnataka, India">
+        </div>
+
+        <div class="form-group">
+          <label for="fieldSummary">About / Professional Summary</label>
+          <textarea id="fieldSummary" rows="3" placeholder="Candidate profile summary..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="fieldProfileUrl">LinkedIn URL</label>
+          <input type="text" id="fieldProfileUrl" placeholder="https://www.linkedin.com/in/username/">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="fieldTotalExperience">Total Experience (yrs)</label>
+            <input type="number" step="0.1" id="fieldTotalExperience" placeholder="e.g. 5.5">
+          </div>
+          <div class="form-group flex-1">
+            <label for="fieldNoticePeriod">Notice Period (days)</label>
+            <input type="number" id="fieldNoticePeriod" placeholder="30">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="fieldCurrentSalary">Current CTC (LPA)</label>
+            <input type="number" step="0.1" id="fieldCurrentSalary" placeholder="e.g. 15.0">
+          </div>
+          <div class="form-group flex-1">
+            <label for="fieldExpectedSalary">Expected CTC (LPA)</label>
+            <input type="number" step="0.1" id="fieldExpectedSalary" placeholder="e.g. 20.0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="fieldSkills">Skills (comma-separated)</label>
+          <input type="text" id="fieldSkills" placeholder="Python, PyTorch, CUDA, Django">
+        </div>
+      </div>
+
+      <!-- Experience Section -->
+      <div class="card">
+        <div class="card-header">
+          <span>Work Experience (<span id="expCount">0</span>)</span>
+          <button type="button" id="addExpBtn" class="btn-sm btn-outline">+ Add Entry</button>
+        </div>
+        <div id="experienceList" class="dynamic-list"></div>
+        <textarea id="fieldExperience" class="hidden"></textarea>
+      </div>
+
+      <!-- Education Section -->
+      <div class="card">
+        <div class="card-header">
+          <span>Education (<span id="eduCount">0</span>)</span>
+          <button type="button" id="addEduBtn" class="btn-sm btn-outline">+ Add Entry</button>
+        </div>
+        <div id="educationList" class="dynamic-list"></div>
+        <textarea id="fieldEducation" class="hidden"></textarea>
+      </div>
+
+      <div class="card action-card">
+        <button type="button" id="saveBtn" class="btn btn-success btn-block">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Save Candidate
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
