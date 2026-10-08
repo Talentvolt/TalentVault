@@ -46,7 +46,6 @@ let currentMode = "parsing"; // "parsing" or "manual"
 let currentExtractedData = null;
 let experiencesData = [];
 let educationsData = [];
-let csrfToken = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   const parsingModeBtn = document.getElementById("parsingModeBtn");
@@ -71,24 +70,61 @@ document.addEventListener("DOMContentLoaded", () => {
   enrichBtn.addEventListener("click", () => handleEnrich("all"));
 
   // Resolve the API base URL (production default, storage override for dev)
-  // before making any network call, then prefetch the CSRF token.
-  loadApiBaseUrl().then(() => {
-    fetchCsrfToken();
-  });
+  // before any network call. CSRF tokens are fetched fresh per-request, so
+  // nothing is cached here.
+  loadApiBaseUrl();
 });
 
-async function fetchCsrfToken() {
+/**
+ * Obtain a FRESH CSRF token from the backend. Django sets the `csrftoken`
+ * cookie on this GET and returns a matching token in the JSON body. A token is
+ * never cached across requests so it cannot go stale after a login/session
+ * change (Django rotates the CSRF secret on login).
+ */
+async function getCsrfToken() {
   try {
     const res = await fetch(importEndpoint(), { method: "GET", credentials: "include" });
     if (res.ok) {
       const data = await res.json();
-      if (data.csrfToken) {
-        csrfToken = data.csrfToken;
+      if (data && data.csrfToken) {
+        return data.csrfToken;
       }
     }
   } catch (e) {
-    console.warn("Could not prefetch CSRF token:", e);
+    console.warn("Could not fetch CSRF token:", e);
   }
+  return null;
+}
+
+/**
+ * POST with CSRF protection. Fetches a fresh token immediately before the
+ * request and sends it in X-CSRFToken alongside the session cookies. If Django
+ * rejects a stale/rotated token with 403, we refresh once and retry so a
+ * login/session change mid-flight never leaves the extension stuck.
+ */
+async function postWithCsrf(url, payload) {
+  const doPost = async () => {
+    const token = await getCsrfToken();
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+    if (token) {
+      headers["X-CSRFToken"] = token;
+    }
+    return fetch(url, {
+      method: "POST",
+      headers: headers,
+      credentials: "include",
+      body: JSON.stringify(payload)
+    });
+  };
+
+  let response = await doPost();
+  if (response.status === 403) {
+    response = await doPost();
+  }
+  return response;
 }
 
 function setMode(mode) {
@@ -449,26 +485,9 @@ async function handleEnrich(scope) {
   showAlert("Contacting TalentVault enrichment service...", "info");
 
   try {
-    if (!csrfToken) {
-      await fetchCsrfToken();
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    };
-    if (csrfToken) {
-      headers["X-CSRFToken"] = csrfToken;
-    }
-
     const body = Object.assign({}, person, { scope: scope, save: scope === "all" });
 
-    const response = await fetch(enrichmentEndpoint(), {
-      method: "POST",
-      headers: headers,
-      credentials: "include",
-      body: JSON.stringify(body)
-    });
+    const response = await postWithCsrf(enrichmentEndpoint(), body);
 
     const result = await response.json();
 
@@ -540,24 +559,7 @@ async function handleSaveCandidate() {
   };
 
   try {
-    if (!csrfToken) {
-      await fetchCsrfToken();
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    };
-    if (csrfToken) {
-      headers["X-CSRFToken"] = csrfToken;
-    }
-
-    const response = await fetch(importEndpoint(), {
-      method: "POST",
-      headers: headers,
-      credentials: "include",
-      body: JSON.stringify(payload)
-    });
+    const response = await postWithCsrf(importEndpoint(), payload);
 
     const result = await response.json();
 
