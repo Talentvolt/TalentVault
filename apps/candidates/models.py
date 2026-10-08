@@ -864,6 +864,49 @@ class BulkResumeItem(BaseAppModel):
         return f"{self.job.job_number} - {self.filename} ({self.status})"
 
 
+class EnrichmentPerson(BaseAppModel):
+    """
+    TalentVault native People/Email/Phone database.
+
+    Holds authorized, developer-imported contact records that the native
+    enrichment engine matches against using profile identifiers (name, company,
+    title, location, LinkedIn URL). It is the source of truth for the native
+    (non-HTTP, non-recursive) enrichment provider.
+    """
+    class ContactStatus(models.TextChoices):
+        NOT_FOUND = 'not_found', _('Not Found')
+        FOUND = 'found', _('Found')
+        VERIFIED = 'verified', _('Verified')
+        UNVERIFIED = 'unverified', _('Unverified')
+
+    full_name = models.CharField(max_length=255, db_index=True)
+    company = models.CharField(max_length=255, blank=True, default='', db_index=True)
+    title = models.CharField(max_length=255, blank=True, default='', db_index=True)
+    location = models.CharField(max_length=255, blank=True, default='', db_index=True)
+    linkedin_url = models.URLField(blank=True, null=True, db_index=True)
+
+    email = models.EmailField(blank=True, null=True)
+    email_status = models.CharField(
+        max_length=20, choices=ContactStatus.choices, default=ContactStatus.NOT_FOUND, db_index=True
+    )
+    phone = models.CharField(max_length=30, blank=True, null=True)
+    phone_status = models.CharField(
+        max_length=20, choices=ContactStatus.choices, default=ContactStatus.NOT_FOUND, db_index=True
+    )
+
+    source = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    confidence = models.FloatField(default=1.0)
+    last_verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('enrichment person')
+        verbose_name_plural = _('enrichment people')
+        ordering = ['full_name']
+
+    def __str__(self):
+        return f"{self.full_name} ({self.company or '—'})"
+
+
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
@@ -884,6 +927,7 @@ from django.dispatch import receiver
 @receiver(pre_save, sender=RecentCandidateSearch)
 @receiver(pre_save, sender=BulkResumeJob)
 @receiver(pre_save, sender=BulkResumeItem)
+@receiver(pre_save, sender=EnrichmentPerson)
 def pre_save_sanitize_handler(sender, instance, **kwargs):
     from apps.candidates.utils import sanitize_text, sanitize_recursive
     import django.db.models as django_models

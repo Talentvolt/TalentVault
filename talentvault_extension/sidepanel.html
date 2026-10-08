@@ -59,11 +59,11 @@
 
         <div class="form-row">
           <div class="form-group flex-1">
-            <label for="fieldEmail">Email</label>
+            <label for="fieldEmail">Email <span id="emailStatusBadge" class="status-badge hidden"></span></label>
             <input type="email" id="fieldEmail" placeholder="e.g. candidate@example.com">
           </div>
           <div class="form-group flex-1">
-            <label for="fieldPhone">Phone Number</label>
+            <label for="fieldPhone">Phone Number <span id="phoneStatusBadge" class="status-badge hidden"></span></label>
             <input type="text" id="fieldPhone" placeholder="e.g. +91 9876543210">
           </div>
         </div>
@@ -119,6 +119,35 @@
           <label for="fieldSkills">Skills (comma-separated)</label>
           <input type="text" id="fieldSkills" placeholder="Python, PyTorch, CUDA, Django">
         </div>
+      </div>
+
+      <!-- Contact Enrichment Section -->
+      <div class="card">
+        <div class="card-header">
+          <span>Contact Enrichment</span>
+          <span class="source-tag source-manual">LOCAL</span>
+        </div>
+        <div class="form-row">
+          <button type="button" id="findEmailBtn" class="btn btn-outline flex-1">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            Find Email
+          </button>
+          <button type="button" id="findPhoneBtn" class="btn btn-outline flex-1">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/>
+            </svg>
+            Find Phone
+          </button>
+        </div>
+        <button type="button" id="enrichBtn" class="btn btn-primary btn-block">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
+          </svg>
+          Enrich Candidate
+        </button>
       </div>
 
       <!-- Experience Section -->

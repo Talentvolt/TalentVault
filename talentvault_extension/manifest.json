@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TalentVault Candidate Importer",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aKbiXQ5HjVdS/IvnvmklTN2TbmrfWEPpnR0/XMqxyvOVBBxy2zc8yaPJfyUhnYtJRSRAmX19UnN7zo/Cj0BL7+CznImXnP7fDbD1/oreYcFbvzNaVOWmBCTHvTifj3AWBxbG6QkVrnzV0+2EvT8tE+anytv5e188VAEGQCJENbXZQ3ZvkVuXwrwCSS6Mye7GpL84D/F23H4vkIZ2lbaSRzuokstdZ6aK8TGZI3IHy2F3urBRFOAaoqu577y9cDQ7rvWZ7DjPXBVA99hmBCLFRxbIzkYSJf7zvIA68AltKDg+bedRPF8SCIjRImSc9nRctEF4ZM6uRxxfyzO+aBx8wIDAQAB",
   "description": "Import candidate profiles directly from LinkedIn or Naukri into TalentVault.",
   "permissions": [
@@ -11,8 +11,8 @@
     "storage"
   ],
   "host_permissions": [
-    "http://localhost/*",
-    "http://127.0.0.1/*",
+    "https://talent-vault.in/*",
+    "https://www.talent-vault.in/*",
     "https://*.linkedin.com/*",
     "https://*.naukri.com/*"
   ],

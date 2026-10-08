@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "TalentVault Contact Enrichment",
+  "version": "1.0.0",
+  "description": "B2B contact enrichment (email / phone finder) for the TalentVault side panel.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "http://localhost:4100/*",
+    "https://*.linkedin.com/*"
+  ],
+  "action": {
+    "default_title": "Open TalentVault Enrichment"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

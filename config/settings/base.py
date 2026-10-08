@@ -89,6 +89,26 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL_NAME = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
 # ==============================================================================
+# Candidate Contact Enrichment
+#
+# The TalentVault extension never talks to an external enrichment provider
+# directly. It calls the local /api/v1/enrichment/person/ endpoint, which runs
+# the native TalentVault enrichment engine against the People/Email/Phone
+# database (apps.candidates.EnrichmentPerson). This is the default for LOCAL use
+# and never makes outbound or recursive API calls.
+#
+#   ENRICHMENT_PROVIDER: "native" (default) | "mock" (tests) | "http" (optional
+#                        future external adapter).
+#   ENRICHMENT_BASE_URL / ENRICHMENT_API_KEY / ENRICHMENT_API_KEY_HEADER /
+#   ENRICHMENT_TIMEOUT: used only by the optional "http" adapter.
+# ==============================================================================
+ENRICHMENT_PROVIDER = os.environ.get("ENRICHMENT_PROVIDER", "native")
+ENRICHMENT_BASE_URL = os.environ.get("ENRICHMENT_BASE_URL", "").strip()
+ENRICHMENT_API_KEY = os.environ.get("ENRICHMENT_API_KEY", "").strip()
+ENRICHMENT_API_KEY_HEADER = os.environ.get("ENRICHMENT_API_KEY_HEADER", "X-Api-Key")
+ENRICHMENT_TIMEOUT = float(os.environ.get("ENRICHMENT_TIMEOUT", "10"))
+
+# ==============================================================================
 # HireNest Australia Admin Integration (read-only proxy to HireNest)
 #
 # TalentVault and HireNest keep SEPARATE databases. The TalentVault Admin
