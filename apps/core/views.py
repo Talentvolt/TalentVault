@@ -28,6 +28,14 @@ from apps.interviews.models import Interview
 from apps.notifications.models import Notification
 from apps.companies.models import CompanyMember, Company
 from .permissions import SuperAdminRequiredMixin, RecruiterRequiredMixin, CandidateRequiredMixin
+from .hire_worldwide import (
+    CURRENCY_CHOICES,
+    COUNTRY_CHOICES,
+    COUNTRY_CURRENCY_MAP,
+    SALARY_PERIOD_CHOICES,
+    DEFAULT_CURRENCY,
+    DEFAULT_SALARY_PERIOD,
+)
 from services.resume_intelligence import ResumeIntelligenceService
 from services.candidate_matching_service import CandidateMatchingService
 from utils.tenant import (
@@ -1362,10 +1370,53 @@ class HirenestEmployerApprovalsView(SuperAdminRequiredMixin, HireNestAdminAPIMix
 
 
 HIRENEST_JOB_FIELDS = [
-    'title', 'company_name', 'location', 'department', 'job_type', 'work_mode',
-    'status', 'min_experience', 'max_experience', 'min_salary', 'max_salary',
+    'title', 'company_name', 'location', 'country', 'state', 'city',
+    'department', 'job_type', 'work_mode', 'status', 'min_experience',
+    'max_experience', 'min_salary', 'max_salary', 'currency', 'salary_period',
     'required_skills_text', 'preferred_skills_text', 'description',
 ]
+
+
+def _hirenest_job_payload(request):
+    """
+    Build the JSON payload sent to the HireNest admin jobs API.
+
+    Normalises the new worldwide fields so pre-existing Australia-only postings
+    keep working: salary currency defaults to AUD, the salary period defaults to
+    annual, and the legacy ``location`` field is derived from the granular
+    country/state/city fields when it was not supplied directly.
+    """
+    payload = {field: (request.POST.get(field) or '').strip() for field in HIRENEST_JOB_FIELDS}
+
+    if not payload.get('currency'):
+        payload['currency'] = DEFAULT_CURRENCY
+    if not payload.get('salary_period'):
+        payload['salary_period'] = DEFAULT_SALARY_PERIOD
+    if not payload.get('location'):
+        payload['location'] = ', '.join(
+            part for part in (payload.get('city'), payload.get('state'), payload.get('country')) if part
+        )
+
+    return payload
+
+
+def _normalize_hirenest_job(job):
+    """
+    Return a copy of a HireNest job dict with worldwide fields populated.
+
+    Legacy HireNest postings only carry ``location`` (an Australian city/state
+    string). This fills in the newer fields so the edit form renders sensible
+    defaults without mutating the shared list entry.
+    """
+    normalized = dict(job) if isinstance(job, dict) else dict(job or {})
+    if not normalized.get('currency'):
+        normalized['currency'] = DEFAULT_CURRENCY
+    if not normalized.get('salary_period'):
+        normalized['salary_period'] = DEFAULT_SALARY_PERIOD
+    if not normalized.get('country') and not normalized.get('city') and not normalized.get('state'):
+        normalized['country'] = 'Australia'
+        normalized['city'] = normalized.get('location') or ''
+    return normalized
 
 
 class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, TemplateView):
@@ -1407,6 +1458,12 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
             'job_types': Job._meta.get_field('job_type').choices,
             'work_modes': Job._meta.get_field('work_mode').choices,
             'job_statuses': Job._meta.get_field('status').choices,
+            'currencies': CURRENCY_CHOICES,
+            'countries': COUNTRY_CHOICES,
+            'salary_periods': SALARY_PERIOD_CHOICES,
+            'country_currency_map': COUNTRY_CURRENCY_MAP,
+            'default_currency': DEFAULT_CURRENCY,
+            'default_salary_period': DEFAULT_SALARY_PERIOD,
         }
 
     def get_context_data(self, **kwargs):
@@ -1450,7 +1507,7 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
         if edit_id:
             for job in context['jobs']:
                 if str(job.get('id')) == str(edit_id):
-                    context['edit_job'] = job
+                    context['edit_job'] = _normalize_hirenest_job(job)
                     break
 
         return context
@@ -1460,7 +1517,7 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
             messages.error(request, "The HireNest Australia integration is not configured.")
             return redirect(reverse('frontend:admin_hirenest_jobs'))
 
-        payload = {field: request.POST.get(field, '') for field in HIRENEST_JOB_FIELDS}
+        payload = _hirenest_job_payload(request)
         import requests
         url = f"{self._api_base()}/api/admin/jobs/"
         try:
@@ -1527,7 +1584,7 @@ class HirenestAdminJobDetailView(SuperAdminRequiredMixin, HireNestAdminAPIMixin,
                     url, json={'action': action}, headers=self._api_headers(), timeout=self.api_timeout
                 )
             else:
-                payload = {field: request.POST.get(field, '') for field in HIRENEST_JOB_FIELDS}
+                payload = _hirenest_job_payload(request)
                 response = requests.put(
                     url, json=payload, headers=self._api_headers(), timeout=self.api_timeout
                 )

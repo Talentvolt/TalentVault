@@ -7,7 +7,7 @@
     <div>
         <h3 class="fw-bold m-0 text-dark"><i class="bi bi-briefcase-fill me-2 text-primary"></i>HireNest Australia Jobs</h3>
         <p class="text-secondary small m-0 mt-1">
-            Create and manage HireNest Australia job postings. Postings are stored in the HireNest
+            Create and manage HireNest job postings in any country worldwide. Postings are stored in the HireNest
             database through a secure server-side integration. TalentVault India jobs are never mixed in.
         </p>
     </div>
@@ -77,9 +77,23 @@
                            value="{{ edit_job.company_name|default:'' }}" placeholder="e.g. Sydney Analytics Group">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold">Location (Australia) *</label>
-                    <input type="text" name="location" class="form-control" required
-                           value="{{ edit_job.location|default:'' }}" placeholder="e.g. Sydney NSW">
+                    <label class="form-label small fw-bold">Country *</label>
+                    <select name="country" id="id_country" class="form-select" required>
+                        <option value="">Select a country</option>
+                        {% for value, label in countries %}
+                        <option value="{{ value }}" {% if edit_job.country == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">State / Region</label>
+                    <input type="text" name="state" class="form-control"
+                           value="{{ edit_job.state|default:'' }}" placeholder="e.g. NSW">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">City / Location *</label>
+                    <input type="text" name="city" class="form-control" required
+                           value="{{ edit_job.city|default:'' }}" placeholder="e.g. Sydney">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small fw-bold">Department / Classification</label>
@@ -121,12 +135,28 @@
                            value="{{ edit_job.max_experience|default:1 }}">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold">Min Salary (AUD / year)</label>
+                    <label class="form-label small fw-bold">Salary Currency</label>
+                    <select name="currency" id="id_currency" class="form-select">
+                        {% for value, label in currencies %}
+                        <option value="{{ value }}" {% if edit_job.currency|default:default_currency == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Salary Period</label>
+                    <select name="salary_period" id="id_salary_period" class="form-select">
+                        {% for value, label in salary_periods %}
+                        <option value="{{ value }}" {% if edit_job.salary_period|default:default_salary_period == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Min Salary</label>
                     <input type="number" name="min_salary" min="0" step="0.01" class="form-control"
                            value="{{ edit_job.min_salary|default:'' }}">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold">Max Salary (AUD / year)</label>
+                    <label class="form-label small fw-bold">Max Salary</label>
                     <input type="number" name="max_salary" min="0" step="0.01" class="form-control"
                            value="{{ edit_job.max_salary|default:'' }}">
                 </div>
@@ -172,7 +202,7 @@
                         <th class="py-3 small text-uppercase fw-bold">Company</th>
                         <th class="py-3 small text-uppercase fw-bold">Location</th>
                         <th class="py-3 small text-uppercase fw-bold">Type</th>
-                        <th class="py-3 small text-uppercase fw-bold">Salary (AUD)</th>
+                        <th class="py-3 small text-uppercase fw-bold">Salary</th>
                         <th class="py-3 small text-uppercase fw-bold">Status</th>
                         <th class="px-4 py-3 text-end small text-uppercase fw-bold">Actions</th>
                     </tr>
@@ -185,9 +215,24 @@
                             <span class="text-secondary small">{{ job.department|default:"General" }}</span>
                         </td>
                         <td><span class="text-secondary small">{{ job.company_name|default:"N/A" }}</span></td>
-                        <td><span class="text-secondary small">{{ job.location|default:"N/A" }}</span></td>
+                        <td>
+                            {% if job.city or job.state or job.country %}
+                                <span class="text-secondary small">{{ job.city|default:'' }}{% if job.state %}, {{ job.state }}{% endif %}</span>
+                                <div class="text-muted small">{{ job.country|default:'' }}</div>
+                            {% else %}
+                                <span class="text-secondary small">{{ job.location|default:"N/A" }}</span>
+                            {% endif %}
+                        </td>
                         <td><span class="badge bg-light text-dark border small">{{ job.job_type }}</span></td>
-                        <td><span class="text-secondary small">{{ job.salary_display }}</span></td>
+                        <td>
+                            <span class="text-secondary small">{{ job.salary_display }}</span>
+                            {% if job.currency or job.salary_period %}
+                            <div class="d-flex gap-1 mt-1 flex-wrap">
+                                {% if job.currency %}<span class="badge bg-light text-dark border small">{{ job.currency }}</span>{% endif %}
+                                {% if job.salary_period %}<span class="badge bg-light text-dark border small">{{ job.salary_period|title }}</span>{% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if job.status == 'ACTIVE' %}
                                 <span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle me-1"></i> Active</span>
@@ -252,4 +297,28 @@
         </div>
     </div>
 </div>
+
+{{ country_currency_map|json_script:"country-currency-map" }}
+<script>
+(function () {
+    var countryEl = document.getElementById('id_country');
+    var currencyEl = document.getElementById('id_currency');
+    if (!countryEl || !currencyEl) { return; }
+
+    var mapEl = document.getElementById('country-currency-map');
+    var currencyByCountry = {};
+    try {
+        currencyByCountry = JSON.parse(mapEl.textContent || '{}') || {};
+    } catch (e) {
+        currencyByCountry = {};
+    }
+
+    countryEl.addEventListener('change', function () {
+        var code = currencyByCountry[countryEl.value];
+        if (code) {
+            currencyEl.value = code;
+        }
+    });
+})();
+</script>
 {% endblock %}

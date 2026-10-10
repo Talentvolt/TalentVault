@@ -155,6 +155,88 @@ class HireNestAdminJobsTests(TestCase):
         self.assertContains(response, 'Build the Australian data platform.')
 
     # ------------------------------------------------------------------
+    # Worldwide location / currency / salary period fields
+    # ------------------------------------------------------------------
+    def test_form_renders_worldwide_location_and_salary_fields(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': []})):
+                response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        for field in ('country', 'state', 'city', 'currency', 'salary_period'):
+            self.assertContains(response, f'name="{field}"')
+        self.assertContains(response, 'id_country')
+        self.assertContains(response, 'id_currency')
+        # The Australia-only location label must be gone.
+        self.assertNotContains(response, 'Location (Australia)')
+        # A non-Australian currency choice is offered.
+        self.assertContains(response, 'INR')
+
+    def test_create_posts_worldwide_currency_and_period(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch(
+                'requests.post',
+                return_value=_fake_response({'message': 'posted'}, status_code=201),
+            ) as mocked_post:
+                self.client.post(self.list_url, {
+                    'title': 'Data Engineer',
+                    'country': 'India',
+                    'state': 'Maharashtra',
+                    'city': 'Mumbai',
+                    'currency': 'INR',
+                    'salary_period': 'MONTHLY',
+                    'min_salary': '100000',
+                    'max_salary': '150000',
+                    'description': 'Build it.',
+                }, follow=True)
+
+        args, kwargs = mocked_post.call_args
+        payload = kwargs['json']
+        self.assertEqual(payload['country'], 'India')
+        self.assertEqual(payload['state'], 'Maharashtra')
+        self.assertEqual(payload['city'], 'Mumbai')
+        self.assertEqual(payload['currency'], 'INR')
+        self.assertEqual(payload['salary_period'], 'MONTHLY')
+        # Legacy location is derived from the granular fields.
+        self.assertEqual(payload['location'], 'Mumbai, Maharashtra, India')
+
+    def test_create_defaults_currency_and_period_to_aud_annually(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch(
+                'requests.post',
+                return_value=_fake_response({'message': 'posted'}, status_code=201),
+            ) as mocked_post:
+                self.client.post(self.list_url, {
+                    'title': 'Engineer',
+                    'country': 'Australia',
+                    'city': 'Sydney',
+                    'description': 'Build it.',
+                }, follow=True)
+
+        args, kwargs = mocked_post.call_args
+        self.assertEqual(kwargs['json']['currency'], 'AUD')
+        self.assertEqual(kwargs['json']['salary_period'], 'ANNUALLY')
+
+    def test_edit_legacy_job_defaults_country_and_currency(self):
+        self.client.force_login(self.admin)
+        legacy = dict(HIRENEST_JOB)
+        legacy.pop('currency', None)
+        legacy.pop('country', None)
+        legacy.pop('city', None)
+        legacy.pop('state', None)
+        with self._configured():
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': [legacy]})):
+                response = self.client.get(self.list_url + f'?edit={JOB_ID}')
+
+        self.assertEqual(response.status_code, 200)
+        # Legacy Australia-only jobs are shown as Australia with AUD currency.
+        self.assertContains(response, '<option value="Australia" selected>')
+        self.assertContains(response, '<option value="AUD" selected>')
+
+    # ------------------------------------------------------------------
     # Create
     # ------------------------------------------------------------------
     def test_create_posts_job_to_hirenest(self):
