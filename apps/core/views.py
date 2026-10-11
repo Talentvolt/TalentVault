@@ -1625,6 +1625,171 @@ class HirenestAdminJobDetailView(SuperAdminRequiredMixin, HireNestAdminAPIMixin,
         return redirect(redirect_url)
 
 
+class HirenestAdminCandidatesView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, TemplateView):
+    """
+    Admin Portal read-only view of HireNest candidate applications.
+
+    TalentVault and HireNest keep separate databases. This view never reads or
+    writes candidate records directly; it lists applications through the
+    authenticated HireNest admin API. The shared secret is sent only server-side
+    and never reaches the browser.
+    """
+    template_name = 'admin_hirenest_candidates.html'
+    allowed_statuses = ['APPLIED', 'UNDER_REVIEW', 'SHORTLISTED', 'INTERVIEW', 'SELECTED', 'REJECTED', 'ALL']
+
+    def _fetch_applications(self, status_filter, job_filter, query):
+        import requests
+        from urllib.parse import urlencode
+        params = {'status': status_filter}
+        if job_filter:
+            params['job'] = job_filter
+        if query:
+            params['q'] = query
+        url = f"{self._api_base()}/api/admin/applications/?{urlencode(params)}"
+        try:
+            response = requests.get(url, headers=self._api_headers(), timeout=self.api_timeout)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=applications list, url=%s): %s",
+                url, exc,
+            )
+            raise HireNestAPIUnavailable()
+
+        self._raise_for_api_status(response, 'applications list', url)
+        try:
+            return response.json().get('applications', [])
+        except ValueError:
+            body = (getattr(response, 'text', '') or '')[:200].replace('\n', ' ')
+            logger.error(
+                "HireNest admin API returned invalid JSON (context=applications list, url=%s, body=%s)",
+                url, body,
+            )
+            raise HireNestAPIUnavailable()
+
+    def _fetch_jobs(self):
+        import requests
+        url = f"{self._api_base()}/api/admin/jobs/?status=ALL"
+        try:
+            response = requests.get(url, headers=self._api_headers(), timeout=self.api_timeout)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=jobs list for filter, url=%s): %s",
+                url, exc,
+            )
+            raise HireNestAPIUnavailable()
+
+        self._raise_for_api_status(response, 'jobs list for filter', url)
+        try:
+            return response.json().get('jobs', [])
+        except ValueError:
+            logger.error("HireNest admin API returned invalid JSON (context=jobs list for filter)")
+            raise HireNestAPIUnavailable()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        status_filter = self.request.GET.get('status', 'ALL').upper()
+        if status_filter not in self.allowed_statuses:
+            status_filter = 'ALL'
+        job_filter = (self.request.GET.get('job') or '').strip()
+        query = (self.request.GET.get('q') or '').strip()
+
+        context.update({
+            'status_filter': status_filter,
+            'job_filter': job_filter,
+            'query': query,
+            'hirenest_configured': self._api_configured(),
+            'hirenest_missing_config': self._missing_config(),
+            'candidates': [],
+            'jobs': [],
+            'integration_error': '',
+        })
+
+        if context['hirenest_configured']:
+            try:
+                context['candidates'] = self._fetch_applications(status_filter, job_filter, query)
+                context['jobs'] = self._fetch_jobs()
+            except HireNestAPIAuthError:
+                context['integration_error'] = (
+                    "HireNest integration authentication failed. "
+                    "Please verify HIRENEST_ADMIN_API_KEY on the server."
+                )
+            except HireNestIntegrationError:
+                context['integration_error'] = (
+                    "HireNest API unavailable. Please try again later, "
+                    "or verify the integration configuration."
+                )
+            except Exception:
+                logger.error("Unexpected HireNest admin candidates integration error")
+                context['integration_error'] = (
+                    "HireNest API unavailable. Please try again later, "
+                    "or verify the integration configuration."
+                )
+
+        return context
+
+
+class HirenestAdminCandidateDetailView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, TemplateView):
+    """
+    Admin Portal read-only detail for a single HireNest candidate application.
+    """
+    template_name = 'admin_hirenest_candidate_detail.html'
+
+    def _fetch_application(self, application_id):
+        import requests
+        url = f"{self._api_base()}/api/admin/applications/{application_id}/"
+        try:
+            response = requests.get(url, headers=self._api_headers(), timeout=self.api_timeout)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=application detail, url=%s): %s",
+                url, exc,
+            )
+            raise HireNestAPIUnavailable()
+
+        self._raise_for_api_status(response, 'application detail', url)
+        try:
+            return response.json().get('application', {})
+        except ValueError:
+            body = (getattr(response, 'text', '') or '')[:200].replace('\n', ' ')
+            logger.error(
+                "HireNest admin API returned invalid JSON (context=application detail, url=%s, body=%s)",
+                url, body,
+            )
+            raise HireNestAPIUnavailable()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        application_id = self.kwargs.get('application_id')
+        context.update({
+            'application': None,
+            'hirenest_configured': self._api_configured(),
+            'hirenest_missing_config': self._missing_config(),
+            'integration_error': '',
+        })
+
+        if context['hirenest_configured']:
+            try:
+                context['application'] = self._fetch_application(application_id)
+            except HireNestAPIAuthError:
+                context['integration_error'] = (
+                    "HireNest integration authentication failed. "
+                    "Please verify HIRENEST_ADMIN_API_KEY on the server."
+                )
+            except HireNestIntegrationError:
+                context['integration_error'] = (
+                    "HireNest API unavailable. Please try again later, "
+                    "or verify the integration configuration."
+                )
+            except Exception:
+                logger.error("Unexpected HireNest admin candidate detail integration error")
+                context['integration_error'] = (
+                    "HireNest API unavailable. Please try again later, "
+                    "or verify the integration configuration."
+                )
+
+        return context
+
+
 class JobActionView(RecruiterRequiredMixin, View):
     def post(self, request, pk, action):
         job = get_object_or_404(get_tenant_jobs_qs(request.user), pk=pk)

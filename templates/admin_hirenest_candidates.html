@@ -1,0 +1,161 @@
+{% extends "layouts/admin_base.html" %}
+
+{% block title %}HireNest Candidates | Admin Portal | TalentVault{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold m-0 text-dark"><i class="bi bi-people-fill me-2 text-primary"></i>HireNest Candidates</h3>
+        <p class="text-secondary small m-0 mt-1">
+            Candidates who applied to HireNest jobs. Applications are read from the HireNest
+            database through a secure server-side integration. TalentVault candidates are never mixed in.
+        </p>
+    </div>
+</div>
+
+{% if not hirenest_configured %}
+<div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-plug-fill"></i>
+    <div>
+        The HireNest integration is not configured. Set
+        {% for var in hirenest_missing_config %}<code>{{ var }}</code>{% if not forloop.last %} and {% endif %}{% endfor %}
+        in the server environment.
+    </div>
+</div>
+{% elif integration_error %}
+<div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-exclamation-octagon-fill"></i>
+    <div>{{ integration_error }}</div>
+</div>
+{% endif %}
+
+{% if messages %}
+<div class="mb-4">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-2" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <form method="get" action="{% url 'frontend:admin_hirenest_candidates' %}" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Application Status</label>
+                <select name="status" class="form-select">
+                    <option value="ALL" {% if status_filter == 'ALL' %}selected{% endif %}>All statuses</option>
+                    <option value="APPLIED" {% if status_filter == 'APPLIED' %}selected{% endif %}>Applied</option>
+                    <option value="UNDER_REVIEW" {% if status_filter == 'UNDER_REVIEW' %}selected{% endif %}>Under Review</option>
+                    <option value="SHORTLISTED" {% if status_filter == 'SHORTLISTED' %}selected{% endif %}>Shortlisted</option>
+                    <option value="INTERVIEW" {% if status_filter == 'INTERVIEW' %}selected{% endif %}>Interview</option>
+                    <option value="SELECTED" {% if status_filter == 'SELECTED' %}selected{% endif %}>Selected</option>
+                    <option value="REJECTED" {% if status_filter == 'REJECTED' %}selected{% endif %}>Rejected</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold mb-1">Job</label>
+                <select name="job" class="form-select">
+                    <option value="">All jobs</option>
+                    {% for job in jobs %}
+                    <option value="{{ job.id }}" {% if job_filter == job.id|stringformat:"s" %}selected{% endif %}>{{ job.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Candidate Name / Email</label>
+                <input type="text" name="q" class="form-control" value="{{ query }}" placeholder="Search candidates">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary fw-bold w-100">
+                    <i class="bi bi-search me-1"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <span class="fw-bold">
+            <i class="bi bi-person-lines-fill me-2 text-primary"></i>
+            HireNest Candidates (Filter: {{ status_filter }})
+        </span>
+        <span class="badge bg-light text-dark border">Total: {{ candidates|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-4 py-3 small text-uppercase fw-bold">Candidate</th>
+                        <th class="py-3 small text-uppercase fw-bold">Applied Job</th>
+                        <th class="py-3 small text-uppercase fw-bold">Location</th>
+                        <th class="py-3 small text-uppercase fw-bold">Expected Salary</th>
+                        <th class="py-3 small text-uppercase fw-bold">Applied On</th>
+                        <th class="py-3 small text-uppercase fw-bold">Status</th>
+                        <th class="py-3 small text-uppercase fw-bold">Resume</th>
+                        <th class="px-4 py-3 text-end small text-uppercase fw-bold">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for application in candidates %}
+                    <tr>
+                        <td class="px-4">
+                            <div class="fw-bold text-dark">{{ application.candidate_name|default:"Unknown" }}</div>
+                            <span class="text-secondary small">{{ application.email|default:"—" }}</span>
+                        </td>
+                        <td><span class="text-secondary small">{{ application.job_title|default:"N/A" }}</span></td>
+                        <td><span class="text-secondary small">{{ application.location|default:"N/A" }}</span></td>
+                        <td>
+                            <span class="text-secondary small">{{ application.expected_salary_display|default:"—" }}</span>
+                            {% if application.expected_salary_currency %}
+                            <div class="text-muted small">{{ application.expected_salary_currency }}{% if application.salary_period %} / {{ application.salary_period|title }}{% endif %}</div>
+                            {% endif %}
+                        </td>
+                        <td><span class="text-secondary small">{{ application.application_date|slice:":10"|default:"—" }}</span></td>
+                        <td>
+                            {% if application.status_display == 'Applied' %}
+                                <span class="badge bg-primary text-white px-3 py-2">Applied</span>
+                            {% elif application.status_display == 'Under Review' %}
+                                <span class="badge bg-info text-dark px-3 py-2">Under Review</span>
+                            {% elif application.status_display == 'Shortlisted' %}
+                                <span class="badge bg-warning text-dark px-3 py-2">Shortlisted</span>
+                            {% elif application.status_display == 'Interview Scheduled' %}
+                                <span class="badge bg-secondary text-white px-3 py-2">Interview</span>
+                            {% elif application.status_display == 'Selected' %}
+                                <span class="badge bg-success text-white px-3 py-2">Selected</span>
+                            {% elif application.status_display == 'Rejected' %}
+                                <span class="badge bg-danger text-white px-3 py-2">Rejected</span>
+                            {% else %}
+                                <span class="badge bg-secondary text-white px-3 py-2">{{ application.status_display|default:application.stage }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if application.has_resume %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-file-earmark-pdf me-1"></i>Yes</span>
+                            {% else %}
+                                <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 text-end">
+                            <a href="{% url 'frontend:admin_hirenest_candidate_detail' application.id %}"
+                               class="btn btn-sm btn-outline-primary fw-semibold"><i class="bi bi-eye"></i> View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-secondary">
+                            <i class="bi bi-inbox fs-2 d-block mb-2 text-muted"></i>
+                            No HireNest candidate applications found{% if status_filter != 'ALL' %} for status '{{ status_filter }}'{% endif %}.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

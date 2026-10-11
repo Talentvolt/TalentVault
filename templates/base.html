@@ -109,6 +109,10 @@
                     <i class="bi bi-briefcase"></i>
                     <span>HireNest Australia Jobs</span>
                 </a>
+                <a href="{% url 'frontend:admin_hirenest_candidates' %}" class="sidebar-link {% if request.resolver_match.url_name in 'admin_hirenest_candidates,admin_hirenest_candidate_detail' %}active{% endif %}">
+                    <i class="bi bi-people"></i>
+                    <span>HireNest Candidates</span>
+                </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
                 <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">

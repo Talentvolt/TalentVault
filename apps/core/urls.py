@@ -14,6 +14,8 @@ from .views import (
     HirenestEmployerApprovalsView,
     HirenestAdminJobsView,
     HirenestAdminJobDetailView,
+    HirenestAdminCandidatesView,
+    HirenestAdminCandidateDetailView,
     JobsView,
     JobCreateView,
     JobUpdateView,
@@ -115,6 +117,8 @@ urlpatterns = [
     path('dashboard/admin/hirenest-employer-approvals/', HirenestEmployerApprovalsView.as_view(), name='admin_hirenest_employer_approvals'),
     path('dashboard/admin/hirenest-jobs/', HirenestAdminJobsView.as_view(), name='admin_hirenest_jobs'),
     path('dashboard/admin/hirenest-jobs/<uuid:job_id>/', HirenestAdminJobDetailView.as_view(), name='admin_hirenest_job_detail'),
+    path('dashboard/admin/hirenest-candidates/', HirenestAdminCandidatesView.as_view(), name='admin_hirenest_candidates'),
+    path('dashboard/admin/hirenest-candidates/<uuid:application_id>/', HirenestAdminCandidateDetailView.as_view(), name='admin_hirenest_candidate_detail'),
     
     path('jobs/', JobsView.as_view(), name='jobs'),
     path('jobs/new/', JobCreateView.as_view(), name='job_create'),

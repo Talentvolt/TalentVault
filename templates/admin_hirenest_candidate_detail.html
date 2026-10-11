@@ -1,0 +1,141 @@
+{% extends "layouts/admin_base.html" %}
+
+{% block title %}HireNest Candidate Application | Admin Portal | TalentVault{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'frontend:admin_hirenest_candidates' %}" class="text-decoration-none text-muted fw-semibold small">
+        &larr; Back to HireNest Candidates
+    </a>
+</div>
+
+{% if not hirenest_configured %}
+<div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-plug-fill"></i>
+    <div>
+        The HireNest integration is not configured. Set
+        {% for var in hirenest_missing_config %}<code>{{ var }}</code>{% if not forloop.last %} and {% endif %}{% endfor %}
+        in the server environment.
+    </div>
+</div>
+{% elif integration_error %}
+<div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-exclamation-octagon-fill"></i>
+    <div>{{ integration_error }}</div>
+</div>
+{% endif %}
+
+{% if application %}
+<div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold m-0 text-dark"><i class="bi bi-person-badge me-2 text-primary"></i>{{ application.candidate_name|default:"Unknown" }}</h3>
+        <p class="text-secondary small m-0 mt-1">
+            Applied for <strong>{{ application.job_title|default:"N/A" }}</strong> on {{ application.application_date|slice:":10"|default:"—" }}
+        </p>
+    </div>
+    {% if application.status_display %}
+    <span class="badge bg-primary text-white px-3 py-2">{{ application.status_display }}</span>
+    {% endif %}
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <span class="fw-bold"><i class="bi bi-info-circle me-2 text-primary"></i>Application Details</span>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-secondary small fw-bold">Candidate</dt>
+                    <dd class="col-sm-8">{{ application.candidate_name|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Email</dt>
+                    <dd class="col-sm-8">{{ application.email|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Phone</dt>
+                    <dd class="col-sm-8">{{ application.phone|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Applied Job</dt>
+                    <dd class="col-sm-8">{{ application.job_title|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Location</dt>
+                    <dd class="col-sm-8">{{ application.location|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Expected Salary</dt>
+                    <dd class="col-sm-8">
+                        {{ application.expected_salary_display|default:"—" }}
+                        {% if application.expected_salary_currency %}
+                        <span class="text-muted small">({{ application.expected_salary_currency }}{% if application.salary_period %} / {{ application.salary_period|title }}{% endif %})</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Application Date</dt>
+                    <dd class="col-sm-8">{{ application.application_date|slice:":10"|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary small fw-bold">Status</dt>
+                    <dd class="col-sm-8">{{ application.status_display|default:application.stage }}</dd>
+
+                    {% if application.linkedin_url %}
+                    <dt class="col-sm-4 text-secondary small fw-bold">LinkedIn</dt>
+                    <dd class="col-sm-8"><a href="{{ application.linkedin_url }}" target="_blank" rel="noopener" class="text-decoration-none">{{ application.linkedin_url }}</a></dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        {% if application.cover_letter %}
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <span class="fw-bold"><i class="bi bi-envelope me-2 text-primary"></i>Cover Letter</span>
+            </div>
+            <div class="card-body">
+                <p class="mb-0 text-secondary" style="white-space: pre-line;">{{ application.cover_letter }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <span class="fw-bold"><i class="bi bi-file-earmark-text me-2 text-primary"></i>Resume</span>
+            </div>
+            <div class="card-body">
+                {% if application.has_resume %}
+                    <div class="d-grid gap-2">
+                        {% if application.resume_preview_url %}
+                        <a href="{{ application.resume_preview_url }}" target="_blank" rel="noopener" class="btn btn-outline-primary fw-semibold">
+                            <i class="bi bi-eye me-1"></i>View Resume
+                        </a>
+                        {% endif %}
+                        {% if application.resume_url %}
+                        <a href="{{ application.resume_url }}" target="_blank" rel="noopener" class="btn btn-primary fw-semibold">
+                            <i class="bi bi-download me-1"></i>Download Resume
+                        </a>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <p class="text-muted small mb-0">No resume was submitted with this application.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if application.screening_answers %}
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <span class="fw-bold"><i class="bi bi-question-circle me-2 text-primary"></i>Screening Answers</span>
+            </div>
+            <div class="card-body">
+                {% for answer in application.screening_answers %}
+                <div class="mb-3">
+                    <div class="fw-bold small text-dark">{{ forloop.counter }}. {{ answer.question }}</div>
+                    <div class="text-secondary small">{{ answer.answer|default:"—" }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
