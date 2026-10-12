@@ -555,6 +555,76 @@
             border-color: var(--primary-purple);
             transform: translateY(-2px);
         }
+
+        /* ---------- Responsive (Tablet & Mobile) ---------- */
+        @media (max-width: 991.98px) {
+            .hero-section { padding: 130px 0 70px; }
+            section { padding: 80px 0; }
+            .hero-title { font-size: 3.2rem; }
+            .section-title { font-size: 2.4rem; }
+            .hero-visual-wrapper {
+                min-height: auto;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 18px;
+                margin-top: 36px;
+            }
+            .visual-glow { width: 260px; height: 260px; top: 50%; right: 50%; transform: translate(50%, -50%); }
+            .visual-card,
+            .visual-card.card-main,
+            .visual-card.card-secondary {
+                position: static !important;
+                width: 100% !important;
+                max-width: 400px;
+                margin: 0 auto;
+                animation: none !important;
+            }
+            .card-badge-floating { top: -14px; right: 14px; }
+            .metrics-section { padding: 70px 0; }
+            .footer-custom { padding: 60px 0 30px; }
+            .navbar-custom .navbar-collapse {
+                padding: 12px 0 18px;
+            }
+            .navbar-custom .navbar-collapse .d-flex.gap-3 {
+                flex-wrap: wrap;
+                padding-top: 12px;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .hero-section { padding: 115px 0 56px; }
+            .hero-title { font-size: 2.55rem; line-height: 1.08; }
+            .hero-subtitle { font-size: 1.05rem; margin-bottom: 28px; }
+            .hero-badge { margin-bottom: 20px; }
+            section { padding: 64px 0; }
+            .section-title { font-size: 2rem; }
+            .section-subtitle { font-size: 1rem; margin-bottom: 40px; }
+            .navbar-custom { padding: 12px 0; }
+            .pipeline-wrapper { padding: 22px; border-radius: 24px; }
+            .feature-showcase-card, .workflow-step-card, .feature-grid-item { padding: 24px; }
+            .testimonial-card { padding: 24px; }
+            .metric-value { font-size: 2.5rem; }
+            .hero-visual-wrapper { margin-top: 24px; }
+        }
+
+        @media (max-width: 575.98px) {
+            .hero-section { padding: 108px 0 44px; }
+            .hero-title { font-size: 2.1rem; }
+            .hero-subtitle { font-size: 0.98rem; }
+            section { padding: 56px 0; }
+            .section-title { font-size: 1.8rem; }
+            .metric-value { font-size: 2.15rem; }
+            .visual-card,
+            .visual-card.card-main,
+            .visual-card.card-secondary { padding: 18px; border-radius: 18px; }
+            .pipeline-wrapper { padding: 16px; }
+            .pipeline-column { padding: 14px; }
+            .testimonial-text { font-size: 0.98rem; }
+            .footer-custom { padding: 48px 0 24px; }
+            .hero-section .btn-purple,
+            .hero-section .btn-outline-custom { width: 100%; text-align: center; }
+        }
     </style>
 </head>
 <body>

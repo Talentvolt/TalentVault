@@ -1562,3 +1562,27 @@ body {
         padding: 0.6rem 0.5rem;
     }
 }
+
+/* Mobile Top Navbar Overflow Guards */
+@media (max-width: 575.98px) {
+    /* Prevent dropdown menus from overflowing narrow viewports */
+    .dropdown-menu {
+        max-width: calc(100vw - 1.5rem);
+    }
+    .dropdown-menu[style*="min-width"] {
+        min-width: 0 !important;
+        width: min(320px, calc(100vw - 1.5rem));
+    }
+    /* Hide avatar name/company label to keep the top bar from overflowing */
+    .top-navbar .dropdown-toggle .d-flex.flex-column {
+        display: none !important;
+    }
+    .top-navbar .dropdown-toggle img.me-3 {
+        margin-right: 0 !important;
+    }
+}
+
+/* Wide data tables: always allow controlled horizontal scroll */
+.table-responsive {
+    max-width: 100%;
+}
