@@ -8,7 +8,7 @@
         </button>
         <div class="sidebar-branding">
             <a href="{% if request.user.role == 'CANDIDATE' %}{% url 'frontend:candidate_dashboard' %}{% else %}{% url 'frontend:recruiter_dashboard' %}{% endif %}" class="sidebar-logo-link">
-                <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault" class="sidebar-logo-img">
+                <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault" class="sidebar-logo-img" style="height: 36px; width: auto; max-width: 175px; object-fit: contain; display: block;">
             </a>
             <div class="sidebar-sub-branding">
                 <span class="sidebar-workspace-name">{% if request.user.role == 'CANDIDATE' %}Candidate Workspace{% else %}Recruiter Workspace{% endif %}</span>
