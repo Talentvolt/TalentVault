@@ -252,6 +252,16 @@
                             <div class="d-inline-flex gap-1">
                                 <a href="{% url 'frontend:admin_hirenest_jobs' %}?status={{ status_filter }}&edit={{ job.id }}"
                                    class="btn btn-sm btn-outline-primary fw-semibold"><i class="bi bi-pencil"></i> Edit</a>
+                                {% if job.status == 'ACTIVE' %}
+                                <div class="dropdown">
+                                    <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-share"></i> Share</button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2">
+                                        <li><button type="button" class="dropdown-item py-2 fw-medium tv-share-job" data-share-url="{{ job.share_url }}" data-share-title="{{ job.title }}"><i class="bi bi-share text-secondary me-2"></i> Share Job</button></li>
+                                        <li><button type="button" class="dropdown-item py-2 fw-medium tv-copy-job-link" data-share-url="{{ job.share_url }}"><i class="bi bi-link-45deg text-secondary me-2"></i> Copy Link</button></li>
+                                        <li><button type="button" class="dropdown-item py-2 fw-medium tv-whatsapp-job" data-share-url="{{ job.share_url }}" data-share-title="{{ job.title }}"><i class="bi bi-whatsapp text-secondary me-2"></i> WhatsApp</button></li>
+                                    </ul>
+                                </div>
+                                {% endif %}
                                 {% if job.status != 'ACTIVE' %}
                                 <form method="post" action="{% url 'frontend:admin_hirenest_job_detail' job.id %}" class="d-inline">
                                     {% csrf_token %}
@@ -317,6 +327,86 @@
         var code = currencyByCountry[countryEl.value];
         if (code) {
             currencyEl.value = code;
+        }
+    });
+})();
+</script>
+
+<script>
+(function () {
+    function copyText(text) {
+        return new Promise(function (resolve, reject) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () { resolve(); }).catch(function () {
+                    legacyCopy(text, resolve, reject);
+                });
+            } else {
+                legacyCopy(text, resolve, reject);
+            }
+        });
+    }
+
+    function legacyCopy(text, resolve, reject) {
+        try {
+            var input = document.createElement('textarea');
+            input.value = text;
+            input.setAttribute('readonly', '');
+            input.style.position = 'fixed';
+            input.style.top = '-1000px';
+            document.body.appendChild(input);
+            input.select();
+            input.setSelectionRange(0, input.value.length);
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            resolve();
+        } catch (err) {
+            reject(err);
+        }
+    }
+
+    function shareJob(url, title) {
+        if (navigator.share) {
+            navigator.share({ title: title || 'Job opening', url: url }).catch(function () {});
+            return;
+        }
+        copyText(url).then(function () {
+            showToast('Link copied to clipboard', 'success');
+        }).catch(function () {
+            showToast('Unable to copy link', 'danger');
+        });
+    }
+
+    function copyJobLink(url) {
+        copyText(url).then(function () {
+            showToast('Link copied to clipboard', 'success');
+        }).catch(function () {
+            showToast('Unable to copy link', 'danger');
+        });
+    }
+
+    function shareWhatsApp(url, title) {
+        var text = title ? title + '\n' + url : url;
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
+    }
+
+    document.addEventListener('click', function (event) {
+        var shareBtn = event.target.closest('.tv-share-job');
+        if (shareBtn) {
+            event.preventDefault();
+            shareJob(shareBtn.getAttribute('data-share-url') || window.location.href, shareBtn.getAttribute('data-share-title') || '');
+            return;
+        }
+        var copyBtn = event.target.closest('.tv-copy-job-link');
+        if (copyBtn) {
+            event.preventDefault();
+            copyJobLink(copyBtn.getAttribute('data-share-url') || window.location.href);
+            return;
+        }
+        var whatsappBtn = event.target.closest('.tv-whatsapp-job');
+        if (whatsappBtn) {
+            event.preventDefault();
+            shareWhatsApp(whatsappBtn.getAttribute('data-share-url') || window.location.href, whatsappBtn.getAttribute('data-share-title') || '');
+            return;
         }
     });
 })();

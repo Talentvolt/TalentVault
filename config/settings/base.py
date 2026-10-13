@@ -133,6 +133,10 @@ def _normalize_hirenest_base_url(raw):
 
 HIRENEST_API_BASE_URL = _normalize_hirenest_base_url(os.environ.get("HIRENEST_API_BASE_URL"))
 HIRENEST_ADMIN_API_KEY = os.environ.get("HIRENEST_ADMIN_API_KEY", "").strip()
+# Public website base for HireNest Australia job share links. Defaults to the
+# canonical production domain; it is only used to build public job URLs and is
+# never used for the server-to-server admin API.
+HIRENEST_PUBLIC_BASE_URL = _normalize_hirenest_base_url(os.environ.get("HIRENEST_PUBLIC_BASE_URL"))
 
 INSTALLED_APPS = [
     'django.contrib.admin',

@@ -1200,6 +1200,18 @@ class HireNestAdminAPIMixin:
     def _api_key(self):
         return (getattr(settings, 'HIRENEST_ADMIN_API_KEY', '') or '').strip()
 
+    def _public_base_url(self):
+        base = (getattr(settings, 'HIRENEST_PUBLIC_BASE_URL', '') or '').strip()
+        if not base:
+            base = self._api_base()
+        return base.rstrip('/')
+
+    def _job_public_url(self, job):
+        job_id = job.get('id') if isinstance(job, dict) else getattr(job, 'id', None)
+        if not job_id:
+            return ''
+        return f"{self._public_base_url()}/jobs/{job_id}/"
+
     def _api_configured(self):
         return bool(self._api_base() and self._api_key())
 
@@ -1476,6 +1488,7 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
             'status_filter': status_filter,
             'hirenest_configured': self._api_configured(),
             'hirenest_missing_config': self._missing_config(),
+            'hirenest_public_base': self._public_base_url(),
             'jobs': [],
             'integration_error': '',
             'edit_job': None,
@@ -1502,6 +1515,9 @@ class HirenestAdminJobsView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, Temp
                     "HireNest API unavailable. Please try again later, "
                     "or verify the integration configuration."
                 )
+
+        for job in context['jobs']:
+            job['share_url'] = self._job_public_url(job)
 
         edit_id = self.request.GET.get('edit')
         if edit_id:
