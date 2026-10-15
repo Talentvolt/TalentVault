@@ -35,6 +35,7 @@ from .hire_worldwide import (
     SALARY_PERIOD_CHOICES,
     DEFAULT_CURRENCY,
     DEFAULT_SALARY_PERIOD,
+    default_currency_for_country,
 )
 from services.resume_intelligence import ResumeIntelligenceService
 from services.candidate_matching_service import CandidateMatchingService
@@ -1393,15 +1394,21 @@ def _hirenest_job_payload(request):
     """
     Build the JSON payload sent to the HireNest admin jobs API.
 
-    Normalises the new worldwide fields so pre-existing Australia-only postings
-    keep working: salary currency defaults to AUD, the salary period defaults to
-    annual, and the legacy ``location`` field is derived from the granular
-    country/state/city fields when it was not supplied directly.
+    Uses explicitly provided currency as the source of truth. If no currency
+    was selected, applies a sensible country-based default: USA -> USD,
+    Australia -> AUD.
     """
     payload = {field: (request.POST.get(field) or '').strip() for field in HIRENEST_JOB_FIELDS}
 
-    if not payload.get('currency'):
-        payload['currency'] = DEFAULT_CURRENCY
+    currency = (payload.get('currency') or '').strip().upper()
+    if not currency:
+        derived_location = payload.get('location') or ', '.join(
+            part for part in (payload.get('city'), payload.get('state'), payload.get('country')) if part
+        )
+        payload['currency'] = default_currency_for_country(payload.get('country'), derived_location)
+    else:
+        payload['currency'] = currency
+
     if not payload.get('salary_period'):
         payload['salary_period'] = DEFAULT_SALARY_PERIOD
     if not payload.get('location'):
@@ -1421,13 +1428,45 @@ def _normalize_hirenest_job(job):
     defaults without mutating the shared list entry.
     """
     normalized = dict(job) if isinstance(job, dict) else dict(job or {})
+
+    if not normalized.get('country') and not normalized.get('city') and not normalized.get('state'):
+        loc = (normalized.get('location') or '').strip()
+        parts = [p.strip() for p in loc.split(',') if p.strip()] if loc else []
+        if len(parts) >= 3:
+            normalized['city'] = parts[0]
+            normalized['state'] = parts[1]
+            normalized['country'] = parts[2]
+        elif len(parts) == 2:
+            normalized['city'] = parts[0]
+            normalized['country'] = parts[1]
+        elif len(parts) == 1:
+            if parts[0] in COUNTRY_CURRENCY_MAP:
+                normalized['country'] = parts[0]
+            else:
+                loc_lower = parts[0].lower()
+                if any(c in loc_lower for c in ('usa', 'united states', 'new york', 'california', 'texas', 'san francisco')):
+                    normalized['country'] = 'United States'
+                    normalized['city'] = parts[0]
+                else:
+                    normalized['country'] = 'Australia'
+                    normalized['city'] = parts[0]
+        else:
+            normalized['country'] = 'Australia'
+            normalized['city'] = normalized.get('location') or ''
+
+    c = normalized.get('country') or ''
+    if c.lower() in ('usa', 'us', 'united states of america'):
+        normalized['country'] = 'United States'
+    elif c.lower() in ('aus', 'au'):
+        normalized['country'] = 'Australia'
+
     if not normalized.get('currency'):
-        normalized['currency'] = DEFAULT_CURRENCY
+        normalized['currency'] = default_currency_for_country(
+            normalized.get('country'), normalized.get('location')
+        )
     if not normalized.get('salary_period'):
         normalized['salary_period'] = DEFAULT_SALARY_PERIOD
-    if not normalized.get('country') and not normalized.get('city') and not normalized.get('state'):
-        normalized['country'] = 'Australia'
-        normalized['city'] = normalized.get('location') or ''
+
     return normalized
 
 

@@ -431,3 +431,146 @@ class HireNestAdminJobsTests(TestCase):
         self.assertIn('404', logged)
         self.assertIn('/api/admin/jobs/', logged)
         self.assertNotIn(TEST_API_KEY, logged)
+
+    # ------------------------------------------------------------------
+    # Currency regression tests: USD / AUD create, edit, reload & display
+    # ------------------------------------------------------------------
+    def test_create_job_defaults_currency_to_usd_for_usa_when_unset(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch(
+                'requests.post',
+                return_value=_fake_response({'message': 'posted'}, status_code=201),
+            ) as mocked_post:
+                self.client.post(self.list_url, {
+                    'title': 'Cloud Architect',
+                    'country': 'United States',
+                    'city': 'New York',
+                    'currency': '',
+                    'description': 'US role.',
+                }, follow=True)
+
+        args, kwargs = mocked_post.call_args
+        self.assertEqual(kwargs['json']['currency'], 'USD')
+
+    def test_create_job_defaults_currency_to_aud_for_australia_when_unset(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch(
+                'requests.post',
+                return_value=_fake_response({'message': 'posted'}, status_code=201),
+            ) as mocked_post:
+                self.client.post(self.list_url, {
+                    'title': 'DevOps Engineer',
+                    'country': 'Australia',
+                    'city': 'Sydney',
+                    'currency': '',
+                    'description': 'AU role.',
+                }, follow=True)
+
+        args, kwargs = mocked_post.call_args
+        self.assertEqual(kwargs['json']['currency'], 'AUD')
+
+    def test_update_job_posts_explicitly_selected_usd_currency(self):
+        self.client.force_login(self.admin)
+        with self._configured():
+            with mock.patch(
+                'requests.put',
+                return_value=_fake_response({'message': 'updated'}),
+            ) as mocked_put:
+                self.client.post(self.detail_url, {
+                    'action': 'update',
+                    'title': 'Senior Data Engineer',
+                    'country': 'United States',
+                    'city': 'San Francisco',
+                    'currency': 'USD',
+                    'salary_period': 'ANNUALLY',
+                    'min_salary': '160000',
+                    'max_salary': '200000',
+                    'description': 'Updated US role.',
+                }, follow=True)
+
+        args, kwargs = mocked_put.call_args
+        self.assertEqual(kwargs['json']['currency'], 'USD')
+        self.assertEqual(kwargs['json']['title'], 'Senior Data Engineer')
+
+    def test_edit_job_prefills_usd_currency(self):
+        self.client.force_login(self.admin)
+        usd_job = dict(HIRENEST_JOB)
+        usd_job['currency'] = 'USD'
+        usd_job['country'] = 'United States'
+        usd_job['city'] = 'San Francisco'
+        usd_job['location'] = 'San Francisco, CA, United States'
+
+        with self._configured():
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': [usd_job]})):
+                response = self.client.get(self.list_url + f'?edit={JOB_ID}')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<option value="USD" selected>')
+
+    def test_jobs_list_displays_usd_currency_badge_for_usd_job(self):
+        self.client.force_login(self.admin)
+        usd_job = dict(HIRENEST_JOB)
+        usd_job['currency'] = 'USD'
+        usd_job['min_salary'] = '150000.00'
+        usd_job['max_salary'] = '190000.00'
+        usd_job['salary_display'] = '$150,000 - $190,000 / year'
+
+        with self._configured():
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': [usd_job]})):
+                response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<span class="badge bg-light text-dark border small">USD</span>')
+        self.assertContains(response, '$150,000 - $190,000 / year')
+
+    def test_jobs_list_hides_currency_badge_when_salary_is_negotiable_or_blank(self):
+        self.client.force_login(self.admin)
+        negotiable_job = dict(HIRENEST_JOB)
+        negotiable_job['currency'] = 'USD'
+        negotiable_job['min_salary'] = None
+        negotiable_job['max_salary'] = None
+        negotiable_job['salary_display'] = 'Salary negotiable'
+
+        with self._configured():
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': [negotiable_job]})):
+                response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Salary negotiable')
+        # When salary is negotiable or blank, do not show misleading currency or period badges
+        self.assertNotContains(response, '<span class="badge bg-light text-dark border small">USD</span>')
+        self.assertNotContains(response, '<span class="badge bg-light text-dark border small">Annually</span>')
+
+    def test_saved_currency_survives_reload(self):
+        self.client.force_login(self.admin)
+        usd_job = dict(HIRENEST_JOB)
+        usd_job['currency'] = 'USD'
+        usd_job['min_salary'] = '150000.00'
+        usd_job['max_salary'] = '190000.00'
+        usd_job['salary_display'] = '$150,000 - $190,000 / year'
+
+        with self._configured():
+            # 1. Save edit with USD
+            with mock.patch('requests.put', return_value=_fake_response({'message': 'updated'})) as mocked_put:
+                response = self.client.post(self.detail_url, {
+                    'action': 'update',
+                    'title': 'Senior Data Engineer',
+                    'currency': 'USD',
+                    'description': 'Updated role.',
+                }, follow=False)
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(mocked_put.call_args[1]['json']['currency'], 'USD')
+
+            # 2. Reload listing page (GET)
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': [usd_job]})):
+                list_response = self.client.get(self.list_url)
+            self.assertEqual(list_response.status_code, 200)
+            self.assertContains(list_response, '<span class="badge bg-light text-dark border small">USD</span>')
+
+            # 3. Reload edit form (GET ?edit=id)
+            with mock.patch('requests.get', return_value=_fake_response({'jobs': [usd_job]})):
+                edit_response = self.client.get(self.list_url + f'?edit={JOB_ID}')
+            self.assertEqual(edit_response.status_code, 200)
+            self.assertContains(edit_response, '<option value="USD" selected>')

@@ -226,3 +226,35 @@ COUNTRY_CURRENCY_MAP = {
     'Nepal': 'NPR',
     'Myanmar': 'MMK',
 }
+
+
+def default_currency_for_country(country=None, location=None):
+    """
+    Derive a sensible currency from country and/or location when none is explicitly selected.
+    Defaults to USD for USA, AUD for Australia, or mapped currency for other countries.
+    Falls back to DEFAULT_CURRENCY (AUD) if completely indeterminate.
+    """
+    country_str = (country or '').strip()
+    if country_str:
+        if country_str in COUNTRY_CURRENCY_MAP:
+            return COUNTRY_CURRENCY_MAP[country_str]
+        normalized_c = country_str.lower()
+        if normalized_c in ('usa', 'united states', 'united states of america', 'us'):
+            return 'USD'
+        if normalized_c in ('australia', 'au', 'aus'):
+            return 'AUD'
+        for c_name, curr in COUNTRY_CURRENCY_MAP.items():
+            if c_name.lower() == normalized_c:
+                return curr
+
+    loc_str = (location or '').strip().lower()
+    if loc_str:
+        if any(term in loc_str for term in ('united states', 'usa', 'u.s.a', 'u.s.', 'new york', 'california', 'texas', 'san francisco')):
+            return 'USD'
+        if any(term in loc_str for term in ('australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'nsw', 'vic', 'qld', 'wa', 'sa', 'tas', 'act', 'nt')):
+            return 'AUD'
+        for c_name, curr in COUNTRY_CURRENCY_MAP.items():
+            if c_name.lower() in loc_str:
+                return curr
+
+    return DEFAULT_CURRENCY

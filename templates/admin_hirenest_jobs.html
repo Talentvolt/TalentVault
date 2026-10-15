@@ -226,11 +226,15 @@
                         <td><span class="badge bg-light text-dark border small">{{ job.job_type }}</span></td>
                         <td>
                             <span class="text-secondary small">{{ job.salary_display }}</span>
-                            {% if job.currency or job.salary_period %}
-                            <div class="d-flex gap-1 mt-1 flex-wrap">
-                                {% if job.currency %}<span class="badge bg-light text-dark border small">{{ job.currency }}</span>{% endif %}
-                                {% if job.salary_period %}<span class="badge bg-light text-dark border small">{{ job.salary_period|title }}</span>{% endif %}
-                            </div>
+                            {% if job.min_salary or job.max_salary %}
+                                {% if "negotiable" not in job.salary_display|lower and "not specified" not in job.salary_display|lower %}
+                                    {% if job.currency or job.salary_period %}
+                                    <div class="d-flex gap-1 mt-1 flex-wrap">
+                                        {% if job.currency %}<span class="badge bg-light text-dark border small">{{ job.currency }}</span>{% endif %}
+                                        {% if job.salary_period %}<span class="badge bg-light text-dark border small">{{ job.salary_period|title }}</span>{% endif %}
+                                    </div>
+                                    {% endif %}
+                                {% endif %}
                             {% endif %}
                         </td>
                         <td>
