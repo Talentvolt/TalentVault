@@ -1,0 +1,377 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy | TalentVault Candidate Importer</title>
+    <meta name="description" content="TalentVault privacy policy covering the TalentVault Candidate Importer Chrome extension, including data collection, transmission, storage, sharing, retention and deletion.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{% if request.is_secure %}https://{% else %}http://{% endif %}{{ request.get_host }}/privacy-policy/">
+    <link rel="icon" type="image/x-icon" href="{% static 'images/logo/favicon.ico' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'images/logo/favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{% static 'images/logo/favicon-48x48.png' %}">
+
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <!-- Google Fonts (same as the TalentVault landing pages) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --indigo: #172554;
+            --indigo-600: #1e3a8a;
+            --blue: #2563EB;
+            --teal: #0F766E;
+            --cream: #FFFDF7;
+            --page: #F8FAFC;
+            --ink: #0F172A;
+            --muted: #64748B;
+            --line: #E2E8F0;
+            --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-display: 'Sora', 'Plus Jakarta Sans', sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-body);
+            color: var(--ink);
+            background: var(--page);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { text-decoration: none; }
+
+        @media (min-width: 1200px) {
+            .container { max-width: 1240px; padding-left: 2rem; padding-right: 2rem; }
+        }
+
+        /* Navbar (mirrors landing page branding) */
+        .tv-navbar {
+            position: sticky;
+            top: 0;
+            z-index: 1050;
+            background: rgba(255, 253, 247, .88);
+            backdrop-filter: blur(16px) saturate(160%);
+            -webkit-backdrop-filter: blur(16px) saturate(160%);
+            border-bottom: 1px solid rgba(15, 23, 42, .06);
+        }
+        .tv-navbar .navbar-brand img { height: 48px; width: auto; object-fit: contain; }
+        @media (max-width: 991.98px) {
+            .tv-navbar .navbar-brand img { height: 40px; }
+        }
+
+        .tv-page-head {
+            background: linear-gradient(135deg, #172554 0%, #1e3a8a 100%);
+            color: #fff;
+            padding: 64px 0 56px;
+        }
+        .tv-page-head h1 {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 2.4rem;
+            letter-spacing: -.02em;
+        }
+        .tv-page-head p { color: rgba(255, 255, 255, .78); max-width: 760px; }
+
+        .tv-policy-body { padding: 56px 0 72px; }
+
+        .tv-policy-section {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 32px 36px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
+        }
+        .tv-policy-section h2 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 1.35rem;
+            color: var(--indigo);
+            margin-bottom: 14px;
+        }
+        .tv-policy-section h3 {
+            font-weight: 700;
+            font-size: 1.02rem;
+            color: var(--ink);
+            margin: 20px 0 8px;
+        }
+        .tv-policy-section p, .tv-policy-section li {
+            color: #334155;
+            font-size: .97rem;
+            line-height: 1.7;
+        }
+        .tv-policy-section ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+        .tv-policy-section li { margin-bottom: 6px; }
+
+        .tv-policy-nav {
+            position: sticky;
+            top: 90px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 22px 24px;
+        }
+        .tv-policy-nav a {
+            display: block;
+            color: var(--muted);
+            font-size: .9rem;
+            padding: 6px 0;
+            font-weight: 500;
+        }
+        .tv-policy-nav a:hover { color: var(--indigo); }
+
+        .tv-callout {
+            background: #EFF6FF;
+            border: 1px solid #DBEAFE;
+            border-radius: 12px;
+            padding: 16px 20px;
+            color: #1e3a8a;
+            font-size: .95rem;
+            margin: 16px 0;
+        }
+
+        /* Footer (mirrors landing page footer) */
+        .tv-footer { background: #16213E; color: #94A3B8; padding: 56px 0 30px; }
+        .tv-footer-brand img { height: 46px; width: auto; object-fit: contain; margin-bottom: 14px; }
+        .tv-footer h6 { color: #fff; font-weight: 700; font-size: .95rem; margin-bottom: 16px; }
+        .tv-footer-link { display: block; color: #94A3B8; font-size: .92rem; margin-bottom: 10px; }
+        .tv-footer-link:hover { color: #fff; }
+        .tv-social-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 38px; height: 38px; border-radius: 10px;
+            background: rgba(255, 255, 255, .08); color: #CBD5E1; font-size: 1.05rem;
+        }
+        .tv-social-btn:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+        .tv-footer-bottom { border-top: 1px solid rgba(255, 255, 255, .08); margin-top: 40px; padding-top: 24px; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg tv-navbar py-2">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault">
+            </a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <a href="/" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Back to Home</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- PAGE HEADER -->
+    <section class="tv-page-head">
+        <div class="container">
+            <span class="badge rounded-pill mb-3" style="background: rgba(255,255,255,.14); color: #fff; font-weight: 600; font-size: .8rem;">Legal &amp; Privacy</span>
+            <h1>Privacy Policy</h1>
+            <p class="mb-0 mt-2">How the TalentVault Candidate Importer Chrome extension collects, transmits, stores and shares candidate information, and how TalentVault handles that data.</p>
+            <p class="mb-0 mt-2" style="font-size: .9rem;">Last updated: 15 October 2026</p>
+        </div>
+    </section>
+
+    <!-- POLICY BODY -->
+    <section class="tv-policy-body">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    <div class="tv-policy-section">
+                        <h2>1. Introduction</h2>
+                        <p>This Privacy Policy describes how TalentVault Technologies ("TalentVault", "we", "us" or "our") handles data in connection with the <strong>TalentVault Candidate Importer</strong> Chrome extension ("the extension") and the TalentVault recruitment platform available at <strong>talent-vault.in</strong>.</p>
+                        <p>The extension lets a recruiter import a candidate's public profile into their TalentVault account. It is a recruiter-initiated tool: nothing is collected, extracted or transmitted until the recruiter explicitly triggers an action inside the extension.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>2. Who uses the extension</h2>
+                        <p>The extension is used by recruiters and hiring teams who already have a TalentVault account and are signed in. The candidate whose profile is imported is the <em>data subject</em>; the recruiter performing the import is the <em>data controller</em> of the candidate record they create in their TalentVault workspace.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>3. Data the extension collects</h2>
+                        <p>When a recruiter opens a LinkedIn or Naukri profile page and clicks <strong>"Extract Candidate Data"</strong>, the extension reads the information that is already visible on that page. No background or automatic collection occurs, and the extension does not access data the recruiter cannot already see on the page.</p>
+                        <h3>Profile information (visible on the page)</h3>
+                        <ul>
+                            <li>Candidate name</li>
+                            <li>Headline / current designation</li>
+                            <li>Current company</li>
+                            <li>Location</li>
+                            <li>Professional summary / "About" text</li>
+                            <li>Work experience (company, designation, dates/duration, location and description)</li>
+                            <li>Education (institution, degree, field of study and dates)</li>
+                            <li>Skills listed on the profile</li>
+                            <li>The profile's public URL</li>
+                        </ul>
+                        <h3>Contact details (only when present or found)</h3>
+                        <ul>
+                            <li>Email address — extracted only if an email address appears in the visible profile text, or if the recruiter clicks "Find Email" / "Enrich".</li>
+                            <li>Phone number — extracted only if a phone number appears in the visible profile text, or if the recruiter clicks "Find Phone" / "Enrich".</li>
+                        </ul>
+                        <h3>Compensation and availability (only when present)</h3>
+                        <ul>
+                            <li>Current CTC / salary, expected CTC / salary, and notice period — these are extracted only when the recruiter's profile text mentions them. The extension never invents these values.</li>
+                            <li>Total experience, which may be calculated from the visible work-experience entries.</li>
+                        </ul>
+                        <div class="tv-callout">
+                            <i class="bi bi-info-circle me-1"></i> The extension does not read your browsing history, other tabs, bookmarks, or any page other than the LinkedIn/Naukri profile page you have open when you click "Extract".
+                        </div>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>4. When extraction starts</h2>
+                        <p>Extraction starts <strong>only</strong> when the recruiter:</p>
+                        <ul>
+                            <li>opens the extension's side panel while viewing a LinkedIn or Naukri profile, and</li>
+                            <li>clicks the <strong>"Extract Candidate Data"</strong> button.</li>
+                        </ul>
+                        <p>The extracted information is then displayed in the side panel for the recruiter to review and edit. The recruiter can also enter candidate details manually ("Manual Mode") without extracting anything from the page.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>5. What is stored locally</h2>
+                        <p>Candidate data extracted by the extension is held only in the side panel's in-memory form while the panel is open, so the recruiter can review and edit it. This data is <strong>not written to <code>chrome.storage.local</code></strong>, is not persisted to disk by the extension, and is discarded when the panel is closed.</p>
+                        <p>The only value the extension stores in <code>chrome.storage.local</code> is an optional, developer-only API base URL override (<code>apiBaseUrl</code>). The extension ships with no API keys, secrets, or credentials.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>6. Where data is transmitted</h2>
+                        <p>Candidate data is transmitted to TalentVault's servers only when the recruiter takes an explicit action, always over HTTPS (TLS):</p>
+                        <ul>
+                            <li><strong>"Save Candidate"</strong> — the full candidate form (name, email, phone, headline, current company, location, summary, profile URL, experience, education, skills, and any salary/notice-period values) is sent via <code>POST</code> to <code>https://talent-vault.in/api/v1/candidates/import/</code>.</li>
+                            <li><strong>"Find Email" / "Find Phone" / "Enrich"</strong> — the candidate's name, company, title, location and profile URL are sent via <code>POST</code> to <code>https://talent-vault.in/api/v1/enrichment/person/</code> to look up contact details.</li>
+                        </ul>
+                        <p>These requests include the recruiter's TalentVault session cookies and a fresh CSRF token. The extension authenticates as the signed-in recruiter and does not embed any secret or API key.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>7. What TalentVault saves</h2>
+                        <p>When a recruiter saves a candidate, TalentVault creates or updates a candidate record in the recruiter's workspace, including:</p>
+                        <ul>
+                            <li>A <strong>candidate profile</strong>: full name, professional summary, current company, current designation, location, total experience, current/expected salary (when provided), notice period and immediate-joiner flag, LinkedIn/portfolio URL, and source.</li>
+                            <li><strong>Work experience</strong> and <strong>education</strong> entries.</li>
+                            <li><strong>Skills</strong> associated with the candidate.</li>
+                            <li>A candidate user account (used internally; it has no login password).</li>
+                            <li>The original import payload, retained as structured data on the candidate record (<code>parsed_json</code>) for reference.</li>
+                        </ul>
+                        <p>If a candidate already exists (matched by email, phone, or profile URL), the import updates the existing record instead of creating a duplicate.</p>
+                        <p>For enrichment, only validated email/phone values are written to a matching candidate, and existing real contact details are never overwritten.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>8. How the data is used</h2>
+                        <p>TalentVault uses imported candidate data to:</p>
+                        <ul>
+                            <li>Create and maintain candidate records in the recruiter's TalentVault workspace;</li>
+                            <li>Power TalentVault's recruitment features (search, matching, pipelines, interviews, and analytics) for the recruiter who imported the data;</li>
+                            <li>Optionally enrich contact details (email/phone) so the recruiter can reach the candidate.</li>
+                        </ul>
+                        <p>TalentVault does not sell candidate data and does not use imported candidate data for advertising.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>9. Third parties that receive the data</h2>
+                        <p><strong>LinkedIn and Naukri.</strong> These are the <em>sources</em> of the visible profile data. The recruiter opens these pages directly in their own browser; TalentVault does not transmit candidate data to LinkedIn or Naukri.</p>
+                        <p><strong>TalentVault's hosting and storage providers.</strong> TalentVault runs on its own servers (talent-vault.in, hosted on Render) and stores uploaded files on Amazon Web Services S3. These providers host TalentVault's infrastructure and process data on TalentVault's behalf; they are not the recipients of a separate data transfer from the extension.</p>
+                        <p><strong>Contact enrichment.</strong> By default, the "Find Email" / "Find Phone" / "Enrich" feature matches the candidate against TalentVault's own people/contact database — no external enrichment service is involved. TalentVault may configure an external enrichment provider in the future; if it does, only the candidate's name, company, title, location and profile URL would be shared with that provider to look up contact details.</p>
+                        <p><strong>No other third parties.</strong> The extension does not transfer candidate data to any other third party. It does not use Google OAuth scopes or Google APIs.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>10. Security</h2>
+                        <p>All communication between the extension and TalentVault's servers uses HTTPS (TLS). TalentVault authenticates requests against the signed-in recruiter's session and validates a CSRF token to prevent cross-site request forgery. Contact details are stored only after validation, and profile text is sanitised on the server before it is saved.</p>
+                        <p>No method of transmission or storage is completely secure, and TalentVault cannot guarantee absolute security of candidate data.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>11. Data retention and deletion</h2>
+                        <p>Imported candidate records are retained in the recruiter's TalentVault workspace until the recruiter (or a TalentVault administrator) deletes them, or until the account is closed. TalentVault does not currently apply an automatic retention period to imported candidate records.</p>
+                        <p><strong>Deletion requests.</strong> Candidates may request access to, correction of, or deletion of their data by contacting TalentVault at <a href="mailto:{{ privacy_contact_email }}">{{ privacy_contact_email }}</a>. Recruiters can also delete candidate records from their workspace at any time. We will action verifiable requests in accordance with applicable law.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>12. Chrome Web Store disclosures</h2>
+                        <h3>Chrome Web Store User Data Policy</h3>
+                        <p>TalentVault complies with the Chrome Web Store User Data Policy. The extension only collects, transmits and stores candidate data for the purposes described in this policy, and the extension's access is limited to the permissions declared in its manifest (<code>activeTab</code>, <code>scripting</code>, <code>sidePanel</code>, <code>storage</code>) and host permissions for <code>talent-vault.in</code>, <code>linkedin.com</code> and <code>naukri.com</code>.</p>
+                        <h3>Limited Use disclosure</h3>
+                        <p>The extension does <strong>not</strong> request restricted Google OAuth scopes and does not access, use or transfer Google user data. Because no Google user data is collected, there is no Google user data that could be shared with third parties. If this changes in a future version, this policy will be updated and the relevant disclosures added before the change ships.</p>
+                    </div>
+
+                    <div class="tv-policy-section">
+                        <h2>13. Contact us</h2>
+                        <p>If you have questions about this policy, or wish to make a privacy or deletion request, contact us at:</p>
+                        <p class="mb-1"><i class="bi bi-envelope me-2" style="color: var(--indigo);"></i><a href="mailto:{{ privacy_contact_email }}">{{ privacy_contact_email }}</a></p>
+                        <p class="mb-0"><i class="bi bi-globe me-2" style="color: var(--indigo);"></i>https://talent-vault.in</p>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="tv-policy-nav">
+                        <h6 class="fw-bold mb-3" style="color: var(--indigo);">On this page</h6>
+                        <a href="#intro">1. Introduction</a>
+                        <a href="#who-uses">2. Who uses the extension</a>
+                        <a href="#collects">3. Data the extension collects</a>
+                        <a href="#extraction">4. When extraction starts</a>
+                        <a href="#local">5. What is stored locally</a>
+                        <a href="#transmitted">6. Where data is transmitted</a>
+                        <a href="#saved">7. What TalentVault saves</a>
+                        <a href="#usage">8. How the data is used</a>
+                        <a href="#third-parties">9. Third parties</a>
+                        <a href="#security">10. Security</a>
+                        <a href="#retention">11. Retention &amp; deletion</a>
+                        <a href="#cws">12. Chrome Web Store disclosures</a>
+                        <a href="#contact">13. Contact us</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="tv-footer">
+        <div class="container">
+            <div class="row g-4 align-items-start">
+                <div class="col-lg-4">
+                    <div class="tv-footer-brand">
+                        <img src="{% static 'images/logo/talentvault-logo.png' %}" alt="TalentVault">
+                    </div>
+                    <p style="max-width: 320px;">Connecting exceptional talent with exceptional companies.</p>
+                    <div class="d-flex gap-2 mt-3">
+                        <a href="https://www.linkedin.com/company/talent-vault-tech/about/?viewAsMember=true" target="_blank" rel="noopener noreferrer" class="tv-social-btn" title="LinkedIn" aria-label="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                        <a href="https://www.instagram.com/talentvault2020?igsh=OWsydm1wMXdmZGtq" target="_blank" rel="noopener noreferrer" class="tv-social-btn" title="Instagram" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-3">
+                    <h6>Product</h6>
+                    <a href="{% url 'frontend:jobs' %}" class="tv-footer-link">Jobs Search</a>
+                    <a href="{% url 'frontend:candidate_career_resources' %}" class="tv-footer-link">Career Resources</a>
+                    <a href="{% url 'frontend:ats_pipeline' %}" class="tv-footer-link">ATS Pipeline</a>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-3">
+                    <h6>Legal</h6>
+                    <a href="{% url 'frontend:privacy_policy' %}" class="tv-footer-link">Privacy Policy</a>
+                    <a href="#" class="tv-footer-link">Terms of Service</a>
+                </div>
+                <div class="col-sm-6 col-md-4 col-lg-2">
+                    <h6>Contact</h6>
+                    <a href="mailto:{{ privacy_contact_email }}" class="tv-footer-link">{{ privacy_contact_email }}</a>
+                </div>
+            </div>
+            <div class="tv-footer-bottom d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <span class="small">&copy; 2026 TalentVault Technologies. AI That Hires Smarter. All rights reserved.</span>
+                <div class="d-flex gap-4 small">
+                    <a href="{% url 'frontend:privacy_policy' %}" class="tv-footer-link mb-0">Privacy Policy</a>
+                    <a href="#" class="tv-footer-link mb-0">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

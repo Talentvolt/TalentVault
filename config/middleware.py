@@ -18,7 +18,7 @@ class TalentVaultCsrfMiddleware(CsrfViewMiddleware):
         return super()._origin_verified(request)
 
 
-PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt'})
+PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt', '/privacy-policy/', '/privacy-policy'})
 PUBLIC_PREFIXES = (
     '/accounts/',
     '/admin/',

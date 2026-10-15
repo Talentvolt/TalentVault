@@ -305,6 +305,26 @@ class LandingPageView(TemplateView):
 
 
 
+class PrivacyPolicyView(TemplateView):
+    """
+    Public privacy policy page (no authentication required).
+
+    Documents the TalentVault Candidate Importer Chrome extension's data
+    collection, transmission, storage and sharing practices. The copy is kept
+    accurate to the extension source (talentvault_extension/) and the import
+    and enrichment API views (apps/candidates/import_views.py and
+    apps/candidates/enrichment_views.py).
+    """
+    template_name = 'privacy_policy.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['privacy_contact_email'] = getattr(
+            settings, 'DEFAULT_FROM_EMAIL', None
+        ) or 'Talentvault2020@gmail.com'
+        return context
+
+
 class EmployerLandingView(TemplateView):
     template_name = 'landing_employer.html'
 
