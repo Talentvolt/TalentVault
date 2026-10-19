@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 from apps.candidates.models import CandidateProfile, Experience, Education, CandidateSkill
 from apps.accounts.models import User
 
-EXT_ORIGIN = "chrome-extension://hneceobjjiehhicimdfdeheodcoklgec"
+EXT_ORIGIN = "chrome-extension://egcfpgbhoklbacaijdachfbemffnfejp"
 
 @pytest.mark.django_db
 def test_full_linkedin_candidate_import_pipeline():

@@ -39,9 +39,14 @@ SESSION_COOKIE_NAME = 'sessionid'
 CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_HTTPONLY = True
 
-CORS_ALLOW_ALL_ORIGINS = True
+# Exact published Chrome Web Store extension origin. CSRF and CORS are both
+# restricted to this single origin so no other extension can call the API.
+TALENTVAULT_EXTENSION_ORIGIN = "chrome-extension://egcfpgbhoklbacaijdachfbemffnfejp"
+
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^chrome-extension://hneceobjjiehhicimdfdeheodcoklgec$",
+    r"^chrome-extension://egcfpgbhoklbacaijdachfbemffnfejp$",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -55,7 +60,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://www.talent-vault.in",
     "https://*.onrender.com",
     "https://*.talent-vault.in",
-    "chrome-extension://hneceobjjiehhicimdfdeheodcoklgec",
+    TALENTVAULT_EXTENSION_ORIGIN,
 ]
 
 env_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS")

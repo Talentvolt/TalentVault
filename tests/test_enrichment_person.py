@@ -7,7 +7,7 @@ from apps.candidates.models import CandidateProfile
 from services.enrichment.mock_provider import MockEnrichmentProvider
 from services.enrichment.person_match import PersonMatchService
 
-EXT_ORIGIN = "chrome-extension://hneceobjjiehhicimdfdeheodcoklgec"
+EXT_ORIGIN = "chrome-extension://egcfpgbhoklbacaijdachfbemffnfejp"
 
 
 @pytest.fixture(autouse=True)

@@ -10,7 +10,7 @@ from services.enrichment.http_provider import HTTPEnrichmentProvider
 from services.enrichment.person_match import PersonMatchService
 from services.enrichment.providers import EnrichmentProviderError
 
-EXT_ORIGIN = "chrome-extension://hneceobjjiehhicimdfdeheodcoklgec"
+EXT_ORIGIN = "chrome-extension://egcfpgbhoklbacaijdachfbemffnfejp"
 
 PERSON = {
     "name": "Ananya Deshmukh",

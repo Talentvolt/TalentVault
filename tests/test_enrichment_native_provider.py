@@ -8,7 +8,7 @@ from apps.candidates.models import EnrichmentPerson
 from services.enrichment.native_provider import NativeEnrichmentProvider
 from services.enrichment.person_match import PersonMatchService
 
-EXT_ORIGIN = "chrome-extension://hneceobjjiehhicimdfdeheodcoklgec"
+EXT_ORIGIN = "chrome-extension://egcfpgbhoklbacaijdachfbemffnfejp"
 
 PERSON = {
     "name": "Ananya Deshmukh",

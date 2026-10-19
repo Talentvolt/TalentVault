@@ -6,15 +6,16 @@ from apps.accounts.models import User
 class TalentVaultCsrfMiddleware(CsrfViewMiddleware):
     """
     Custom CSRF middleware for TalentVault.
-    Validates chrome-extension origins against CSRF_TRUSTED_ORIGINS settings
-    without disabling CSRF protection or using @csrf_exempt.
+
+    Restricts chrome-extension requests to the exact published extension origin.
+    CSRF token validation remains fully enforced for every request; this override
+    only tightens the origin allowlist and never disables CSRF protection.
     """
     def _origin_verified(self, request):
         request_origin = request.META.get("HTTP_ORIGIN", "")
         if request_origin.startswith("chrome-extension://"):
-            trusted = getattr(settings, "CSRF_TRUSTED_ORIGINS", [])
-            if any(t.startswith("chrome-extension://") for t in trusted):
-                return True
+            allowed_origin = getattr(settings, "TALENTVAULT_EXTENSION_ORIGIN", "")
+            return request_origin == allowed_origin
         return super()._origin_verified(request)
 
 
