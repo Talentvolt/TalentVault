@@ -986,18 +986,25 @@ body.candidate-saas-body {
                         <div class="timeline-item experience-entry" data-start-date="{{ exp.start_date|date:'Y-m-d' }}" data-end-date="{% if exp.is_current or not exp.end_date %}present{% else %}{{ exp.end_date|date:'Y-m-d' }}{% endif %}">
                             <div class="timeline-marker"></div>
                             <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2">
-                                <h6 class="timeline-title">{{ exp.designation }}</h6>
+                                <h6 class="timeline-title">{% if exp.designation %}{{ exp.designation }}{% else %}<span class="text-muted fw-normal">Untitled role</span>{% endif %}</h6>
                                 <span class="timeline-date-duration">
-                                    {{ exp.start_date|date:"M Y"|default:"N/A" }} – {% if exp.is_current or not exp.end_date %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif %}
+                                    {% if exp.date_range_display %}{{ exp.date_range_display }}{% else %}Dates not available{% endif %}
                                     <span class="experience-duration-text text-primary fw-medium ms-1"></span>
                                 </span>
                             </div>
+                            {% if exp.company_name %}
                             <div class="timeline-company">
-                                <i class="bi bi-building me-1 text-muted"></i> {{ exp.company_name }}
+                                <i class="bi bi-building me-1 text-muted"></i> {{ exp.company_name }}{% if exp.employment_type %} <span class="text-muted">· {{ exp.employment_type }}</span>{% endif %}
                             </div>
+                            {% endif %}
+                            {% if exp.location %}
+                            <div class="text-muted small mt-1"><i class="bi bi-geo-alt me-1"></i>{{ exp.location }}</div>
+                            {% endif %}
+                            {% if exp.description %}
                             <div class="exp-description-area mt-2 text-secondary" style="font-size: 0.91rem; line-height: 1.6; color: #475569;">
                                 {{ exp.description|safe }}
                             </div>
+                            {% endif %}
                         </div>
                         {% empty %}
                         <div class="text-center py-4 text-muted">
@@ -1017,15 +1024,17 @@ body.candidate-saas-body {
                     <div class="pb-3 mb-3 {% if not forloop.last %}border-bottom{% endif %}">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <h6 class="fw-bold mb-1" style="font-size: 0.98rem; color: #0F172A;">{{ edu.degree }}</h6>
-                                <div class="text-secondary fw-medium" style="font-size: 0.9rem;">{{ edu.institution }}</div>
+                                <h6 class="fw-bold mb-1" style="font-size: 0.98rem; color: #0F172A;">{% if edu.degree %}{{ edu.degree }}{% else %}<span class="text-muted fw-normal">Qualification not listed</span>{% endif %}</h6>
+                                {% if edu.institution %}<div class="text-secondary fw-medium" style="font-size: 0.9rem;">{{ edu.institution }}</div>{% endif %}
                                 {% if edu.field_of_study %}
                                 <div class="text-muted small mt-0.5">Field of Study: {{ edu.field_of_study }}</div>
                                 {% endif %}
                             </div>
+                            {% if edu.start_date or edu.end_date %}
                             <span class="badge bg-light text-muted border px-2.5 py-1" style="font-size: 0.78rem;">
-                                {{ edu.start_date|date:"Y"|default:"N/A" }} – {{ edu.end_date|date:"Y"|default:"N/A" }}
+                                {{ edu.start_date|date:"Y"|default:"—" }} – {% if edu.is_pursuing or not edu.end_date %}Present{% else %}{{ edu.end_date|date:"Y" }}{% endif %}
                             </span>
+                            {% endif %}
                         </div>
                     </div>
                     {% empty %}
@@ -1116,11 +1125,22 @@ body.candidate-saas-body {
                         {% endif %}
                     </div>
                     {% else %}
-                    <div class="text-center py-5 bg-light rounded-3 border">
-                        <i class="bi bi-file-earmark-x fs-1 mb-2 d-block text-secondary opacity-50"></i>
-                        <h6 class="fw-bold">No Resume File Available</h6>
-                        <p class="small text-muted mb-0">The resume file has not been uploaded or is currently unavailable.</p>
-                    </div>
+                        {% if candidate.source_resume_url %}
+                        <div class="text-center py-5 bg-light rounded-3 border">
+                            <i class="bi bi-file-earmark-pdf fs-1 mb-2 d-block text-info"></i>
+                            <h6 class="fw-bold">Resume available on source portal</h6>
+                            <p class="small text-muted mb-3">The resume file could not be downloaded directly from Naukri, so the source link is shown instead.</p>
+                            <a href="{{ candidate.source_resume_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                                <i class="bi bi-box-arrow-up-right me-2"></i>View Resume on Source (Naukri)
+                            </a>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5 bg-light rounded-3 border">
+                            <i class="bi bi-file-earmark-x fs-1 mb-2 d-block text-secondary opacity-50"></i>
+                            <h6 class="fw-bold">No Resume File Available</h6>
+                            <p class="small text-muted mb-0">The resume file has not been uploaded or is currently unavailable.</p>
+                        </div>
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -1354,11 +1374,22 @@ body.candidate-saas-body {
                 <iframe src="{% url 'frontend:candidate_resume_preview' candidate.id %}" style="border: none; width: 100%; height: 100%;"></iframe>
             </div>
             {% else %}
-            <div class="text-center py-5 bg-light rounded border text-muted">
-                <i class="bi bi-file-earmark-x fs-1 mb-2 d-block text-secondary opacity-50"></i>
-                <h6 class="fw-bold">No Resume File Available</h6>
-                <p class="small text-muted mb-0">The resume file has not been uploaded or is currently unavailable.</p>
-            </div>
+                {% if candidate.source_resume_url %}
+                <div class="text-center py-5 bg-light rounded border text-muted">
+                    <i class="bi bi-file-earmark-pdf fs-1 mb-2 d-block text-info"></i>
+                    <h6 class="fw-bold">Resume available on source portal</h6>
+                    <p class="small text-muted mb-3">The resume file could not be downloaded directly from Naukri, so the source link is shown instead.</p>
+                    <a href="{{ candidate.source_resume_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                        <i class="bi bi-box-arrow-up-right me-2"></i>View Resume on Source (Naukri)
+                    </a>
+                </div>
+                {% else %}
+                <div class="text-center py-5 bg-light rounded border text-muted">
+                    <i class="bi bi-file-earmark-x fs-1 mb-2 d-block text-secondary opacity-50"></i>
+                    <h6 class="fw-bold">No Resume File Available</h6>
+                    <p class="small text-muted mb-0">The resume file has not been uploaded or is currently unavailable.</p>
+                </div>
+                {% endif %}
             {% endif %}
         </div>
     </div>
@@ -1667,6 +1698,8 @@ body.candidate-saas-body {
             <div class="col-12">
                 {% if candidate.has_resume %}
                 <a href="{{ candidate.resume_file_url }}" class="btn btn-outline-dark w-100 btn-sm" style="border-radius: 8px;"><i class="bi bi-download me-2"></i> Download Resume</a>
+                {% elif candidate.source_resume_url %}
+                <a href="{{ candidate.source_resume_url }}" target="_blank" rel="noopener" class="btn btn-outline-dark w-100 btn-sm" style="border-radius: 8px;"><i class="bi bi-box-arrow-up-right me-2"></i> View Resume (Source)</a>
                 {% else %}
                 <button class="btn btn-outline-secondary w-100 btn-sm" disabled style="border-radius: 8px;"><i class="bi bi-file-earmark-x me-2"></i> Resume not available</button>
                 {% endif %}

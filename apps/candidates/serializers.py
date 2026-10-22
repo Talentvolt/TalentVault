@@ -8,9 +8,12 @@ class CandidateSkillSerializer(serializers.ModelSerializer):
         fields = ('id', 'skill_name', 'years_of_experience', 'proficiency')
 
 class ExperienceSerializer(serializers.ModelSerializer):
+    date_range = serializers.CharField(source='date_range_display', read_only=True)
+
     class Meta:
         model = Experience
-        fields = ('id', 'company_name', 'designation', 'start_date', 'end_date', 'is_current', 'description')
+        fields = ('id', 'company_name', 'designation', 'employment_type', 'location',
+                  'start_date', 'end_date', 'is_current', 'description', 'date_range')
 
 class EducationSerializer(serializers.ModelSerializer):
     class Meta:

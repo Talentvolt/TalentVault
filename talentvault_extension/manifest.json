@@ -1,44 +1,64 @@
 {
-    "manifest_version":  3,
-    "name":  "TalentVault Candidate Importer",
-    "version":  "1.0.3",
-    "description":  "Import candidate profiles directly from LinkedIn or Naukri into TalentVault.",
-    "permissions":  [
-                        "activeTab",
-                        "scripting",
-                        "sidePanel",
-                        "storage"
-                    ],
-    "host_permissions":  [
-                             "https://talent-vault.in/*",
-                             "https://www.talent-vault.in/*",
-                             "https://*.linkedin.com/*",
-                             "https://*.naukri.com/*"
-                         ],
-    "background":  {
-                       "service_worker":  "background.js"
-                   },
-    "content_scripts":  [
-                            {
-                                "matches":  [
-                                                "https://*.linkedin.com/*",
-                                                "https://*.naukri.com/*"
-                                            ],
-                                "js":  [
-                                           "content.js"
-                                       ],
-                                "run_at":  "document_idle"
-                            }
-                        ],
-    "action":  {
-                   "default_title":  "Open TalentVault Importer",
-                   "default_popup":  "sidepanel.html",
-                   "default_icon":  "icon.png"
-               },
-    "side_panel":  {
-                       "default_path":  "sidepanel.html"
-                   },
-    "icons":  {
-                  "48":  "icon.png"
-              }
+    "manifest_version": 3,
+    "name": "Talent Vault",
+    "version": "1.0.6",
+    "description": "Save LinkedIn and Naukri profiles to Talent Vault.",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage",
+        "downloads"
+    ],
+    "host_permissions": [
+        "https://talent-vault.in/*",
+        "https://www.talent-vault.in/*",
+        "http://127.0.0.1:8000/*",
+        "http://localhost:8000/*",
+        "http://localhost/*",
+        "https://*.linkedin.com/*",
+        "https://*.naukri.com/*",
+        "https://*.apna.com/*",
+        "https://*.apna.co/*",
+        "https://*.shine.com/*",
+        "https://*.timesjobs.com/*",
+        "https://*.foundit.in/*",
+        "https://*.cutshort.io/*",
+        "https://*.hirist.com/*",
+        "https://*.instahyre.com/*",
+        "https://*.wellfound.com/*",
+        "https://*.indeed.com/*"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://*.linkedin.com/*",
+                "https://*.naukri.com/*",
+                "https://*.apna.com/*",
+                "https://*.apna.co/*",
+                "https://*.shine.com/*",
+                "https://*.timesjobs.com/*",
+                "https://*.foundit.in/*",
+                "https://*.cutshort.io/*",
+                "https://*.hirist.com/*",
+                "https://*.instahyre.com/*",
+                "https://*.wellfound.com/*",
+                "https://*.indeed.com/*"
+            ],
+            "js": [
+                "content.js",
+                "widget.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "action": {
+        "default_title": "Open Talent Vault",
+        "default_icon": "icon.png"
+    },
+    "icons": {
+        "48": "icon.png"
+    }
 }

@@ -52,6 +52,11 @@ class CandidateProfile(BaseAppModel):
     preferred_location = models.CharField(max_length=255, blank=True, null=True)
     linkedin_url = models.URLField(blank=True, null=True)
     portfolio_url = models.URLField(blank=True, null=True)
+    source_resume_url = models.TextField(
+        blank=True,
+        null=True,
+        help_text="External resume URL captured from the source portal (e.g. Naukri) when the file itself cannot be downloaded. TextField avoids varchar(200) length limits on long Naukri/blob resume URLs.",
+    )
     source = models.CharField(max_length=50, blank=True, null=True, default='', db_index=True)
     ats_score = models.PositiveIntegerField(default=0, db_index=True, help_text="Calculated ATS suitability score (0-100)")
     profile_photo = models.ImageField(upload_to='candidate_photos/', null=True, blank=True)
@@ -419,17 +424,32 @@ class Experience(BaseAppModel):
     Work experience entries for a Candidate.
     """
     profile = models.ForeignKey(CandidateProfile, on_delete=models.CASCADE, related_name='experiences')
-    company_name = models.CharField(max_length=255)
-    designation = models.CharField(max_length=255)
+    company_name = models.CharField(max_length=255, blank=True, default="")
+    designation = models.CharField(max_length=255, blank=True, default="")
+    location = models.CharField(max_length=255, blank=True, default="")
+    employment_type = models.CharField(max_length=50, blank=True, default="")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     is_current = models.BooleanField(default=False)
     description = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['-start_date']
+        ordering = ['-start_date', '-is_current', 'id']
         verbose_name = _('experience')
         verbose_name_plural = _('experiences')
+
+    @property
+    def date_range_display(self):
+        from django.utils.dateformat import format as dj_format
+        start = dj_format(self.start_date, "M Y") if self.start_date else ""
+        end = "Present" if self.is_current or not self.end_date else dj_format(self.end_date, "M Y")
+        if start and end:
+            return f"{start} – {end}"
+        if end:
+            return end
+        if start:
+            return start
+        return ""
 
 class Education(BaseAppModel):
     """

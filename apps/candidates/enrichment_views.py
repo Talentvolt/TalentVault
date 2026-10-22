@@ -1,6 +1,8 @@
 import logging
 
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -99,6 +101,7 @@ def _save_enrichment(person, result):
     }
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class PersonEnrichmentAPIView(APIView):
     """
     Local email + phone enrichment for an imported candidate profile.
@@ -109,6 +112,10 @@ class PersonEnrichmentAPIView(APIView):
     """
 
     permission_classes = [permissions.AllowAny]
+    # Same rationale as CandidateImportAPIView: the extension (including an
+    # unpacked local build) calls this endpoint directly, so no session
+    # authentication runs and DRF's SessionAuthentication CSRF check is skipped.
+    authentication_classes = []
 
     def post(self, request, *args, **kwargs):
         data = request.data or {}

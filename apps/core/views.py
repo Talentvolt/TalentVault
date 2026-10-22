@@ -2492,6 +2492,10 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         from apps.candidates.models import RecentCandidateSearch
         
         user = self.request.user
+        # IMPORTANT: no `candidate_status` / Draft / Pending filter is applied by
+        # default. The base queryset is tenant-scoped only, so every imported
+        # candidate (created_by=None via the extension's anonymous import API,
+        # candidate_status defaults to 'ACTIVE') is always visible in the list.
         base_qs = get_tenant_candidates_qs(user).select_related(
             'uploaded_by', 'created_by', 'edited_by'
         ).order_by('-created_at').prefetch_related(

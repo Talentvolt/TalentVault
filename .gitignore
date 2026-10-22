@@ -33,6 +33,10 @@ db_backup.sqlite3
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Node (extension JS tests)
+node_modules/
+package-lock.json
 # Deployment cleanup
 python313/
 scratch/

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>TalentVault Candidate Importer</title>
+  <title>Talent Vault</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -10,8 +10,7 @@
     <div class="brand">
       <div class="logo-icon">TV</div>
       <div>
-        <div class="brand-title">TalentVault</div>
-        <div class="brand-subtitle">Candidate Importer</div>
+        <div class="brand-title">Talent Vault</div>
       </div>
     </div>
     <div class="endpoint-badge" id="apiEndpointBadge">API: Active</div>
@@ -37,11 +36,23 @@
     <div id="statusAlert" class="alert hidden"></div>
 
     <div id="extractCard" class="card action-card">
-      <button id="importBtn" class="btn btn-primary btn-block">
+      <div id="parsingStatus" class="parsing-status hidden">
+        <span class="spinner"></span>
+        <span>Parsing active page…</span>
+      </div>
+      <div id="parseError" class="alert alert-error hidden"></div>
+      <button type="button" id="parseBtn" class="btn btn-primary btn-block">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
         </svg>
-        1. Extract Candidate Data
+        Parse Profile
+      </button>
+      <button type="button" id="retryBtn" class="btn btn-outline btn-block hidden">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 11-3-6.7L21 8"/>
+          <path d="M21 3v5h-5"/>
+        </svg>
+        Retry Parse
       </button>
     </div>
 
@@ -50,6 +61,11 @@
         <div class="card-header">
           <span>Candidate Information</span>
           <span id="sourceBadge" class="source-tag">Source: LINKEDIN</span>
+        </div>
+
+        <div class="form-group">
+          <label for="recruiterEmail">Recruiter Email (your login)</label>
+          <input type="email" id="recruiterEmail" placeholder="e.g. you@company.com">
         </div>
 
         <div class="form-group">
@@ -168,6 +184,50 @@
         </div>
         <div id="educationList" class="dynamic-list"></div>
         <textarea id="fieldEducation" class="hidden"></textarea>
+      </div>
+
+      <!-- Projects Section -->
+      <div class="card">
+        <div class="card-header">
+          <span>Projects (<span id="projCount">0</span>)</span>
+          <button type="button" id="addProjBtn" class="btn-sm btn-outline">+ Add Entry</button>
+        </div>
+        <div id="projectsList" class="dynamic-list"></div>
+      </div>
+
+      <!-- Certifications Section -->
+      <div class="card">
+        <div class="card-header">
+          <span>Certifications (<span id="certCount">0</span>)</span>
+          <button type="button" id="addCertBtn" class="btn-sm btn-outline">+ Add Entry</button>
+        </div>
+        <div id="certificationsList" class="dynamic-list"></div>
+      </div>
+
+      <!-- Resume Attachment Section -->
+      <div id="resumeSection" class="card hidden">
+        <div class="card-header">
+          <span>Resume Attachment</span>
+          <span class="source-tag">DOWNLOADABLE</span>
+        </div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="attachResumeCheckbox" style="accent-color:#2563eb;">
+          <span>Attach candidate's real resume file to CRM profile</span>
+        </label>
+        <div id="resumeBadge" class="resume-badge hidden"></div>
+      </div>
+
+      <!-- Manual Resume Upload Section -->
+      <div class="card">
+        <div class="card-header">
+          <span>Manual Resume Upload</span>
+          <span class="source-tag source-manual">MANUAL</span>
+        </div>
+        <div class="form-group">
+          <label for="manualResumeUpload">Attach a resume file (PDF / DOC / DOCX)</label>
+          <input type="file" id="manualResumeUpload" accept=".pdf,.doc,.docx">
+          <span id="selectedFileName" class="resume-badge hidden"></span>
+        </div>
       </div>
 
       <div class="card action-card">

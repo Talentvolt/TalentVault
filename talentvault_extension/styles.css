@@ -214,6 +214,17 @@ textarea:focus {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
+input[type="file"] {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-main);
+  font-family: inherit;
+}
+
 textarea {
   resize: vertical;
 }
@@ -282,6 +293,32 @@ textarea {
   height: 16px;
 }
 
+.parsing-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 4px 0;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #bfdbfe;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .alert {
   padding: 8px 10px;
   border-radius: 6px;
@@ -326,6 +363,68 @@ textarea {
   border-radius: 6px;
   padding: 8px;
   position: relative;
+}
+
+.dynamic-card-readonly {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.readonly-row {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.readonly-row:last-child {
+  margin-bottom: 0;
+}
+
+.readonly-label {
+  font-weight: 700;
+  color: #475569;
+  min-width: 85px;
+  flex-shrink: 0;
+}
+
+.readonly-value {
+  color: #1e293b;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.empty-list-notice {
+  padding: 8px;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  color: #1e293b;
+}
+
+.resume-badge {
+  display: inline-block;
+  font-size: 11px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 3px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+  margin-top: 4px;
 }
 
 .remove-item-btn {

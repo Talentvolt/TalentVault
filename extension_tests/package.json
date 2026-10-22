@@ -1,0 +1,13 @@
+{
+  "name": "talent-vault-extension-tests",
+  "version": "1.0.0",
+  "description": "Talent Vault Chrome extension test suite (node:test + jsdom)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test sidepanel.test.mjs content.test.mjs content_extraction.test.mjs widget.test.mjs background.test.mjs manifest.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}
