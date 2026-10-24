@@ -217,6 +217,7 @@
 <!-- Simple Candidate Directory Toolbar & Compact Actions -->
 <div class="directory-toolbar shadow-xs mb-3">
     <form method="GET" action="{% url 'frontend:candidate_search' %}" id="candidate-directory-form" class="row g-2.5 align-items-center">
+        {% if active_recruiter_filter %}<input type="hidden" name="recruiter_id" value="{{ active_recruiter_filter.id }}"><input type="hidden" name="start" value="{{ filters.start }}"><input type="hidden" name="end" value="{{ filters.end }}">{% endif %}
         <!-- Search by Name / Email / Phone / Designation / Company / Skills -->
         <div class="col-12 col-lg-5 col-xl-5 position-relative" id="candidate-search-input-wrapper">
             <div class="input-group">
@@ -229,7 +230,7 @@
                        value="{{ filters.q|default:'' }}" 
                        autocomplete="off">
                 {% if filters.q %}
-                    <a href="{% url 'frontend:candidate_search' %}" class="btn btn-outline-secondary d-flex align-items-center" title="Clear search">
+                    <a href="{% url 'frontend:candidate_search' %}{% if active_recruiter_filter %}?recruiter_id={{ active_recruiter_filter.id }}&amp;start={{ filters.start }}&amp;end={{ filters.end }}{% endif %}" class="btn btn-outline-secondary d-flex align-items-center" title="Clear search">
                         <i class="bi bi-x-lg"></i>
                     </a>
                 {% endif %}
@@ -287,6 +288,18 @@
         </div>
     </form>
 </div>
+
+{% if active_recruiter_filter %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2 px-1">
+    <div class="d-inline-flex align-items-center gap-2">
+        <i class="bi bi-funnel-fill text-primary"></i>
+        <span class="small text-secondary">Filtering candidates uploaded by <strong class="text-dark">{{ active_recruiter_filter.name }}</strong></span>
+    </div>
+    <a href="{% url 'frontend:candidate_search' %}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
+        <i class="bi bi-x-circle"></i> Clear Filter
+    </a>
+</div>
+{% endif %}
 
 <!-- 3. Candidate Results Count & List Container -->
 <main class="candidate-directory-container">

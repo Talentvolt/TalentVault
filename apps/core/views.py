@@ -709,6 +709,7 @@ class RecruiterDashboardView(RecruiterRequiredMixin, TemplateView):
                 'name': name,
                 'initials': _initials(name),
                 'is_unassigned': is_unassigned,
+                'recruiter_id': ('unassigned' if is_unassigned else str(entry['user'].id)),
                 'counts': counts,
                 'total': sum(counts.values()),
             })
@@ -2504,7 +2505,64 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
                 queryset=get_tenant_applications_qs(user).select_related('job', 'job__company', 'job__client', 'created_by').order_by('-created_at')
             )
         )
-        
+
+        # Recruiter attribution filter (applied at the DB query level using the
+        # recruiter's unique user ID). Mirrors the dashboard's owner resolution:
+        # owner = coalesce(uploaded_by, created_by). When a dashboard date range
+        # is supplied alongside the recruiter filter, the same Kolkata-day
+        # boundaries are applied so the filtered count matches the dashboard
+        # "TOTAL" exactly.
+        recruiter_id_param = (self.request.GET.get('recruiter_id') or '').strip()
+        if recruiter_id_param:
+            if recruiter_id_param.lower() == 'unassigned':
+                base_qs = base_qs.filter(uploaded_by__isnull=True, created_by__isnull=True)
+            else:
+                try:
+                    import uuid as _uuid
+                    _uuid.UUID(recruiter_id_param)
+                except (ValueError, AttributeError):
+                    recruiter_id_param = ''
+                if recruiter_id_param:
+                    base_qs = base_qs.filter(
+                        Q(uploaded_by_id=recruiter_id_param) |
+                        Q(uploaded_by__isnull=True, created_by_id=recruiter_id_param)
+                    )
+
+            if recruiter_id_param:
+                start_param = (self.request.GET.get('start') or '').strip()
+                end_param = (self.request.GET.get('end') or '').strip()
+                if start_param or end_param:
+                    from datetime import date as _date, timedelta as _timedelta
+                    from utils.date_helpers import KOLKATA_TZ
+
+                    def _iso_date(raw):
+                        if not raw:
+                            return None
+                        try:
+                            return _date.fromisoformat(raw)
+                        except (ValueError, TypeError):
+                            return None
+
+                    activity_start = _iso_date(start_param)
+                    activity_end = _iso_date(end_param)
+                    if activity_start or activity_end:
+                        if activity_end is None:
+                            activity_end = activity_start
+                        elif activity_start is None:
+                            activity_start = activity_end - _timedelta(days=6)
+                        if activity_start > activity_end:
+                            activity_start, activity_end = activity_end, activity_start
+                        range_start_dt = timezone.make_aware(
+                            datetime.combine(activity_start, datetime.min.time()), KOLKATA_TZ
+                        )
+                        range_end_dt = timezone.make_aware(
+                            datetime.combine(activity_end + _timedelta(days=1), datetime.min.time()), KOLKATA_TZ
+                        )
+                        base_qs = base_qs.filter(
+                            created_at__gte=range_start_dt,
+                            created_at__lt=range_end_dt,
+                        )
+
         # 1. Extract query & tag inputs
         q = (self.request.GET.get('q') or self.request.GET.get('name') or '').strip()
         tags_raw = self.request.GET.getlist('tags')
@@ -2723,7 +2781,27 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             selected_job = get_tenant_jobs_qs(user).filter(id=job_id).first()
             
         context['selected_job'] = selected_job
-        
+
+        # Recruiter attribution filter (from the recruiter upload activity table)
+        recruiter_id_param = (self.request.GET.get('recruiter_id') or '').strip()
+        active_recruiter_filter = None
+        if recruiter_id_param:
+            if recruiter_id_param.lower() == 'unassigned':
+                active_recruiter_filter = {'id': 'unassigned', 'name': 'Unassigned'}
+            else:
+                try:
+                    recruiter_user = User.objects.filter(id=recruiter_id_param).first()
+                except Exception:
+                    recruiter_user = None
+                if recruiter_user:
+                    active_recruiter_filter = {
+                        'id': recruiter_id_param,
+                        'name': recruiter_user.get_full_name() or recruiter_user.email,
+                    }
+                else:
+                    active_recruiter_filter = {'id': recruiter_id_param, 'name': 'Recruiter'}
+        context['active_recruiter_filter'] = active_recruiter_filter
+
         q = (self.request.GET.get('q') or self.request.GET.get('name') or '').strip()
         tags_raw = self.request.GET.getlist('tags')
         if not tags_raw and self.request.GET.get('tags'):
@@ -2752,6 +2830,9 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
             'company_type': (self.request.GET.get('company_type') or '').strip(),
             'employment_type': (self.request.GET.get('employment_type') or '').strip(),
             'job_id': job_id,
+            'recruiter_id': recruiter_id_param,
+            'start': (self.request.GET.get('start') or '').strip(),
+            'end': (self.request.GET.get('end') or '').strip(),
             'stage': (self.request.GET.get('stage') or '').strip(),
             'tags': tags_raw,
             'min_exp': (self.request.GET.get('min_exp') or '').strip(),

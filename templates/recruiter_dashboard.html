@@ -44,6 +44,15 @@
         border-color: var(--primary-color);
         color: var(--primary-color);
     }
+    .recruiter-total-link {
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .recruiter-total-link:hover {
+        background-color: var(--primary-color) !important;
+        color: #fff !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
 </style>
 {% endblock %}
 
@@ -129,7 +138,7 @@
                             </td>
                             {% endfor %}
                             <td class="text-end py-2">
-                                <span class="badge rounded-pill fw-bold" style="font-size: 0.72rem; background-color: var(--primary-light); color: var(--primary-color);">{{ row.total }}</span>
+                                <a href="{% url 'frontend:candidate_search' %}?recruiter_id={{ row.recruiter_id }}&amp;start={{ activity_start_iso }}&amp;end={{ activity_end_iso }}" class="recruiter-total-link badge rounded-pill fw-bold text-decoration-none" style="font-size: 0.72rem; background-color: var(--primary-light); color: var(--primary-color);" title="View candidates uploaded by {{ row.name }}">{{ row.total }}</a>
                             </td>
                         </tr>
                         {% endfor %}
