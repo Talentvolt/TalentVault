@@ -1,0 +1,17 @@
+Hi {{ candidate_name }},
+
+Your CV has been successfully processed and your profile has been created on TalentVault.
+
+To complete your profile and make it available for relevant job opportunities, please review your information and complete your TalentVault profile.
+
+Your CV / Profile:
+
+{{ candidate_profile_link }}
+
+Please click the link above to view your CV details and complete your profile.
+
+Once your profile is completed, recruiters can consider your profile for suitable job opportunities.
+
+Regards,  
+TalentVault Team  
+TalentVault Technologies

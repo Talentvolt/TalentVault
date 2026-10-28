@@ -1,3 +1,5 @@
+import re
+from django.urls import reverse
 from django.shortcuts import redirect
 from django.middleware.csrf import CsrfViewMiddleware
 from django.conf import settings
@@ -19,6 +21,7 @@ class TalentVaultCsrfMiddleware(CsrfViewMiddleware):
         return super()._origin_verified(request)
 
 
+CANDIDATE_DETAIL_PATH_RE = re.compile(r"^/candidates/[0-9a-fA-F-]{32,36}/?$")
 PUBLIC_EXACT_PATHS = frozenset({'/', '/employers/', '/employers', '/sitemap.xml', '/robots.txt', '/privacy-policy/', '/privacy-policy'})
 PUBLIC_PREFIXES = (
     '/accounts/',
@@ -89,6 +92,10 @@ class RoleAccessMiddleware:
         # Bypass static, media and API
         if not (path.startswith('/static/') or path.startswith('/media/') or path.startswith('/api/') or '/api/' in path):
             if not request.user.is_authenticated:
+                if CANDIDATE_DETAIL_PATH_RE.match(path):
+                    res = redirect(f"{reverse('candidate_login')}?next={path}")
+                    return self._add_no_cache_headers(res)
+
                 is_public = path in PUBLIC_EXACT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES) or '/public-apply/' in path
                 if not is_public:
                     res = redirect('/')
@@ -107,6 +114,8 @@ class RoleAccessMiddleware:
                 elif role == User.Role.CANDIDATE:
                     is_forbidden = any(path.startswith(prefix) for prefix in CANDIDATE_FORBIDDEN_PREFIXES)
                     if path.endswith('/resume/preview/') or path.endswith('/resume/download/') or '/api/' in path:
+                        is_forbidden = False
+                    if CANDIDATE_DETAIL_PATH_RE.match(path):
                         is_forbidden = False
                     if not is_forbidden and path.startswith('/jobs/'):
                         is_forbidden = any(suffix in path for suffix in JOB_FORBIDDEN_SUFFIXES)

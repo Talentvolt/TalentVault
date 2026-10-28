@@ -138,6 +138,10 @@
                         <a href="{{ candidate.resume_file_url }}" target="_blank" class="btn btn-outline-secondary" title="Download Resume">
                             <i class="bi bi-download"></i> Resume
                         </a>
+                    {% else %}
+                        <button type="button" class="btn btn-primary" onclick="openUploadCVModal('{{ candidate.id }}', '{{ candidate.full_name|default:candidate.user.email|escapejs }}')" title="Upload CV / Add Resume">
+                            <i class="bi bi-file-earmark-arrow-up"></i> Upload CV
+                        </button>
                     {% endif %}
                     <a href="{% url 'frontend:interviews' %}?candidate_id={{ candidate.id }}" class="btn btn-outline-info" title="Schedule Interview">
                         <i class="bi bi-calendar-event"></i> Schedule

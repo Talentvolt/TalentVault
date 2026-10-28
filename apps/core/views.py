@@ -2639,7 +2639,7 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         # Status & Freshness
         candidate_status_param = (self.request.GET.get('candidate_status') or self.request.GET.get('status') or '').strip()
         freshness_days = self.request.GET.get('freshness_days') or self.request.GET.get('activity_days')
-        has_resume = True if self.request.GET.get('has_resume') in ['1', 'true', 'True'] else None
+        has_resume_param = self.request.GET.get('has_resume')
         has_verified_mobile = True if self.request.GET.get('has_verified_mobile') in ['1', 'true', 'True'] else None
         has_verified_email = True if self.request.GET.get('has_verified_email') in ['1', 'true', 'True'] else None
         search_within_results = (self.request.GET.get('search_within_results') or '').strip()
@@ -2652,16 +2652,28 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         boolean_query_param = (self.request.GET.get('boolean_query') or '').strip()
         sort_by = (self.request.GET.get('sort_by') or self.request.GET.get('sort') or 'newest').strip()
 
-        # Tab routing (e.g. shortlisted, saved_for_later, new, modified)
+        # Tab routing (with_resume, without_resume, shortlisted, saved_for_later, new, modified, all)
         tab_param = self.request.GET.get('tab', '').strip().lower()
-        if tab_param == 'shortlisted':
+        if tab_param == 'without_resume' or has_resume_param in ['0', 'false', 'False']:
+            has_resume = False
+        elif tab_param == 'with_resume' or has_resume_param in ['1', 'true', 'True']:
+            has_resume = True
+        elif tab_param == 'shortlisted':
             candidate_status_param = 'SHORTLISTED'
+            has_resume = None
         elif tab_param == 'saved_for_later':
             candidate_status_param = 'SAVED_FOR_LATER'
+            has_resume = None
         elif tab_param == 'new':
             candidate_status_param = 'NEW_CANDIDATE'
+            has_resume = None
         elif tab_param == 'modified':
             candidate_status_param = 'MODIFIED'
+            has_resume = None
+        elif tab_param == 'all':
+            has_resume = None
+        else:
+            has_resume = None
 
         # Record Recent Search if any search term is entered
         if q or selected_tags or title_param or skills_param or boolean_query_param:
@@ -2905,18 +2917,42 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         # Counts for tabs (computed in a single aggregate query)
         from django.db.models import Count
         base_all = get_tenant_candidates_qs(user)
+        if recruiter_id_param:
+            if recruiter_id_param.lower() == 'unassigned':
+                base_all = base_all.filter(uploaded_by__isnull=True, created_by__isnull=True)
+            elif recruiter_id_param:
+                base_all = base_all.filter(
+                    Q(uploaded_by_id=recruiter_id_param) |
+                    Q(uploaded_by__isnull=True, created_by_id=recruiter_id_param)
+                )
         from django.utils import timezone
         import datetime
         week_ago = timezone.now() - datetime.timedelta(days=7)
         tab_counts = base_all.aggregate(
             all=Count('id'),
+            with_resume=Count('id', filter=Q(resume__isnull=False) & ~Q(resume='')),
+            without_resume=Count('id', filter=Q(resume__isnull=True) | Q(resume='')),
             shortlisted=Count('id', filter=Q(is_shortlisted=True) | Q(candidate_status='SHORTLISTED')),
             saved_for_later=Count('id', filter=Q(is_saved_for_later=True) | Q(candidate_status='SAVED_FOR_LATER')),
             new=Count('id', filter=Q(created_at__gte=week_ago)),
             modified=Count('id', filter=Q(updated_at__gte=week_ago)),
         )
+        tab_p = self.request.GET.get('tab', '').strip().lower()
+        has_r_p = self.request.GET.get('has_resume')
+        if tab_p == 'without_resume' or has_r_p in ['0', 'false', 'False']:
+            resolved_tab = 'without_resume'
+        elif tab_p == 'with_resume' or has_r_p in ['1', 'true', 'True']:
+            resolved_tab = 'with_resume'
+        elif tab_p in ['shortlisted', 'saved_for_later', 'new', 'modified', 'all']:
+            resolved_tab = tab_p
+        else:
+            resolved_tab = 'with_resume'
+
+        context['current_tab'] = resolved_tab
         context['tab_counts'] = {
             'all': tab_counts['all'],
+            'with_resume': tab_counts['with_resume'],
+            'without_resume': tab_counts['without_resume'],
             'shortlisted': tab_counts['shortlisted'],
             'saved_for_later': tab_counts['saved_for_later'],
             'new': tab_counts['new'],

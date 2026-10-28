@@ -217,6 +217,7 @@
 <!-- Simple Candidate Directory Toolbar & Compact Actions -->
 <div class="directory-toolbar shadow-xs mb-3">
     <form method="GET" action="{% url 'frontend:candidate_search' %}" id="candidate-directory-form" class="row g-2.5 align-items-center">
+        <input type="hidden" name="tab" value="{{ current_tab|default:'with_resume' }}">
         {% if active_recruiter_filter %}<input type="hidden" name="recruiter_id" value="{{ active_recruiter_filter.id }}"><input type="hidden" name="start" value="{{ filters.start }}"><input type="hidden" name="end" value="{{ filters.end }}">{% endif %}
         <!-- Search by Name / Email / Phone / Designation / Company / Skills -->
         <div class="col-12 col-lg-5 col-xl-5 position-relative" id="candidate-search-input-wrapper">
@@ -230,7 +231,7 @@
                        value="{{ filters.q|default:'' }}" 
                        autocomplete="off">
                 {% if filters.q %}
-                    <a href="{% url 'frontend:candidate_search' %}{% if active_recruiter_filter %}?recruiter_id={{ active_recruiter_filter.id }}&amp;start={{ filters.start }}&amp;end={{ filters.end }}{% endif %}" class="btn btn-outline-secondary d-flex align-items-center" title="Clear search">
+                    <a href="{% url 'frontend:candidate_search' %}?tab={{ current_tab|default:'with_resume' }}{% if active_recruiter_filter %}&amp;recruiter_id={{ active_recruiter_filter.id }}&amp;start={{ filters.start }}&amp;end={{ filters.end }}{% endif %}" class="btn btn-outline-secondary d-flex align-items-center" title="Clear search">
                         <i class="bi bi-x-lg"></i>
                     </a>
                 {% endif %}
@@ -303,7 +304,35 @@
 
 <!-- 3. Candidate Results Count & List Container -->
 <main class="candidate-directory-container">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2.5 px-1">
+    <!-- 2 Sections / Tabs: WITH RESUME and WITHOUT RESUME -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3 px-1 border-bottom pb-2">
+        <ul class="nav nav-pills gap-2" id="candidateResumeTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <a href="?tab=with_resume{% for k, v in request.GET.items %}{% if k != 'tab' and k != 'page' and k != 'has_resume' %}&{{ k }}={{ v }}{% endif %}{% endfor %}" 
+                   class="nav-link px-3.5 py-2 fw-semibold d-inline-flex align-items-center gap-2 {% if current_tab != 'without_resume' %}active bg-primary text-white shadow-xs{% else %}bg-light text-secondary border border-light-subtle{% endif %}" 
+                   id="tab-with-resume"
+                   title="Candidates with CV / Resume attached">
+                    <i class="bi bi-file-earmark-check{% if current_tab != 'without_resume' %}-fill{% endif %}"></i>
+                    <span>WITH RESUME</span>
+                    <span class="badge {% if current_tab != 'without_resume' %}bg-white text-primary{% else %}bg-secondary-subtle text-secondary{% endif %} rounded-pill ms-1">
+                        {{ tab_counts.with_resume|default:"0" }}
+                    </span>
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a href="?tab=without_resume{% for k, v in request.GET.items %}{% if k != 'tab' and k != 'page' and k != 'has_resume' %}&{{ k }}={{ v }}{% endif %}{% endfor %}" 
+                   class="nav-link px-3.5 py-2 fw-semibold d-inline-flex align-items-center gap-2 {% if current_tab == 'without_resume' %}active bg-primary text-white shadow-xs{% else %}bg-light text-secondary border border-light-subtle{% endif %}" 
+                   id="tab-without-resume"
+                   title="Candidates without CV / Resume attached">
+                    <i class="bi bi-file-earmark-x{% if current_tab == 'without_resume' %}-fill{% endif %}"></i>
+                    <span>WITHOUT RESUME</span>
+                    <span class="badge {% if current_tab == 'without_resume' %}bg-white text-primary{% else %}bg-secondary-subtle text-secondary{% endif %} rounded-pill ms-1">
+                        {{ tab_counts.without_resume|default:"0" }}
+                    </span>
+                </a>
+            </li>
+        </ul>
+
         <span class="fw-bold text-dark small" id="candidate-count-badge">
             <i class="bi bi-people-fill text-primary me-1"></i> Showing <strong class="text-primary">{{ candidates|length }}</strong> Candidate{% if candidates|length != 1 %}s{% endif %}
         </span>
@@ -656,4 +685,5 @@
         setTimeout(() => toast.remove(), 3500);
     }
 </script>
+{% include "includes/upload_cv_modal.html" %}
 {% endblock %}

@@ -1,0 +1,125 @@
+<!-- Upload CV / Add Resume Modal -->
+<div class="modal fade" id="uploadCVModal" tabindex="-1" aria-labelledby="uploadCVModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header bg-light border-bottom px-4 py-3">
+        <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="uploadCVModalLabel">
+          <i class="bi bi-file-earmark-arrow-up text-primary"></i> Upload CV / Add Resume
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="uploadCVForm" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="merge_resume">
+        <input type="hidden" name="candidate_id" id="uploadCV_candidate_id" value="">
+        <div class="modal-body px-4 py-3.5">
+          <div class="mb-3">
+            <label class="form-label small text-secondary fw-semibold">Target Candidate</label>
+            <input type="text" id="uploadCV_candidate_name" class="form-control bg-light" readonly>
+            <div class="form-text x-small text-muted">
+              The uploaded CV will be parsed and attached directly to this existing candidate profile.
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="uploadCV_file" class="form-label small fw-bold text-dark">Select Resume File (PDF, DOCX)</label>
+            <input class="form-control" type="file" id="uploadCV_file" name="resume" accept=".pdf,.docx,.doc" required>
+          </div>
+          <div id="uploadCV_alert" class="alert alert-danger d-none py-2 px-3 small" role="alert"></div>
+          <div id="uploadCV_spinner" class="d-none text-center py-2">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            <span class="small text-secondary fw-semibold">Parsing CV and updating candidate profile...</span>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-top px-4 py-2.5">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary px-3 fw-semibold" id="uploadCV_submit_btn">
+            <i class="bi bi-upload me-1"></i> Upload &amp; Parse CV
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openUploadCVModal(candidateId, candidateName) {
+    var idInput = document.getElementById('uploadCV_candidate_id');
+    var nameInput = document.getElementById('uploadCV_candidate_name');
+    var fileInput = document.getElementById('uploadCV_file');
+    var alertBox = document.getElementById('uploadCV_alert');
+    var spinner = document.getElementById('uploadCV_spinner');
+    var submitBtn = document.getElementById('uploadCV_submit_btn');
+    if (idInput) idInput.value = candidateId || '';
+    if (nameInput) nameInput.value = candidateName || '';
+    if (fileInput) fileInput.value = '';
+    if (alertBox) alertBox.classList.add('d-none');
+    if (spinner) spinner.classList.add('d-none');
+    if (submitBtn) submitBtn.disabled = false;
+    var modalElem = document.getElementById('uploadCVModal');
+    if (modalElem) {
+        var modal = bootstrap.Modal.getInstance(modalElem) || new bootstrap.Modal(modalElem);
+        modal.show();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.getElementById('uploadCVForm');
+    if (!form || form.dataset.listenerAttached) return;
+    form.dataset.listenerAttached = 'true';
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var fileInput = document.getElementById('uploadCV_file');
+        var alertBox = document.getElementById('uploadCV_alert');
+        var submitBtn = document.getElementById('uploadCV_submit_btn');
+        var spinner = document.getElementById('uploadCV_spinner');
+
+        if (!fileInput.files || !fileInput.files[0]) {
+            alertBox.textContent = 'Please select a resume file to upload.';
+            alertBox.classList.remove('d-none');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        spinner.classList.remove('d-none');
+        alertBox.classList.add('d-none');
+
+        var formData = new FormData(form);
+
+        fetch("{% url 'frontend:resume_parser' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(function(res) {
+            return res.json().then(function(data) {
+                return { ok: res.ok, data: data };
+            }).catch(function() {
+                return { ok: res.ok, data: {} };
+            });
+        })
+        .then(function(result) {
+            if (result.ok && result.data.success) {
+                if (window.location.pathname.indexOf('/candidates/') !== -1 && window.location.pathname !== '/candidates/') {
+                    window.location.reload();
+                } else {
+                    window.location.href = "{% url 'frontend:candidate_search' %}?tab=with_resume";
+                }
+            } else {
+                submitBtn.disabled = false;
+                spinner.classList.add('d-none');
+                alertBox.textContent = (result.data && result.data.message) ? result.data.message : 'Upload failed. Please verify the resume file format.';
+                alertBox.classList.remove('d-none');
+            }
+        })
+        .catch(function(err) {
+            submitBtn.disabled = false;
+            spinner.classList.add('d-none');
+            alertBox.textContent = 'Error uploading CV: ' + err.message;
+            alertBox.classList.remove('d-none');
+        });
+    });
+});
+</script>

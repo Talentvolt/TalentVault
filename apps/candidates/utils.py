@@ -1588,6 +1588,17 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
             logger.info(f"[TIMING] [{request_id}] END Save Candidate: {filename} (took {t_db:.4f}s)")
             print(f"[TIMING] [{request_id}] END Save Candidate: {filename} (took {t_db:.4f}s)")
 
+            # Trigger automatic candidate profile invitation email after successful parsing and record creation
+            try:
+                from apps.accounts.services.email_service import send_candidate_profile_invitation_email
+                send_candidate_profile_invitation_email(
+                    profile=profile,
+                    candidate_email=email,
+                    candidate_name=candidate_name
+                )
+            except Exception as e_auto_inv:
+                logger.error(f"[AUTO INVITATION ERROR] Candidate {profile.id}: {e_auto_inv}", exc_info=True)
+
             logger.info(f"[PARSER COMPLETED] [{request_id}] Candidate Profile created/updated successfully: {profile.id}")
             print(f"[PARSER COMPLETED] [{request_id}] Candidate Profile created successfully: ID={profile.id}, Name={profile.full_name}")
             
@@ -2415,6 +2426,18 @@ def merge_candidate_profile_data(
         except Exception as e_ats:
             logger.error(f"ATS scoring on merge failed: {e_ats}", exc_info=True)
 
+        # Trigger automatic candidate invitation email if profile has not received invitation yet
+        try:
+            if not existing_profile.profile_invitation_sent:
+                from apps.accounts.services.email_service import send_candidate_profile_invitation_email
+                send_candidate_profile_invitation_email(
+                    profile=existing_profile,
+                    candidate_email=info.get('email') if info else None,
+                    candidate_name=existing_profile.full_name
+                )
+        except Exception as e_merge_inv:
+            logger.error(f"[AUTO INVITATION MERGE ERROR] {e_merge_inv}", exc_info=True)
+
         return existing_profile
 
 
@@ -2485,4 +2508,4 @@ def process_and_merge_resume(file_obj, filename, candidate_profile_id, uploaded_
         photo_ext=photo_ext,
         uploaded_by=uploaded_by,
         job_id=job_id
-    )
+    )

@@ -530,6 +530,8 @@ class UniversalCandidateSearchService:
 
         if has_resume is True:
             filters &= Q(resume__isnull=False) & ~Q(resume='')
+        elif has_resume is False:
+            filters &= (Q(resume__isnull=True) | Q(resume=''))
 
         if has_verified_email is True:
             filters &= Q(user__is_verified=True)

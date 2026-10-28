@@ -115,7 +115,7 @@
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
-                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
+                <a href="{% url 'frontend:candidate_search' %}?tab=with_resume" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
                     <i class="bi bi-people"></i>
                     <span>Candidates</span>
                 </a>
@@ -183,7 +183,7 @@
                 </a>
 
                 <div class="sidebar-section-label mt-3">RECRUITMENT</div>
-                <a href="{% url 'frontend:candidate_search' %}" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
+                <a href="{% url 'frontend:candidate_search' %}?tab=with_resume" class="sidebar-link {% if request.resolver_match.url_name in 'candidate_search,candidate_list,candidate_detail' and not request.GET.pool and request.resolver_match.url_name != 'talent_search' %}active{% endif %}">
                     <i class="bi bi-people"></i>
                     <span>Candidates</span>
                 </a>

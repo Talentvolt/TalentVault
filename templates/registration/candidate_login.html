@@ -145,8 +145,11 @@
             {% endif %}
 
             <!-- Login Form -->
-            <form method="post" action="{% url 'candidate_login' %}" class="space-y-5">
+            <form method="post" action="{% url 'candidate_login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}" class="space-y-5">
                 {% csrf_token %}
+                {% if request.GET.next %}
+                <input type="hidden" name="next" value="{{ request.GET.next }}">
+                {% endif %}
 
                 <!-- Email -->
                 <div>

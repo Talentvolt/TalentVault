@@ -425,16 +425,35 @@ CLAMAV_PORT = int(os.environ.get('CLAMAV_PORT', 3310))
 CLAMAV_STRICT = os.environ.get('CLAMAV_STRICT', 'False').lower() in ('true', '1', 'yes')
 SOFFICE_PATH = os.environ.get('SOFFICE_PATH', 'soffice')
 
-# Email Configuration (Gmail SMTP)
+# Email Configuration (Provider-agnostic SMTP / API backend)
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', 15))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@talent-vault.in')
-SITE_NAME = 'TalentVault'
-SITE_DOMAIN = 'talent-vault.in'
+
+# Sender Identity Configuration (Configurable via ENV, never hardcoded)
+EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', 'TalentVault').strip()
+EMAIL_FROM_ADDRESS = os.environ.get('EMAIL_FROM_ADDRESS', 'noreply@talent-vault.in').strip()
+
+_env_default_from = os.environ.get('DEFAULT_FROM_EMAIL', '').strip()
+if _env_default_from:
+    if '<' in _env_default_from and '>' in _env_default_from:
+        DEFAULT_FROM_EMAIL = _env_default_from
+    elif EMAIL_FROM_NAME:
+        DEFAULT_FROM_EMAIL = f"{EMAIL_FROM_NAME} <{_env_default_from}>"
+    else:
+        DEFAULT_FROM_EMAIL = _env_default_from
+else:
+    DEFAULT_FROM_EMAIL = f"{EMAIL_FROM_NAME} <{EMAIL_FROM_ADDRESS}>"
+
+SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+SUPPORT_EMAIL = os.environ.get('SUPPORT_EMAIL', 'support@talent-vault.in')
+SITE_NAME = os.environ.get('SITE_NAME', 'TalentVault')
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', 'talent-vault.in')
 
 
 

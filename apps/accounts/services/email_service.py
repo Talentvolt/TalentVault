@@ -327,3 +327,174 @@ def send_recruiter_rejection_emails(
 
     return recruiter_sent, admin_sent
 
+
+def send_candidate_profile_invitation_email(
+    profile,
+    candidate_email: str = None,
+    candidate_name: str = None,
+    request=None,
+    force_resend: bool = False
+) -> Tuple[bool, str]:
+    """
+    Automatically send profile invitation email to candidate after CV parsing.
+    
+    Includes idempotency protection (prevents duplicate invitation emails),
+    dynamic candidate profile URL generation, multi-part plain-text and HTML
+    rendering with professional CTA button, error logging, and database tracking.
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    if not profile:
+        return False, "Candidate profile is missing."
+
+    # Idempotency check: Do not resend if already sent unless force_resend is explicitly requested
+    if profile.profile_invitation_sent and not force_resend:
+        logger.info(f"[INVITATION SKIPPED] Invitation email already sent to candidate {profile.id} at {profile.profile_invitation_sent_at}")
+        return False, "Invitation email has already been sent."
+
+    from apps.candidates.utils import is_placeholder_email, VALID_EMAIL_RE
+    from apps.candidates.models import CandidateProfile
+
+    # Resolve candidate email: provided argument -> profile.contact_email -> profile.user.email
+    target_email = (candidate_email or "").strip().lower()
+    if not target_email or is_placeholder_email(target_email):
+        target_email = (profile.contact_email or "").strip().lower()
+    if not target_email or is_placeholder_email(target_email):
+        user_email = getattr(profile.user, 'email', '') or ''
+        if not is_placeholder_email(user_email):
+            target_email = user_email.strip().lower()
+
+    if not target_email or is_placeholder_email(target_email) or not VALID_EMAIL_RE.match(target_email):
+        logger.warning(f"[INVITATION SKIPPED] No valid email address found for candidate {profile.id}. Email: '{target_email}'")
+        return False, "No valid candidate email found."
+
+    # Resolve candidate name
+    resolved_name = (candidate_name or profile.full_name or "Candidate").strip()
+    if not resolved_name or resolved_name.lower() in ('unknown', 'unknown candidate', 'none', 'null'):
+        resolved_name = "Candidate"
+
+    # Generate unique profile URL dynamically
+    profile_link = profile.get_full_profile_url(request=request)
+
+    subject = "Complete Your TalentVault Profile"
+    from_name = getattr(settings, 'EMAIL_FROM_NAME', 'TalentVault') or 'TalentVault'
+    default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@talent-vault.in'
+    if '<' in default_from and '>' in default_from:
+        from_email = default_from
+    else:
+        from_email = f"{from_name} <{default_from}>"
+
+    reply_to_email = getattr(settings, 'SUPPORT_EMAIL', 'support@talent-vault.in') or 'support@talent-vault.in'
+    
+    import uuid
+    domain = getattr(settings, 'SITE_DOMAIN', 'talent-vault.in') or 'talent-vault.in'
+    if domain.startswith('http://') or domain.startswith('https://'):
+        domain = domain.split('://')[-1]
+    domain = domain.split('/')[0].split(':')[0]
+    msg_id = f"<{uuid.uuid4()}@{domain}>"
+
+    custom_headers = {
+        'Message-ID': msg_id,
+        'X-Mailer': 'TalentVault Notification Service',
+        'Auto-Submitted': 'auto-generated',
+    }
+
+    context = {
+        'candidate_name': resolved_name,
+        'candidate_profile_link': profile_link,
+        'candidate': profile,
+        'email': target_email
+    }
+
+    # Render templates with robust fallbacks
+    try:
+        text_content = render_to_string('emails/candidate_profile_invitation.txt', context)
+    except Exception as render_err:
+        logger.warning(f"Could not render candidate_profile_invitation.txt: {render_err}")
+        text_content = (
+            f"Hi {resolved_name},\n\n"
+            f"Your CV has been successfully processed and your profile has been created on TalentVault.\n\n"
+            f"To complete your profile and make it available for relevant job opportunities, please review your information and complete your TalentVault profile.\n\n"
+            f"Your CV / Profile:\n\n"
+            f"{profile_link}\n\n"
+            f"Please click the link above to view your CV details and complete your profile.\n\n"
+            f"Once your profile is completed, recruiters can consider your profile for suitable job opportunities.\n\n"
+            f"Regards,\n"
+            f"TalentVault Team\n"
+            f"TalentVault Technologies\n"
+        )
+
+    try:
+        html_content = render_to_string('emails/candidate_profile_invitation.html', context)
+    except Exception as render_err:
+        logger.warning(f"Could not render candidate_profile_invitation.html: {render_err}")
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #FAF9FF; color: #0F172A;">
+            <p>Hi {resolved_name},</p>
+            <p>Your CV has been successfully processed and your profile has been created on TalentVault.</p>
+            <p>To complete your profile and make it available for relevant job opportunities, please review your information and complete your TalentVault profile.</p>
+            <p><strong>Your CV / Profile:</strong></p>
+            <p style="margin: 24px 0;"><a href="{profile_link}" style="background-color: #2563EB; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Complete Your TalentVault Profile</a></p>
+            <p>Direct Link: <a href="{profile_link}">{profile_link}</a></p>
+            <p>Please click the link above to view your CV details and complete your profile.</p>
+            <p>Once your profile is completed, recruiters can consider your profile for suitable job opportunities.</p>
+            <p style="margin-top: 24px;">Regards,<br><strong>TalentVault Team</strong><br>TalentVault Technologies</p>
+        </div>
+        """
+
+    masked_target = mask_email(target_email)
+    try:
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=from_email,
+            to=[target_email],
+            reply_to=[reply_to_email],
+            headers=custom_headers,
+        )
+        email_message.attach_alternative(html_content, "text/html")
+        email_message.send(fail_silently=False)
+
+        # Log email to EmailLog if available
+        try:
+            from apps.notifications.models import EmailLog
+            EmailLog.objects.create(
+                sender=profile.uploaded_by or profile.created_by,
+                recipient_email=target_email,
+                subject=subject,
+                body=text_content,
+                status='SENT'
+            )
+        except Exception as log_err:
+            logger.warning(f"Could not log email to EmailLog: {log_err}")
+
+        # Update candidate profile tracking fields
+        from django.utils import timezone
+        now = timezone.now()
+        CandidateProfile.objects.filter(id=profile.id).update(
+            profile_invitation_sent=True,
+            profile_invitation_sent_at=now
+        )
+        profile.profile_invitation_sent = True
+        profile.profile_invitation_sent_at = now
+
+        logger.info(f"[INVITATION SENT] Successfully sent candidate profile invitation email to {masked_target} for profile {profile.id}")
+        return True, "Invitation email sent successfully."
+
+    except Exception as exc:
+        logger.error(f"[INVITATION FAILED] Failed to send candidate profile invitation email to {masked_target} for profile {profile.id}: {str(exc)}", exc_info=True)
+        try:
+            from apps.notifications.models import EmailLog
+            EmailLog.objects.create(
+                sender=profile.uploaded_by or profile.created_by,
+                recipient_email=target_email,
+                subject=subject,
+                body=f"{text_content}\n\n[DELIVERY ERROR]: {str(exc)}",
+                status='FAILED'
+            )
+        except Exception:
+            pass
+        return False, f"Failed to send invitation email: {str(exc)}"
+
+

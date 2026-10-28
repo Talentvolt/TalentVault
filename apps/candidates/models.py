@@ -100,6 +100,18 @@ class CandidateProfile(BaseAppModel):
     is_shortlisted = models.BooleanField(default=False, db_index=True)
     is_saved_for_later = models.BooleanField(default=False, db_index=True)
 
+    # Automatic Profile Invitation Email Tracking
+    profile_invitation_sent = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Tracks whether the automatic profile invitation email has been sent to the candidate."
+    )
+    profile_invitation_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the profile invitation email was successfully sent."
+    )
+
     # Diversity & Affirmative Hiring (Explicit Self-Declared Candidate Data Only)
     gender = models.CharField(
         max_length=30, 
@@ -257,6 +269,49 @@ class CandidateProfile(BaseAppModel):
     @property
     def expected_salary_lpa(self):
         return format_salary_lpa(self.expected_salary)
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('frontend:candidate_detail', kwargs={'pk': self.pk})
+
+    def get_full_profile_url(self, request=None):
+        """
+        Dynamically generate the full absolute profile URL for this candidate.
+        Example: https://talent-vault.in/candidates/<candidate-uuid>/
+        Guarantees HTTPS and production domain, never localhost, 127.0.0.1, or private IP.
+        """
+        from django.urls import reverse
+        from django.conf import settings
+        path = reverse('frontend:candidate_detail', kwargs={'pk': self.pk})
+
+        prod_domain = getattr(settings, 'SITE_DOMAIN', 'talent-vault.in').strip()
+        if prod_domain.startswith('http://'):
+            prod_domain = prod_domain[7:]
+        elif prod_domain.startswith('https://'):
+            prod_domain = prod_domain[8:]
+        prod_domain = prod_domain.rstrip('/')
+        domain = prod_domain or 'talent-vault.in'
+
+        if request:
+            try:
+                req_host = request.get_host().split(':')[0].strip().lower()
+                if (
+                    req_host
+                    and req_host not in ('localhost', '127.0.0.1', 'testserver')
+                    and not req_host.startswith('192.168.')
+                    and not req_host.startswith('10.')
+                    and not (
+                        req_host.startswith('172.')
+                        and req_host.split('.')[1].isdigit()
+                        and 16 <= int(req_host.split('.')[1]) <= 31
+                    )
+                ):
+                    domain = req_host
+            except Exception:
+                domain = prod_domain
+
+        return f"https://{domain}{path}"
+
     
     # Resume Intelligence Engine fields
     original_file = models.FileField(upload_to='resumes/original/', null=True, blank=True)

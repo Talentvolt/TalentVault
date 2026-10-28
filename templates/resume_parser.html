@@ -508,6 +508,12 @@
                                 <strong>Education Count:</strong> <span id="res-education">-</span>
                             </div>
                         </div>
+                        <div class="mb-3 p-2.5 rounded bg-white border border-success-subtle d-flex align-items-center justify-content-between" id="res-invitation-container">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-envelope-check text-success fs-5" id="res-invitation-icon"></i>
+                                <span class="small" id="res-invitation-text">Checking candidate invitation status...</span>
+                            </div>
+                        </div>
                         <div class="d-flex gap-2">
                             <a href="#" id="viewCandidateBtn" class="btn btn-success fw-bold px-4">View Candidate</a>
                             <button type="button" id="resetParserBtn" class="btn btn-outline-success fw-bold px-4">Upload Another Resume</button>
@@ -1500,6 +1506,21 @@ document.addEventListener("DOMContentLoaded", function() {
         resExperience.textContent = data.experience !== undefined ? data.experience : "0.0";
         resSkills.textContent = data.skills_count !== undefined ? data.skills_count : "0";
         resEducation.textContent = data.education_count !== undefined ? data.education_count : "0";
+        
+        const invText = document.getElementById("res-invitation-text");
+        const invIcon = document.getElementById("res-invitation-icon");
+        if (invText && invIcon) {
+            if (data.profile_invitation_sent) {
+                invIcon.className = "bi bi-envelope-check-fill text-success fs-5";
+                invText.innerHTML = `<strong>Profile Invitation Sent:</strong> Automatic invitation email sent to candidate (${data.email || 'extracted email'})`;
+            } else if (!data.email || data.email.includes('no-email.talentvault.internal')) {
+                invIcon.className = "bi bi-envelope-slash text-muted fs-5";
+                invText.innerHTML = `<strong>Candidate Email Not Available:</strong> No valid candidate email found in parsed CV.`;
+            } else {
+                invIcon.className = "bi bi-envelope text-primary fs-5";
+                invText.innerHTML = `<strong>Candidate Profile Created:</strong> Invitation can be sent from the candidate detail page.`;
+            }
+        }
         
         const jobIdInput = document.getElementById("manualJobId");
         const jobIdVal = jobIdInput ? jobIdInput.value : "";

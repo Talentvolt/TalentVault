@@ -735,6 +735,11 @@ body.candidate-saas-body {
 
     <!-- REQUIRED ACTION BUTTONS (All visible with reference color hierarchy) -->
     <div class="d-flex flex-wrap align-items-center gap-2">
+        {% if not resume_exists and can_edit_candidate %}
+        <button type="button" class="btn btn-primary fw-semibold" onclick="openUploadCVModal('{{ candidate.id }}', '{{ candidate.full_name|default:candidate.user.email|escapejs }}')">
+            <i class="bi bi-file-earmark-arrow-up me-1.5"></i> Upload CV
+        </button>
+        {% endif %}
         <!-- 1. Share Profile (cyan/blue outline) -->
         <button type="button" class="btn btn-action-share" data-bs-toggle="modal" data-bs-target="#shareProfileModal">
             <i class="bi bi-share me-1.5"></i> Share Profile
@@ -859,6 +864,33 @@ body.candidate-saas-body {
                     
                     <!-- Availability / Status Pill -->
                     <span class="candidate-status-pill">Available</span>
+
+                    <!-- Candidate Invitation Status Indication -->
+                    <span id="invitationStatusBadge">
+                    {% if candidate.profile_invitation_sent %}
+                        <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1.5" style="font-size: 0.78rem;" title="Sent at {{ candidate.profile_invitation_sent_at|date:'M d, Y H:i' }}">
+                            <i class="bi bi-envelope-check-fill"></i> Profile Invitation Sent{% if candidate.profile_invitation_sent_at %} <small class="text-muted ms-1">({{ candidate.profile_invitation_sent_at|date:"M d, Y H:i" }})</small>{% endif %}
+                        </span>
+                        {% if can_edit_candidate %}
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 text-muted ms-1" style="font-size: 0.75rem;" onclick="sendCandidateInvitation('{{ candidate.id }}')" title="Resend Invitation Email">
+                            <i class="bi bi-arrow-repeat"></i> Resend
+                        </button>
+                        {% endif %}
+                    {% elif not candidate.contact_email %}
+                        <span class="badge rounded-pill bg-light text-muted border px-2.5 py-1 d-inline-flex align-items-center gap-1.5" style="font-size: 0.78rem;" title="Candidate email not available">
+                            <i class="bi bi-envelope-slash"></i> Candidate Email Not Available
+                        </span>
+                    {% else %}
+                        <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1.5" style="font-size: 0.78rem;">
+                            <i class="bi bi-envelope-exclamation"></i> Invitation Pending
+                        </span>
+                        {% if can_edit_candidate %}
+                        <button type="button" class="btn btn-sm btn-outline-primary py-0.5 px-2.5 rounded-pill ms-1" style="font-size: 0.75rem;" onclick="sendCandidateInvitation('{{ candidate.id }}')" id="btnSendInvitation">
+                            <i class="bi bi-send me-1"></i>Send Invitation
+                        </button>
+                        {% endif %}
+                    {% endif %}
+                    </span>
 
                     <!-- LinkedIn Icon -->
                     <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" class="text-decoration-none ms-1" title="LinkedIn Profile">
@@ -1138,7 +1170,12 @@ body.candidate-saas-body {
                         <div class="text-center py-5 bg-light rounded-3 border">
                             <i class="bi bi-file-earmark-x fs-1 mb-2 d-block text-secondary opacity-50"></i>
                             <h6 class="fw-bold">No Resume File Available</h6>
-                            <p class="small text-muted mb-0">The resume file has not been uploaded or is currently unavailable.</p>
+                            <p class="small text-muted mb-3">The resume file has not been uploaded or is currently unavailable.</p>
+                            {% if can_edit_candidate %}
+                            <button type="button" class="btn btn-primary px-3.5 py-2 fw-semibold" onclick="openUploadCVModal('{{ candidate.id }}', '{{ candidate.full_name|default:candidate.user.email|escapejs }}')">
+                                <i class="bi bi-file-earmark-arrow-up me-1.5"></i> Add Resume / Upload CV
+                            </button>
+                            {% endif %}
                         </div>
                         {% endif %}
                     {% endif %}
@@ -1293,7 +1330,12 @@ body.candidate-saas-body {
                     {% else %}
                     <div class="text-center py-3 bg-light rounded-3 border">
                         <i class="bi bi-file-earmark-x text-muted fs-3 d-block mb-1"></i>
-                        <span class="small text-muted">No resume document attached.</span>
+                        <span class="small text-muted d-block mb-2">No resume document attached.</span>
+                        {% if can_edit_candidate %}
+                        <button type="button" class="btn btn-sm btn-primary fw-semibold" onclick="openUploadCVModal('{{ candidate.id }}', '{{ candidate.full_name|default:candidate.user.email|escapejs }}')">
+                            <i class="bi bi-file-earmark-arrow-up me-1"></i> Upload CV
+                        </button>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -2276,5 +2318,54 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 });
+
+function sendCandidateInvitation(candidateId) {
+    const btn = document.getElementById('btnSendInvitation');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Sending...';
+    }
+    
+    fetch(`/candidates/${candidateId}/send-invitation/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            const badgeContainer = document.getElementById('invitationStatusBadge');
+            if (badgeContainer) {
+                badgeContainer.innerHTML = `
+                    <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1.5" style="font-size: 0.78rem;">
+                        <i class="bi bi-envelope-check-fill"></i> Profile Invitation Sent ${data.sent_at ? '<small class="text-muted ms-1">(' + data.sent_at + ')</small>' : ''}
+                    </span>
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 text-muted ms-1" style="font-size: 0.75rem;" onclick="sendCandidateInvitation('${candidateId}')" title="Resend Invitation Email">
+                        <i class="bi bi-arrow-repeat"></i> Resend
+                    </button>
+                `;
+            }
+            alert('Profile invitation email sent successfully!');
+        } else {
+            alert(data.message || 'Failed to send invitation email.');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Error sending invitation:', err);
+        alert('An error occurred while sending the invitation email.');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    });
+}
 </script>
+{% include "includes/upload_cv_modal.html" %}
 {% endblock content %}

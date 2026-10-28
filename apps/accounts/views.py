@@ -569,6 +569,10 @@ class CandidateLoginView(View):
                             request.session.set_expiry(1209600)  # 2 weeks
                         else:
                             request.session.set_expiry(0)
+                        from django.utils.http import url_has_allowed_host_and_scheme
+                        next_url = request.POST.get('next') or request.GET.get('next')
+                        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                            return redirect(next_url)
                         return redirect('frontend:candidate_dashboard')
                     else:
                         form.add_error(None, "This account is disabled.")
