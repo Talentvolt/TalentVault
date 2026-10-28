@@ -338,6 +338,7 @@ class BulkResumeParserService:
             bulk_job = BulkResumeJob.objects.create(
                 job_number=job_number,
                 user=user,
+                created_by=user,
                 job=job,
                 status=BulkResumeJob.Status.PENDING,
                 zip_filename=getattr(zip_file, 'name', '') if zip_file else '',
@@ -871,7 +872,7 @@ class BulkResumeParserService:
     # STEP 3: ASYNCHRONOUS BATCH PROCESSING ENGINE
     # =========================================================================
     @classmethod
-    def start_background_processing(cls, job_number_or_id: str, overwrite: Optional[bool] = None, sync: bool = False) -> bool:
+    def start_background_processing(cls, job_number_or_id: str, overwrite: Optional[bool] = None, sync: bool = False, user: Optional[User] = None) -> bool:
         """
         Launches background thread for non-blocking parsing of the bulk job.
         If sync=True, executes synchronously in current thread (useful for testing).
@@ -883,13 +884,21 @@ class BulkResumeParserService:
         if job.status == BulkResumeJob.Status.PROCESSING:
             return True  # Already running
 
+        fields_to_update = ['status', 'started_at']
         if overwrite is not None:
             job.overwrite = overwrite
-            job.save(update_fields=['overwrite'])
+            fields_to_update.append('overwrite')
+
+        if job.user is None and user is not None:
+            job.user = user
+            fields_to_update.append('user')
+            if not job.created_by:
+                job.created_by = user
+                fields_to_update.append('created_by')
 
         job.status = BulkResumeJob.Status.PROCESSING
         job.started_at = timezone.now()
-        job.save(update_fields=['status', 'started_at'])
+        job.save(update_fields=fields_to_update)
 
         if sync:
             cls._run_bulk_job_worker(str(job.id))
@@ -978,10 +987,12 @@ class BulkResumeParserService:
         job.current_file = item.filename
         job.save(update_fields=['current_file'])
 
+        uploader = user or getattr(job, 'user', None)
+
         file_path = item.file_path
         if not file_path and item.excel_metadata:
             # Excel-only candidate row (no resume file): create/update from metadata.
-            cls._process_excel_only_item(item, job, user=user, job_target=job_target, overwrite=overwrite)
+            cls._process_excel_only_item(item, job, user=uploader, job_target=job_target, overwrite=overwrite)
             return
 
         if not file_path or not os.path.exists(file_path):
@@ -1056,7 +1067,7 @@ class BulkResumeParserService:
                 filename=item.filename,
                 overwrite=overwrite,
                 user=None,
-                uploaded_by=user
+                uploaded_by=uploader
             )
 
             # Apply Excel metadata override/enrichment if available
@@ -1257,7 +1268,27 @@ class BulkResumeParserService:
                     user_obj.save()
                 was_existing = False
 
-            profile, created_profile = CandidateProfile.objects.get_or_create(user=user_obj)
+            uploader = user or getattr(job, 'user', None)
+            defaults = {}
+            if uploader:
+                defaults['uploaded_by'] = uploader
+                defaults['created_by'] = uploader
+
+            profile, created_profile = CandidateProfile.objects.get_or_create(
+                user=user_obj,
+                defaults=defaults
+            )
+
+            if uploader:
+                owner_fields_to_update = []
+                if not profile.uploaded_by or (overwrite and was_existing):
+                    profile.uploaded_by = uploader
+                    owner_fields_to_update.append('uploaded_by')
+                if not profile.created_by:
+                    profile.created_by = uploader
+                    owner_fields_to_update.append('created_by')
+                if owner_fields_to_update and not created_profile:
+                    profile.save(update_fields=owner_fields_to_update)
 
             cls._enrich_profile_from_excel(profile, excel_data)
 

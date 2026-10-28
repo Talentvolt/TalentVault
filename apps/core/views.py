@@ -343,6 +343,10 @@ class RoleRedirectView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             user = request.user
+            from django.utils.http import url_has_allowed_host_and_scheme
+            next_url = request.GET.get('next') or request.POST.get('next')
+            if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                return redirect(next_url)
             if user.role == User.Role.SUPER_ADMIN or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
                 return redirect('frontend:admin_dashboard')
             elif user.role in [User.Role.RECRUITER, User.Role.COMPANY_ADMIN]:
@@ -3323,6 +3327,32 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
         return context
 
 
+class CandidateRetryInvitationView(RecruiterRequiredMixin, View):
+    """
+    Allows recruiter to manually send or retry sending the candidate profile invitation email.
+    """
+    def post(self, request, pk, *args, **kwargs):
+        candidate = get_object_or_404(CandidateProfile, pk=pk)
+        from apps.accounts.services.email_service import send_candidate_profile_invitation_email
+        success, message = send_candidate_profile_invitation_email(
+            profile=candidate,
+            request=request,
+            force_resend=True
+        )
+        if success:
+            sent_at_str = candidate.profile_invitation_sent_at.strftime('%b %d, %Y %H:%M') if candidate.profile_invitation_sent_at else ''
+            return JsonResponse({
+                "success": True,
+                "message": "Candidate profile invitation email sent successfully.",
+                "sent_at": sent_at_str
+            })
+        else:
+            return JsonResponse({
+                "success": False,
+                "message": message
+            }, status=400)
+
+
 class SaveCandidateNotesView(RecruiterRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         profile = get_object_or_404(CandidateProfile, pk=pk)
@@ -3419,6 +3449,23 @@ class CandidateDetailView(RecruiterRequiredMixin, DetailView):
     model = CandidateProfile
     template_name = 'candidate_detail.html'
     context_object_name = 'candidate'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"{reverse('candidate_login')}?next={request.path}")
+        if request.user.role == User.Role.CANDIDATE:
+            candidate_id = kwargs.get('pk')
+            user_profile = getattr(request.user, 'candidate_profile', None)
+            is_owner = False
+            if user_profile and str(user_profile.id) == str(candidate_id):
+                is_owner = True
+            elif CandidateProfile.objects.filter(pk=candidate_id, user=request.user).exists():
+                is_owner = True
+
+            if is_owner:
+                return redirect('frontend:candidate_profile')
+            return redirect('frontend:candidate_dashboard')
+        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         return get_tenant_candidates_qs(self.request.user).select_related(
@@ -5638,6 +5685,19 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                             except Exception as e_map:
                                 logger.error(f"Error mapping manual candidate to job {job_id}: {e_map}", exc_info=True)
                             
+                    # Automatically send profile invitation email if not already sent
+                    if not profile.profile_invitation_sent:
+                        try:
+                            from apps.accounts.services.email_service import send_candidate_profile_invitation_email
+                            send_candidate_profile_invitation_email(
+                                profile=profile,
+                                candidate_email=email,
+                                candidate_name=profile.full_name,
+                                request=request
+                            )
+                        except Exception as e_man_inv:
+                            logger.error(f"[MANUAL SAVE INVITATION ERROR] Candidate {profile.id}: {e_man_inv}", exc_info=True)
+
                     return JsonResponse({"success": True, "candidate_id": str(profile.id), "job_id": request.POST.get('job_id', ''), "message": "Candidate saved successfully."})
                 except Exception as e:
                     logger.error(f"[MANUAL SAVE FAILED] Exception: {str(e)}", exc_info=True)
@@ -5968,7 +6028,9 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                     "summary": profile.summary or '',
                     "resume_name": profile.original_filename or '',
                     "confidence": float(profile.ocr_confidence or 90.0),
-                    "experiences": experiences_list
+                    "experiences": experiences_list,
+                    "profile_invitation_sent": getattr(profile, 'profile_invitation_sent', False),
+                    "profile_invitation_sent_at": profile.profile_invitation_sent_at.strftime('%b %d, %Y %H:%M') if getattr(profile, 'profile_invitation_sent_at', None) else ''
                 })
             q.put(data)
             
@@ -6124,7 +6186,7 @@ class BulkResumeStartAPIView(RecruiterRequiredMixin, View):
         sync = request.POST.get('sync') in ['true', '1', True] or (request.headers.get('X-Test-Sync') == '1')
 
         try:
-            BulkResumeParserService.start_background_processing(job_id, overwrite=overwrite, sync=sync)
+            BulkResumeParserService.start_background_processing(job_id, overwrite=overwrite, sync=sync, user=request.user)
             return JsonResponse({
                 "success": True,
                 "job_id": job_id,

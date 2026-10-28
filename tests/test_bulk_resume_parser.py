@@ -688,3 +688,83 @@ class TestBulkResumeParser(TestCase):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
+    def test_excel_import_assigns_logged_in_recruiter_nikhil_mittal(self):
+        """
+        Regression test: When logged-in recruiter Nikhil Mittal uploads an Excel file:
+        1. Imported CandidateProfile records have uploaded_by and created_by set to Nikhil Mittal.
+        2. candidate.uploader_name returns 'Nikhil Mittal'.
+        3. Candidate listing renders 'Uploaded By: Nikhil Mittal' and not 'System Import'.
+        4. Recruiter dashboard counts the imported candidates under 'Nikhil Mittal' and not 'Unassigned'.
+        """
+        from django.urls import reverse
+        from apps.companies.models import Company, CompanyMember
+
+        nikhil = User.objects.create_user(
+            email='nikhil.mittal@talentvault.com',
+            first_name='Nikhil',
+            last_name='Mittal',
+            password='TestPassword123!',
+            role=User.Role.RECRUITER,
+            recruiter_status=User.RecruiterStatus.ACTIVE
+        )
+        comp, _ = Company.objects.get_or_create(name='TalentVault Test Org')
+        CompanyMember.objects.get_or_create(user=nikhil, company=comp, defaults={'role': 'ADMIN'})
+
+        client = Client()
+        client.force_login(nikhil)
+
+        excel_file = self._create_sample_excel([
+            ['Acme Corp', 'Backend Dev', 'Noida', 'Sector 62', 'Candidate Alpha', '9911223344', '', ''],
+            ['Beta Corp', 'Frontend Dev', 'Gurgaon', 'Cyber Hub', 'Candidate Beta', '9911223355', '', ''],
+        ])
+
+        # 1. Validate & stage
+        val_resp = client.post('/api/bulk-resume/validate/', {
+            'candidates_excel': excel_file,
+            'overwrite': 'false'
+        })
+        self.assertEqual(val_resp.status_code, 200)
+        data = val_resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['excel_rows'], 2)
+
+        job = BulkResumeJob.objects.get(job_number=data['job_id'])
+        self.assertEqual(job.user, nikhil)
+
+        # 2. Start bulk processing
+        start_resp = client.post('/api/bulk-resume/start/', {
+            'job_id': data['job_id'],
+            'overwrite': 'false',
+            'sync': 'true'
+        })
+        self.assertEqual(start_resp.status_code, 200)
+
+        # 3. Verify CandidateProfile ownership
+        user_alpha = User.objects.get(phone_number='9911223344')
+        user_beta = User.objects.get(phone_number='9911223355')
+        profile_alpha = CandidateProfile.objects.get(user=user_alpha)
+        profile_beta = CandidateProfile.objects.get(user=user_beta)
+
+        self.assertEqual(profile_alpha.uploaded_by, nikhil)
+        self.assertEqual(profile_alpha.created_by, nikhil)
+        self.assertEqual(profile_alpha.uploader_name, 'Nikhil Mittal')
+
+        self.assertEqual(profile_beta.uploaded_by, nikhil)
+        self.assertEqual(profile_beta.created_by, nikhil)
+        self.assertEqual(profile_beta.uploader_name, 'Nikhil Mittal')
+
+        # 4. Verify candidate search list shows 'Uploaded By: Nikhil Mittal'
+        search_resp = client.get(reverse('frontend:candidate_search'))
+        self.assertEqual(search_resp.status_code, 200)
+        content = search_resp.content.decode('utf-8')
+        self.assertIn('Nikhil Mittal', content)
+
+        # 5. Verify Dashboard counts candidates under 'Nikhil Mittal' and not 'Unassigned'
+        dash_resp = client.get(reverse('frontend:recruiter_dashboard'))
+        self.assertEqual(dash_resp.status_code, 200)
+        rows = dash_resp.context.get('recruiter_upload_rows', [])
+        by_name = {r['name']: r for r in rows}
+        self.assertIn('Nikhil Mittal', by_name)
+        self.assertEqual(by_name['Nikhil Mittal']['total'], 2)
+        self.assertFalse(by_name['Nikhil Mittal']['is_unassigned'])
+
