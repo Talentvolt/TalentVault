@@ -328,46 +328,20 @@ def send_recruiter_rejection_emails(
     return recruiter_sent, admin_sent
 
 
-def send_candidate_profile_invitation_email(
+def _send_candidate_profile_invitation_email_now(
     profile,
-    candidate_email: str = None,
-    candidate_name: str = None,
-    request=None,
-    force_resend: bool = False
+    candidate_email: str,
+    candidate_name: str,
+    request=None
 ) -> Tuple[bool, str]:
     """
-    Automatically send profile invitation email to candidate after CV parsing.
-    
-    Includes idempotency protection (prevents duplicate invitation emails),
-    dynamic candidate profile URL generation, multi-part plain-text and HTML
-    rendering with professional CTA button, error logging, and database tracking.
-
-    Returns:
-        Tuple of (success: bool, message: str)
+    Internal function to send the invitation email immediately.
+    Used by the queue processor and manual send endpoints.
+    Assumes email validation and idempotency checks have been done.
     """
-    if not profile:
-        return False, "Candidate profile is missing."
-
-    # Idempotency check: Do not resend if already sent unless force_resend is explicitly requested
-    if profile.profile_invitation_sent and not force_resend:
-        logger.info(f"[INVITATION SKIPPED] Invitation email already sent to candidate {profile.id} at {profile.profile_invitation_sent_at}")
-        return False, "Invitation email has already been sent."
-
     from apps.candidates.utils import is_placeholder_email, VALID_EMAIL_RE
     from apps.candidates.models import CandidateProfile
-
-    # Resolve candidate email: provided argument -> profile.contact_email -> profile.user.email
-    target_email = (candidate_email or "").strip().lower()
-    if not target_email or is_placeholder_email(target_email):
-        target_email = (profile.contact_email or "").strip().lower()
-    if not target_email or is_placeholder_email(target_email):
-        user_email = getattr(profile.user, 'email', '') or ''
-        if not is_placeholder_email(user_email):
-            target_email = user_email.strip().lower()
-
-    if not target_email or is_placeholder_email(target_email) or not VALID_EMAIL_RE.match(target_email):
-        logger.warning(f"[INVITATION SKIPPED] No valid email address found for candidate {profile.id}. Email: '{target_email}'")
-        return False, "No valid candidate email found."
+    from django.utils import timezone
 
     # Resolve candidate name
     resolved_name = (candidate_name or profile.full_name or "Candidate").strip()
@@ -404,7 +378,7 @@ def send_candidate_profile_invitation_email(
         'candidate_name': resolved_name,
         'candidate_profile_link': profile_link,
         'candidate': profile,
-        'email': target_email
+        'email': candidate_email
     }
 
     # Render templates with robust fallbacks
@@ -443,13 +417,13 @@ def send_candidate_profile_invitation_email(
         </div>
         """
 
-    masked_target = mask_email(target_email)
+    masked_target = mask_email(candidate_email)
     try:
         email_message = EmailMultiAlternatives(
             subject=subject,
             body=text_content,
             from_email=from_email,
-            to=[target_email],
+            to=[candidate_email],
             reply_to=[reply_to_email],
             headers=custom_headers,
         )
@@ -461,7 +435,7 @@ def send_candidate_profile_invitation_email(
             from apps.notifications.models import EmailLog
             EmailLog.objects.create(
                 sender=profile.uploaded_by or profile.created_by,
-                recipient_email=target_email,
+                recipient_email=candidate_email,
                 subject=subject,
                 body=text_content,
                 status='SENT'
@@ -470,7 +444,6 @@ def send_candidate_profile_invitation_email(
             logger.warning(f"Could not log email to EmailLog: {log_err}")
 
         # Update candidate profile tracking fields
-        from django.utils import timezone
         now = timezone.now()
         CandidateProfile.objects.filter(id=profile.id).update(
             profile_invitation_sent=True,
@@ -488,7 +461,7 @@ def send_candidate_profile_invitation_email(
             from apps.notifications.models import EmailLog
             EmailLog.objects.create(
                 sender=profile.uploaded_by or profile.created_by,
-                recipient_email=target_email,
+                recipient_email=candidate_email,
                 subject=subject,
                 body=f"{text_content}\n\n[DELIVERY ERROR]: {str(exc)}",
                 status='FAILED'
@@ -498,3 +471,98 @@ def send_candidate_profile_invitation_email(
         return False, f"Failed to send invitation email: {str(exc)}"
 
 
+def send_candidate_profile_invitation_email(
+    profile,
+    candidate_email: str = None,
+    candidate_name: str = None,
+    request=None,
+    force_resend: bool = False,
+    queue_email: bool = True
+) -> Tuple[bool, str]:
+    """
+    Queue or send profile invitation email to candidate after CV parsing.
+    
+    Includes idempotency protection (prevents duplicate invitation emails),
+    dynamic candidate profile URL generation, multi-part plain-text and HTML
+    rendering with professional CTA button, error logging, and database tracking.
+
+    When queue_email=True (default for automatic parsing), the email is added
+    to a persistent queue for delayed sequential delivery (3-minute intervals).
+    When queue_email=False (manual sends), the email is sent immediately.
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    if not profile:
+        return False, "Candidate profile is missing."
+
+    # Idempotency check: Do not resend if already sent unless force_resend is explicitly requested
+    if profile.profile_invitation_sent and not force_resend:
+        logger.info(f"[INVITATION SKIPPED] Invitation email already sent to candidate {profile.id} at {profile.profile_invitation_sent_at}")
+        return False, "Invitation email has already been sent."
+
+    from apps.candidates.utils import is_placeholder_email, VALID_EMAIL_RE
+    from apps.candidates.models import CandidateProfile
+
+    # Resolve candidate email: provided argument -> profile.contact_email -> profile.user.email
+    target_email = (candidate_email or "").strip().lower()
+    if not target_email or is_placeholder_email(target_email):
+        target_email = (profile.contact_email or "").strip().lower()
+    if not target_email or is_placeholder_email(target_email):
+        user_email = getattr(profile.user, 'email', '') or ''
+        if not is_placeholder_email(user_email):
+            target_email = user_email.strip().lower()
+
+    if not target_email or is_placeholder_email(target_email) or not VALID_EMAIL_RE.match(target_email):
+        logger.warning(f"[INVITATION SKIPPED] No valid email address found for candidate {profile.id}. Email: '{target_email}'")
+        return False, "No valid candidate email found."
+
+    # Resolve candidate name
+    resolved_name = (candidate_name or profile.full_name or "Candidate").strip()
+    if not resolved_name or resolved_name.lower() in ('unknown', 'unknown candidate', 'none', 'null'):
+        resolved_name = "Candidate"
+
+    if not queue_email:
+        # Manual send - send immediately
+        return _send_candidate_profile_invitation_email_now(profile, target_email, resolved_name, request)
+
+    # Queue the email for delayed sequential delivery
+    from apps.candidates.models import CandidateInvitationEmailQueue
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # Check if already queued for this candidate (prevent duplicates from bulk parsing retries)
+    existing_queued = CandidateInvitationEmailQueue.objects.filter(
+        candidate_profile=profile,
+        status__in=['PENDING', 'SENDING']
+    ).first()
+    if existing_queued:
+        logger.info(f"[INVITATION QUEUE SKIPPED] Already queued for candidate {profile.id}")
+        return False, "Invitation email already queued."
+
+    # Calculate scheduled time: first email waits 3 minutes, subsequent ones wait 3 min after previous
+    now = timezone.now()
+    last_queued = CandidateInvitationEmailQueue.objects.filter(
+        status__in=['PENDING', 'SENDING']
+    ).order_by('-scheduled_at').first()
+    
+    if last_queued:
+        scheduled_at = last_queued.scheduled_at + timedelta(minutes=3)
+        # Ensure it's at least 3 minutes from now
+        if scheduled_at < now + timedelta(minutes=3):
+            scheduled_at = now + timedelta(minutes=3)
+    else:
+        # First email in queue - wait 3 minutes
+        scheduled_at = now + timedelta(minutes=3)
+
+    CandidateInvitationEmailQueue.objects.create(
+        candidate_profile=profile,
+        candidate_email=target_email,
+        candidate_name=resolved_name,
+        scheduled_at=scheduled_at,
+        status='PENDING',
+        max_attempts=3
+    )
+
+    logger.info(f"[INVITATION QUEUED] Candidate {profile.id} ({target_email}) scheduled for {scheduled_at}")
+    return True, f"Invitation email queued for delivery at {scheduled_at.strftime('%H:%M:%S')}."

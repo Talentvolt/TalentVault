@@ -447,6 +447,78 @@ class CandidateProfile(BaseAppModel):
 
         super().save(*args, **kwargs)
 
+
+class CandidateInvitationEmailQueue(BaseAppModel):
+    """
+    Persistent queue for candidate profile invitation emails.
+    
+    Enables delayed and sequential email delivery (3-minute intervals)
+    for bulk resume parsing scenarios. Emails are queued after successful
+    candidate profile creation and processed by a background worker.
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('SENDING', 'Sending'),
+        ('SENT', 'Sent'),
+        ('FAILED', 'Failed'),
+    ]
+
+    candidate_profile = models.ForeignKey(
+        'CandidateProfile',
+        on_delete=models.CASCADE,
+        related_name='invitation_email_queue',
+        help_text='The candidate profile this invitation is for.'
+    )
+    candidate_email = models.EmailField(
+        help_text='Email address to send the invitation to.'
+    )
+    candidate_name = models.CharField(
+        max_length=255,
+        default='Candidate',
+        help_text='Candidate name for personalization.'
+    )
+    scheduled_at = models.DateTimeField(
+        db_index=True,
+        help_text='When this email should be sent (3 minutes after queueing for first, then sequential).'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='PENDING',
+        db_index=True,
+        help_text='Current processing status.'
+    )
+    attempts = models.PositiveIntegerField(
+        default=0,
+        help_text='Number of send attempts made.'
+    )
+    max_attempts = models.PositiveIntegerField(
+        default=3,
+        help_text='Maximum number of retry attempts.'
+    )
+    last_error = models.TextField(
+        blank=True,
+        default='',
+        help_text='Error message from last failed attempt.'
+    )
+    sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when email was successfully sent.'
+    )
+
+    class Meta:
+        db_table = 'candidate_invitation_email_queue'
+        ordering = ['scheduled_at', 'created_at']
+        indexes = [
+            models.Index(fields=['status', 'scheduled_at']),
+            models.Index(fields=['candidate_profile', 'status']),
+        ]
+
+    def __str__(self):
+        return f"Invitation for {self.candidate_name} ({self.candidate_email}) - {self.status}"
+
+
 class DuplicateResumeLog(BaseAppModel):
     email = models.EmailField(db_index=True)
     phone = models.CharField(max_length=20, blank=True, null=True)

@@ -3366,6 +3366,7 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
 class CandidateRetryInvitationView(RecruiterRequiredMixin, View):
     """
     Allows recruiter to manually send or retry sending the candidate profile invitation email.
+    Manual sends bypass the queue and send immediately.
     """
     def post(self, request, pk, *args, **kwargs):
         candidate = get_object_or_404(CandidateProfile, pk=pk)
@@ -3373,7 +3374,8 @@ class CandidateRetryInvitationView(RecruiterRequiredMixin, View):
         success, message = send_candidate_profile_invitation_email(
             profile=candidate,
             request=request,
-            force_resend=True
+            force_resend=True,
+            queue_email=False
         )
         if success:
             sent_at_str = candidate.profile_invitation_sent_at.strftime('%b %d, %Y %H:%M') if candidate.profile_invitation_sent_at else ''

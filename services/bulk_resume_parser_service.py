@@ -965,6 +965,16 @@ class BulkResumeParserService:
             job.save()
 
         logger.info(f"[BULK WORKER COMPLETED] Finished Job {job.job_number}: Success={job.successful_count}, Updated={job.updated_count}, Skipped={job.skipped_count}, Failed={job.failed_count}")
+
+        # Trigger invitation email queue processing for newly created candidates
+        try:
+            from apps.candidates.management.commands.process_invitation_email_queue import Command
+            processor = Command()
+            processed = processor.process_queue(limit=50, dry_run=False)
+            logger.info(f"[BULK WORKER] Processed {processed} invitation emails after bulk job completion")
+        except Exception as e:
+            logger.warning(f"[BULK WORKER] Failed to process invitation email queue: {e}")
+
         connection.close()
 
     @classmethod

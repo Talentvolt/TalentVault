@@ -19,3 +19,16 @@ services:
         value: https://hirenest.com.au
       - key: HIRENEST_ADMIN_API_KEY
         sync: false
+
+  # Cron job to process candidate invitation email queue every 2 minutes
+  - type: cron
+    name: talentvault-invitation-email-processor
+    env: python
+    buildCommand: apt-get update && apt-get install -y --no-install-recommends antiword libreoffice-writer libmagic1 && pip install -r requirements.txt
+    schedule: "*/2 * * * *"
+    startCommand: python manage.py process_invitation_email_queue --limit 20
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.base
+      - key: PYTHON_VERSION
+        value: 3.11.9

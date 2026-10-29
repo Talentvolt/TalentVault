@@ -1,15 +1,17 @@
 import io
 from decimal import Decimal
 from unittest.mock import patch
+from datetime import timedelta
 import pytest
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core import mail
+from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.candidates.models import CandidateProfile, CandidateSkill, Experience
+from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, CandidateInvitationEmailQueue
 from apps.candidates.utils import process_resume_file, handle_resume_upload
 from apps.accounts.services.email_service import send_candidate_profile_invitation_email
 from apps.notifications.models import EmailLog
@@ -39,12 +41,12 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
     @patch('apps.candidates.utils.extract_profile_photo', return_value=(None, None))
     @patch('apps.candidates.utils.parse_resume_via_parseora')
     @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
-    def test_successful_cv_upload_triggers_automatic_invitation_email(self, mock_ocr, mock_parseora, mock_photo):
+    def test_successful_cv_upload_queues_invitation_email(self, mock_ocr, mock_parseora, mock_photo):
         """
         Flow Test:
         Recruiter uploads CV -> CV parses successfully -> Candidate is created ->
-        Candidate email is extracted -> Automatic invitation email is sent ->
-        Email contains the correct unique TalentVault candidate profile link and CTA button.
+        Invitation email is queued (NOT sent immediately) with ~3 minute delay ->
+        When queue processor runs after scheduled time -> Email is sent with correct details.
         """
         candidate_email = "sara.connor@cyberdyne.org"
         candidate_name = "Sara Connor"
@@ -87,18 +89,39 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
             uploaded_by=self.recruiter
         )
 
-        # 1. Candidate profile creation verification
+        # 1. Candidate profile creation verification & non-waiting check
         self.assertEqual(status, "SUCCESS")
         self.assertIsNotNone(profile)
         self.assertEqual(profile.full_name, candidate_name)
         self.assertEqual(profile.contact_email, candidate_email)
 
-        # 2. Database tracking verification
+        # 2. Verify email is NOT sent immediately (queued instead)
+        self.assertEqual(len(mail.outbox), 0, "Email must not be sent immediately upon upload")
+        profile.refresh_from_db()
+        self.assertFalse(profile.profile_invitation_sent)
+
+        # 3. Verify queue item exists and scheduled ~3 minutes in future
+        queue_item = CandidateInvitationEmailQueue.objects.filter(candidate_profile=profile).first()
+        self.assertIsNotNone(queue_item)
+        self.assertEqual(queue_item.status, 'PENDING')
+        self.assertEqual(queue_item.candidate_email, candidate_email)
+        
+        # Scheduled at should be approximately 3 minutes from now
+        time_diff = queue_item.scheduled_at - timezone.now()
+        self.assertGreaterEqual(time_diff.total_seconds(), 170) # ~3 minutes (allowing slight margin)
+
+        # 4. Simulate time passing by moving scheduled_at to the past
+        queue_item.scheduled_at = timezone.now() - timedelta(seconds=10)
+        queue_item.save(update_fields=['scheduled_at'])
+
+        # 5. Run queue processor command
+        call_command('process_invitation_email_queue', run_once=True)
+
+        # 6. Automatic email sending verification & From address check
         profile.refresh_from_db()
         self.assertTrue(profile.profile_invitation_sent)
         self.assertIsNotNone(profile.profile_invitation_sent_at)
 
-        # 3. Automatic email sending verification & From address check
         self.assertEqual(len(mail.outbox), 1)
         sent_email = mail.outbox[0]
         self.assertEqual(sent_email.to, [candidate_email])
@@ -108,14 +131,14 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
         self.assertEqual(sent_email.reply_to, ["support@talent-vault.in"])
         self.assertTrue(sent_email.extra_headers.get('Message-ID', '').endswith('@talent-vault.in>'))
 
-        # 4. Check dynamic HTTPS production profile link in email body (no localhost/IPs)
+        # 7. Check dynamic HTTPS production profile link in email body (no localhost/IPs)
         expected_profile_link = f"https://talent-vault.in/candidates/{profile.id}/"
         self.assertIn(expected_profile_link, sent_email.body)
         self.assertTrue(expected_profile_link.startswith("https://talent-vault.in/"))
         self.assertNotIn("localhost", sent_email.body)
         self.assertNotIn("127.0.0.1", sent_email.body)
 
-        # 5. Check exact required template copy in email plain text
+        # 8. Check exact required template copy in email plain text
         self.assertIn(f"Hi {candidate_name},", sent_email.body)
         self.assertIn("Your CV has been successfully processed and your profile has been created on TalentVault.", sent_email.body)
         self.assertIn("To complete your profile and make it available for relevant job opportunities, please review your information and complete your TalentVault profile.", sent_email.body)
@@ -126,7 +149,7 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
         self.assertIn("TalentVault Team", sent_email.body)
         self.assertIn("TalentVault Technologies", sent_email.body)
 
-        # 6. Check HTML alternative and CTA button
+        # 9. Check HTML alternative and CTA button
         self.assertEqual(len(sent_email.alternatives), 1)
         html_body, mime = sent_email.alternatives[0]
         self.assertEqual(mime, "text/html")
@@ -136,7 +159,7 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
         self.assertNotIn("localhost", html_body)
         self.assertNotIn("127.0.0.1", html_body)
 
-        # 7. Check EmailLog record
+        # 10. Check EmailLog record
         email_log = EmailLog.objects.filter(recipient_email=candidate_email).first()
         self.assertIsNotNone(email_log)
         self.assertEqual(email_log.status, 'SENT')
@@ -144,9 +167,60 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
     @patch('apps.candidates.utils.extract_profile_photo', return_value=(None, None))
     @patch('apps.candidates.utils.parse_resume_via_parseora')
     @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
-    def test_duplicate_cv_upload_does_not_send_duplicate_invitation(self, mock_ocr, mock_parseora, mock_photo):
+    def test_bulk_upload_sequences_invitation_emails(self, mock_ocr, mock_parseora, mock_photo):
         """
-        Verify idempotency: re-parsing or uploading duplicate CV does NOT send a second invitation email.
+        Verify that during bulk parsing, multiple invitation emails are queued sequentially
+        with at least 3 minutes between consecutive email sends.
+        """
+        now = timezone.now()
+        
+        # Candidate 1
+        cand1_email = "john.doe@example.com"
+        cand1_name = "John Doe"
+        mock_ocr.return_value = {
+            "text": f"{cand1_name}\nEmail: {cand1_email}\nSoftware Engineer",
+            "engine": "pdfplumber", "confidence": 95.0, "resume_type": "DIGITAL", "largest_bold_name": cand1_name
+        }
+        mock_parseora.return_value = {
+            "personal_info": {"name": cand1_name, "email": cand1_email, "phone": "9876543201"},
+            "summary": "Developer", "skills": ["Python"], "experience": [], "education": []
+        }
+        
+        profile1, status1 = process_resume_file(self._create_sample_file("Resume 1"), "resume1.txt", overwrite=True, uploaded_by=self.recruiter)
+        self.assertEqual(status1, "SUCCESS")
+
+        # Candidate 2
+        cand2_email = "jane.smith@example.com"
+        cand2_name = "Jane Smith"
+        mock_ocr.return_value = {
+            "text": f"{cand2_name}\nEmail: {cand2_email}\nProduct Manager",
+            "engine": "pdfplumber", "confidence": 95.0, "resume_type": "DIGITAL", "largest_bold_name": cand2_name
+        }
+        mock_parseora.return_value = {
+            "personal_info": {"name": cand2_name, "email": cand2_email, "phone": "9876543202"},
+            "summary": "PM", "skills": ["Agile"], "experience": [], "education": []
+        }
+
+        profile2, status2 = process_resume_file(self._create_sample_file("Resume 2"), "resume2.txt", overwrite=True, uploaded_by=self.recruiter)
+        self.assertEqual(status2, "SUCCESS")
+
+        # Verify both are queued and spaced by ~3 minutes
+        q1 = CandidateInvitationEmailQueue.objects.get(candidate_profile=profile1)
+        q2 = CandidateInvitationEmailQueue.objects.get(candidate_profile=profile2)
+
+        self.assertIsNotNone(q1)
+        self.assertIsNotNone(q2)
+        
+        # q2 scheduled_at should be >= q1.scheduled_at + 3 minutes
+        diff = q2.scheduled_at - q1.scheduled_at
+        self.assertGreaterEqual(diff.total_seconds(), 175)
+
+    @patch('apps.candidates.utils.extract_profile_photo', return_value=(None, None))
+    @patch('apps.candidates.utils.parse_resume_via_parseora')
+    @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
+    def test_duplicate_cv_upload_does_not_queue_duplicate_invitation(self, mock_ocr, mock_parseora, mock_photo):
+        """
+        Verify idempotency: re-parsing or uploading duplicate CV does NOT queue a second invitation email.
         """
         candidate_email = "alex.murphy@omnicorp.org"
         candidate_name = "Alex Murphy"
@@ -165,30 +239,26 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
             "education": []
         }
 
-        # First parse -> sends 1 email
+        # First parse -> queues 1 email
         fake_file_1 = self._create_sample_file("Alex Murphy Resume 1")
         profile, status = process_resume_file(fake_file_1, "alex_murphy_1.txt", overwrite=True, uploaded_by=self.recruiter)
         self.assertEqual(status, "SUCCESS")
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertTrue(profile.profile_invitation_sent)
-
-        # Clear outbox
-        mail.outbox.clear()
+        self.assertEqual(CandidateInvitationEmailQueue.objects.filter(candidate_profile=profile).count(), 1)
 
         # Second parse (same candidate) with overwrite=True
         fake_file_2 = self._create_sample_file("Alex Murphy Resume 2")
         profile2, status2 = process_resume_file(fake_file_2, "alex_murphy_2.txt", overwrite=True, uploaded_by=self.recruiter)
         self.assertEqual(status2, "SUCCESS")
 
-        # Must NOT send duplicate email
-        self.assertEqual(len(mail.outbox), 0, "Duplicate invitation email must not be sent on re-parsing!")
+        # Must NOT queue duplicate email
+        self.assertEqual(CandidateInvitationEmailQueue.objects.filter(candidate_profile=profile).count(), 1, "Duplicate invitation queue item must not be created on re-parsing!")
 
     @patch('apps.candidates.utils.extract_profile_photo', return_value=(None, None))
     @patch('apps.candidates.utils.parse_resume_via_parseora')
     @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
-    def test_no_valid_email_does_not_send_invitation(self, mock_ocr, mock_parseora, mock_photo):
+    def test_no_valid_email_does_not_queue_invitation(self, mock_ocr, mock_parseora, mock_photo):
         """
-        Do not send email if no valid candidate email is found in CV.
+        Do not queue email if no valid candidate email is found in CV.
         """
         mock_ocr.return_value = {
             "text": "John Anonymous\nNo email listed\nPhone: 9876543212\nSystems Analyst",
@@ -211,26 +281,23 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
         self.assertEqual(status, "SUCCESS")
         profile.refresh_from_db()
 
-        # No email must be sent
-        self.assertEqual(len(mail.outbox), 0)
+        # No queue item must be created
+        self.assertEqual(CandidateInvitationEmailQueue.objects.filter(candidate_profile=profile).count(), 0)
         self.assertFalse(profile.profile_invitation_sent)
-        self.assertIsNone(profile.profile_invitation_sent_at)
 
     @patch('apps.candidates.utils.extract_profile_photo', return_value=(None, None))
     @patch('apps.candidates.utils.parse_resume_via_parseora')
     @patch('services.resume_intelligence.ResumeIntelligenceService.run_ocr_pipeline')
     @patch('django.core.mail.EmailMultiAlternatives.send')
-    def test_email_sending_failure_does_not_break_cv_parsing_or_profile_creation(
+    def test_email_sending_failure_logs_and_handles_gracefully(
         self, mock_send, mock_ocr, mock_parseora, mock_photo
     ):
         """
-        If email sending fails:
-        - CV parsing must remain successful
-        - Candidate profile must remain created
-        - Error is logged
-        - Invitation email can be retried later
+        If email sending fails during queue processing:
+        - Error is logged and captured in EmailLog and queue item
+        - Retried or marked failed appropriately
         """
-        mock_send.side_effect = Exception("SMTP connection timed out to smtp.gmail.com")
+        mock_send.side_effect = Exception("SMTP connection timed out")
 
         candidate_email = "bruce.wayne@waynecorp.org"
         mock_ocr.return_value = {
@@ -249,26 +316,30 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
         }
 
         fake_file = self._create_sample_file("Bruce Wayne Resume")
-        # process_resume_file must succeed without raising an exception
         profile, status = process_resume_file(fake_file, "bruce_wayne.txt", overwrite=True, uploaded_by=self.recruiter)
 
         self.assertEqual(status, "SUCCESS")
-        self.assertIsNotNone(profile)
-        self.assertEqual(profile.full_name, "Bruce Wayne")
+        
+        # Queue item created
+        queue_item = CandidateInvitationEmailQueue.objects.get(candidate_profile=profile)
+        queue_item.scheduled_at = timezone.now() - timedelta(seconds=5)
+        queue_item.max_attempts = 1 # fail immediately on 1st attempt
+        queue_item.save(update_fields=['scheduled_at', 'max_attempts'])
 
-        profile.refresh_from_db()
-        # Invitation sent must be False because email delivery failed
-        self.assertFalse(profile.profile_invitation_sent)
-        self.assertIsNone(profile.profile_invitation_sent_at)
+        # Run queue processor
+        call_command('process_invitation_email_queue', run_once=True)
+
+        queue_item.refresh_from_db()
+        self.assertEqual(queue_item.status, 'FAILED')
+        self.assertIn('SMTP connection timed out', queue_item.last_error)
 
         failed_log = EmailLog.objects.filter(recipient_email=candidate_email).first()
         self.assertIsNotNone(failed_log)
         self.assertEqual(failed_log.status, 'FAILED')
-        self.assertIn('SMTP connection timed out', failed_log.body)
 
     def test_retry_invitation_endpoint(self):
         """
-        Recruiter can retry or manually send the invitation email from the candidate detail view.
+        Recruiter can retry or manually send the invitation email immediately from the candidate detail view.
         """
         cand_user = User.objects.create(
             email='clark.kent@dailyplanet.org',
