@@ -1707,10 +1707,10 @@ class HirenestAdminJobDetailView(SuperAdminRequiredMixin, HireNestAdminAPIMixin,
 
 class HirenestAdminCandidatesView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, TemplateView):
     """
-    Admin Portal read-only view of HireNest candidate applications.
+    Admin Portal read-only view of HireNest candidate applications and parser-imported candidates.
 
     TalentVault and HireNest keep separate databases. This view never reads or
-    writes candidate records directly; it lists applications through the
+    writes candidate records directly; it lists applications and candidates through the
     authenticated HireNest admin API. The shared secret is sent only server-side
     and never reaches the browser.
     """
@@ -1746,6 +1746,28 @@ class HirenestAdminCandidatesView(SuperAdminRequiredMixin, HireNestAdminAPIMixin
             )
             raise HireNestAPIUnavailable()
 
+    def _fetch_parser_candidates(self, query):
+        import requests
+        from urllib.parse import urlencode
+        params = {'source': 'RESUME_PARSER'}
+        if query:
+            params['q'] = query
+        url = f"{self._api_base()}/api/admin/candidates/?{urlencode(params)}"
+        try:
+            response = requests.get(url, headers=self._api_headers(), timeout=self.api_timeout)
+        except requests.exceptions.RequestException as exc:
+            logger.error(
+                "HireNest admin API request failed (context=parser candidates list, url=%s): %s",
+                url, exc,
+            )
+            return []
+        if response.status_code >= 400:
+            return []
+        try:
+            return response.json().get('candidates', [])
+        except ValueError:
+            return []
+
     def _fetch_jobs(self):
         import requests
         url = f"{self._api_base()}/api/admin/jobs/?status=ALL"
@@ -1780,6 +1802,7 @@ class HirenestAdminCandidatesView(SuperAdminRequiredMixin, HireNestAdminAPIMixin
             'hirenest_configured': self._api_configured(),
             'hirenest_missing_config': self._missing_config(),
             'candidates': [],
+            'parser_candidates': [],
             'jobs': [],
             'integration_error': '',
         })
@@ -1787,6 +1810,7 @@ class HirenestAdminCandidatesView(SuperAdminRequiredMixin, HireNestAdminAPIMixin
         if context['hirenest_configured']:
             try:
                 context['candidates'] = self._fetch_applications(status_filter, job_filter, query)
+                context['parser_candidates'] = self._fetch_parser_candidates(query)
                 context['jobs'] = self._fetch_jobs()
             except HireNestAPIAuthError:
                 context['integration_error'] = (
@@ -1926,7 +1950,9 @@ class HirenestCandidateParserView(SuperAdminRequiredMixin, HireNestAdminAPIMixin
                     "skills": ", ".join(parsed_data.get('skills', [])),
                     "linkedin_url": personal.get('linkedin_url') or '',
                     "portfolio_url": personal.get('portfolio_url') or '',
-                    "notice_period": 30
+                    "notice_period": 30,
+                    "experiences": parsed_data.get('experience', []),
+                    "educations": parsed_data.get('education', []),
                 }
                 
                 return JsonResponse({

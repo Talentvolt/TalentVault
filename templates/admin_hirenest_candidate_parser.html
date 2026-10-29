@@ -7,7 +7,7 @@
     <div>
         <h3 class="fw-bold m-0 text-dark"><i class="bi bi-file-earmark-arrow-up-fill me-2 text-primary"></i>HireNest Candidate Parser</h3>
         <p class="text-secondary small m-0 mt-1">
-            Upload candidate CVs using TalentVault's parsing engine, review and edit extracted details, and securely create candidate profiles in the <strong>HireNest database only</strong>. TalentVault candidate records are untouched.
+            Upload candidate CVs using TalentVault's parsing engine, review and edit extracted details (including work experience & education), and securely create candidate profiles in the <strong>HireNest database only</strong>.
         </p>
     </div>
 </div>
@@ -61,8 +61,11 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="confirm_create">
             <input type="hidden" name="ignore_duplicate" id="ignoreDuplicateInput" value="false">
+            <input type="hidden" name="experiences" id="experiencesJsonInput" value="[]">
+            <input type="hidden" name="educations" id="educationsJsonInput" value="[]">
 
-            <div class="row g-3">
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-person-badge me-2"></i>Personal & Professional Info</h6>
+            <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <label class="form-label small fw-bold">Full Name *</label>
                     <input type="text" class="form-control" id="fullNameInput" name="full_name" required>
@@ -108,6 +111,20 @@
                     <textarea class="form-control" id="summaryInput" name="summary" rows="3"></textarea>
                 </div>
             </div>
+
+            <!-- Work Experience Section -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-primary m-0"><i class="bi bi-briefcase me-2"></i>Work Experience Entries</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="addExperienceRow()"><i class="bi bi-plus-circle me-1"></i>Add Experience</button>
+            </div>
+            <div id="experiencesContainer" class="mb-4"></div>
+
+            <!-- Education Section -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-primary m-0"><i class="bi bi-mortarboard me-2"></i>Education Entries</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="addEducationRow()"><i class="bi bi-plus-circle me-1"></i>Add Education</button>
+            </div>
+            <div id="educationsContainer" class="mb-4"></div>
 
             <div class="mt-4 pt-3 border-top d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-secondary px-4 fw-bold" onclick="resetParser()">Cancel</button>
@@ -190,6 +207,10 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
             document.getElementById('skillsInput').value = p.skills || '';
             document.getElementById('summaryInput').value = p.summary || '';
 
+            // Populate experiences and educations
+            renderExperiences(p.experiences || []);
+            renderEducations(p.educations || []);
+
             document.getElementById('uploadCard').classList.add('d-none');
             document.getElementById('reviewCard').classList.remove('d-none');
             showAlert('success', res.body.message);
@@ -204,8 +225,119 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
     });
 });
 
+function renderExperiences(exps) {
+    let container = document.getElementById('experiencesContainer');
+    container.innerHTML = '';
+    if (!exps || exps.length === 0) {
+        addExperienceRow();
+        return;
+    }
+    exps.forEach(exp => addExperienceRow(exp));
+}
+
+function addExperienceRow(exp = {}) {
+    let container = document.getElementById('experiencesContainer');
+    let idx = container.children.length;
+    let div = document.createElement('div');
+    div.className = 'card bg-light border p-3 mb-3 experience-row';
+    div.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold small text-secondary">Experience Entry #${idx + 1}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.experience-row').remove()"><i class="bi bi-trash"></i></button>
+        </div>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Company Name</label>
+                <input type="text" class="form-control form-control-sm exp-company" value="${exp.company_name || exp.company || ''}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Job Title / Designation</label>
+                <input type="text" class="form-control form-control-sm exp-designation" value="${exp.designation || exp.title || ''}">
+            </div>
+            <div class="col-md-12">
+                <label class="form-label small fw-bold">Responsibilities & Achievements</label>
+                <textarea class="form-control form-control-sm exp-desc" rows="2">${exp.description || ''}</textarea>
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function renderEducations(edus) {
+    let container = document.getElementById('educationsContainer');
+    container.innerHTML = '';
+    if (!edus || edus.length === 0) {
+        addEducationRow();
+        return;
+    }
+    edus.forEach(edu => addEducationRow(edu));
+}
+
+function addEducationRow(edu = {}) {
+    let container = document.getElementById('educationsContainer');
+    let idx = container.children.length;
+    let div = document.createElement('div');
+    div.className = 'card bg-light border p-3 mb-3 education-row';
+    div.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold small text-secondary">Education Entry #${idx + 1}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.education-row').remove()"><i class="bi bi-trash"></i></button>
+        </div>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Qualification / Degree</label>
+                <input type="text" class="form-control form-control-sm edu-degree" value="${edu.degree || edu.qualification || ''}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Institution / University</label>
+                <input type="text" class="form-control form-control-sm edu-institution" value="${edu.institution || edu.university || ''}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Field of Study</label>
+                <input type="text" class="form-control form-control-sm edu-field" value="${edu.field_of_study || ''}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Passing / Grad Year</label>
+                <input type="text" class="form-control form-control-sm edu-year" value="${edu.passing_year || edu.graduation_year || ''}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Grade / CGPA</label>
+                <input type="text" class="form-control form-control-sm edu-grade" value="${edu.percentage_or_cgpa || ''}">
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
 document.getElementById('confirmForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    // Collect experiences
+    let experiences = [];
+    document.querySelectorAll('.experience-row').forEach(row => {
+        let comp = row.querySelector('.exp-company').value.trim();
+        let desig = row.querySelector('.exp-designation').value.trim();
+        let desc = row.querySelector('.exp-desc').value.trim();
+        if (comp || desig) {
+            experiences.push({ company_name: comp, designation: desig, description: desc });
+        }
+    });
+    document.getElementById('experiencesJsonInput').value = JSON.stringify(experiences);
+
+    // Collect educations
+    let educations = [];
+    document.querySelectorAll('.education-row').forEach(row => {
+        let deg = row.querySelector('.edu-degree').value.trim();
+        let inst = row.querySelector('.edu-institution').value.trim();
+        let field = row.querySelector('.edu-field').value.trim();
+        let yr = row.querySelector('.edu-year').value.trim();
+        let grade = row.querySelector('.edu-grade').value.trim();
+        if (deg || inst) {
+            educations.push({ degree: deg, institution: inst, field_of_study: field, passing_year: yr, percentage_or_cgpa: grade });
+        }
+    });
+    document.getElementById('educationsJsonInput').value = JSON.stringify(educations);
+
     submitCandidateData(false);
 });
 
