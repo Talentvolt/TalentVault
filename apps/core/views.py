@@ -1900,18 +1900,18 @@ class HirenestCandidateParserView(SuperAdminRequiredMixin, HireNestAdminAPIMixin
                 return JsonResponse({'success': False, 'message': 'No resume file uploaded.'}, status=400)
             
             try:
-                from apps.candidates.utils import extract_resume_text_and_metadata, parse_resume_via_parseora
+                from apps.candidates.utils import parse_resume_via_parseora
                 from services.resume_intelligence import ResumeIntelligenceService
-                
+
                 filename = file_obj.name
                 file_bytes = file_obj.read()
-                
+
                 # Run OCR / text extraction pipeline
                 ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
                 resume_text = ocr_result.get('text', '')
-                
+
                 # Run structured parser
-                parsed_data = parse_resume_via_parseora(resume_text, filename)
+                parsed_data = parse_resume_via_parseora(file_bytes, filename, raw_text=resume_text)
                 personal = parsed_data.get('personal_info', {})
                 
                 extracted = {
