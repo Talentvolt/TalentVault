@@ -5,9 +5,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3 mb-4">
     <div>
-        <h3 class="fw-bold m-0 text-dark"><i class="bi bi-file-earmark-arrow-up-fill me-2 text-primary"></i>HireNest Candidate Parser</h3>
+        <h3 class="fw-bold m-0 text-dark"><i class="bi bi-file-earmark-arrow-up-fill me-2 text-primary"></i>HireNest Candidate Parser (International Recruitment)</h3>
         <p class="text-secondary small m-0 mt-1">
-            Upload candidate CVs using TalentVault's parsing engine, review and edit extracted details (including work experience & education), and securely create candidate profiles in the <strong>HireNest database only</strong>.
+            Upload international or local candidate CVs using TalentVault's parsing engine, review and edit international personal details, work rights, structured work experience & education, and securely create candidate profiles in the <strong>HireNest database only</strong>.
         </p>
     </div>
 </div>
@@ -28,7 +28,7 @@
 <!-- Step 1: Upload CV Card -->
 <div class="card shadow-sm border-0 mb-4" id="uploadCard">
     <div class="card-header bg-white border-bottom py-3">
-        <h5 class="fw-bold m-0 text-dark"><i class="bi bi-cloud-upload me-2 text-primary"></i>Step 1: Upload Candidate Resume</h5>
+        <h5 class="fw-bold m-0 text-dark"><i class="bi bi-cloud-upload me-2 text-primary"></i>Step 1: Upload Candidate Resume (Global Formats Supported)</h5>
     </div>
     <div class="card-body p-4">
         <form id="uploadForm" enctype="multipart/form-data">
@@ -36,7 +36,7 @@
             <input type="hidden" name="action" value="parse_resume">
             <div class="upload-dropzone border-2 border-dashed rounded-3 p-5 text-center bg-light mb-3" style="cursor: pointer;" onclick="document.getElementById('resumeFileInput').click();">
                 <i class="bi bi-file-earmark-pdf fs-1 text-primary mb-2 d-block"></i>
-                <h5 class="fw-bold text-dark">Click to upload or drag & drop resume</h5>
+                <h5 class="fw-bold text-dark">Click to upload or drag & drop international resume</h5>
                 <p class="text-secondary small mb-0">Supported formats: PDF, DOC, DOCX (Max size: 10MB)</p>
                 <input type="file" id="resumeFileInput" name="resume_file" class="d-none" accept=".pdf,.doc,.docx" onchange="handleFileSelected(this)">
             </div>
@@ -53,7 +53,7 @@
 <!-- Step 2: Review & Edit Parsed Details Card (Hidden initially) -->
 <div class="card shadow-sm border-0 mb-4 d-none" id="reviewCard">
     <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold m-0 text-dark"><i class="bi bi-pencil-square me-2 text-primary"></i>Step 2: Review & Edit Parsed Candidate Details</h5>
+        <h5 class="fw-bold m-0 text-dark"><i class="bi bi-pencil-square me-2 text-primary"></i>Step 2: Review & Edit International Candidate Details</h5>
         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetParser()"><i class="bi bi-arrow-counterclockwise me-1"></i>Upload Another CV</button>
     </div>
     <div class="card-body p-4">
@@ -64,7 +64,7 @@
             <input type="hidden" name="experiences" id="experiencesJsonInput" value="[]">
             <input type="hidden" name="educations" id="educationsJsonInput" value="[]">
 
-            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-person-badge me-2"></i>Personal & Professional Info</h6>
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-person-badge me-2"></i>Personal, Contact & Australian Work Rights Info</h6>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <label class="form-label small fw-bold">Full Name *</label>
@@ -75,12 +75,35 @@
                     <input type="email" class="form-control" id="emailInput" name="email" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-bold">Phone Number</label>
-                    <input type="text" class="form-control" id="phoneInput" name="phone_number">
+                    <label class="form-label small fw-bold">International Phone Number (with Country Code)</label>
+                    <input type="text" class="form-control" id="phoneInput" name="phone_number" placeholder="+61 ..., +44 ..., +1 ...">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-bold">Location</label>
-                    <input type="text" class="form-control" id="locationInput" name="location">
+                    <label class="form-label small fw-bold">Current City / Location</label>
+                    <input type="text" class="form-control" id="locationInput" name="location" placeholder="Sydney, London, New York...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Current Country of Residence</label>
+                    <input type="text" class="form-control" id="countryOfResidenceInput" name="country_of_residence" value="Australia" placeholder="Australia, United Kingdom, United States...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Australian Work Rights / Visa Status</label>
+                    <select class="form-select" id="workRightsInput" name="work_rights_visa_status">
+                        <option value="">Select Work Rights / Visa</option>
+                        <option value="Australian Citizen">Australian Citizen</option>
+                        <option value="Australian Permanent Resident">Australian Permanent Resident</option>
+                        <option value="Temporary Working Visa (e.g. 482, 457)">Temporary Working Visa (e.g. 482, 457)</option>
+                        <option value="Working Holiday Visa (417/462)">Working Holiday Visa (417/462)</option>
+                        <option value="Student Visa (Subclass 500)">Student Visa (Subclass 500)</option>
+                        <option value="Requires Sponsorship">Requires Sponsorship</option>
+                        <option value="Other / International">Other / International</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-center pt-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="relocationInput" name="relocation_availability" value="true" checked>
+                        <label class="form-check-label small fw-bold ms-2" for="relocationInput">Available for Relocation</label>
+                    </div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small fw-bold">Current Company</label>
@@ -114,14 +137,14 @@
 
             <!-- Work Experience Section -->
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold text-primary m-0"><i class="bi bi-briefcase me-2"></i>Work Experience Entries</h6>
+                <h6 class="fw-bold text-primary m-0"><i class="bi bi-briefcase me-2"></i>Work Experience Entries (International Employers)</h6>
                 <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="addExperienceRow()"><i class="bi bi-plus-circle me-1"></i>Add Experience</button>
             </div>
             <div id="experiencesContainer" class="mb-4"></div>
 
             <!-- Education Section -->
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold text-primary m-0"><i class="bi bi-mortarboard me-2"></i>Education Entries</h6>
+                <h6 class="fw-bold text-primary m-0"><i class="bi bi-mortarboard me-2"></i>Education Entries (Global Qualifications & Institutions)</h6>
                 <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="addEducationRow()"><i class="bi bi-plus-circle me-1"></i>Add Education</button>
             </div>
             <div id="educationsContainer" class="mb-4"></div>
@@ -199,6 +222,10 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
             document.getElementById('emailInput').value = p.email || '';
             document.getElementById('phoneInput').value = p.phone_number || '';
             document.getElementById('locationInput').value = p.location || '';
+            document.getElementById('countryOfResidenceInput').value = p.country_of_residence || 'Australia';
+            if (p.work_rights_visa_status) {
+                document.getElementById('workRightsInput').value = p.work_rights_visa_status;
+            }
             document.getElementById('companyInput').value = p.current_company || '';
             document.getElementById('designationInput').value = p.current_designation || '';
             document.getElementById('expInput').value = p.total_experience || 0;
@@ -247,10 +274,14 @@ function addExperienceRow(exp = {}) {
         </div>
         <div class="row g-2">
             <div class="col-md-6">
-                <label class="form-label small fw-bold">Company Name</label>
+                <label class="form-label small fw-bold">Employer Name</label>
                 <input type="text" class="form-control form-control-sm exp-company" value="${exp.company_name || exp.company || ''}">
             </div>
             <div class="col-md-6">
+                <label class="form-label small fw-bold">Employer Country</label>
+                <input type="text" class="form-control form-control-sm exp-country" value="${exp.employer_country || ''}" placeholder="Australia, UK, US...">
+            </div>
+            <div class="col-md-12">
                 <label class="form-label small fw-bold">Job Title / Designation</label>
                 <input type="text" class="form-control form-control-sm exp-designation" value="${exp.designation || exp.title || ''}">
             </div>
@@ -285,23 +316,27 @@ function addEducationRow(edu = {}) {
         </div>
         <div class="row g-2">
             <div class="col-md-6">
-                <label class="form-label small fw-bold">Qualification / Degree</label>
+                <label class="form-label small fw-bold">Qualification / Degree / Diploma</label>
                 <input type="text" class="form-control form-control-sm edu-degree" value="${edu.degree || edu.qualification || ''}">
             </div>
             <div class="col-md-6">
-                <label class="form-label small fw-bold">Institution / University</label>
+                <label class="form-label small fw-bold">Institution / University Name</label>
                 <input type="text" class="form-control form-control-sm edu-institution" value="${edu.institution || edu.university || ''}">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Institution Country</label>
+                <input type="text" class="form-control form-control-sm edu-country" value="${edu.institution_country || ''}" placeholder="Australia, UK...">
+            </div>
+            <div class="col-md-3">
                 <label class="form-label small fw-bold">Field of Study</label>
                 <input type="text" class="form-control form-control-sm edu-field" value="${edu.field_of_study || ''}">
             </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Passing / Grad Year</label>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Graduation Year</label>
                 <input type="text" class="form-control form-control-sm edu-year" value="${edu.passing_year || edu.graduation_year || ''}">
             </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Grade / CGPA</label>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Grade / GPA</label>
                 <input type="text" class="form-control form-control-sm edu-grade" value="${edu.percentage_or_cgpa || ''}">
             </div>
         </div>
@@ -316,10 +351,11 @@ document.getElementById('confirmForm').addEventListener('submit', function(e) {
     let experiences = [];
     document.querySelectorAll('.experience-row').forEach(row => {
         let comp = row.querySelector('.exp-company').value.trim();
+        let country = row.querySelector('.exp-country').value.trim();
         let desig = row.querySelector('.exp-designation').value.trim();
         let desc = row.querySelector('.exp-desc').value.trim();
         if (comp || desig) {
-            experiences.push({ company_name: comp, designation: desig, description: desc });
+            experiences.push({ company_name: comp, employer_country: country, designation: desig, description: desc });
         }
     });
     document.getElementById('experiencesJsonInput').value = JSON.stringify(experiences);
@@ -329,11 +365,12 @@ document.getElementById('confirmForm').addEventListener('submit', function(e) {
     document.querySelectorAll('.education-row').forEach(row => {
         let deg = row.querySelector('.edu-degree').value.trim();
         let inst = row.querySelector('.edu-institution').value.trim();
+        let instCountry = row.querySelector('.edu-country').value.trim();
         let field = row.querySelector('.edu-field').value.trim();
         let yr = row.querySelector('.edu-year').value.trim();
         let grade = row.querySelector('.edu-grade').value.trim();
         if (deg || inst) {
-            educations.push({ degree: deg, institution: inst, field_of_study: field, passing_year: yr, percentage_or_cgpa: grade });
+            educations.push({ degree: deg, institution: inst, institution_country: instCountry, field_of_study: field, passing_year: yr, percentage_or_cgpa: grade });
         }
     });
     document.getElementById('educationsJsonInput').value = JSON.stringify(educations);
