@@ -1870,6 +1870,133 @@ class HirenestAdminCandidateDetailView(SuperAdminRequiredMixin, HireNestAdminAPI
         return context
 
 
+class HirenestCandidateParserView(SuperAdminRequiredMixin, HireNestAdminAPIMixin, TemplateView):
+    """
+    HireNest Candidate Parser view in TalentVault Admin Portal.
+    
+    Reuses TalentVault's existing resume parsing engine (OCR, Parseora, extraction logic)
+    to parse an uploaded CV without saving into TalentVault India's database.
+    Allows recruiter to review/edit parsed details before confirming.
+    On confirmation, creates the candidate profile in the HireNest database only
+    via the secure HireNest admin API.
+    """
+    template_name = 'admin_hirenest_candidate_parser.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'hirenest_configured': self._api_configured(),
+            'hirenest_missing_config': self._missing_config(),
+        })
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action') or request.GET.get('action')
+        
+        # Step 1: Parse uploaded resume file using TalentVault parsing engine (no DB save)
+        if action == 'parse_resume':
+            file_obj = request.FILES.get('resume_file')
+            if not file_obj:
+                return JsonResponse({'success': False, 'message': 'No resume file uploaded.'}, status=400)
+            
+            try:
+                from apps.candidates.utils import extract_resume_text_and_metadata, parse_resume_via_parseora
+                from services.resume_intelligence import ResumeIntelligenceService
+                
+                filename = file_obj.name
+                file_bytes = file_obj.read()
+                
+                # Run OCR / text extraction pipeline
+                ocr_result = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
+                resume_text = ocr_result.get('text', '')
+                
+                # Run structured parser
+                parsed_data = parse_resume_via_parseora(resume_text, filename)
+                personal = parsed_data.get('personal_info', {})
+                
+                extracted = {
+                    "full_name": personal.get('name') or ocr_result.get('largest_bold_name') or 'Candidate',
+                    "email": personal.get('email') or '',
+                    "phone_number": personal.get('phone') or '',
+                    "location": personal.get('location') or 'Australia',
+                    "current_company": personal.get('current_company') or '',
+                    "current_designation": personal.get('current_designation') or '',
+                    "total_experience": personal.get('total_experience') or 0.0,
+                    "summary": parsed_data.get('summary') or '',
+                    "skills": ", ".join(parsed_data.get('skills', [])),
+                    "linkedin_url": personal.get('linkedin_url') or '',
+                    "portfolio_url": personal.get('portfolio_url') or '',
+                    "notice_period": 30
+                }
+                
+                return JsonResponse({
+                    "success": True,
+                    "parsed_data": extracted,
+                    "message": "Resume successfully parsed. Please review details before confirming."
+                })
+            except Exception as exc:
+                logger.error(f"HireNest Candidate Parser extraction error: {exc}")
+                return JsonResponse({
+                    "success": False,
+                    "message": f"Resume parsing failed: {str(exc)}"
+                }, status=500)
+
+        # Step 2: Confirm and create candidate in HireNest database via secure API
+        elif action == 'confirm_create':
+            if not self._api_configured():
+                return JsonResponse({'success': False, 'message': 'HireNest integration is not configured.'}, status=400)
+            
+            payload = {
+                "full_name": request.POST.get('full_name', '').strip(),
+                "email": request.POST.get('email', '').strip(),
+                "phone_number": request.POST.get('phone_number', '').strip(),
+                "location": request.POST.get('location', '').strip(),
+                "current_company": request.POST.get('current_company', '').strip(),
+                "current_designation": request.POST.get('current_designation', '').strip(),
+                "total_experience": request.POST.get('total_experience') or 0.0,
+                "summary": request.POST.get('summary', '').strip(),
+                "skills": request.POST.get('skills', '').strip(),
+                "linkedin_url": request.POST.get('linkedin_url', '').strip(),
+                "portfolio_url": request.POST.get('portfolio_url', '').strip(),
+                "notice_period": request.POST.get('notice_period') or 30,
+                "ignore_duplicate": request.POST.get('ignore_duplicate', 'false')
+            }
+            
+            if not payload['email']:
+                return JsonResponse({'success': False, 'message': 'Candidate email is required.'}, status=400)
+                
+            url = f"{self._api_base()}/api/admin/candidates/"
+            try:
+                import requests
+                response = requests.post(url, json=payload, headers=self._api_headers(), timeout=self.api_timeout)
+                try:
+                    data = response.json()
+                except Exception:
+                    data = {"success": False, "message": response.text[:200]}
+                
+                if response.status_code == 200 and data.get('success'):
+                    return JsonResponse({
+                        "success": True,
+                        "candidate_id": data.get('candidate_id'),
+                        "message": "Candidate profile successfully created in the HireNest database!"
+                    })
+                elif response.status_code == 400 and data.get('stage') == 'duplicate':
+                    return JsonResponse(data, status=400)
+                else:
+                    return JsonResponse({
+                        "success": False,
+                        "message": data.get('message', f"HireNest API error ({response.status_code})")
+                    }, status=response.status_code)
+            except Exception as exc:
+                logger.error(f"HireNest candidate creation API error: {exc}")
+                return JsonResponse({
+                    "success": False,
+                    "message": f"HireNest API unavailable: {str(exc)}"
+                }, status=500)
+                
+        return JsonResponse({'success': False, 'message': 'Invalid action.'}, status=400)
+
+
 class JobActionView(RecruiterRequiredMixin, View):
     def post(self, request, pk, action):
         job = get_object_or_404(get_tenant_jobs_qs(request.user), pk=pk)
