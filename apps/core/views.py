@@ -3516,6 +3516,197 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
         return context
 
 
+def _extract_candidate_ids(data):
+    candidate_ids = []
+    if hasattr(data, 'getlist'):
+        c_val = data.getlist('candidate_ids[]') or data.getlist('candidate_ids')
+        if not c_val:
+            raw = data.get('candidate_ids') or data.get('candidate_ids[]')
+            if isinstance(raw, list):
+                c_val = raw
+            elif isinstance(raw, str):
+                c_val = [c.strip() for c in raw.split(',') if c.strip()]
+        candidate_ids = [str(x).strip() for x in c_val if str(x).strip()]
+    elif isinstance(data, dict):
+        c_val = data.get('candidate_ids') or data.get('candidate_ids[]')
+        if isinstance(c_val, list):
+            candidate_ids = [str(x).strip() for x in c_val if str(x).strip()]
+        elif isinstance(c_val, str):
+            candidate_ids = [c.strip() for c in c_val.split(',') if c.strip()]
+    return candidate_ids
+
+
+class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
+    """
+    Sends bulk client presentation email for selected candidates of a job,
+    with optional resume attachments.
+    """
+    def post(self, request, job_id, *args, **kwargs):
+        job = get_object_or_404(get_tenant_jobs_qs(request.user), id=job_id)
+        
+        data = {}
+        try:
+            if request.body:
+                data = json.loads(request.body.decode('utf-8'))
+        except Exception:
+            pass
+
+        if not data and hasattr(request, 'POST') and request.POST:
+            data = request.POST
+
+        candidate_ids = _extract_candidate_ids(data)
+
+        to_email = (data.get('to_email') or '').strip()
+        cc_email = (data.get('cc') or '').strip()
+        bcc_email = (data.get('bcc') or '').strip()
+        subject = (data.get('subject') or f"Candidate Profiles for {job.title}").strip()
+        body = (data.get('body') or '').strip()
+        attach_resumes = str(data.get('attach_resumes', 'false')).lower() in ('true', '1', 'yes')
+
+        if not to_email or '@' not in to_email:
+            return JsonResponse({'success': False, 'message': 'Valid recipient "To" email address is required.'}, status=400)
+
+        if not candidate_ids:
+            return JsonResponse({'success': False, 'message': 'Please select at least one candidate.'}, status=400)
+
+        candidates = CandidateProfile.objects.filter(id__in=candidate_ids).select_related('user').prefetch_related('skills', 'experiences', 'educations')
+        if not candidates.exists():
+            return JsonResponse({'success': False, 'message': 'Selected candidates not found.'}, status=404)
+
+        try:
+            from django.core.mail import EmailMultiAlternatives
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@talent-vault.in'
+            
+            candidate_list_text = "\n".join([
+                f"- {c.full_name or c.user.email} (Designation: {c.current_designation or 'N/A'}, Company: {c.current_company or 'N/A'}, Exp: {c.total_experience} yrs, Email: {c.user.email})"
+                for c in candidates
+            ])
+            
+            full_body = f"{body}\n\nSelected Candidates:\n{candidate_list_text}"
+            
+            to_list = [e.strip() for e in to_email.split(',') if e.strip()]
+            cc_list = [e.strip() for e in cc_email.split(',') if e.strip()] if cc_email else []
+            bcc_list = [e.strip() for e in bcc_email.split(',') if e.strip()] if bcc_email else []
+
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=full_body,
+                from_email=from_email,
+                to=to_list,
+                cc=cc_list,
+                bcc=bcc_list
+            )
+
+            if attach_resumes:
+                for c in candidates:
+                    if c.has_resume:
+                        try:
+                            resume_file = c.resume
+                            resume_file.open('rb')
+                            file_content = resume_file.read()
+                            resume_file.close()
+                            import os
+                            filename = os.path.basename(c.resume.name) or f"resume_{c.id}.pdf"
+                            msg.attach(filename, file_content)
+                        except Exception as att_err:
+                            logger.warning(f"Could not attach resume for candidate {c.id}: {att_err}")
+
+            msg.send(fail_silently=False)
+
+            logger.info(f"[EMAIL TO CLIENT] Successfully sent email for job {job.title} to {to_email} with {candidates.count()} candidates.")
+            return JsonResponse({
+                'success': True,
+                'message': f'Successfully sent email to {to_email} with {candidates.count()} candidate profile(s).'
+            })
+        except Exception as exc:
+            logger.error(f"Failed to send email to client: {exc}")
+            return JsonResponse({'success': False, 'message': f'Failed to send email: {str(exc)}'}, status=500)
+
+
+class JobCandidatesAISuggestEmailView(RecruiterRequiredMixin, View):
+    """
+    Uses OpenAI to generate a professional email subject and body presenting
+    selected candidates to a client.
+    """
+    def post(self, request, job_id, *args, **kwargs):
+        job = get_object_or_404(get_tenant_jobs_qs(request.user), id=job_id)
+        
+        data = {}
+        try:
+            if request.body:
+                data = json.loads(request.body.decode('utf-8'))
+        except Exception:
+            pass
+
+        if not data and hasattr(request, 'POST') and request.POST:
+            data = request.POST
+
+        candidate_ids = _extract_candidate_ids(data)
+        logger.info(f"DEBUG AISuggest: data type={type(data)}, candidate_ids={candidate_ids}")
+
+        if not candidate_ids:
+            logger.info(f"DEBUG AISuggest: returning 400 because candidate_ids is empty. data={data}")
+            return JsonResponse({'success': False, 'message': 'Please select at least one candidate.'}, status=400)
+
+        candidates = CandidateProfile.objects.filter(id__in=candidate_ids).select_related('user').prefetch_related('skills', 'experiences', 'educations')
+
+        openai_api_key = getattr(settings, "OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY"))
+        if not openai_api_key:
+            return JsonResponse({
+                'success': True,
+                'subject': f"Candidate Shortlist for {job.title}",
+                'body': f"Dear Hiring Manager,\n\nWe are pleased to present the following shortlisted candidates for the {job.title} position:\n\n" +
+                        "\n".join([f"- {c.full_name}: {c.current_designation or 'Professional'} with {c.total_experience} years of experience." for c in candidates]) +
+                        "\n\nPlease review their profiles and let us know your availability for interviews.\n\nBest regards,\nTalentVault Team"
+            })
+
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=openai_api_key, timeout=30.0)
+            
+            candidate_summaries = "\n".join([
+                f"Name: {c.full_name}\nDesignation: {c.current_designation} at {c.current_company}\nExperience: {c.total_experience} years\nSkills: {', '.join([s.skill_name for s in c.skills.all()[:8]])}\nSummary: {c.summary[:200]}"
+                for c in candidates
+            ])
+
+            prompt = f"""
+            Job Title: {job.title}
+            Job Location: {job.location}
+            Job Description Summary: {job.description[:600]}
+
+            Selected Candidates:
+            {candidate_summaries}
+
+            Task: Write a professional email presentation subject and body for a client highlighting why these candidates are a great fit for the position. Return JSON with keys 'subject' and 'body'.
+            """
+
+            completion = client.chat.completions.create(
+                model=getattr(settings, "OPENAI_MODEL_NAME", "gpt-4.1-mini"),
+                messages=[
+                    {"role": "system", "content": "You are an expert technical recruiter writing professional candidate presentation emails to hiring clients. Output valid JSON with 'subject' and 'body'."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.7
+            )
+
+            result = json.loads(completion.choices[0].message.content)
+            return JsonResponse({
+                'success': True,
+                'subject': result.get('subject', f"Candidate Profiles for {job.title}"),
+                'body': result.get('body', "Dear Client,\n\nPlease find attached the candidate profiles.")
+            })
+        except Exception as exc:
+            logger.error(f"AI suggest email generation error: {exc}")
+            return JsonResponse({
+                'success': True,
+                'subject': f"Candidate Shortlist for {job.title}",
+                'body': f"Dear Hiring Manager,\n\nWe are pleased to present the shortlisted candidates for {job.title}:\n\n" +
+                        "\n".join([f"- {c.full_name} ({c.current_designation})" for c in candidates]) +
+                        "\n\nBest regards,\nTalentVault"
+            })
+
+
 class CandidateRetryInvitationView(RecruiterRequiredMixin, View):
     """
     Allows recruiter to manually send or retry sending the candidate profile invitation email.
