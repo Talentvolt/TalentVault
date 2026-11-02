@@ -6862,11 +6862,30 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
     """
     def post(self, request, pk, *args, **kwargs):
         from services.candidate_matching_service import CandidateMatchingService
+        from services.resume_intelligence import ResumeIntelligenceService
         
         profile = get_object_or_404(get_editable_candidates_qs(request.user), pk=pk)
         action = request.POST.get("action", "preview") # preview or accept
         
-        improved_data = ResumeIntelligenceService.ai_improve_resume_data(profile.parsed_json)
+        # 1. Re-read original uploaded CV using existing resume extraction/OCR pipeline if resume exists
+        cv_data = profile.parsed_json or {}
+        if profile.resume and hasattr(profile.resume, 'name') and profile.resume.name:
+            try:
+                profile.resume.open('rb')
+                file_bytes = profile.resume.read()
+                filename = os.path.basename(profile.resume.name)
+                profile.resume.close()
+                if file_bytes:
+                    ocr_res = ResumeIntelligenceService.run_ocr_pipeline(file_bytes, filename)
+                    extracted_text = ocr_res.get("text", "") if isinstance(ocr_res, dict) else str(ocr_res)
+                    if extracted_text and len(extracted_text.strip()) > 10:
+                        parsed_cv = ResumeIntelligenceService.parse_resume_nlp(extracted_text)
+                        if isinstance(parsed_cv, dict) and parsed_cv:
+                            cv_data = parsed_cv
+            except Exception as e:
+                logger.warning(f"[AI ASSIST] Could not re-read resume file for candidate {profile.id}: {e}")
+
+        improved_data = ResumeIntelligenceService.ai_improve_resume_data(cv_data)
         
         # Determine job for ATS score and match percentage recommendations
         job_id = request.POST.get('job_id') or request.GET.get('job_id')
@@ -6879,6 +6898,24 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
                 job = app.job
         if not job:
             job = Job.objects.filter(status='ACTIVE').first() or Job.objects.first()
+
+        # Identify missing information by comparing extracted CV info against database profile
+        existing_exp_keys = set((e.company_name.strip().lower(), e.designation.strip().lower()) for e in profile.experiences.all())
+        missing_experience = [exp for exp in improved_data.get('experience', []) if (exp.get('company', '').strip().lower(), exp.get('designation', '').strip().lower()) not in existing_exp_keys]
+
+        existing_edu_keys = set((e.institution.strip().lower(), e.degree.strip().lower()) for e in profile.educations.all())
+        missing_education = [edu for edu in improved_data.get('education', []) if (edu.get('institution', '').strip().lower(), edu.get('degree', '').strip().lower()) not in existing_edu_keys]
+
+        current_skills = set(s.skill_name.strip().title() for s in profile.skills.all())
+        suggested_skills = [s for s in improved_data.get('skills', []) if s.strip().title() not in current_skills]
+
+        existing_proj_keys = set(p.title.strip().lower() for p in profile.projects.all())
+        missing_projects = [p for p in improved_data.get('projects', []) if (p.get('title') or '').strip().lower() not in existing_proj_keys]
+
+        existing_cert_keys = set(c.name.strip().lower() for c in profile.certifications.all())
+        missing_certifications = [c for c in improved_data.get('certifications', []) if (c.get('name') or '').strip().lower() not in existing_cert_keys]
+
+        missing_summary = improved_data.get('summary', '') if not profile.summary else ''
             
         if action == 'preview':
             # Calculate mock improved candidate ATS/match score
@@ -6985,10 +7022,6 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
                 mock_cand = MockCandidate(improved_data, profile)
                 improved_ats_analysis = CandidateMatchingService.calculate_job_ats_score(mock_cand, job)
             
-            # Suggest missing skills (skills in improved list but not in current profile)
-            current_skills = set(s.skill_name.strip().title() for s in profile.skills.all())
-            suggested_skills = [s for s in improved_data.get('skills', []) if s.strip().title() not in current_skills]
-            
             # Calculate current candidate ATS/match score for comparison
             current_ats_analysis = None
             if job:
@@ -7003,6 +7036,11 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
                 'current_ats_score': current_ats_analysis['total_score'] if current_ats_analysis else 0,
                 'improved_ats_score': ats_score,
                 'suggested_skills': suggested_skills,
+                'missing_experience': missing_experience,
+                'missing_education': missing_education,
+                'missing_projects': missing_projects,
+                'missing_certifications': missing_certifications,
+                'missing_summary': missing_summary,
                 'improved_summary': improved_data.get('summary', ''),
                 'job_match_percentage': job_match_percentage,
                 'job_title': job.title if job else None
@@ -7013,10 +7051,14 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             profile.parsed_json = improved_data
             
             info = improved_data.get("personal_info", {})
-            profile.full_name = info.get("name", profile.full_name)[:255] if info.get("name") else profile.full_name
-            profile.summary = improved_data.get("summary", profile.summary)
-            profile.current_company = info.get("current_company", profile.current_company)[:255] if info.get("current_company") is not None else profile.current_company
-            profile.current_designation = info.get("current_designation", profile.current_designation)[:255] if info.get("current_designation") is not None else profile.current_designation
+            if info.get("name"):
+                profile.full_name = info.get("name", profile.full_name)[:255]
+            if improved_data.get("summary") and not profile.summary:
+                profile.summary = improved_data.get("summary")
+            if info.get("current_company"):
+                profile.current_company = info.get("current_company")[:255]
+            if info.get("current_designation"):
+                profile.current_designation = info.get("current_designation")[:255]
             
             # Save AI Improved fields separately
             profile.ai_summary = improved_data.get("summary", "")
@@ -7035,7 +7077,7 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             profile.current_version = new_ver_num
             
             profile.audit_logs.append({
-                "action": "Applied AI Assist improvements",
+                "action": "Applied AI Assist improvements and recovered missing info",
                 "timestamp": timezone.now().isoformat(),
                 "user": "System AI"
             })
@@ -7043,38 +7085,84 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
             
             from apps.candidates.utils import parse_date_robust
             
-            # Sync Skills relation
-            profile.skills.all().delete()
+            # Sync Skills relation with duplicate prevention
             for sk in improved_data.get("skills", []):
-                CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk.strip().title()[:100])
+                sk_clean = sk.strip()
+                if sk_clean:
+                    CandidateSkill.objects.get_or_create(profile=profile, skill_name=sk_clean.title()[:100])
                 
-            # Sync Experiences relation
-            profile.experiences.all().delete()
+            # Sync Experiences relation with duplicate prevention (do not delete existing, add missing)
+            current_exps = set((e.company_name.strip().lower(), e.designation.strip().lower()) for e in profile.experiences.all())
             for exp in improved_data.get("experience", []):
-                s_date = parse_date_robust(exp.get("start_date"), None)
-                e_date = parse_date_robust(exp.get("end_date"), None)
-                Experience.objects.create(
-                    profile=profile,
-                    company_name=exp.get("company", "Company")[:100],
-                    designation=exp.get("designation", "Role")[:100],
-                    description=exp.get("description", ""),
-                    start_date=s_date,
-                    end_date=e_date
-                )
+                c_name = (exp.get("company") or "Company").strip()
+                desig = (exp.get("designation") or "Role").strip()
+                key = (c_name.lower(), desig.lower())
+                if key not in current_exps:
+                    s_date = parse_date_robust(exp.get("start_date"), None)
+                    e_date = parse_date_robust(exp.get("end_date"), None)
+                    Experience.objects.create(
+                        profile=profile,
+                        company_name=c_name[:100],
+                        designation=desig[:100],
+                        description=exp.get("description", ""),
+                        start_date=s_date,
+                        end_date=e_date
+                    )
+                    current_exps.add(key)
+                else:
+                    # Update description if empty or improve if needed
+                    existing_exp_obj = profile.experiences.filter(company_name__iexact=c_name, designation__iexact=desig).first()
+                    if existing_exp_obj and not existing_exp_obj.description and exp.get("description"):
+                        existing_exp_obj.description = exp.get("description")
+                        existing_exp_obj.save(update_fields=['description'])
                 
-            # Sync Education relation
-            profile.educations.all().delete()
+            # Sync Education relation with duplicate prevention (do not delete existing, add missing)
+            current_edus = set((e.institution.strip().lower(), e.degree.strip().lower()) for e in profile.educations.all())
             for edu in improved_data.get("education", []):
-                s_date = parse_date_robust(edu.get("start_date"), None)
-                e_date = parse_date_robust(edu.get("end_date"), None)
-                Education.objects.create(
-                    profile=profile,
-                    institution=edu.get("institution", "Institution")[:100],
-                    degree=edu.get("degree", "Degree")[:100],
-                    field_of_study=edu.get("field_of_study", "")[:100],
-                    start_date=s_date,
-                    end_date=e_date
-                )
+                inst = (edu.get("institution") or "Institution").strip()
+                deg = (edu.get("degree") or "Degree").strip()
+                key = (inst.lower(), deg.lower())
+                if key not in current_edus:
+                    s_date = parse_date_robust(edu.get("start_date"), None)
+                    e_date = parse_date_robust(edu.get("end_date"), None)
+                    Education.objects.create(
+                        profile=profile,
+                        institution=inst[:100],
+                        degree=deg[:100],
+                        field_of_study=edu.get("field_of_study", "")[:100],
+                        start_date=s_date,
+                        end_date=e_date
+                    )
+                    current_edus.add(key)
+
+            # Sync Projects relation with duplicate prevention
+            current_projs = set(p.title.strip().lower() for p in profile.projects.all())
+            for proj in improved_data.get("projects", []):
+                p_title = (proj.get("title") or "").strip()
+                if p_title and p_title.lower() not in current_projs:
+                    Project.objects.create(
+                        profile=profile,
+                        title=p_title[:255],
+                        description=proj.get("description", "")
+                    )
+                    current_projs.add(p_title.lower())
+
+            # Sync Certifications relation with duplicate prevention
+            current_certs = set(c.name.strip().lower() for c in profile.certifications.all())
+            for cert in improved_data.get("certifications", []):
+                c_name = (cert.get("name") or "").strip()
+                if c_name and c_name.lower() not in current_certs:
+                    try:
+                        i_date = datetime.strptime(cert.get("issue_date"), "%Y-%m-%d").date() if cert.get("issue_date") else None
+                    except Exception:
+                        i_date = None
+                    Certification.objects.create(
+                        profile=profile,
+                        name=c_name[:255],
+                        issuing_organization=cert.get("issuing_organization", "")[:255],
+                        issue_date=i_date
+                    )
+                    current_certs.add(c_name.lower())
                 
             # Recalculate ATS
             CandidateMatchingService.update_ats_scores(candidate_id=profile.id)
@@ -7090,7 +7178,7 @@ class CandidateAIAssistView(LoginRequiredMixin, View):
                 logger = logging.getLogger(__name__)
                 logger.error(f"[AI ASSIST] Failed to generate/save generated_resume.pdf: {str(e)}", exc_info=True)
 
-            messages.success(request, "AI improvements accepted successfully!")
+            messages.success(request, "AI improvements accepted and missing information recovered successfully!")
             return redirect('frontend:candidate_detail', pk=profile.id)
             
         return JsonResponse({'status': 'error', 'message': 'Invalid action'}, status=400)

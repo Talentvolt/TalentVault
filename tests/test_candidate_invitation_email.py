@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, CandidateInvitationEmailQueue
+from apps.candidates.models import CandidateProfile, CandidateSkill, Experience, Education, CandidateInvitationEmailQueue
 from apps.candidates.utils import process_resume_file, handle_resume_upload
 from apps.accounts.services.email_service import send_candidate_profile_invitation_email
 from apps.notifications.models import EmailLog
@@ -456,3 +456,123 @@ class TestCandidateProfileInvitationEmailFlow(TestCase):
         response_no_email = self.client.get(url_no_email)
         self.assertEqual(response_no_email.status_code, 200)
         self.assertContains(response_no_email, "Candidate Email Not Available")
+
+    @patch('services.resume_intelligence.ResumeIntelligenceService.ai_improve_resume_data')
+    def test_candidate_ai_assist_view_post(self, mock_ai_improve):
+        """
+        Regression Test for CandidateAIAssistView POST endpoint ('preview' and 'accept' actions)
+        ensures ResumeIntelligenceService is properly imported and invoked without UnboundLocalError.
+        """
+        mock_ai_improve.return_value = {
+            "personal_info": {"name": "Test Candidate", "email": "test@example.com"},
+            "summary": "Improved summary",
+            "skills": ["Python", "Django"],
+            "experience": [],
+            "education": [],
+            "projects": [],
+            "certifications": []
+        }
+
+        cand_user = User.objects.create(email='test.cand@example.com', role=User.Role.CANDIDATE)
+        cand_profile = CandidateProfile.objects.create(
+            user=cand_user,
+            full_name='Test Candidate',
+            uploaded_by=self.recruiter,
+            parsed_json={"personal_info": {"name": "Test Candidate"}}
+        )
+
+        url = reverse('frontend:candidate_ai_improve', kwargs={'pk': cand_profile.id})
+        
+        # Test preview action
+        response = self.client.post(url, {'action': 'preview'})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['improved_summary'], 'Improved summary')
+
+        # Test accept action
+        response_accept = self.client.post(url, {'action': 'accept'})
+        self.assertEqual(response_accept.status_code, 302)
+        self.assertIn(reverse('frontend:candidate_detail', kwargs={'pk': cand_profile.id}), response_accept.url)
+        
+        cand_profile.refresh_from_db()
+        self.assertEqual(cand_profile.ai_summary, 'Improved summary')
+
+    @patch('services.resume_intelligence.ResumeIntelligenceService.ai_improve_resume_data')
+    def test_candidate_ai_assist_missing_info_and_duplicate_prevention(self, mock_ai_improve):
+        """
+        Test that AI Assist identifies missing Work Experience, Education, and Skills,
+        shows them in preview, and on accept saves missing records while preventing duplicates.
+        """
+        mock_ai_improve.return_value = {
+            "personal_info": {"name": "Test Candidate", "email": "test@example.com"},
+            "summary": "Improved professional summary with full details",
+            "skills": ["Python", "Django", "PostgreSQL"],
+            "experience": [
+                {"company": "Existing Corp", "designation": "Developer", "description": "Did dev work", "start_date": "2020-01-01", "end_date": "2021-01-01"},
+                {"company": "New Corp", "designation": "Senior Engineer", "description": "Led backend", "start_date": "2021-02-01", "end_date": "2023-01-01"}
+            ],
+            "education": [
+                {"institution": "Existing University", "degree": "B.Tech", "field_of_study": "CS", "start_date": "2016-01-01", "end_date": "2020-01-01"},
+                {"institution": "New University", "degree": "M.Tech", "field_of_study": "AI", "start_date": "2023-01-01", "end_date": "2025-01-01"}
+            ],
+            "projects": [],
+            "certifications": []
+        }
+
+        cand_user = User.objects.create(email='test.missing@example.com', role=User.Role.CANDIDATE)
+        cand_profile = CandidateProfile.objects.create(
+            user=cand_user,
+            full_name='Test Candidate',
+            uploaded_by=self.recruiter,
+            parsed_json={"personal_info": {"name": "Test Candidate"}}
+        )
+
+        # Pre-create an existing experience and education to test duplicate prevention
+        Experience.objects.create(
+            profile=cand_profile,
+            company_name="Existing Corp",
+            designation="Developer",
+            description="Original desc",
+            start_date="2020-01-01",
+            end_date="2021-01-01"
+        )
+        Education.objects.create(
+            profile=cand_profile,
+            institution="Existing University",
+            degree="B.Tech",
+            field_of_study="CS",
+            start_date="2016-01-01",
+            end_date="2020-01-01"
+        )
+        CandidateSkill.objects.create(profile=cand_profile, skill_name="Python")
+
+        url = reverse('frontend:candidate_ai_improve', kwargs={'pk': cand_profile.id})
+
+        # 1. Preview action checks missing info identification
+        response = self.client.post(url, {'action': 'preview'})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(len(data['missing_experience']), 1)
+        self.assertEqual(data['missing_experience'][0]['company'], "New Corp")
+        self.assertEqual(len(data['missing_education']), 1)
+        self.assertEqual(data['missing_education'][0]['institution'], "New University")
+        self.assertIn("PostgreSQL", data['suggested_skills'])
+
+        # 2. Accept action saves missing records and prevents duplicates
+        response_accept = self.client.post(url, {'action': 'accept'})
+        self.assertEqual(response_accept.status_code, 302)
+
+        cand_profile.refresh_from_db()
+        # Verify experiences count: should be 2 (Existing Corp + New Corp), not duplicated
+        self.assertEqual(cand_profile.experiences.count(), 2)
+        # Verify educations count: should be 2 (Existing University + New University), not duplicated
+        self.assertEqual(cand_profile.educations.count(), 2)
+        # Verify skills count: Python, Django, PostgreSQL
+        skill_names = set(cand_profile.skills.values_list('skill_name', flat=True))
+        self.assertIn("Python", skill_names)
+        self.assertIn("Django", skill_names)
+        self.assertIn("Postgresql", skill_names)
+
+
