@@ -255,6 +255,10 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
             import base64
             import requests
 
+            # Check and refresh token if expired
+            if connected_account.token_expires_at and connected_account.token_expires_at <= timezone.now():
+                connected_account.refresh_access_token()
+
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
             msg['From'] = from_email
@@ -284,13 +288,16 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
 
             access_token = connected_account.oauth_access_token or "mock_oauth_access_token"
             api_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "raw": raw_mime
-            }
+
+            def send_gmail_request(token):
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "raw": raw_mime
+                }
+                return requests.post(api_url, headers=headers, json=payload, timeout=20)
 
             if 'locmem' in getattr(settings, 'EMAIL_BACKEND', '').lower() and not connected_account.oauth_access_token:
                 from django.core.mail import EmailMessage
@@ -309,8 +316,20 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
                         email_msg.attach(att.name, att.read(), getattr(att, 'content_type', 'application/octet-stream'))
                 email_msg.send(fail_silently=False)
             else:
-                response = requests.post(api_url, headers=headers, json=payload, timeout=20)
+                response = send_gmail_request(access_token)
+                if response.status_code == 401:
+                    refreshed = connected_account.refresh_access_token()
+                    if refreshed:
+                        access_token = connected_account.oauth_access_token
+                        response = send_gmail_request(access_token)
+                    else:
+                        connected_account.is_verified = False
+                        connected_account.save(update_fields=['is_verified'])
+
                 if response.status_code not in (200, 201):
+                    if response.status_code == 401:
+                        connected_account.is_verified = False
+                        connected_account.save(update_fields=['is_verified'])
                     raise Exception(f"Gmail API error ({response.status_code}): {response.text}")
         else:
             from django.core.mail import EmailMessage, get_connection
@@ -350,16 +369,6 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         email_log.status = 'SENT'
         email_log.save(update_fields=['status'])
         return email_log, True, "Email sent successfully via authorized recruiter mailbox."
-    except Exception as e:
-        logger.error(f"Failed to send email to {recipient_email}: {e}")
-        email_log.status = 'FAILED'
-        email_log.error_message = str(e)
-        email_log.save(update_fields=['status', 'error_message'])
-        return email_log, False, str(e)
-
-        email_log.status = 'SENT'
-        email_log.save(update_fields=['status'])
-        return email_log, True, "Email sent successfully."
     except Exception as e:
         logger.error(f"Failed to send email to {recipient_email}: {e}")
         email_log.status = 'FAILED'

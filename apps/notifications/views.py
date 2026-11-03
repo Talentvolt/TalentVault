@@ -79,19 +79,36 @@ class RecruiterEmailAccountAPIView(View):
             
         elif action == 'connect_oauth':
             provider = request.POST.get('provider', 'GMAIL')
-            email_address = request.POST.get('email_address') or f"{request.user.email}"
+            email_address = request.POST.get('email_address') or request.user.email
             
             if not email_address:
                 return JsonResponse({"success": False, "message": "Email address is required."}, status=400)
                 
-            is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
+            # Verify recruiter email ownership
+            if email_address.lower() != request.user.email.lower() and not request.user.is_verified:
+                return JsonResponse({"success": False, "message": "Email address ownership verification failed."}, status=400)
+                
+            access_token = request.POST.get('oauth_access_token')
+            refresh_token = request.POST.get('oauth_refresh_token')
+            expires_at = request.POST.get('token_expires_at')
             
+            existing_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, email_address=email_address).first()
+            final_refresh_token = refresh_token if refresh_token else (existing_account.oauth_refresh_token if existing_account else None)
+            final_access_token = access_token if access_token else (existing_account.oauth_access_token if existing_account else None)
+            
+            is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
+            if existing_account and existing_account.is_default:
+                is_default = True
+                
             account, created = RecruiterEmailAccount.objects.update_or_create(
                 recruiter=request.user,
                 email_address=email_address,
                 defaults={
                     'account_type': 'OAUTH',
                     'provider': provider,
+                    'oauth_access_token': final_access_token,
+                    'oauth_refresh_token': final_refresh_token,
+                    'token_expires_at': expires_at,
                     'is_verified': True,
                     'is_default': is_default
                 }

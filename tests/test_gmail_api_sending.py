@@ -3,6 +3,7 @@ import uuid
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client
 from django.urls import reverse
+from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.accounts.models import User
 from apps.companies.models import Company
@@ -107,3 +108,81 @@ class GmailAPIOAuthSendingTests(TestCase):
         data = response.json()
         self.assertTrue(data['success'])
         self.assertTrue(mock_requests_post.called)
+
+    @patch('requests.post')
+    def test_oauth_token_refresh_before_sending(self, mock_requests_post):
+        self.email_account.oauth_refresh_token = 'valid_refresh_token_abc'
+        self.email_account.token_expires_at = timezone.now() - timezone.timedelta(hours=1)
+        self.email_account.save()
+
+        def post_side_effect(url, **kwargs):
+            res = MagicMock()
+            if 'oauth2.googleapis.com/token' in url:
+                res.status_code = 200
+                res.json.return_value = {"access_token": "refreshed_access_token_xyz", "expires_in": 3600}
+            else:
+                res.status_code = 200
+                res.json.return_value = {"id": "msg_refreshed_123"}
+            return res
+
+        mock_requests_post.side_effect = post_side_effect
+
+        email_log, success, message = send_ats_email(
+            sender=self.recruiter,
+            recipient_email='client@company.com',
+            subject='Token Refresh Test',
+            body='Testing token refresh.',
+            email_account=self.email_account
+        )
+
+        self.assertTrue(success)
+        self.assertEqual(email_log.status, 'SENT')
+        self.email_account.refresh_from_db()
+        self.assertEqual(self.email_account.oauth_access_token, "refreshed_access_token_xyz")
+
+    @patch('requests.post')
+    def test_oauth_revoked_credentials_401(self, mock_requests_post):
+        self.email_account.oauth_refresh_token = 'revoked_refresh_token_xyz'
+        self.email_account.save()
+
+        def post_side_effect(url, **kwargs):
+            res = MagicMock()
+            if 'oauth2.googleapis.com/token' in url:
+                res.status_code = 401
+                res.text = "Invalid Grant"
+            else:
+                res.status_code = 401
+                res.text = "Unauthorized"
+            return res
+
+        mock_requests_post.side_effect = post_side_effect
+
+        email_log, success, message = send_ats_email(
+            sender=self.recruiter,
+            recipient_email='client@company.com',
+            subject='Revoked Credentials Test',
+            body='Testing revoked credentials.',
+            email_account=self.email_account
+        )
+
+        self.assertFalse(success)
+        self.assertEqual(email_log.status, 'FAILED')
+        self.email_account.refresh_from_db()
+        self.assertFalse(self.email_account.is_verified)
+
+    def test_preserve_existing_refresh_token(self):
+        self.email_account.oauth_refresh_token = 'original_refresh_token_123'
+        self.email_account.save()
+
+        url = reverse('notifications:recruiter_email_accounts_api')
+        response = self.client_session.post(url, {
+            'action': 'connect_oauth',
+            'provider': 'GMAIL',
+            'email_address': self.recruiter.email,
+            'oauth_access_token': 'new_access_token_456',
+            # no refresh_token provided in request
+        })
+        self.assertEqual(response.status_code, 200)
+        self.email_account.refresh_from_db()
+        self.assertEqual(self.email_account.oauth_refresh_token, 'original_refresh_token_123')
+        self.assertEqual(self.email_account.oauth_access_token, 'new_access_token_456')
