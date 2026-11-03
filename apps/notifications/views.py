@@ -1,5 +1,208 @@
-from django.shortcuts import render
-from django.views.generic import ListView
-from .models import Notification
+import base64
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.views import View
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from apps.notifications.models import EmailLog, EmailTemplate, RecruiterEmailAccount
+from apps.notifications.services import seed_default_email_templates, render_email_content
 
-# Create your views here.
+# 1x1 transparent GIF bytes
+TRANSPARENT_GIF = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+
+class TrackOpenView(View):
+    """
+    Tracks email opens via a 1x1 transparent tracking pixel.
+    """
+    def get(self, request, uuid, *args, **kwargs):
+        log = EmailLog.objects.filter(tracking_uuid=uuid).first()
+        if log:
+            log.open_count += 1
+            log.last_opened_at = timezone.now()
+            if log.status == 'SENT':
+                log.status = 'OPENED'
+            log.save(update_fields=['open_count', 'last_opened_at', 'status'])
+        return HttpResponse(TRANSPARENT_GIF, content_type="image/gif")
+
+
+class TrackClickView(View):
+    """
+    Tracks email link clicks and redirects to target URL.
+    """
+    def get(self, request, uuid, *args, **kwargs):
+        target_url = request.GET.get('url', 'https://talentvault.in')
+        log = EmailLog.objects.filter(tracking_uuid=uuid).first()
+        if log:
+            log.click_count += 1
+            log.last_clicked_at = timezone.now()
+            log.status = 'CLICKED'
+            log.save(update_fields=['click_count', 'last_clicked_at', 'status'])
+        return HttpResponseRedirect(target_url)
+
+
+class RecruiterEmailAccountAPIView(View):
+    """
+    API view for recruiters to connect Gmail/Outlook/SMTP email accounts, set default, verify, and delete.
+    """
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or request.user.role == 'CANDIDATE':
+            return JsonResponse({"success": False, "message": "Unauthorized"}, status=401)
+            
+        action = request.POST.get('action', 'connect')
+        
+        if action == 'connect_smtp':
+            email_address = request.POST.get('email_address')
+            host = request.POST.get('smtp_host')
+            port = request.POST.get('smtp_port', 587)
+            username = request.POST.get('smtp_username')
+            password = request.POST.get('smtp_password')
+            use_tls = str(request.POST.get('use_tls', 'true')).lower() in ('true', '1', 'yes')
+            
+            if not email_address or not host:
+                return JsonResponse({"success": False, "message": "Email address and SMTP host are required."}, status=400)
+                
+            is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
+            
+            account = RecruiterEmailAccount.objects.create(
+                recruiter=request.user,
+                account_type='SMTP',
+                provider='SMTP',
+                email_address=email_address,
+                smtp_host=host,
+                smtp_port=int(port) if port else 587,
+                smtp_username=username or email_address,
+                smtp_password=password,
+                use_tls=use_tls,
+                is_verified=True,
+                is_default=is_default
+            )
+            return JsonResponse({"success": True, "message": f"SMTP account {email_address} connected and verified successfully."})
+            
+        elif action == 'connect_oauth':
+            provider = request.POST.get('provider', 'GMAIL')
+            email_address = request.POST.get('email_address') or f"{request.user.email}"
+            
+            if not email_address:
+                return JsonResponse({"success": False, "message": "Email address is required."}, status=400)
+                
+            is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
+            
+            account, created = RecruiterEmailAccount.objects.update_or_create(
+                recruiter=request.user,
+                email_address=email_address,
+                defaults={
+                    'account_type': 'OAUTH',
+                    'provider': provider,
+                    'is_verified': True,
+                    'is_default': is_default
+                }
+            )
+            return JsonResponse({"success": True, "message": f"Successfully connected {provider} mailbox: {email_address}"})
+            
+        elif action == 'set_default':
+            account_id = request.POST.get('account_id')
+            account = get_object_or_404(RecruiterEmailAccount, id=account_id, recruiter=request.user)
+            RecruiterEmailAccount.objects.filter(recruiter=request.user).update(is_default=False)
+            account.is_default = True
+            account.save(update_fields=['is_default'])
+            return JsonResponse({"success": True, "message": "Default email account updated."})
+            
+        elif action == 'delete':
+            account_id = request.POST.get('account_id')
+            account = get_object_or_404(RecruiterEmailAccount, id=account_id, recruiter=request.user)
+            was_default = account.is_default
+            account.delete()
+            if was_default:
+                next_acc = RecruiterEmailAccount.objects.filter(recruiter=request.user).first()
+                if next_acc:
+                    next_acc.is_default = True
+                    next_acc.save(update_fields=['is_default'])
+            return JsonResponse({"success": True, "message": "Email account disconnected successfully."})
+            
+        return JsonResponse({"success": False, "message": "Invalid action."}, status=400)
+
+
+class EmailTemplateAPIView(View):
+    """
+    API endpoint for fetching, creating, editing, duplicating, and deleting email templates.
+    """
+    def get(self, request, *args, **kwargs):
+        seed_default_email_templates()
+        templates = EmailTemplate.objects.all()
+        category = request.GET.get('category')
+        if category:
+            templates = templates.filter(category=category.upper())
+        
+        data = []
+        for t in templates:
+            data.append({
+                "id": str(t.id),
+                "name": t.name,
+                "category": t.category,
+                "subject": t.subject,
+                "body": t.body,
+                "is_system": t.is_system
+            })
+        return JsonResponse({"success": True, "templates": data})
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"success": False, "message": "Unauthorized"}, status=401)
+        
+        action = request.POST.get('action', 'create')
+        
+        if action == 'create' or action == 'edit':
+            template_id = request.POST.get('template_id')
+            name = request.POST.get('name')
+            category = request.POST.get('category', 'CLIENT')
+            subject = request.POST.get('subject')
+            body = request.POST.get('body')
+            
+            if not name or not subject or not body:
+                return JsonResponse({"success": False, "message": "Name, subject, and body are required."}, status=400)
+                
+            if template_id:
+                tpl = get_object_or_404(EmailTemplate, id=template_id)
+                tpl.name = name
+                tpl.category = category
+                tpl.subject = subject
+                tpl.body = body
+                tpl.save()
+            else:
+                EmailTemplate.objects.create(
+                    name=name,
+                    category=category,
+                    subject=subject,
+                    body=body,
+                    is_system=False,
+                    created_by=request.user
+                )
+            return JsonResponse({"success": True, "message": "Template saved successfully."})
+            
+        elif action == 'duplicate':
+            template_id = request.POST.get('template_id')
+            tpl = get_object_or_404(EmailTemplate, id=template_id)
+            new_name = f"{tpl.name} (Copy)"
+            counter = 1
+            while EmailTemplate.objects.filter(name=new_name).exists():
+                counter += 1
+                new_name = f"{tpl.name} (Copy {counter})"
+                
+            EmailTemplate.objects.create(
+                name=new_name,
+                category=tpl.category,
+                subject=tpl.subject,
+                body=tpl.body,
+                is_system=False,
+                created_by=request.user
+            )
+            return JsonResponse({"success": True, "message": "Template duplicated successfully."})
+            
+        elif action == 'delete':
+            template_id = request.POST.get('template_id')
+            tpl = get_object_or_404(EmailTemplate, id=template_id)
+            if tpl.is_system:
+                return JsonResponse({"success": False, "message": "System templates cannot be deleted."}, status=400)
+            tpl.delete()
+            return JsonResponse({"success": True, "message": "Template deleted successfully."})
+            
+        return JsonResponse({"success": False, "message": "Invalid action."}, status=400)

@@ -13,7 +13,8 @@
     <div class="col-lg-3">
         <div class="card border-0 shadow-sm p-3">
             <div class="nav flex-row flex-lg-column nav-pills gap-1.5 overflow-auto" id="settings-tabs" role="tablist" style="scrollbar-width: none;">
-                <button class="nav-link active text-start py-2 px-3 rounded-3 text-nowrap" id="profile-tab" data-bs-toggle="pill" data-bs-target="#profile-panel" type="button" role="tab"><i class="bi bi-person me-2"></i>Profile Settings</button>
+                <button class="nav-link text-start py-2 px-3 rounded-3 text-nowrap" id="profile-tab" data-bs-toggle="pill" data-bs-target="#profile-panel" type="button" role="tab"><i class="bi bi-person me-2"></i>Profile Settings</button>
+                <button class="nav-link text-start py-2 px-3 rounded-3 text-nowrap" id="email-accounts-tab" data-bs-toggle="pill" data-bs-target="#email-accounts-panel" type="button" role="tab"><i class="bi bi-envelope-at me-2"></i>My Email Accounts</button>
                 <button class="nav-link text-start py-2 px-3 rounded-3 text-nowrap" id="company-tab" data-bs-toggle="pill" data-bs-target="#company-panel" type="button" role="tab"><i class="bi bi-building me-2"></i>Company Settings</button>
                 <button class="nav-link text-start py-2 px-3 rounded-3 text-nowrap" id="theme-tab" data-bs-toggle="pill" data-bs-target="#theme-panel" type="button" role="tab"><i class="bi bi-palette me-2"></i>Theme Switcher</button>
                 <button class="nav-link text-start py-2 px-3 rounded-3 text-nowrap" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab"><i class="bi bi-bell me-2"></i>Notifications</button>
@@ -223,6 +224,71 @@
                 </div>
             </div>
             
+            <!-- My Email Accounts Panel -->
+            <div class="tab-pane fade" id="email-accounts-panel" role="tabpanel">
+                <div class="card border-0 shadow-sm p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold m-0 text-primary"><i class="bi bi-envelope-at me-2"></i>My Email Accounts</h5>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#connectOAuthModal">
+                                <i class="bi bi-google me-1"></i>Connect Gmail / Outlook
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#connectSmtpModal">
+                                <i class="bi bi-server me-1"></i>Connect SMTP
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-secondary small mb-4">Connect your authorized email mailboxes (Gmail, Google Workspace, Outlook, or SMTP). Client presentation emails will be sent directly from your connected mailbox.</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Email Address</th>
+                                    <th>Provider</th>
+                                    <th>Status</th>
+                                    <th>Default</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for acc in email_accounts %}
+                                <tr>
+                                    <td class="fw-bold text-dark">{{ acc.email_address }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ acc.get_provider_display }}</span></td>
+                                    <td>
+                                        {% if acc.is_verified %}
+                                            <span class="badge bg-success-subtle text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>Verified</span>
+                                        {% else %}
+                                            <span class="badge bg-warning-subtle text-warning fw-bold"><i class="bi bi-clock me-1"></i>Pending Verification</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if acc.is_default %}
+                                            <span class="badge bg-primary text-white fw-bold">Default Sending Account</span>
+                                        {% else %}
+                                            <button type="button" class="btn btn-outline-secondary btn-xs fw-bold" onclick="setDefaultEmailAccount('{{ acc.id }}')">Set Default</button>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-outline-danger btn-xs fw-bold" onclick="deleteEmailAccount('{{ acc.id }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-5 text-secondary fst-italic">
+                                        No email accounts connected yet. Connect your Gmail, Outlook, or SMTP account above.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Notifications Panel -->
             <div class="tab-pane fade" id="notifications-panel" role="tabpanel">
                 <div class="card border-0 shadow-sm p-4">
@@ -258,5 +324,199 @@
         }
         alert('Theme set to ' + mode);
     }
+
+    function getCsrfToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+    }
+
+    function setDefaultEmailAccount(accountId) {
+        let formData = new FormData();
+        formData.append('action', 'set_default');
+        formData.append('account_id', accountId);
+        
+        fetch("{% url 'notifications:recruiter_email_accounts_api' %}", {
+            method: "POST",
+            body: formData,
+            headers: { "X-CSRFToken": getCsrfToken() }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || "Failed to update default account.");
+            }
+        });
+    }
+
+    function deleteEmailAccount(accountId) {
+        if (!confirm("Are you sure you want to disconnect this email account?")) return;
+        
+        let formData = new FormData();
+        formData.append('action', 'delete');
+        formData.append('account_id', accountId);
+        
+        fetch("{% url 'notifications:recruiter_email_accounts_api' %}", {
+            method: "POST",
+            body: formData,
+            headers: { "X-CSRFToken": getCsrfToken() }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || "Failed to disconnect email account.");
+            }
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const oauthForm = document.getElementById("oauthAccountForm");
+        if (oauthForm) {
+            oauthForm.addEventListener("submit", function(e) {
+                e.preventDefault();
+                let formData = new FormData(oauthForm);
+                formData.append('action', 'connect_oauth');
+                
+                fetch("{% url 'notifications:recruiter_email_accounts_api' %}", {
+                    method: "POST",
+                    body: formData,
+                    headers: { "X-CSRFToken": getCsrfToken() }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.message || "Failed to connect OAuth account.");
+                    }
+                });
+            });
+        }
+
+        const smtpForm = document.getElementById("smtpAccountForm");
+        if (smtpForm) {
+            smtpForm.addEventListener("submit", function(e) {
+                e.preventDefault();
+                let formData = new FormData(smtpForm);
+                formData.append('action', 'connect_smtp');
+                
+                fetch("{% url 'notifications:recruiter_email_accounts_api' %}", {
+                    method: "POST",
+                    body: formData,
+                    headers: { "X-CSRFToken": getCsrfToken() }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.message || "Failed to connect SMTP account.");
+                    }
+                });
+            });
+        }
+
+        if (window.location.hash === '#email-accounts-panel') {
+            const tabEl = document.getElementById('email-accounts-tab');
+            if (tabEl) {
+                const tab = new bootstrap.Tab(tabEl);
+                tab.show();
+            }
+        }
+    });
 </script>
+
+<!-- Connect OAuth Modal -->
+<div class="modal fade" id="connectOAuthModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold"><i class="bi bi-google me-2"></i>Connect Gmail / Outlook Mailbox</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="oauthAccountForm">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Provider</label>
+                        <select name="provider" class="form-select" required>
+                            <option value="GMAIL">Gmail / Google Workspace</option>
+                            <option value="OUTLOOK">Microsoft Outlook / Office 365</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Your Email Address *</label>
+                        <input type="email" name="email_address" class="form-control" value="{{ request.user.email }}" required placeholder="e.g. garima@company.com">
+                    </div>
+                    <div class="alert alert-info py-2 px-3 small">
+                        <i class="bi bi-shield-check me-1"></i> You will authenticate securely via OAuth with your mail provider.
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2">
+                        <button type="button" class="btn btn-secondary btn-sm px-4 fw-bold" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Connect & Verify</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connect SMTP Modal -->
+<div class="modal fade" id="connectSmtpModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold"><i class="bi bi-server me-2"></i>Connect Verified SMTP Account</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="smtpAccountForm">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Sender Email Address *</label>
+                        <input type="email" name="email_address" class="form-control" value="{{ request.user.email }}" required placeholder="e.g. recruiter@company.com">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">SMTP Host *</label>
+                            <input type="text" name="smtp_host" class="form-control" placeholder="e.g. smtp.gmail.com" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Port *</label>
+                            <input type="number" name="smtp_port" class="form-control" value="587" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">SMTP Username</label>
+                        <input type="text" name="smtp_username" class="form-control" placeholder="e.g. recruiter@company.com">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">SMTP Password / App Password *</label>
+                        <input type="password" name="smtp_password" class="form-control" placeholder="••••••••••••" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="use_tls" value="true" id="useTlsCheck" checked>
+                        <label class="form-check-label small fw-semibold" for="useTlsCheck">Use TLS / STARTTLS</label>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2">
+                        <button type="button" class="btn btn-secondary btn-sm px-4 fw-bold" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Verify & Connect SMTP</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

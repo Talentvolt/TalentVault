@@ -84,6 +84,7 @@ urlpatterns = [
     # Frontend Dashboard UI
     path('', include('apps.core.urls', namespace='frontend')),
     path('clients/', include('apps.clients.urls', namespace='clients')),
+    path('notifications/', include('apps.notifications.urls', namespace='notifications')),
     path('accounts/logout/', CustomLogoutView.as_view(), name='account_logout'),
     path("accounts/", include("allauth.urls")),
     

@@ -31,6 +31,7 @@ PUBLIC_PREFIXES = (
     '/jobs/share/',
     '/share/job/',
     '/share/candidate/',
+    '/notifications/',
     '/sitemap',
     '/robots.txt',
 )

@@ -19,6 +19,16 @@ class JobCandidatesEmailToClientTests(TestCase):
             password='Password123!',
             role=User.Role.RECRUITER
         )
+        from apps.notifications.models import RecruiterEmailAccount
+        RecruiterEmailAccount.objects.create(
+            recruiter=self.recruiter,
+            account_type='SMTP',
+            provider='SMTP',
+            email_address='garima@techcorp.com',
+            smtp_host='smtp.mailprovider.com',
+            is_verified=True,
+            is_default=True
+        )
         self.company = Company.objects.create(name='TechCorp', slug='tech-corp')
         self.job = Job.objects.create(
             title='Python Developer',

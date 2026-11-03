@@ -3501,6 +3501,10 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
         context['job'] = self.job
         context['total_applications_count'] = Application.objects.filter(job=self.job).count()
         
+        from apps.notifications.models import EmailTemplate, RecruiterEmailAccount
+        context['email_templates'] = EmailTemplate.objects.all()
+        context['recruiter_email_accounts'] = RecruiterEmailAccount.objects.filter(recruiter=self.request.user, is_verified=True)
+
         # Get stages lists for filters
         context['stage_choices'] = Application.ApplicationStage.choices
         
@@ -3539,7 +3543,7 @@ def _extract_candidate_ids(data):
 class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
     """
     Sends bulk client presentation email for selected candidates of a job,
-    with optional resume attachments.
+    with template selection, placeholder rendering, and EmailLog tracking.
     """
     def post(self, request, job_id, *args, **kwargs):
         job = get_object_or_404(get_tenant_jobs_qs(request.user), id=job_id)
@@ -3561,7 +3565,9 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
         bcc_email = (data.get('bcc') or '').strip()
         subject = (data.get('subject') or f"Candidate Profiles for {job.title}").strip()
         body = (data.get('body') or '').strip()
+        template_id = data.get('template_id')
         attach_resumes = str(data.get('attach_resumes', 'false')).lower() in ('true', '1', 'yes')
+        email_account_id = data.get('email_account_id')
 
         if not to_email or '@' not in to_email:
             return JsonResponse({'success': False, 'message': 'Valid recipient "To" email address is required.'}, status=400)
@@ -3573,51 +3579,103 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
         if not candidates.exists():
             return JsonResponse({'success': False, 'message': 'Selected candidates not found.'}, status=404)
 
+        connected_account = None
+        from apps.notifications.models import RecruiterEmailAccount
+        if email_account_id:
+            try:
+                connected_account = RecruiterEmailAccount.objects.get(
+                    id=email_account_id,
+                    recruiter=request.user,
+                    is_verified=True
+                )
+            except RecruiterEmailAccount.DoesNotExist:
+                return JsonResponse({'success': False, 'message': 'Selected email account is invalid or unauthorized.'}, status=400)
+        else:
+            connected_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, is_verified=True, is_default=True).first()
+            if not connected_account:
+                connected_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, is_verified=True).first()
+
+        if not connected_account:
+            return JsonResponse({
+                'success': False,
+                'message': 'No connected email mailbox found. Please connect your Gmail, Outlook, or SMTP account in Settings under "My Email Accounts".',
+                'needs_email_connection': True
+            }, status=400)
+
+        template_name = None
+        from apps.notifications.models import EmailTemplate
+        if template_id:
+            try:
+                tpl = EmailTemplate.objects.get(id=template_id)
+                template_name = tpl.name
+                if not subject or subject == f"Candidate Profiles for {job.title}":
+                    subject = tpl.subject
+                if not body:
+                    body = tpl.body
+            except EmailTemplate.DoesNotExist:
+                pass
+
         try:
-            from django.core.mail import EmailMultiAlternatives
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@talent-vault.in'
-            
+            from apps.notifications.services import render_email_content, send_ats_email
+
             candidate_list_text = "\n".join([
-                f"- {c.full_name or c.user.email} (Designation: {c.current_designation or 'N/A'}, Company: {c.current_company or 'N/A'}, Exp: {c.total_experience} yrs, Email: {c.user.email})"
+                f"- {c.full_name or c.user.email} (Designation: {c.current_designation or 'N/A'}, Company: {c.current_company or 'N/A'}, Exp: {c.total_experience} yrs, Email: {c.user.email}, Profile: https://talentvault.in/candidates/{c.id}/)"
                 for c in candidates
             ])
             
-            full_body = f"{body}\n\nSelected Candidates:\n{candidate_list_text}"
-            
-            to_list = [e.strip() for e in to_email.split(',') if e.strip()]
-            cc_list = [e.strip() for e in cc_email.split(',') if e.strip()] if cc_email else []
-            bcc_list = [e.strip() for e in bcc_email.split(',') if e.strip()] if bcc_email else []
-
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=full_body,
-                from_email=from_email,
-                to=to_list,
-                cc=cc_list,
-                bcc=bcc_list
+            primary_candidate = candidates.first()
+            rendered_body = render_email_content(
+                body,
+                candidate=primary_candidate,
+                job=job,
+                recruiter=request.user,
+                client_name=to_email.split('@')[0].capitalize()
             )
+            
+            final_body = f"{rendered_body}\n\nSelected Candidates List:\n{candidate_list_text}"
 
+            attachments = []
             if attach_resumes:
                 for c in candidates:
                     if c.has_resume:
                         try:
                             resume_file = c.resume
                             resume_file.open('rb')
-                            file_content = resume_file.read()
-                            resume_file.close()
                             import os
                             filename = os.path.basename(c.resume.name) or f"resume_{c.id}.pdf"
-                            msg.attach(filename, file_content)
+                            class FileAttachment:
+                                def __init__(self, name, content):
+                                    self.name = name
+                                    self._content = content
+                                def read(self):
+                                    return self._content
+                            attachments.append(FileAttachment(filename, resume_file.read()))
+                            resume_file.close()
                         except Exception as att_err:
                             logger.warning(f"Could not attach resume for candidate {c.id}: {att_err}")
 
-            msg.send(fail_silently=False)
+            email_log, success, message = send_ats_email(
+                sender=request.user,
+                recipient_email=to_email,
+                subject=render_email_content(subject, candidate=primary_candidate, job=job, recruiter=request.user),
+                body=final_body,
+                cc=cc_email,
+                bcc=bcc_email,
+                template_name=template_name or "Job Candidates Email to Client",
+                candidate_ids=candidate_ids,
+                attachments=attachments,
+                request=request,
+                email_account=connected_account
+            )
 
-            logger.info(f"[EMAIL TO CLIENT] Successfully sent email for job {job.title} to {to_email} with {candidates.count()} candidates.")
-            return JsonResponse({
-                'success': True,
-                'message': f'Successfully sent email to {to_email} with {candidates.count()} candidate profile(s).'
-            })
+            if success:
+                logger.info(f"[EMAIL TO CLIENT] Successfully sent email for job {job.title} to {to_email} with {candidates.count()} candidates.")
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Successfully sent email to {to_email} with {candidates.count()} candidate profile(s).'
+                })
+            else:
+                return JsonResponse({'success': False, 'message': message}, status=500)
         except Exception as exc:
             logger.error(f"Failed to send email to client: {exc}")
             return JsonResponse({'success': False, 'message': f'Failed to send email: {str(exc)}'}, status=500)
