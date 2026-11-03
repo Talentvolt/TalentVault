@@ -188,8 +188,9 @@ def render_email_content(template_text, candidate=None, job=None, recruiter=None
 
 def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, template_name=None, candidate_ids=None, attachments=None, request=None, email_account=None):
     """
-    Sends ATS email via Django EmailMessage, supports CC, BCC, attachments,
-    tracking pixel injection, sender identity enforcement, and logs to EmailLog.
+    Sends ATS email via Django EmailMessage, supporting CC, BCC, attachments,
+    tracking pixel injection, strict recruiter sender identity enforcement (From: Name <email>),
+    and logs to EmailLog. Blocks sending if no connected and verified mailbox exists.
     """
     connected_account = email_account
     if connected_account:
@@ -200,6 +201,21 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
             connected_account = sender.email_accounts.filter(is_verified=True, is_default=True).first()
             if not connected_account:
                 connected_account = sender.email_accounts.filter(is_verified=True).first()
+
+    if not connected_account or not connected_account.is_verified:
+        raise ValueError("No connected and verified email mailbox found. Please connect your Gmail, Outlook, or SMTP account in Settings under 'My Email Accounts'.")
+
+    recruiter_name = "Recruiter"
+    if sender:
+        if hasattr(sender, 'get_full_name') and sender.get_full_name():
+            recruiter_name = sender.get_full_name()
+        elif hasattr(sender, 'first_name') and sender.first_name:
+            recruiter_name = f"{sender.first_name} {sender.last_name}".strip()
+        elif hasattr(sender, 'email') and sender.email:
+            recruiter_name = sender.email.split('@')[0].capitalize()
+
+    from_email = f"{recruiter_name} <{connected_account.email_address}>"
+    reply_to_list = [connected_account.email_address]
 
     email_log = EmailLog.objects.create(
         sender=sender,
@@ -231,24 +247,18 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         cc_list = [c.strip() for c in cc.split(',')] if cc else []
         bcc_list = [b.strip() for b in bcc.split(',')] if bcc else []
 
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@talentvault.com'
-        reply_to_list = []
         connection = None
-
-        if connected_account:
-            from_email = connected_account.email_address
-            reply_to_list = [connected_account.email_address]
-            if connected_account.account_type == 'SMTP' and connected_account.smtp_host and not 'locmem' in getattr(settings, 'EMAIL_BACKEND', '').lower():
-                from django.core.mail import get_connection
-                connection = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
-                    host=connected_account.smtp_host,
-                    port=connected_account.smtp_port or 587,
-                    username=connected_account.smtp_username,
-                    password=connected_account.smtp_password,
-                    use_tls=connected_account.use_tls,
-                    use_ssl=connected_account.use_ssl,
-                )
+        if connected_account.account_type == 'SMTP' and connected_account.smtp_host and not 'locmem' in getattr(settings, 'EMAIL_BACKEND', '').lower():
+            from django.core.mail import get_connection
+            connection = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=connected_account.smtp_host,
+                port=connected_account.smtp_port or 587,
+                username=connected_account.smtp_username,
+                password=connected_account.smtp_password,
+                use_tls=connected_account.use_tls,
+                use_ssl=connected_account.use_ssl,
+            )
 
         email_msg = EmailMessage(
             subject=subject,

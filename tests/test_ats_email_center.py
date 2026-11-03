@@ -18,6 +18,16 @@ class TestATSEmailCenter:
             role=User.Role.RECRUITER,
             recruiter_status=User.RecruiterStatus.ACTIVE
         )
+        from apps.notifications.models import RecruiterEmailAccount
+        RecruiterEmailAccount.objects.create(
+            recruiter=self.recruiter,
+            account_type='SMTP',
+            provider='SMTP',
+            email_address='recruiter@talentvault.com',
+            smtp_host='smtp.mailprovider.com',
+            is_verified=True,
+            is_default=True
+        )
         self.candidate_user = User.objects.create_user(
             email="candidate@talentvault.com",
             password="password123",
