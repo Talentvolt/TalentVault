@@ -116,8 +116,11 @@ def get_tenant_candidates_qs(user):
     if company:
         return CandidateProfile.objects.filter(
             Q(created_by__company_affiliations__company=company) |
-            Q(created_by__company_affiliations__company__isnull=True) |
-            Q(created_by__isnull=True)
+            Q(uploaded_by__company_affiliations__company=company) |
+            Q(created_by=user) |
+            Q(uploaded_by=user) |
+            Q(created_by__company_affiliations__company__isnull=True, uploaded_by__company_affiliations__company__isnull=True) |
+            Q(created_by__isnull=True, uploaded_by__isnull=True)
         ).distinct()
     
     return CandidateProfile.objects.all()

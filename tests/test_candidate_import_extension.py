@@ -679,3 +679,45 @@ def test_import_with_structured_resume_format_and_projects_certifications():
     assert len(parsed["education"]) == 1
     assert len(parsed["projects"]) == 2
     assert len(parsed["certifications"]) == 2
+
+
+@pytest.mark.django_db
+def test_extension_saved_candidate_appears_in_dashboard_queryset():
+    from apps.companies.models import Company, CompanyMember
+    from utils.tenant import get_tenant_candidates_qs
+
+    company = Company.objects.create(name="Acme Corp", slug="acme-corp")
+    recruiter = User.objects.create_user(
+        email='dashboard.recruiter@acme.com',
+        password='Password123!',
+        role=User.Role.RECRUITER,
+        first_name='John',
+        last_name='Doe',
+    )
+    CompanyMember.objects.create(company=company, user=recruiter, role='ADMIN')
+
+    client = APIClient()
+    url = reverse('api_candidate_import')
+
+    payload = {
+        "full_name": "Dashboard Candidate",
+        "email": "dashboard.candidate@example.com",
+        "location": "Mumbai",
+        "source": "linkedin",
+        "uploaded_by_email": "dashboard.recruiter@acme.com",
+    }
+
+    resp = client.post(url, payload, format='json', HTTP_ORIGIN=EXT_ORIGIN)
+    assert resp.status_code == status.HTTP_201_CREATED
+    data = resp.json()
+    candidate_id = data["candidate_id"]
+
+    # Verify candidate record exists using returned Candidate ID
+    profile = CandidateProfile.objects.get(id=candidate_id)
+    assert profile.full_name == "Dashboard Candidate"
+    assert profile.uploaded_by_id == recruiter.id
+
+    # Verify candidate appears in recruiter's dashboard queryset immediately
+    tenant_qs = get_tenant_candidates_qs(recruiter)
+    assert tenant_qs.filter(id=candidate_id).exists()
+
