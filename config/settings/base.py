@@ -410,6 +410,8 @@ SOCIALACCOUNT_PROVIDERS = {
         "SCOPE": [
             "profile",
             "email",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://www.googleapis.com/auth/gmail.settings.basic",
         ],
         "AUTH_PARAMS": {
             "access_type": "offline",
@@ -418,6 +420,9 @@ SOCIALACCOUNT_PROVIDERS = {
         }
     }
 }
+
+# Recruiter-to-Client Sending Alias
+RECRUITER_CLIENT_ALIAS_EMAIL = os.environ.get("RECRUITER_CLIENT_ALIAS_EMAIL", "profiles@2020technologies.in")
 
 # ClamAV and Document Processing Security settings
 CLAMAV_HOST = os.environ.get('CLAMAV_HOST', '127.0.0.1')

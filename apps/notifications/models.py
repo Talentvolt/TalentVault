@@ -192,6 +192,89 @@ class RecruiterEmailAccount(BaseAppModel):
             logger.error(f"Exception during OAuth token refresh: {e}")
             return False
 
+    def verify_sendas_alias(self, alias_email="profiles@2020technologies.in"):
+        """
+        Verifies that alias_email is configured as a Send-As alias in the recruiter's Gmail account
+        via Gmail API users.settings.sendAs.list, and that its verificationStatus is 'accepted'.
+        Returns (is_verified: bool, error_message: str | None).
+        """
+        import requests
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if self.account_type != 'OAUTH' or self.provider not in ('GMAIL', 'GOOGLE_WORKSPACE'):
+            return False, f"Recruiter email account {self.email_address} is not an authenticated Gmail/Google Workspace account."
+
+        if not self.is_verified:
+            return False, f"Email account {self.email_address} is disconnected or unverified. Please reconnect your Google account in Settings."
+
+        if self.token_expires_at and self.token_expires_at <= timezone.now():
+            self.refresh_access_token()
+
+        send_as_url = "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs"
+        token = self.oauth_access_token or ""
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+
+        try:
+            response = requests.get(send_as_url, headers=headers, timeout=15)
+        except Exception as req_err:
+            return False, f"Network error contacting Gmail API: {req_err}"
+
+        # If 401 Unauthorized, try refreshing token once
+        if response.status_code == 401:
+            refreshed = self.refresh_access_token()
+            if refreshed:
+                token = self.oauth_access_token
+                headers["Authorization"] = f"Bearer {token}"
+                try:
+                    response = requests.get(send_as_url, headers=headers, timeout=15)
+                except Exception as req_err:
+                    return False, f"Network error contacting Gmail API: {req_err}"
+            else:
+                self.is_verified = False
+                self.save(update_fields=['is_verified'])
+                return False, "Gmail authorization expired or revoked (401). Please reconnect your Google account in Settings."
+
+        if response.status_code == 403:
+            return False, (
+                "Google authorization lacks required Gmail scopes (gmail.settings.basic). "
+                "Please disconnect and reconnect your Google account in Settings to grant required permissions."
+            )
+
+        if response.status_code != 200:
+            return False, f"Gmail API sendAs verification failed with HTTP {response.status_code}: {response.text}"
+
+        try:
+            data = response.json()
+        except Exception:
+            return False, "Failed to parse JSON response from Gmail API sendAs endpoint."
+
+        send_as_list = data.get("sendAs", [])
+        target_alias = alias_email.strip().lower()
+        matched = None
+        for item in send_as_list:
+            if (item.get("sendAsEmail") or "").strip().lower() == target_alias:
+                matched = item
+                break
+
+        if not matched:
+            return False, (
+                f"The alias '{alias_email}' is not configured as a Send-As alias for "
+                f"{self.email_address}. Please add it in Gmail Settings > Accounts > 'Send mail as' before sending."
+            )
+
+        status = (matched.get("verificationStatus") or "").strip().lower()
+        if status != "accepted":
+            return False, (
+                f"The alias '{alias_email}' in your Gmail account ({self.email_address}) is unverified "
+                f"(verification status: '{status}'). Status 'accepted' is required before sending."
+            )
+
+        return True, None
+
 
 class CandidateMessage(BaseAppModel):
     """

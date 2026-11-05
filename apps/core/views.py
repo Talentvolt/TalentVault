@@ -3591,14 +3591,36 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
             except RecruiterEmailAccount.DoesNotExist:
                 return JsonResponse({'success': False, 'message': 'Selected email account is invalid or unauthorized.'}, status=400)
         else:
-            connected_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, is_verified=True, is_default=True).first()
+            connected_account = RecruiterEmailAccount.objects.filter(
+                recruiter=request.user,
+                is_verified=True,
+                account_type='OAUTH',
+                provider__in=['GMAIL', 'GOOGLE_WORKSPACE'],
+                is_default=True
+            ).first()
             if not connected_account:
-                connected_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, is_verified=True).first()
+                connected_account = RecruiterEmailAccount.objects.filter(
+                    recruiter=request.user,
+                    is_verified=True,
+                    account_type='OAUTH',
+                    provider__in=['GMAIL', 'GOOGLE_WORKSPACE']
+                ).first()
+            if not connected_account:
+                connected_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, is_verified=True, is_default=True).first()
+                if not connected_account:
+                    connected_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, is_verified=True).first()
 
         if not connected_account:
             return JsonResponse({
                 'success': False,
-                'message': 'No connected email mailbox found. Please connect your Gmail, Outlook, or SMTP account in Settings under "My Email Accounts".',
+                'message': 'No connected email mailbox found. Please connect your Gmail or Google Workspace account in Settings under "My Email Accounts".',
+                'needs_email_connection': True
+            }, status=400)
+
+        if connected_account.account_type != 'OAUTH' or connected_account.provider not in ('GMAIL', 'GOOGLE_WORKSPACE'):
+            return JsonResponse({
+                'success': False,
+                'message': 'Recruiter-to-client emails must be sent through an authenticated Gmail or Google Workspace account. Please connect your Google account in Settings.',
                 'needs_email_connection': True
             }, status=400)
 
@@ -3675,10 +3697,10 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
                     'message': f'Successfully sent email to {to_email} with {candidates.count()} candidate profile(s).'
                 })
             else:
-                return JsonResponse({'success': False, 'message': message}, status=500)
+                return JsonResponse({'success': False, 'message': message}, status=400)
         except Exception as exc:
             logger.error(f"Failed to send email to client: {exc}")
-            return JsonResponse({'success': False, 'message': f'Failed to send email: {str(exc)}'}, status=500)
+            return JsonResponse({'success': False, 'message': f'Failed to send email: {str(exc)}'}, status=400)
 
 
 class JobCandidatesAISuggestEmailView(RecruiterRequiredMixin, View):
@@ -5477,6 +5499,7 @@ class SettingsView(LoginRequiredMixin, TemplateView):
         cm = user.company_affiliations.select_related('company').first()
         context['company_name'] = cm.company.name if cm and cm.company else ""
         context['designation'] = cm.designation if cm else ""
+        context['email_accounts'] = user.email_accounts.all()
         return context
 
     def post(self, request, *args, **kwargs):

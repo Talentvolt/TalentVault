@@ -188,9 +188,12 @@ def render_email_content(template_text, candidate=None, job=None, recruiter=None
 
 def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, template_name=None, candidate_ids=None, attachments=None, request=None, email_account=None):
     """
-    Sends ATS email via direct Gmail API OAuth2 (users.messages.send) for OAuth connected accounts,
-    or SMTP for SMTP accounts. Enforces strict recruiter identity (From: Name <email>),
-    saves in recruiter's Gmail Sent folder, blocks sending if unverified/disconnected.
+    Sends recruiter-to-client ATS email exclusively via direct Gmail API OAuth2 (users.messages.send)
+    through the recruiter's authenticated Gmail/Google Workspace account.
+    Enforces From: <Recruiter Name> <profiles@2020technologies.in>,
+    Reply-To: <Recruiter Work Email>, verifies alias via users.settings.sendAs.list,
+    places email in the recruiter's Gmail Sent folder, and blocks sending if alias is missing/unverified.
+    Never falls back to TalentVault's shared Gmail.
     """
     connected_account = email_account
     if connected_account:
@@ -198,24 +201,43 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
             raise ValueError("Unauthorized or unverified recruiter email account.")
     else:
         if sender and hasattr(sender, 'email_accounts'):
-            connected_account = sender.email_accounts.filter(is_verified=True, is_default=True).first()
+            connected_account = sender.email_accounts.filter(
+                is_verified=True, 
+                account_type='OAUTH',
+                provider__in=['GMAIL', 'GOOGLE_WORKSPACE'],
+                is_default=True
+            ).first()
             if not connected_account:
-                connected_account = sender.email_accounts.filter(is_verified=True).first()
+                connected_account = sender.email_accounts.filter(
+                    is_verified=True,
+                    account_type='OAUTH',
+                    provider__in=['GMAIL', 'GOOGLE_WORKSPACE']
+                ).first()
+            if not connected_account:
+                connected_account = sender.email_accounts.filter(is_verified=True, is_default=True).first()
+                if not connected_account:
+                    connected_account = sender.email_accounts.filter(is_verified=True).first()
 
     if not connected_account or not connected_account.is_verified:
-        raise ValueError("No connected and verified Gmail/Outlook mailbox found. Please connect your Gmail or Outlook account in Settings under 'My Email Accounts'.")
+        raise ValueError("No connected and verified Gmail/Google Workspace mailbox found. Please connect your Gmail account in Settings under 'My Email Accounts'.")
+
+    if connected_account.account_type != 'OAUTH' or connected_account.provider not in ('GMAIL', 'GOOGLE_WORKSPACE'):
+        raise ValueError("Recruiter-to-client emails must be sent through an authenticated Gmail or Google Workspace account. Never using shared Gmail fallback.")
 
     recruiter_name = "Recruiter"
     if sender:
         if hasattr(sender, 'get_full_name') and sender.get_full_name():
-            recruiter_name = sender.get_full_name()
+            recruiter_name = sender.get_full_name().strip()
         elif hasattr(sender, 'first_name') and sender.first_name:
             recruiter_name = f"{sender.first_name} {sender.last_name}".strip()
         elif hasattr(sender, 'email') and sender.email:
             recruiter_name = sender.email.split('@')[0].capitalize()
 
-    from_email = f"{recruiter_name} <{connected_account.email_address}>"
-    reply_to_email = connected_account.email_address
+    alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
+    recruiter_work_email = connected_account.email_address or (sender.email if sender else alias_email)
+
+    from_email = f"{recruiter_name} <{alias_email}>"
+    reply_to_email = recruiter_work_email
 
     email_log = EmailLog.objects.create(
         sender=sender,
@@ -232,6 +254,12 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
     )
 
     try:
+        # Verify alias via Gmail API users.settings.sendAs.list
+        alias_verified, alias_error = connected_account.verify_sendas_alias(alias_email)
+        if not alias_verified:
+            logger.error(f"Gmail alias verification failed for {connected_account.email_address}: {alias_error}")
+            raise ValueError(alias_error)
+
         # Inject tracking pixel
         pixel_url = ""
         if request:
@@ -247,124 +275,79 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         cc_list = [c.strip() for c in cc.split(',')] if cc else []
         bcc_list = [b.strip() for b in bcc.split(',')] if bcc else []
 
-        if connected_account.account_type == 'OAUTH' or connected_account.provider in ('GMAIL', 'GOOGLE_WORKSPACE', 'OUTLOOK'):
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.text import MIMEText
-            from email.mime.base import MIMEBase
-            from email import encoders
-            import base64
-            import requests
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
+        import base64
+        import requests
 
-            # Check and refresh token if expired
-            if connected_account.token_expires_at and connected_account.token_expires_at <= timezone.now():
-                connected_account.refresh_access_token()
+        # Check and refresh token if expired
+        if connected_account.token_expires_at and connected_account.token_expires_at <= timezone.now():
+            connected_account.refresh_access_token()
 
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = from_email
-            msg['To'] = recipient_email
-            msg['Reply-To'] = reply_to_email
-            if cc_list:
-                msg['Cc'] = ", ".join(cc_list)
-            if bcc_list:
-                msg['Bcc'] = ", ".join(bcc_list)
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = from_email
+        msg['To'] = recipient_email
+        msg['Reply-To'] = reply_to_email
+        if cc_list:
+            msg['Cc'] = ", ".join(cc_list)
+        if bcc_list:
+            msg['Bcc'] = ", ".join(bcc_list)
 
-            msg.attach(MIMEText(html_body, 'html'))
+        msg.attach(MIMEText(html_body, 'html'))
 
-            if attachments:
-                for att in attachments:
-                    try:
-                        part = MIMEBase('application', 'octet-stream')
-                        att_content = att.read() if hasattr(att, 'read') else b""
-                        part.set_payload(att_content)
-                        encoders.encode_base64(part)
-                        filename = getattr(att, 'name', 'attachment.pdf')
-                        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
-                        msg.attach(part)
-                    except Exception as att_err:
-                        logger.warning(f"Failed to attach file to Gmail API message: {att_err}")
+        if attachments:
+            for att in attachments:
+                try:
+                    part = MIMEBase('application', 'octet-stream')
+                    att_content = att.read() if hasattr(att, 'read') else b""
+                    part.set_payload(att_content)
+                    encoders.encode_base64(part)
+                    filename = getattr(att, 'name', 'attachment.pdf')
+                    part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                    msg.attach(part)
+                except Exception as att_err:
+                    logger.warning(f"Failed to attach file to Gmail API message: {att_err}")
 
-            raw_mime = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+        raw_mime = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
 
-            access_token = connected_account.oauth_access_token or "mock_oauth_access_token"
-            api_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+        access_token = connected_account.oauth_access_token or "mock_oauth_access_token"
+        api_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 
-            def send_gmail_request(token):
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "raw": raw_mime
-                }
-                return requests.post(api_url, headers=headers, json=payload, timeout=20)
+        def send_gmail_request(token):
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "raw": raw_mime
+            }
+            return requests.post(api_url, headers=headers, json=payload, timeout=20)
 
-            if 'locmem' in getattr(settings, 'EMAIL_BACKEND', '').lower() and not connected_account.oauth_access_token:
-                from django.core.mail import EmailMessage
-                email_msg = EmailMessage(
-                    subject=subject,
-                    body=html_body,
-                    from_email=from_email,
-                    to=[recipient_email],
-                    cc=cc_list,
-                    bcc=bcc_list,
-                    reply_to=[reply_to_email]
-                )
-                email_msg.content_subtype = "html"
-                if attachments:
-                    for att in attachments:
-                        email_msg.attach(att.name, att.read(), getattr(att, 'content_type', 'application/octet-stream'))
-                email_msg.send(fail_silently=False)
-            else:
+        response = send_gmail_request(access_token)
+        if response.status_code == 401:
+            refreshed = connected_account.refresh_access_token()
+            if refreshed:
+                access_token = connected_account.oauth_access_token
                 response = send_gmail_request(access_token)
-                if response.status_code == 401:
-                    refreshed = connected_account.refresh_access_token()
-                    if refreshed:
-                        access_token = connected_account.oauth_access_token
-                        response = send_gmail_request(access_token)
-                    else:
-                        connected_account.is_verified = False
-                        connected_account.save(update_fields=['is_verified'])
+            else:
+                connected_account.is_verified = False
+                connected_account.save(update_fields=['is_verified'])
+                raise ValueError("Gmail authorization expired or revoked (401). Please reconnect your Google account in Settings.")
 
-                if response.status_code not in (200, 201):
-                    if response.status_code == 401:
-                        connected_account.is_verified = False
-                        connected_account.save(update_fields=['is_verified'])
-                    raise Exception(f"Gmail API error ({response.status_code}): {response.text}")
-        else:
-            from django.core.mail import EmailMessage, get_connection
-            connection = None
-            if connected_account.smtp_host and not 'locmem' in getattr(settings, 'EMAIL_BACKEND', '').lower():
-                connection = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
-                    host=connected_account.smtp_host,
-                    port=connected_account.smtp_port or 587,
-                    username=connected_account.smtp_username,
-                    password=connected_account.smtp_password,
-                    use_tls=connected_account.use_tls,
-                    use_ssl=connected_account.use_ssl,
-                )
-
-            email_msg = EmailMessage(
-                subject=subject,
-                body=html_body,
-                from_email=from_email,
-                to=[recipient_email],
-                cc=cc_list,
-                bcc=bcc_list,
-                reply_to=[reply_to_email],
-                connection=connection
+        if response.status_code == 403:
+            raise ValueError(
+                "Google authorization lacks required Gmail sending scope (gmail.send). "
+                "Please reconnect your Google account in Settings."
             )
-            email_msg.content_subtype = "html"
 
-            if attachments:
-                for att in attachments:
-                    try:
-                        email_msg.attach(att.name, att.read(), getattr(att, 'content_type', 'application/octet-stream'))
-                    except Exception as att_err:
-                        logger.warning(f"Failed to attach file {att.name}: {att_err}")
-
-            email_msg.send(fail_silently=False)
+        if response.status_code not in (200, 201):
+            if response.status_code == 401:
+                connected_account.is_verified = False
+                connected_account.save(update_fields=['is_verified'])
+            raise Exception(f"Gmail API error ({response.status_code}): {response.text}")
 
         email_log.status = 'SENT'
         email_log.save(update_fields=['status'])

@@ -3,6 +3,7 @@ from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.views import View
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 from apps.notifications.models import EmailLog, EmailTemplate, RecruiterEmailAccount
 from apps.notifications.services import seed_default_email_templates, render_email_content
 
@@ -95,6 +96,19 @@ class RecruiterEmailAccountAPIView(View):
             existing_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, email_address=email_address).first()
             final_refresh_token = refresh_token if refresh_token else (existing_account.oauth_refresh_token if existing_account else None)
             final_access_token = access_token if access_token else (existing_account.oauth_access_token if existing_account else None)
+
+            # Fallback to SocialToken if available
+            if not final_access_token:
+                try:
+                    from allauth.socialaccount.models import SocialToken
+                    social_token = SocialToken.objects.filter(account__user=request.user, account__provider='google').first()
+                    if social_token:
+                        final_access_token = social_token.token
+                        final_refresh_token = social_token.token_secret or getattr(social_token, 'token_secret', None)
+                        if social_token.expires_at:
+                            expires_at = social_token.expires_at
+                except Exception:
+                    pass
             
             is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
             if existing_account and existing_account.is_default:
@@ -114,6 +128,16 @@ class RecruiterEmailAccountAPIView(View):
                 }
             )
             return JsonResponse({"success": True, "message": f"Successfully connected {provider} mailbox: {email_address}"})
+            
+        elif action == 'verify_alias':
+            account_id = request.POST.get('account_id')
+            account = get_object_or_404(RecruiterEmailAccount, id=account_id, recruiter=request.user)
+            alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
+            is_valid, err_msg = account.verify_sendas_alias(alias_email)
+            if is_valid:
+                return JsonResponse({"success": True, "message": f"Alias '{alias_email}' verified successfully."})
+            else:
+                return JsonResponse({"success": False, "message": err_msg}, status=400)
             
         elif action == 'set_default':
             account_id = request.POST.get('account_id')
