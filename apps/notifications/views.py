@@ -1,11 +1,21 @@
 import base64
+import os
+import secrets
+import urllib.parse
+import requests
+import logging
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.views import View
 from django.utils import timezone
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import login
+from django.urls import reverse
 from apps.notifications.models import EmailLog, EmailTemplate, RecruiterEmailAccount
 from apps.notifications.services import seed_default_email_templates, render_email_content
+
+logger = logging.getLogger(__name__)
 
 # 1x1 transparent GIF bytes
 TRANSPARENT_GIF = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
@@ -38,6 +48,251 @@ class TrackClickView(View):
             log.status = 'CLICKED'
             log.save(update_fields=['click_count', 'last_clicked_at', 'status'])
         return HttpResponseRedirect(target_url)
+
+
+def get_google_oauth_redirect_uri(request=None):
+    """
+    Returns the authorized Google OAuth redirect URI for recruiter Gmail connection.
+    Respects RECRUITER_GMAIL_OAUTH_CALLBACK_URL or GMAIL_OAUTH_REDIRECT_URI if set in environment/settings.
+    Defaults to https://talent-vault.in/notifications/oauth/gmail/callback/.
+    """
+    configured = (
+        os.environ.get('RECRUITER_GMAIL_OAUTH_CALLBACK_URL')
+        or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CALLBACK_URL', '')
+        or os.environ.get('GMAIL_OAUTH_REDIRECT_URI')
+        or getattr(settings, 'GMAIL_OAUTH_REDIRECT_URI', '')
+    )
+    if configured:
+        return configured.strip()
+
+    if request:
+        uri = request.build_absolute_uri(reverse('notifications:recruiter_gmail_oauth_callback'))
+        if not settings.DEBUG and uri.startswith('http://'):
+            uri = uri.replace('http://', 'https://', 1)
+        return uri
+
+    return 'https://talent-vault.in/notifications/oauth/gmail/callback/'
+
+
+class RecruiterGmailOAuthStartView(View):
+    """
+    Initiates Google OAuth 2.0 flow for logged-in recruiters to connect their Gmail account.
+    Performs a real HTTP redirect (302) to Google's consent screen.
+    Requests gmail.send and gmail.settings.basic scopes with access_type=offline and prompt=consent.
+    Preserves recruiter identity and OAuth state in session.
+    """
+    def handle_start(self, request):
+        if not request.user.is_authenticated or request.user.role == 'CANDIDATE':
+            messages.error(request, "Please log in with a recruiter account to connect Gmail.")
+            return redirect('recruiter_login')
+
+        client_id = os.environ.get('RECRUITER_GMAIL_OAUTH_CLIENT_ID', '') or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CLIENT_ID', '')
+        client_secret = os.environ.get('RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', '') or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', '')
+
+        if client_id.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_ID="):
+            client_id = client_id.replace("RECRUITER_GMAIL_OAUTH_CLIENT_ID=", "", 1).strip()
+        if client_secret.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET="):
+            client_secret = client_secret.replace("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET=", "", 1).strip()
+
+        if not client_id or not client_secret:
+            logger.error("Recruiter Gmail OAuth client credentials (RECRUITER_GMAIL_OAUTH_CLIENT_ID / RECRUITER_GMAIL_OAUTH_CLIENT_SECRET) missing.")
+            messages.error(
+                request,
+                "Recruiter Gmail OAuth credentials (Client ID / Secret) are not configured on the server. "
+                "Please configure RECRUITER_GMAIL_OAUTH_CLIENT_ID and RECRUITER_GMAIL_OAUTH_CLIENT_SECRET."
+            )
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        state = secrets.token_urlsafe(32)
+        request.session['gmail_oauth_state'] = state
+        request.session['gmail_oauth_recruiter_id'] = str(request.user.id)
+        
+        email_hint = (request.GET.get('email_address') or request.POST.get('email_address') or request.user.email or '').strip()
+        if email_hint:
+            request.session['gmail_oauth_expected_email'] = email_hint
+
+        redirect_uri = get_google_oauth_redirect_uri(request)
+        request.session['gmail_oauth_redirect_uri'] = redirect_uri
+
+        scopes = [
+            'openid',
+            'email',
+            'profile',
+            'https://www.googleapis.com/auth/gmail.send',
+            'https://www.googleapis.com/auth/gmail.settings.basic'
+        ]
+
+        params = {
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'response_type': 'code',
+            'scope': ' '.join(scopes),
+            'access_type': 'offline',
+            'prompt': 'consent',
+            'state': state,
+            'include_granted_scopes': 'true',
+        }
+        if email_hint:
+            params['login_hint'] = email_hint
+
+        auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+        return HttpResponseRedirect(auth_url)
+
+    def get(self, request, *args, **kwargs):
+        return self.handle_start(request)
+
+    def post(self, request, *args, **kwargs):
+        return self.handle_start(request)
+
+
+class RecruiterGmailOAuthCallbackView(View):
+    """
+    Handles the callback redirect from Google OAuth 2.0.
+    Validates state, exchanges authorization code for tokens, retrieves profile email,
+    updates or creates RecruiterEmailAccount, marks is_verified=True only upon success,
+    preserves existing refresh tokens if none returned, verifies alias, and redirects to Settings.
+    """
+    def get(self, request, *args, **kwargs):
+        # 1. Error check
+        error = request.GET.get('error')
+        if error:
+            error_desc = request.GET.get('error_description') or error
+            logger.warning(f"Google OAuth authorization cancelled or returned error: {error_desc}")
+            messages.error(request, f"Google OAuth authorization was cancelled or denied: {error_desc}")
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        # 2. State verification
+        expected_state = request.session.get('gmail_oauth_state')
+        received_state = request.GET.get('state')
+        if not expected_state or expected_state != received_state:
+            logger.warning("Google OAuth state security mismatch or expired session.")
+            messages.error(request, "OAuth security state mismatch or session expired. Please try connecting your account again.")
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        # Clear state once verified
+        request.session.pop('gmail_oauth_state', None)
+
+        code = request.GET.get('code')
+        if not code:
+            messages.error(request, "No authorization code was returned by Google.")
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        # 3. Recruiter identity preservation
+        recruiter = request.user if request.user.is_authenticated else None
+        if not recruiter:
+            recruiter_id = request.session.get('gmail_oauth_recruiter_id')
+            if recruiter_id:
+                from apps.accounts.models import User
+                recruiter = User.objects.filter(id=recruiter_id).first()
+                if recruiter:
+                    login(request, recruiter)
+
+        if not recruiter or recruiter.role == 'CANDIDATE':
+            messages.error(request, "Recruiter session not found. Please log in as a recruiter and try again.")
+            return redirect('recruiter_login')
+
+        client_id = os.environ.get('RECRUITER_GMAIL_OAUTH_CLIENT_ID', '') or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CLIENT_ID', '')
+        client_secret = os.environ.get('RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', '') or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', '')
+        if client_id.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_ID="):
+            client_id = client_id.replace("RECRUITER_GMAIL_OAUTH_CLIENT_ID=", "", 1).strip()
+        if client_secret.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET="):
+            client_secret = client_secret.replace("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET=", "", 1).strip()
+
+        if not client_id or not client_secret:
+            logger.error("Recruiter Gmail OAuth client credentials (RECRUITER_GMAIL_OAUTH_CLIENT_ID / RECRUITER_GMAIL_OAUTH_CLIENT_SECRET) missing.")
+            messages.error(
+                request,
+                "Recruiter Gmail OAuth credentials (Client ID / Secret) are not configured on the server. "
+                "Please configure RECRUITER_GMAIL_OAUTH_CLIENT_ID and RECRUITER_GMAIL_OAUTH_CLIENT_SECRET."
+            )
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        redirect_uri = request.session.pop('gmail_oauth_redirect_uri', None) or get_google_oauth_redirect_uri(request)
+
+        # 4. Exchange authorization code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_payload = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri,
+        }
+
+        try:
+            resp = requests.post(token_url, data=token_payload, timeout=15)
+            if resp.status_code != 200:
+                logger.error(f"Google token exchange failed ({resp.status_code}): {resp.text}")
+                messages.error(request, f"Google token exchange failed ({resp.status_code}): {resp.text}")
+                return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+            token_json = resp.json()
+        except Exception as net_err:
+            logger.error(f"Network error communicating with Google token endpoint: {net_err}")
+            messages.error(request, f"Network error communicating with Google: {net_err}")
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        access_token = token_json.get('access_token')
+        refresh_token = token_json.get('refresh_token')
+        expires_in = token_json.get('expires_in', 3600)
+        expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
+
+        # 5. Fetch user profile from Google to confirm authenticated email address
+        connected_email = request.session.pop('gmail_oauth_expected_email', None) or recruiter.email
+        try:
+            userinfo_res = requests.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10
+            )
+            if userinfo_res.status_code == 200:
+                google_info = userinfo_res.json()
+                if google_info.get('email'):
+                    connected_email = google_info.get('email').strip().lower()
+        except Exception as e:
+            logger.warning(f"Could not fetch userinfo from Google: {e}")
+
+        # 6. Preserve existing refresh token if not re-issued
+        existing_account = RecruiterEmailAccount.objects.filter(
+            recruiter=recruiter,
+            email_address__iexact=connected_email
+        ).first()
+
+        final_refresh_token = refresh_token or (existing_account.oauth_refresh_token if existing_account else None)
+
+        is_default = not RecruiterEmailAccount.objects.filter(recruiter=recruiter).exclude(email_address__iexact=connected_email).exists()
+        if existing_account and existing_account.is_default:
+            is_default = True
+
+        # 7. Save account and mark verified only on successful callback
+        account, created = RecruiterEmailAccount.objects.update_or_create(
+            recruiter=recruiter,
+            email_address=connected_email,
+            defaults={
+                'account_type': 'OAUTH',
+                'provider': 'GMAIL',
+                'oauth_access_token': access_token,
+                'oauth_refresh_token': final_refresh_token,
+                'token_expires_at': expires_at,
+                'is_verified': True,
+                'is_default': is_default,
+            }
+        )
+
+        # 8. Verify alias profiles@2020technologies.in
+        alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
+        alias_verified, alias_msg = account.verify_sendas_alias(alias_email)
+        if alias_verified:
+            messages.success(
+                request,
+                f"Successfully connected {connected_email}. The alias '{alias_email}' is verified and ready for client communications."
+            )
+        else:
+            messages.warning(
+                request,
+                f"Successfully connected {connected_email}. Note regarding alias '{alias_email}': {alias_msg}"
+            )
+
+        return redirect(reverse('frontend:settings') + '#email-accounts-panel')
 
 
 class RecruiterEmailAccountAPIView(View):
@@ -123,7 +378,7 @@ class RecruiterEmailAccountAPIView(View):
                     'oauth_access_token': final_access_token,
                     'oauth_refresh_token': final_refresh_token,
                     'token_expires_at': expires_at,
-                    'is_verified': True,
+                    'is_verified': bool(final_access_token),
                     'is_default': is_default
                 }
             )

@@ -58,6 +58,15 @@ class GmailAPIOAuthSendingTests(TestCase):
         self.client_session = Client()
         self.client_session.force_login(self.recruiter)
 
+        # Configure recruiter Gmail OAuth credentials for tests
+        self.patcher_recruiter_oauth = patch.dict('os.environ', {
+            'RECRUITER_GMAIL_OAUTH_CLIENT_ID': 'test-recruiter-client-id-xyz',
+            'RECRUITER_GMAIL_OAUTH_CLIENT_SECRET': 'test-recruiter-client-secret-xyz',
+            'RECRUITER_GMAIL_OAUTH_CALLBACK_URL': 'https://talent-vault.in/notifications/oauth/gmail/callback/'
+        })
+        self.patcher_recruiter_oauth.start()
+        self.addCleanup(self.patcher_recruiter_oauth.stop)
+
         # Mock Gmail sendAs alias verification to return accepted profiles@2020technologies.in by default
         self.mock_get_patcher = patch('requests.get')
         self.mock_requests_get = self.mock_get_patcher.start()
@@ -394,3 +403,197 @@ class GmailAPIOAuthSendingTests(TestCase):
         data = response.json()
         self.assertTrue(data['success'])
         self.assertIn("verified successfully", data['message'])
+
+    def test_gmail_oauth_start_real_http_redirect(self):
+        """
+        Ensure clicking Connect & Verify / hitting recruiter_gmail_oauth_start issues a real
+        HTTP 302 redirect to Google's consent screen with required scopes, prompt=consent, access_type=offline.
+        """
+        url = reverse('notifications:recruiter_gmail_oauth_start')
+        response = self.client_session.get(url, {'email_address': self.recruiter.email})
+        self.assertEqual(response.status_code, 302)
+        redirect_url = response.url
+        self.assertTrue(redirect_url.startswith("https://accounts.google.com/o/oauth2/v2/auth"))
+
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(redirect_url)
+        params = parse_qs(parsed.query)
+
+        self.assertIn('client_id', params)
+        self.assertEqual(params.get('client_id'), ['test-recruiter-client-id-xyz'])
+        self.assertIn('redirect_uri', params)
+        self.assertEqual(params.get('redirect_uri'), ['https://talent-vault.in/notifications/oauth/gmail/callback/'])
+        self.assertEqual(params.get('response_type'), ['code'])
+        self.assertEqual(params.get('access_type'), ['offline'])
+        self.assertEqual(params.get('prompt'), ['consent'])
+
+        scope_str = params.get('scope', [''])[0]
+        self.assertIn('https://www.googleapis.com/auth/gmail.send', scope_str)
+        self.assertIn('https://www.googleapis.com/auth/gmail.settings.basic', scope_str)
+
+        # State stored in session matches state in redirect query
+        state = params.get('state', [None])[0]
+        self.assertIsNotNone(state)
+        self.assertEqual(self.client_session.session.get('gmail_oauth_state'), state)
+        self.assertEqual(self.client_session.session.get('gmail_oauth_recruiter_id'), str(self.recruiter.id))
+
+    def test_gmail_oauth_start_missing_credentials(self):
+        """
+        Displays clear error if RECRUITER_GMAIL_OAUTH_CLIENT_ID or RECRUITER_GMAIL_OAUTH_CLIENT_SECRET is missing.
+        """
+        with patch('django.conf.settings.RECRUITER_GMAIL_OAUTH_CLIENT_ID', ''), \
+             patch('django.conf.settings.RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', ''), \
+             patch.dict('os.environ', {'RECRUITER_GMAIL_OAUTH_CLIENT_ID': '', 'RECRUITER_GMAIL_OAUTH_CLIENT_SECRET': ''}):
+            url = reverse('notifications:recruiter_gmail_oauth_start')
+            response = self.client_session.get(url)
+            self.assertEqual(response.status_code, 302)
+            self.assertIn('settings', response.url)
+
+    @patch('requests.post')
+    def test_gmail_oauth_callback_success(self, mock_requests_post):
+        """
+        Tests complete OAuth callback flow: state validation, code exchange,
+        userinfo fetch, account creation with is_verified=True, and alias check.
+        """
+        # Set session state
+        session = self.client_session.session
+        session['gmail_oauth_state'] = 'test_secure_state_789'
+        session['gmail_oauth_recruiter_id'] = str(self.recruiter.id)
+        session['gmail_oauth_expected_email'] = self.recruiter.email
+        session.save()
+
+        # Mock token exchange
+        mock_token_resp = MagicMock()
+        mock_token_resp.status_code = 200
+        mock_token_resp.json.return_value = {
+            'access_token': 'new_google_access_token_999',
+            'refresh_token': 'new_google_refresh_token_999',
+            'expires_in': 3600
+        }
+        mock_requests_post.return_value = mock_token_resp
+
+        # Mock userinfo and sendAs in requests.get
+        def get_side_effect(url, **kwargs):
+            resp = MagicMock()
+            if 'userinfo' in url:
+                resp.status_code = 200
+                resp.json.return_value = {'email': self.recruiter.email}
+            elif 'sendAs' in url:
+                resp.status_code = 200
+                resp.json.return_value = {
+                    'sendAs': [{
+                        'sendAsEmail': 'profiles@2020technologies.in',
+                        'verificationStatus': 'accepted'
+                    }]
+                }
+            return resp
+
+        self.mock_requests_get.side_effect = get_side_effect
+
+        callback_url = reverse('notifications:recruiter_gmail_oauth_callback')
+        response = self.client_session.get(callback_url, {
+            'code': 'valid_auth_code_123',
+            'state': 'test_secure_state_789'
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('settings', response.url)
+        self.assertIn('email-accounts-panel', response.url)
+
+        # Check account was updated/created and marked verified
+        account = RecruiterEmailAccount.objects.get(recruiter=self.recruiter, email_address=self.recruiter.email)
+        self.assertTrue(account.is_verified)
+        self.assertEqual(account.oauth_access_token, 'new_google_access_token_999')
+        self.assertEqual(account.oauth_refresh_token, 'new_google_refresh_token_999')
+
+    @patch('requests.post')
+    def test_gmail_oauth_callback_preserves_existing_refresh_token(self, mock_requests_post):
+        """
+        When Google re-authorizes without issuing a new refresh token, the existing
+        refresh token must be preserved.
+        """
+        self.email_account.oauth_refresh_token = 'existing_precious_refresh_token'
+        self.email_account.save()
+
+        session = self.client_session.session
+        session['gmail_oauth_state'] = 'state_preserve_token'
+        session['gmail_oauth_recruiter_id'] = str(self.recruiter.id)
+        session.save()
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.status_code = 200
+        # No refresh_token returned by Google
+        mock_token_resp.json.return_value = {
+            'access_token': 'latest_access_token_only',
+            'expires_in': 3600
+        }
+        mock_requests_post.return_value = mock_token_resp
+
+        def get_side_effect(url, **kwargs):
+            resp = MagicMock()
+            if 'userinfo' in url:
+                resp.status_code = 200
+                resp.json.return_value = {'email': self.recruiter.email}
+            else:
+                resp.status_code = 200
+                resp.json.return_value = {
+                    'sendAs': [{
+                        'sendAsEmail': 'profiles@2020technologies.in',
+                        'verificationStatus': 'accepted'
+                    }]
+                }
+            return resp
+
+        self.mock_requests_get.side_effect = get_side_effect
+
+        callback_url = reverse('notifications:recruiter_gmail_oauth_callback')
+        response = self.client_session.get(callback_url, {
+            'code': 'valid_code',
+            'state': 'state_preserve_token'
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.email_account.refresh_from_db()
+        self.assertEqual(self.email_account.oauth_access_token, 'latest_access_token_only')
+        self.assertEqual(self.email_account.oauth_refresh_token, 'existing_precious_refresh_token')
+
+    def test_gmail_oauth_callback_state_mismatch_rejected(self):
+        """
+        OAuth state mismatch must reject the callback, show an error, and not mark account verified.
+        """
+        session = self.client_session.session
+        session['gmail_oauth_state'] = 'correct_state'
+        session.save()
+
+        callback_url = reverse('notifications:recruiter_gmail_oauth_callback')
+        response = self.client_session.get(callback_url, {
+            'code': 'auth_code',
+            'state': 'wrong_tampered_state'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('settings', response.url)
+
+    def test_gmail_oauth_callback_denied_by_user(self):
+        """
+        User cancelling OAuth consent redirects to settings with error.
+        """
+        callback_url = reverse('notifications:recruiter_gmail_oauth_callback')
+        response = self.client_session.get(callback_url, {
+            'error': 'access_denied',
+            'error_description': 'User denied access'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('settings', response.url)
+
+    def test_settings_html_contains_oauth_redirect_form(self):
+        """
+        Verify settings.html renders the form with method=GET and action pointing to
+        recruiter_gmail_oauth_start, ensuring a real HTTP browser navigation.
+        """
+        url = reverse('frontend:settings')
+        response = self.client_session.get(url)
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode('utf-8')
+        self.assertIn('action="/notifications/oauth/gmail/start/"', html)
+        self.assertIn('id="oauthAccountForm"', html)
+        self.assertIn('Connect & Verify', html)

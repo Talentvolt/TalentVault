@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from apps.core.models import BaseAppModel
 from django.conf import settings
+import os
 import uuid
 
 class Notification(BaseAppModel):
@@ -151,8 +152,23 @@ class RecruiterEmailAccount(BaseAppModel):
             return False
             
         import requests
-        client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', 'mock_client_id')
-        client_secret = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_SECRET', 'mock_client_secret')
+        client_id = (
+            os.environ.get('RECRUITER_GMAIL_OAUTH_CLIENT_ID', '')
+            or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CLIENT_ID', '')
+        )
+        client_secret = (
+            os.environ.get('RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', '')
+            or getattr(settings, 'RECRUITER_GMAIL_OAUTH_CLIENT_SECRET', '')
+        )
+        if client_id.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_ID="):
+            client_id = client_id.replace("RECRUITER_GMAIL_OAUTH_CLIENT_ID=", "", 1).strip()
+        if client_secret.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET="):
+            client_secret = client_secret.replace("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET=", "", 1).strip()
+
+        if not client_id:
+            client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', 'mock_client_id')
+        if not client_secret:
+            client_secret = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_SECRET', 'mock_client_secret')
         
         token_url = "https://oauth2.googleapis.com/token"
         data = {

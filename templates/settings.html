@@ -387,23 +387,13 @@
         const oauthForm = document.getElementById("oauthAccountForm");
         if (oauthForm) {
             oauthForm.addEventListener("submit", function(e) {
+                const provider = oauthForm.querySelector('[name="provider"]')?.value || 'GMAIL';
+                if (provider === 'GMAIL') {
+                    // Allow native browser navigation for real HTTP redirect to Google OAuth
+                    return true;
+                }
                 e.preventDefault();
-                let formData = new FormData(oauthForm);
-                formData.append('action', 'connect_oauth');
-                
-                fetch("{% url 'notifications:recruiter_email_accounts_api' %}", {
-                    method: "POST",
-                    body: formData,
-                    headers: { "X-CSRFToken": getCsrfToken() }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert(data.message || "Failed to connect OAuth account.");
-                    }
-                });
+                alert("Microsoft Outlook OAuth integration is coming soon. Please connect using Gmail / Google Workspace or SMTP.");
             });
         }
 
@@ -449,7 +439,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <form id="oauthAccountForm">
+                <form id="oauthAccountForm" method="GET" action="{% url 'notifications:recruiter_gmail_oauth_start' %}">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Provider</label>
                         <select name="provider" class="form-select" required>

@@ -405,6 +405,22 @@ if _google_client_secret.startswith("GOOGLE_CLIENT_SECRET="):
 GOOGLE_CLIENT_ID = _google_client_id
 GOOGLE_CLIENT_SECRET = _google_client_secret
 
+# Recruiter Gmail OAuth Credentials (separate from normal Django Google Login)
+_recruiter_gmail_client_id = os.environ.get("RECRUITER_GMAIL_OAUTH_CLIENT_ID", "")
+if _recruiter_gmail_client_id.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_ID="):
+    _recruiter_gmail_client_id = _recruiter_gmail_client_id.replace("RECRUITER_GMAIL_OAUTH_CLIENT_ID=", "", 1)
+
+_recruiter_gmail_client_secret = os.environ.get("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET", "")
+if _recruiter_gmail_client_secret.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET="):
+    _recruiter_gmail_client_secret = _recruiter_gmail_client_secret.replace("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET=", "", 1)
+
+RECRUITER_GMAIL_OAUTH_CLIENT_ID = _recruiter_gmail_client_id
+RECRUITER_GMAIL_OAUTH_CLIENT_SECRET = _recruiter_gmail_client_secret
+RECRUITER_GMAIL_OAUTH_CALLBACK_URL = os.environ.get(
+    "RECRUITER_GMAIL_OAUTH_CALLBACK_URL",
+    "https://talent-vault.in/notifications/oauth/gmail/callback/"
+)
+
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "SCOPE": [

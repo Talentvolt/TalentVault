@@ -44,6 +44,7 @@ router.register(r'applications', ApplicationViewSet, basename='application')
 router.register(r'interviews', InterviewViewSet, basename='interview')
 
 from allauth.socialaccount.providers.google.views import oauth2_login as google_allauth_login, oauth2_callback as google_allauth_callback
+from apps.notifications.views import RecruiterGmailOAuthCallbackView
 
 from apps.accounts.views import (
     CustomLoginView, 
@@ -107,7 +108,7 @@ urlpatterns = [
     # OAuth Routes
     path('accounts/login/google/', google_allauth_login, name='google_login'),
     path('accounts/login/google/callback/', google_allauth_callback, name='google_callback'),
-    path('accounts/login/google/callback/alias/', google_allauth_callback, name='google_login_callback'),
+    path('accounts/login/google/callback/alias/', RecruiterGmailOAuthCallbackView.as_view(), name='google_login_callback'),
     
     # Employer & Recruiter Auth
     path('accounts/login/recruiter/', EmployerLoginView.as_view(), name='recruiter_login'),
