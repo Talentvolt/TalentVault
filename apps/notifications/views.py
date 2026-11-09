@@ -50,6 +50,64 @@ class TrackClickView(View):
         return HttpResponseRedirect(target_url)
 
 
+RECRUITER_GMAIL_REQUIRED_SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.settings.basic',
+]
+
+
+def parse_oauth_scopes(scope_input):
+    """
+    Parses a space- or comma-delimited scope string or iterable of scopes into a normalized set.
+    """
+    if not scope_input:
+        return set()
+    if isinstance(scope_input, (list, tuple, set)):
+        items = list(scope_input)
+    else:
+        items = str(scope_input).replace(',', ' ').split()
+
+    scopes = set()
+    for s in items:
+        item = s.strip()
+        if not item:
+            continue
+        scopes.add(item)
+        if item.endswith('/'):
+            scopes.add(item.rstrip('/'))
+        if item.startswith('https://www.googleapis.com/auth/'):
+            scopes.add(item[len('https://www.googleapis.com/auth/'):])
+    return scopes
+
+
+def verify_recruiter_gmail_scopes(scope_input):
+    """
+    Verifies that the granted scopes satisfy recruiter Gmail requirements:
+    1. Sending: https://www.googleapis.com/auth/gmail.send
+    2. Settings: https://www.googleapis.com/auth/gmail.settings.basic
+    Note: Full Gmail scope (https://mail.google.com/ or https://mail.google.com) satisfies both.
+    
+    Returns (is_valid: bool, missing_scopes: list[str])
+    """
+    granted = parse_oauth_scopes(scope_input)
+    has_full_mail = ('https://mail.google.com' in granted or 'https://mail.google.com/' in granted)
+
+    has_send = has_full_mail or (
+        'https://www.googleapis.com/auth/gmail.send' in granted or 'gmail.send' in granted
+    )
+    has_settings = has_full_mail or (
+        'https://www.googleapis.com/auth/gmail.settings.basic' in granted or 'gmail.settings.basic' in granted
+    )
+
+    missing = []
+    if not has_send:
+        missing.append('https://www.googleapis.com/auth/gmail.send')
+    if not has_settings:
+        missing.append('https://www.googleapis.com/auth/gmail.settings.basic')
+
+    return len(missing) == 0, missing
+
+
 def get_google_oauth_redirect_uri(request=None):
     """
     Returns the authorized Google OAuth redirect URI for recruiter Gmail connection.
@@ -263,7 +321,50 @@ class RecruiterGmailOAuthCallbackView(View):
         if existing_account and existing_account.is_default:
             is_default = True
 
-        # 7. Save account and mark verified only on successful callback
+        # 7. Verify actual granted scopes before marking account or alias verified
+        granted_scope_raw = token_json.get('scope') or request.GET.get('scope') or ''
+        if not granted_scope_raw and access_token:
+            try:
+                ti_res = requests.get(
+                    "https://oauth2.googleapis.com/tokeninfo",
+                    params={"access_token": access_token},
+                    timeout=10
+                )
+                if ti_res.status_code == 200:
+                    granted_scope_raw = ti_res.json().get('scope', '')
+            except Exception as ti_err:
+                logger.warning(f"Could not check tokeninfo for scope verification: {ti_err}")
+
+        scopes_valid, missing_scopes = verify_recruiter_gmail_scopes(granted_scope_raw)
+
+        if not scopes_valid:
+            # Preserve tokens so user can reconnect easily, but DO NOT mark verified
+            account, created = RecruiterEmailAccount.objects.update_or_create(
+                recruiter=recruiter,
+                email_address=connected_email,
+                defaults={
+                    'account_type': 'OAUTH',
+                    'provider': 'GMAIL',
+                    'oauth_access_token': access_token,
+                    'oauth_refresh_token': final_refresh_token,
+                    'token_expires_at': expires_at,
+                    'is_verified': False,
+                    'is_default': is_default,
+                }
+            )
+            missing_desc = ", ".join(missing_scopes)
+            logger.warning(
+                f"Recruiter Gmail OAuth connected for {connected_email} but required scopes are missing: {missing_desc}"
+            )
+            messages.error(
+                request,
+                f"Google account '{connected_email}' was connected, but required Gmail permissions were not granted: "
+                f"{missing_desc}. Alias verification and email sending are disabled. "
+                "Please reconnect your account and ensure all permission checkboxes are selected on Google's consent screen."
+            )
+            return redirect(reverse('frontend:settings') + '#email-accounts-panel')
+
+        # 8. All required scopes granted: save account and mark verified
         account, created = RecruiterEmailAccount.objects.update_or_create(
             recruiter=recruiter,
             email_address=connected_email,
@@ -278,7 +379,7 @@ class RecruiterGmailOAuthCallbackView(View):
             }
         )
 
-        # 8. Verify alias profiles@2020technologies.in
+        # 9. Verify alias profiles@2020technologies.in
         alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
         alias_verified, alias_msg = account.verify_sendas_alias(alias_email)
         if alias_verified:
@@ -352,18 +453,6 @@ class RecruiterEmailAccountAPIView(View):
             final_refresh_token = refresh_token if refresh_token else (existing_account.oauth_refresh_token if existing_account else None)
             final_access_token = access_token if access_token else (existing_account.oauth_access_token if existing_account else None)
 
-            # Fallback to SocialToken if available
-            if not final_access_token:
-                try:
-                    from allauth.socialaccount.models import SocialToken
-                    social_token = SocialToken.objects.filter(account__user=request.user, account__provider='google').first()
-                    if social_token:
-                        final_access_token = social_token.token
-                        final_refresh_token = social_token.token_secret or getattr(social_token, 'token_secret', None)
-                        if social_token.expires_at:
-                            expires_at = social_token.expires_at
-                except Exception:
-                    pass
             
             is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
             if existing_account and existing_account.is_default:

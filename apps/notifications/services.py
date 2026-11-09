@@ -338,6 +338,8 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
                 raise ValueError("Gmail authorization expired or revoked (401). Please reconnect your Google account in Settings.")
 
         if response.status_code == 403:
+            connected_account.is_verified = False
+            connected_account.save(update_fields=['is_verified'])
             raise ValueError(
                 "Google authorization lacks required Gmail sending scope (gmail.send). "
                 "Please reconnect your Google account in Settings."

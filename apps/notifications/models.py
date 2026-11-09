@@ -165,10 +165,11 @@ class RecruiterEmailAccount(BaseAppModel):
         if client_secret.startswith("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET="):
             client_secret = client_secret.replace("RECRUITER_GMAIL_OAUTH_CLIENT_SECRET=", "", 1).strip()
 
-        if not client_id:
-            client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', 'mock_client_id')
-        if not client_secret:
-            client_secret = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_SECRET', 'mock_client_secret')
+        if not client_id or not client_secret:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("Recruiter Gmail OAuth credentials missing (RECRUITER_GMAIL_OAUTH_CLIENT_ID / RECRUITER_GMAIL_OAUTH_CLIENT_SECRET).")
+            return False
         
         token_url = "https://oauth2.googleapis.com/token"
         data = {
@@ -255,6 +256,8 @@ class RecruiterEmailAccount(BaseAppModel):
                 return False, "Gmail authorization expired or revoked (401). Please reconnect your Google account in Settings."
 
         if response.status_code == 403:
+            self.is_verified = False
+            self.save(update_fields=['is_verified'])
             return False, (
                 "Google authorization lacks required Gmail scopes (gmail.settings.basic). "
                 "Please disconnect and reconnect your Google account in Settings to grant required permissions."

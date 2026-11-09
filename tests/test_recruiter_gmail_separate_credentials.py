@@ -119,6 +119,7 @@ class RecruiterGmailSeparateOAuthCredentialsTests(TestCase):
             "access_token": "recruiter_access_token_xyz",
             "refresh_token": "recruiter_refresh_token_xyz",
             "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.settings.basic openid email profile",
         }
         mock_requests_post.return_value = mock_token_resp
 
@@ -290,6 +291,7 @@ class RecruiterGmailSeparateOAuthCredentialsTests(TestCase):
         mock_token_resp.json.return_value = {
             "access_token": "brand_new_access_token",
             "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.settings.basic openid email profile",
         }
         mock_requests_post.return_value = mock_token_resp
 

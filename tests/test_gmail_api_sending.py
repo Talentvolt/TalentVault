@@ -468,7 +468,8 @@ class GmailAPIOAuthSendingTests(TestCase):
         mock_token_resp.json.return_value = {
             'access_token': 'new_google_access_token_999',
             'refresh_token': 'new_google_refresh_token_999',
-            'expires_in': 3600
+            'expires_in': 3600,
+            'scope': 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.settings.basic openid email profile',
         }
         mock_requests_post.return_value = mock_token_resp
 
@@ -525,7 +526,8 @@ class GmailAPIOAuthSendingTests(TestCase):
         # No refresh_token returned by Google
         mock_token_resp.json.return_value = {
             'access_token': 'latest_access_token_only',
-            'expires_in': 3600
+            'expires_in': 3600,
+            'scope': 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.settings.basic openid email profile',
         }
         mock_requests_post.return_value = mock_token_resp
 
