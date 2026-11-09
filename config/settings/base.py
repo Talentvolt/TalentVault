@@ -440,6 +440,26 @@ SOCIALACCOUNT_PROVIDERS = {
 # Recruiter-to-Client Sending Alias
 RECRUITER_CLIENT_ALIAS_EMAIL = os.environ.get("RECRUITER_CLIENT_ALIAS_EMAIL", "profiles@2020technologies.in")
 
+# Recruiter Mailbox Aliases Mapping
+# Maps authenticated mailboxes to their required Send-As alias.
+# Mailboxes not in this mapping (e.g. growfluencestudio@gmail.com, third-party recruiters)
+# send directly from their primary address without requiring the company alias.
+_raw_mailbox_aliases = os.environ.get("RECRUITER_MAILBOX_ALIASES", "")
+RECRUITER_MAILBOX_ALIASES = {
+    "nikhil@2020technologies.in": RECRUITER_CLIENT_ALIAS_EMAIL,
+}
+if _raw_mailbox_aliases:
+    try:
+        import json
+        RECRUITER_MAILBOX_ALIASES.update({
+            k.strip().lower(): v.strip() for k, v in json.loads(_raw_mailbox_aliases).items()
+        })
+    except Exception:
+        for pair in _raw_mailbox_aliases.split(","):
+            if ":" in pair:
+                mb, al = pair.split(":", 1)
+                RECRUITER_MAILBOX_ALIASES[mb.strip().lower()] = al.strip()
+
 # ClamAV and Document Processing Security settings
 CLAMAV_HOST = os.environ.get('CLAMAV_HOST', '127.0.0.1')
 CLAMAV_PORT = int(os.environ.get('CLAMAV_PORT', 3310))

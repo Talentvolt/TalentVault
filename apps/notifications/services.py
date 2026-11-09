@@ -233,10 +233,19 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         elif hasattr(sender, 'email') and sender.email:
             recruiter_name = sender.email.split('@')[0].capitalize()
 
-    alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
-    recruiter_work_email = connected_account.email_address or (sender.email if sender else alias_email)
+    # Contextual display name override if recruiter name is generic
+    if recruiter_name in ("Recruiter", "", None):
+        email_prefix = (connected_account.email_address or "").split('@')[0].lower()
+        if "growfluence" in email_prefix:
+            recruiter_name = "Growfluence Studio"
+        elif "nikhil" in email_prefix:
+            recruiter_name = "Nikhil Mittal"
 
-    from_email = f"{recruiter_name} <{alias_email}>"
+    required_alias = connected_account.get_required_alias()
+    sending_email = required_alias if required_alias else connected_account.email_address
+    recruiter_work_email = connected_account.email_address or (sender.email if sender else sending_email)
+
+    from_email = f"{recruiter_name} <{sending_email}>"
     reply_to_email = recruiter_work_email
 
     email_log = EmailLog.objects.create(
@@ -254,8 +263,8 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
     )
 
     try:
-        # Verify alias via Gmail API users.settings.sendAs.list
-        alias_verified, alias_error = connected_account.verify_sendas_alias(alias_email)
+        # Verify sending address / Send-As alias via Gmail API users.settings.sendAs.list
+        alias_verified, alias_error = connected_account.verify_sendas_alias(required_alias)
         if not alias_verified:
             logger.error(f"Gmail alias verification failed for {connected_account.email_address}: {alias_error}")
             raise ValueError(alias_error)

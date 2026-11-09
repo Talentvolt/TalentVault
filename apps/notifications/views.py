@@ -379,19 +379,31 @@ class RecruiterGmailOAuthCallbackView(View):
             }
         )
 
-        # 9. Verify alias profiles@2020technologies.in
-        alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
-        alias_verified, alias_msg = account.verify_sendas_alias(alias_email)
+        # 9. Verify sending address / Send-As alias depending on the authenticated mailbox
+        required_alias = account.get_required_alias()
+        alias_verified, alias_msg = account.verify_sendas_alias(required_alias)
         if alias_verified:
-            messages.success(
-                request,
-                f"Successfully connected {connected_email}. The alias '{alias_email}' is verified and ready for client communications."
-            )
+            if required_alias:
+                messages.success(
+                    request,
+                    f"Successfully connected {connected_email}. The Send-As alias '{required_alias}' is verified and ready for client communications."
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Successfully connected {connected_email}. Mailbox is verified and ready for client communications."
+                )
         else:
-            messages.warning(
-                request,
-                f"Successfully connected {connected_email}. Note regarding alias '{alias_email}': {alias_msg}"
-            )
+            if required_alias:
+                messages.warning(
+                    request,
+                    f"Successfully connected {connected_email}. Note regarding alias '{required_alias}': {alias_msg}"
+                )
+            else:
+                messages.warning(
+                    request,
+                    f"Successfully connected {connected_email}. Note regarding mailbox verification: {alias_msg}"
+                )
 
         return redirect(reverse('frontend:settings') + '#email-accounts-panel')
 
@@ -476,10 +488,11 @@ class RecruiterEmailAccountAPIView(View):
         elif action == 'verify_alias':
             account_id = request.POST.get('account_id')
             account = get_object_or_404(RecruiterEmailAccount, id=account_id, recruiter=request.user)
-            alias_email = getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in')
-            is_valid, err_msg = account.verify_sendas_alias(alias_email)
+            required_alias = account.get_required_alias()
+            is_valid, err_msg = account.verify_sendas_alias(required_alias)
             if is_valid:
-                return JsonResponse({"success": True, "message": f"Alias '{alias_email}' verified successfully."})
+                label = f"Alias '{required_alias}'" if required_alias else f"Mailbox '{account.email_address}'"
+                return JsonResponse({"success": True, "message": f"{label} verified successfully."})
             else:
                 return JsonResponse({"success": False, "message": err_msg}, status=400)
             
