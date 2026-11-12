@@ -321,24 +321,56 @@ class RecruiterEmailAccount(BaseAppModel):
             matched = next((a for a in send_as_list if a.get("isPrimary")), send_as_list[0])
 
         if not matched:
-            if is_custom_alias:
-                return False, (
-                    f"The alias '{target_email}' is not configured as a Send-As alias for "
-                    f"{self.email_address}. Please add it in Gmail Settings > Accounts > 'Send mail as' before sending."
-                )
-            else:
-                return False, (
-                    f"Primary email address '{target_email}' was not found in Gmail Send-As settings ({self.email_address})."
-                )
-
-        status = (matched.get("verificationStatus") or "").strip().lower()
-        if status != "accepted":
-            label = f"The alias '{target_email}'" if is_custom_alias else f"Email address '{target_email}'"
-            return False, (
-                f"{label} in your Gmail account ({self.email_address}) is unverified "
-                f"(verification status: '{status}'). Status 'accepted' is required before sending."
+            err_msg = (
+                f"The alias '{target_email}' is not configured as a Send-As alias for {self.email_address}."
+                if is_custom_alias else
+                f"Primary email address '{target_email}' was not found in Gmail Send-As settings ({self.email_address})."
             )
+            logger.warning(
+                f"Gmail sendAs verification failed for account {self.email_address}: "
+                f"HTTP status={response.status_code}, matched_address=None, "
+                f"isPrimary=None, verificationStatus=None, failure_reason={err_msg}"
+            )
+            return False, err_msg
 
+        is_primary = bool(matched.get("isPrimary"))
+        status = (matched.get("verificationStatus") or "").strip().lower()
+        matched_email = (matched.get("sendAsEmail") or "").strip().lower()
+
+        if not is_custom_alias:
+            if not is_primary or matched_email != target_email:
+                err_msg = f"Primary email address '{target_email}' did not match Send-As primary entry (found: '{matched_email}', isPrimary: {is_primary})."
+                logger.warning(
+                    f"Gmail sendAs verification failed for account {self.email_address}: "
+                    f"HTTP status={response.status_code}, matched_address={matched_email}, "
+                    f"isPrimary={is_primary}, verificationStatus={status}, failure_reason={err_msg}"
+                )
+                return False, err_msg
+        else:
+            if matched_email != target_email:
+                err_msg = f"Alias '{target_email}' did not match Send-As entry (found: '{matched_email}')."
+                logger.warning(
+                    f"Gmail sendAs verification failed for account {self.email_address}: "
+                    f"HTTP status={response.status_code}, matched_address={matched_email}, "
+                    f"isPrimary={is_primary}, verificationStatus={status}, failure_reason={err_msg}"
+                )
+                return False, err_msg
+            if status != "accepted":
+                err_msg = f"The alias '{target_email}' in your Gmail account ({self.email_address}) is unverified (verification status: '{status}'). Status 'accepted' is required before sending."
+                logger.warning(
+                    f"Gmail sendAs verification failed for account {self.email_address}: "
+                    f"HTTP status={response.status_code}, matched_address={matched_email}, "
+                    f"isPrimary={is_primary}, verificationStatus={status}, failure_reason={err_msg}"
+                )
+                return False, err_msg
+
+        logger.info(
+            f"Gmail sendAs verification succeeded for account {self.email_address}: "
+            f"HTTP status={response.status_code}, matched_address={matched_email}, "
+            f"isPrimary={is_primary}, verificationStatus={status}"
+        )
+        self.is_verified = True
+        self.save(update_fields=['is_verified'])
         return True, None
 
 

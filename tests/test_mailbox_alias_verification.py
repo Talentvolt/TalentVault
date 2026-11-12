@@ -125,6 +125,51 @@ class RecruiterMailboxAliasVerificationTests(TestCase):
         self.assertTrue(is_verified)
         self.assertIsNone(err_msg)
 
+    @patch("requests.get")
+    def test_growfluence_mailbox_verifies_with_pending_verification_status(self, mock_requests_get):
+        """
+        Regression test:
+        Growfluence mailbox (growfluencestudio@gmail.com) with primary address returning
+        verificationStatus: "pending" from Gmail API must be accepted successfully (is_verified=True).
+        """
+        recruiter, _ = User.objects.get_or_create(
+            email="growfluencestudio@gmail.com",
+            defaults={
+                "first_name": "Growfluence",
+                "last_name": "Studio",
+                "role": User.Role.RECRUITER
+            }
+        )
+        account = RecruiterEmailAccount.objects.create(
+            recruiter=recruiter,
+            account_type="OAUTH",
+            provider="GMAIL",
+            email_address="growfluencestudio@gmail.com",
+            oauth_access_token="growfluence_token_abc",
+            is_verified=True,
+            is_default=True
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "sendAs": [
+                {
+                    "sendAsEmail": "growfluencestudio@gmail.com",
+                    "displayName": "Growfluence Studio",
+                    "isPrimary": True,
+                    "verificationStatus": "pending"
+                }
+            ]
+        }
+        mock_requests_get.return_value = mock_resp
+
+        is_verified, err_msg = account.verify_sendas_alias()
+        self.assertTrue(is_verified, f"Expected verification to succeed even with pending status, got error: {err_msg}")
+        self.assertIsNone(err_msg)
+        account.refresh_from_db()
+        self.assertTrue(account.is_verified)
+
     @patch("requests.post")
     @patch("requests.get")
     def test_growfluence_send_ats_email_headers_and_sent_folder(
