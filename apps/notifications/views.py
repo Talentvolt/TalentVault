@@ -387,6 +387,12 @@ class RecruiterGmailOAuthCallbackView(View):
             }
         )
 
+        # Explicitly mark verified when gmail.settings.basic was granted so the Settings
+        # "My Email Accounts" table immediately shows "Verified" instead of "Pending Verification".
+        if any("gmail.settings.basic" in s for s in granted_scopes_list):
+            account.is_verified = True
+            account.save(update_fields=['is_verified'])
+
         # 9. Verify sending address / Send-As alias depending on the authenticated mailbox
         required_alias = account.get_required_alias()
         alias_verified, alias_msg = account.verify_sendas_alias(required_alias)
