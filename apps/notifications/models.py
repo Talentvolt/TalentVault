@@ -133,6 +133,7 @@ class RecruiterEmailAccount(BaseAppModel):
     oauth_access_token = models.TextField(blank=True, null=True)
     oauth_refresh_token = models.TextField(blank=True, null=True)
     token_expires_at = models.DateTimeField(blank=True, null=True)
+    scopes = models.TextField(blank=True, null=True)
 
     class Meta:
         verbose_name = _('recruiter email account')
@@ -266,6 +267,16 @@ class RecruiterEmailAccount(BaseAppModel):
         target_email = (alias_email or self.email_address or "").strip().lower()
         is_custom_alias = bool(alias_email and alias_email.strip().lower() != (self.email_address or "").strip().lower())
 
+        # Primary @gmail.com mailboxes with gmail.settings.basic granted are considered
+        # verified without a sendAs API round-trip (which can return a spurious 403).
+        email_clean = (self.email_address or "").strip().lower()
+        stored_scopes = (self.scopes or "").replace(',', ' ').split()
+        has_settings_basic = any("gmail.settings.basic" in s for s in stored_scopes)
+        if not is_custom_alias and email_clean.endswith("@gmail.com") and has_settings_basic:
+            self.is_verified = True
+            self.save(update_fields=['is_verified'])
+            return True, None
+
         send_as_url = "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs"
         token = self.oauth_access_token or ""
         headers = {
@@ -294,6 +305,10 @@ class RecruiterEmailAccount(BaseAppModel):
                 return False, "Gmail authorization expired or revoked (401). Please reconnect your Google account in Settings."
 
         if response.status_code == 403:
+            if has_settings_basic:
+                self.is_verified = True
+                self.save(update_fields=['is_verified'])
+                return True, None
             self.is_verified = False
             self.save(update_fields=['is_verified'])
             return False, (

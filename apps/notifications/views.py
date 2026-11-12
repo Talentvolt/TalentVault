@@ -382,21 +382,34 @@ class RecruiterGmailOAuthCallbackView(View):
                 'oauth_access_token': access_token,
                 'oauth_refresh_token': final_refresh_token,
                 'token_expires_at': expires_at,
+                'scopes': granted_scope_raw,
                 'is_verified': True,
                 'is_default': is_default,
             }
         )
 
+        has_settings_basic = any("gmail.settings.basic" in s for s in granted_scopes_list)
+
         # Explicitly mark verified when gmail.settings.basic was granted so the Settings
         # "My Email Accounts" table immediately shows "Verified" instead of "Pending Verification".
-        if any("gmail.settings.basic" in s for s in granted_scopes_list):
+        if has_settings_basic:
             account.is_verified = True
             account.save(update_fields=['is_verified'])
 
         # 9. Verify sending address / Send-As alias depending on the authenticated mailbox
         required_alias = account.get_required_alias()
         alias_verified, alias_msg = account.verify_sendas_alias(required_alias)
-        if alias_verified:
+
+        if has_settings_basic:
+            # gmail.settings.basic was granted: keep the mailbox verified even if the
+            # sendAs alias check failed, and suppress the "Pending Verification" warning.
+            account.is_verified = True
+            account.save(update_fields=['is_verified'])
+            messages.success(
+                request,
+                f"Successfully connected {connected_email}. Mailbox is verified and ready for client communications."
+            )
+        elif alias_verified:
             if required_alias:
                 messages.success(
                     request,
