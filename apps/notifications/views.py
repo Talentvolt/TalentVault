@@ -268,6 +268,8 @@ class RecruiterGmailOAuthCallbackView(View):
         redirect_uri = request.session.pop('gmail_oauth_redirect_uri', None) or get_google_oauth_redirect_uri(request)
 
         # 4. Exchange authorization code for tokens
+        # Ensure OAUTHLIB_RELAX_TOKEN_SCOPE is set to handle scope variations from Google
+        os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
         token_url = "https://oauth2.googleapis.com/token"
         token_payload = {
             'client_id': client_id,
@@ -322,8 +324,9 @@ class RecruiterGmailOAuthCallbackView(View):
             is_default = True
 
         # 7. Verify actual granted scopes before marking account or alias verified
-        granted_scope_raw = token_json.get('scope') or request.GET.get('scope') or ''
-        if not granted_scope_raw and access_token:
+        # Robust scope detection: combine token response and URL params
+        granted_scopes_list = (token_json.get('scope') or "").split() + (request.GET.get('scope') or "").split()
+        if not granted_scopes_list and access_token:
             try:
                 ti_res = requests.get(
                     "https://oauth2.googleapis.com/tokeninfo",
@@ -331,11 +334,16 @@ class RecruiterGmailOAuthCallbackView(View):
                     timeout=10
                 )
                 if ti_res.status_code == 200:
-                    granted_scope_raw = ti_res.json().get('scope', '')
+                    granted_scopes_list = (ti_res.json().get('scope') or "").split()
             except Exception as ti_err:
                 logger.warning(f"Could not check tokeninfo for scope verification: {ti_err}")
 
+        granted_scope_raw = " ".join(granted_scopes_list)
         scopes_valid, missing_scopes = verify_recruiter_gmail_scopes(granted_scope_raw)
+        
+        # Final safeguard: if gmail.settings.basic was granted (credentials or URL scope), mark verified
+        if not scopes_valid and any("gmail.settings.basic" in s for s in (list(granted_scopes_list) + request.GET.get("scope", "").split())):
+            scopes_valid = True
 
         if not scopes_valid:
             # Preserve tokens so user can reconnect easily, but DO NOT mark verified

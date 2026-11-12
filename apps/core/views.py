@@ -3613,14 +3613,7 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
         if not connected_account:
             return JsonResponse({
                 'success': False,
-                'message': 'No connected email mailbox found. Please connect your Gmail or Google Workspace account in Settings under "My Email Accounts".',
-                'needs_email_connection': True
-            }, status=400)
-
-        if connected_account.account_type != 'OAUTH' or connected_account.provider not in ('GMAIL', 'GOOGLE_WORKSPACE'):
-            return JsonResponse({
-                'success': False,
-                'message': 'Recruiter-to-client emails must be sent through an authenticated Gmail or Google Workspace account. Please connect your Google account in Settings.',
+                'message': 'No connected email mailbox found. Please connect your Gmail or Custom SMTP account in Settings under "My Email Accounts".',
                 'needs_email_connection': True
             }, status=400)
 

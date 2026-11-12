@@ -219,10 +219,14 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
                     connected_account = sender.email_accounts.filter(is_verified=True).first()
 
     if not connected_account or not connected_account.is_verified:
-        raise ValueError("No connected and verified Gmail/Google Workspace mailbox found. Please connect your Gmail account in Settings under 'My Email Accounts'.")
+        raise ValueError("No connected and verified email mailbox found. Please connect your Gmail or Custom SMTP account in Settings under 'My Email Accounts'.")
 
-    if connected_account.account_type != 'OAUTH' or connected_account.provider not in ('GMAIL', 'GOOGLE_WORKSPACE'):
-        raise ValueError("Recruiter-to-client emails must be sent through an authenticated Gmail or Google Workspace account. Never using shared Gmail fallback.")
+    # Allow both OAuth (Gmail/Google Workspace) and verified Custom SMTP accounts
+    is_google = connected_account.account_type == 'OAUTH' and connected_account.provider in ('GMAIL', 'GOOGLE_WORKSPACE')
+    is_smtp = connected_account.account_type == 'SMTP'
+    
+    if not (is_google or is_smtp):
+        raise ValueError("Recruiter-to-client emails must be sent through an authenticated Gmail, Google Workspace, or verified Custom SMTP account.")
 
     recruiter_name = "Recruiter"
     if sender:
@@ -263,11 +267,12 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
     )
 
     try:
-        # Verify sending address / Send-As alias via Gmail API users.settings.sendAs.list
-        alias_verified, alias_error = connected_account.verify_sendas_alias(required_alias)
-        if not alias_verified:
-            logger.error(f"Gmail alias verification failed for {connected_account.email_address}: {alias_error}")
-            raise ValueError(alias_error)
+        # Verify sending address / Send-As alias via Gmail API users.settings.sendAs.list (Gmail OAuth only)
+        if is_google:
+            alias_verified, alias_error = connected_account.verify_sendas_alias(required_alias)
+            if not alias_verified:
+                logger.error(f"Gmail alias verification failed for {connected_account.email_address}: {alias_error}")
+                raise ValueError(alias_error)
 
         # Inject tracking pixel
         pixel_url = ""
@@ -321,6 +326,29 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
                     logger.warning(f"Failed to attach file to Gmail API message: {att_err}")
 
         raw_mime = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+
+        if is_smtp:
+            import smtplib
+            smtp_host = connected_account.smtp_host
+            smtp_port = connected_account.smtp_port or 587
+            smtp_username = connected_account.smtp_username or connected_account.email_address
+            smtp_password = connected_account.smtp_password or ""
+
+            if connected_account.use_ssl:
+                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20)
+            else:
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
+                if connected_account.use_tls:
+                    server.starttls()
+            try:
+                server.login(smtp_username, smtp_password)
+                server.sendmail(sending_email, [recipient_email] + cc_list + bcc_list, msg.as_string())
+            finally:
+                server.quit()
+
+            email_log.status = 'SENT'
+            email_log.save(update_fields=['status'])
+            return email_log, True, "Email sent successfully via Custom SMTP mailbox."
 
         access_token = connected_account.oauth_access_token or "mock_oauth_access_token"
         api_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
