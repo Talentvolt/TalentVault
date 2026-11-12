@@ -375,6 +375,13 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
                 raise ValueError("Gmail authorization expired or revoked (401). Please reconnect your Google account in Settings.")
 
         if response.status_code == 403:
+            stored_scopes = (connected_account.scopes or "").replace(',', ' ').split()
+            has_send_scope = any("gmail.send" in s or "mail.google.com" in s for s in stored_scopes)
+            legacy_verified = bool(
+                connected_account.is_verified and connected_account.oauth_access_token and not stored_scopes
+            )
+            if has_send_scope or legacy_verified:
+                raise Exception(f"Gmail API error ({response.status_code}): {response.text}")
             connected_account.is_verified = False
             connected_account.save(update_fields=['is_verified'])
             raise ValueError(
