@@ -3501,8 +3501,9 @@ class JobCandidatesView(RecruiterRequiredMixin, ListView):
         context['job'] = self.job
         context['total_applications_count'] = Application.objects.filter(job=self.job).count()
         
-        from apps.notifications.models import EmailTemplate, RecruiterEmailAccount
-        context['email_templates'] = EmailTemplate.objects.all()
+        from apps.notifications.models import RecruiterEmailAccount
+        from apps.notifications.services import get_ats_template_options
+        context['email_templates'] = get_ats_template_options()
         context['recruiter_email_accounts'] = RecruiterEmailAccount.objects.filter(recruiter=self.request.user, is_verified=True)
 
         # Get stages lists for filters
@@ -3567,6 +3568,7 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
         body = (data.get('body') or '').strip()
         template_id = data.get('template_id')
         attach_resumes = str(data.get('attach_resumes', 'false')).lower() in ('true', '1', 'yes')
+        attach_tracker = str(data.get('attach_tracker', 'true')).lower() in ('true', '1', 'yes')
         email_account_id = data.get('email_account_id')
 
         if not to_email or '@' not in to_email:
@@ -3618,62 +3620,59 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
             }, status=400)
 
         template_name = None
-        from apps.notifications.models import EmailTemplate
+        from apps.notifications.services import resolve_ats_template
         if template_id:
-            try:
-                tpl = EmailTemplate.objects.get(id=template_id)
-                template_name = tpl.name
+            resolved_tpl = resolve_ats_template(template_id)
+            if resolved_tpl:
+                template_name = resolved_tpl.get("name")
                 if not subject or subject == f"Candidate Profiles for {job.title}":
-                    subject = tpl.subject
+                    subject = resolved_tpl.get("subject") or subject
                 if not body:
-                    body = tpl.body
-            except EmailTemplate.DoesNotExist:
-                pass
+                    body = resolved_tpl.get("body") or body
 
         try:
-            from apps.notifications.services import render_email_content, send_ats_email
-
-            candidate_list_text = "\n".join([
-                f"- {c.full_name or c.user.email} (Designation: {c.current_designation or 'N/A'}, Company: {c.current_company or 'N/A'}, Exp: {c.total_experience} yrs, Email: {c.user.email}, Profile: https://talentvault.in/candidates/{c.id}/)"
-                for c in candidates
-            ])
-            
-            primary_candidate = candidates.first()
-            rendered_body = render_email_content(
-                body,
-                candidate=primary_candidate,
-                job=job,
-                recruiter=request.user,
-                client_name=to_email.split('@')[0].capitalize()
+            from apps.notifications.services import (
+                render_email_content,
+                send_ats_email,
+                build_candidate_tracker_plain,
+                build_candidate_tracker_xlsx,
+                build_html_body,
+                read_candidate_resume,
             )
-            
-            final_body = f"{rendered_body}\n\nSelected Candidates List:\n{candidate_list_text}"
+
+            primary_candidate = candidates.first()
+            client_name = to_email.split('@')[0].capitalize()
+            rendered_subject = render_email_content(subject, candidate=primary_candidate, job=job, recruiter=request.user, client_name=client_name)
+            rendered_body = render_email_content(body, candidate=primary_candidate, job=job, recruiter=request.user, client_name=client_name)
+
+            plain_body = f"{rendered_body}\n\nSelected Candidates List:\n{build_candidate_tracker_plain(candidates)}"
+            html_body = build_html_body(rendered_body, candidates)
 
             attachments = []
             if attach_resumes:
                 for c in candidates:
-                    if c.has_resume:
-                        try:
-                            resume_file = c.resume
-                            resume_file.open('rb')
-                            import os
-                            filename = os.path.basename(c.resume.name) or f"resume_{c.id}.pdf"
-                            class FileAttachment:
-                                def __init__(self, name, content):
-                                    self.name = name
-                                    self._content = content
-                                def read(self):
-                                    return self._content
-                            attachments.append(FileAttachment(filename, resume_file.read()))
-                            resume_file.close()
-                        except Exception as att_err:
-                            logger.warning(f"Could not attach resume for candidate {c.id}: {att_err}")
+                    resume_att = read_candidate_resume(c)
+                    if resume_att:
+                        attachments.append(resume_att)
+
+            if attach_tracker:
+                try:
+                    excel_bytes = build_candidate_tracker_xlsx(candidates, job=job)
+                    if excel_bytes:
+                        attachments.append({
+                            "filename": "candidate_tracker.xlsx",
+                            "content": excel_bytes,
+                            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        })
+                except Exception as exc_err:
+                    logger.warning(f"Could not generate candidate tracker Excel: {exc_err}")
 
             email_log, success, message = send_ats_email(
                 sender=request.user,
                 recipient_email=to_email,
-                subject=render_email_content(subject, candidate=primary_candidate, job=job, recruiter=request.user),
-                body=final_body,
+                subject=rendered_subject,
+                body=plain_body,
+                html_body=html_body,
                 cc=cc_email,
                 bcc=bcc_email,
                 template_name=template_name or "Job Candidates Email to Client",

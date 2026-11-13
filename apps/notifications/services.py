@@ -5,8 +5,30 @@ from django.core.mail import EmailMessage
 from django.urls import reverse
 from django.utils import timezone
 from apps.notifications.models import EmailTemplate, EmailLog
+from utils.s3 import get_content_type
 
 logger = logging.getLogger(__name__)
+
+RECRUITER_SUBMISSION_TEMPLATES = [
+    {
+        "key": "standard-candidate-submission",
+        "name": "Standard Candidate Submission",
+        "subject": "Candidate Submission for {{job_title}} - {{company_name}}",
+        "body": "Dear {{client_name}},\n\nPlease find below the profile summary of a strong candidate for the {{job_title}} position.\n\nCandidate: {{candidate_name}}\nExperience: {{experience}} years\nSkills: {{skills}}\nLocation: {{location}}\nProfile: {{candidate_profile_url}}\n\nKindly review the attached profile and resume, and let us know your feedback or interview availability.\n\nBest regards,\n{{recruiter_name}}\n{{company_name}}"
+    },
+    {
+        "key": "urgent-role-shortlist",
+        "name": "Urgent Role Shortlist",
+        "subject": "URGENT SHORTLIST: {{job_title}} Candidates",
+        "body": "Dear {{client_name}},\n\nAs your {{job_title}} requirement is time-critical, we have fast-tracked a shortlist of pre-screened candidates for your immediate review.\n\nTop Candidate: {{candidate_name}} ({{experience}} years)\nSkills: {{skills}}\nLocation: {{location}}\n\nPlease review the attached tracker and resumes immediately so we can lock in priority interview slots.\n\nBest regards,\n{{recruiter_name}}\n{{company_name}}"
+    },
+    {
+        "key": "executive-profile-presentation",
+        "name": "Executive Profile Presentation",
+        "subject": "Executive Profile: {{candidate_name}} for {{job_title}}",
+        "body": "Dear {{client_name}},\n\nWe are pleased to present an executive-level profile for your {{job_title}} mandate.\n\nCandidate: {{candidate_name}}\nExperience: {{experience}} years\nSkills: {{skills}}\nLocation: {{location}}\nProfile: {{candidate_profile_url}}\n\nWe recommend prioritising this profile for a confidential discussion.\n\nBest regards,\n{{recruiter_name}}\n{{company_name}}"
+    },
+]
 
 DEFAULT_EMAIL_TEMPLATES = [
     {
@@ -186,7 +208,291 @@ def render_email_content(template_text, candidate=None, job=None, recruiter=None
         result = result.replace(placeholder, str(val))
     return result
 
-def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, template_name=None, candidate_ids=None, attachments=None, request=None, email_account=None):
+def get_ats_template_options():
+    """
+    Returns the list of email templates available in the "Email Candidate Profiles
+    to Client" dropdown: all active database templates plus the built-in recruiter
+    submission presets so recruiters always have ready-to-use options.
+    """
+    options = []
+    for tpl in EmailTemplate.objects.all():
+        options.append({
+            "id": str(tpl.id),
+            "name": tpl.name,
+            "category": tpl.category,
+            "subject": tpl.subject,
+            "body": tpl.body,
+            "is_builtin": False,
+        })
+    for tpl in RECRUITER_SUBMISSION_TEMPLATES:
+        options.append({
+            "id": f"builtin:{tpl['key']}",
+            "name": tpl["name"],
+            "category": "CLIENT",
+            "subject": tpl["subject"],
+            "body": tpl["body"],
+            "is_builtin": True,
+        })
+    return options
+
+
+def resolve_ats_template(template_id):
+    """
+    Resolves a template selection (DB UUID or built-in key) to its name, subject
+    and body. Returns None when the template cannot be resolved.
+    """
+    if not template_id:
+        return None
+    template_id = str(template_id).strip()
+    if template_id.startswith("builtin:"):
+        key = template_id.split("builtin:", 1)[1]
+        for tpl in RECRUITER_SUBMISSION_TEMPLATES:
+            if tpl["key"] == key:
+                return {"name": tpl["name"], "subject": tpl["subject"], "body": tpl["body"]}
+        return None
+    try:
+        tpl = EmailTemplate.objects.get(id=template_id)
+        return {"name": tpl.name, "subject": tpl.subject, "body": tpl.body}
+    except (EmailTemplate.DoesNotExist, ValueError, TypeError):
+        return None
+
+
+def _candidate_fields(candidate):
+    name = candidate.full_name or (candidate.user.email if candidate.user else None) or "N/A"
+    email = ""
+    phone = ""
+    if candidate.user:
+        email = getattr(candidate.user, 'email', None) or ""
+        phone = getattr(candidate.user, 'phone_number', None) or ""
+    role_company = " / ".join([p for p in [candidate.current_designation, candidate.current_company] if p]) or "N/A"
+    exp = candidate.total_experience
+    experience = "N/A" if exp is None else f"{exp} yrs"
+    location = candidate.location or "N/A"
+    profile_url = ""
+    try:
+        profile_url = candidate.get_full_profile_url()
+    except Exception:
+        profile_url = f"https://talentvault.in/candidates/{candidate.id}/"
+    return {
+        "name": name,
+        "email": email or "N/A",
+        "phone": phone or "N/A",
+        "role_company": role_company,
+        "experience": experience,
+        "location": location,
+        "profile_url": profile_url,
+    }
+
+
+def build_candidate_tracker_html(candidates):
+    from html import escape
+
+    headers = [
+        "S.No", "Candidate Name", "Email ID", "Phone Number",
+        "Current Role & Company", "Total Experience", "Location",
+        "TalentVault Profile",
+    ]
+    header_row = "".join(
+        f"<th style='background-color:#2563EB; color:#ffffff; padding:8px; text-align:left;'>{h}</th>"
+        for h in headers
+    )
+    rows = []
+    for idx, c in enumerate(candidates, start=1):
+        f = _candidate_fields(c)
+        profile_link = f'<a href="{escape(f["profile_url"])}" target="_blank">View Profile</a>'
+        rows.append(
+            "<tr>"
+            f"<td>{idx}</td>"
+            f"<td>{escape(f['name'])}</td>"
+            f"<td>{escape(f['email'])}</td>"
+            f"<td>{escape(f['phone'])}</td>"
+            f"<td>{escape(f['role_company'])}</td>"
+            f"<td>{escape(f['experience'])}</td>"
+            f"<td>{escape(f['location'])}</td>"
+            f"<td>{profile_link}</td>"
+            "</tr>"
+        )
+    body_rows = "".join(rows)
+    return (
+        '<div style="overflow-x:auto;">'
+        '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%; font-family:Arial, sans-serif; font-size:13px;">'
+        f"<thead><tr>{header_row}</tr></thead>"
+        f"<tbody>{body_rows}</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+
+def build_candidate_tracker_plain(candidates):
+    lines = []
+    for idx, c in enumerate(candidates, start=1):
+        f = _candidate_fields(c)
+        lines.append(
+            f"{idx}. {f['name']} ({f['role_company']}) | Email: {f['email']} | Phone: {f['phone']} | "
+            f"Exp: {f['experience']} | Location: {f['location']} | Profile: {f['profile_url']}"
+        )
+    return "\n".join(lines)
+
+
+def build_html_body(rendered_body, candidates):
+    from html import escape
+
+    body_html = escape(rendered_body or "").replace("\n", "<br>")
+    table_html = build_candidate_tracker_html(candidates)
+    return (
+        '<div style="font-family:Arial, Helvetica, sans-serif; color:#1E293B; line-height:1.5;">'
+        f"{body_html}</div><br>{table_html}"
+    )
+
+
+def build_candidate_tracker_xlsx(candidates, job=None):
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    from utils.salary_formatter import format_salary_lpa
+
+    job_title = getattr(job, 'title', None) or ""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Candidate Tracker"
+
+    headers = [
+        "Job Title", "Candidate Name", "Email ID", "Phone Number",
+        "Current Location", "Preferred Location", "Total Experience",
+        "Current Company", "Current CTC", "Expected CTC", "Notice Period",
+        "Skills", "Profile URL",
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for c in candidates:
+        f = _candidate_fields(c)
+        skills = ""
+        try:
+            skills = ", ".join([s.skill_name for s in c.skills.all()])
+        except Exception:
+            skills = ""
+        if getattr(c, 'is_immediate_joiner', False):
+            notice = "Immediate Joiner"
+        else:
+            notice = f"{c.notice_period} days" if c.notice_period is not None else "N/A"
+        total_exp = None
+        try:
+            total_exp = float(c.total_experience) if c.total_experience is not None else None
+        except Exception:
+            total_exp = None
+        ws.append([
+            job_title,
+            f["name"],
+            f["email"] if f["email"] != "N/A" else "",
+            f["phone"] if f["phone"] != "N/A" else "",
+            c.location or "",
+            c.preferred_location or "",
+            total_exp,
+            c.current_company or "",
+            format_salary_lpa(c.current_salary),
+            format_salary_lpa(c.expected_salary),
+            notice,
+            skills,
+            f["profile_url"],
+        ])
+
+    for col_idx in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 22
+    ws.freeze_panes = "A2"
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
+def read_candidate_resume(candidate):
+    """
+    Reliably reads candidate resume bytes whether stored locally or on remote
+    storage (S3/Cloudinary) via the FileField's storage backend. Returns a dict
+    usable as an attachment, or None when the resume cannot be read.
+    """
+    if not getattr(candidate, 'has_resume', False):
+        return None
+    resume = candidate.resume
+    filename = getattr(candidate, 'original_filename', None) or os.path.basename(resume.name) or f"resume_{candidate.id}.pdf"
+    content = b""
+    try:
+        resume.open('rb')
+        try:
+            content = resume.read()
+        finally:
+            resume.close()
+    except Exception as e:
+        logger.warning(f"Could not read resume for candidate {candidate.id}: {e}")
+        content = b""
+    if not content:
+        try:
+            fh = resume.storage.open(resume.name, 'rb')
+            try:
+                content = fh.read()
+            finally:
+                fh.close()
+        except Exception as e:
+            logger.warning(f"Fallback resume read for candidate {candidate.id} failed: {e}")
+            content = b""
+    if not content:
+        return None
+    return {
+        "filename": filename,
+        "content": content,
+        "content_type": get_content_type(filename),
+    }
+
+
+def _attachment_name(att):
+    if isinstance(att, dict):
+        return att.get('filename') or 'attachment'
+    return getattr(att, 'name', None) or 'attachment'
+
+
+def _split_content_type(content_type):
+    if not content_type or '/' not in content_type:
+        return 'application', 'octet-stream'
+    main, _, sub = content_type.partition('/')
+    return main or 'application', sub or 'octet-stream'
+
+
+def _coerce_attachment(att):
+    if isinstance(att, dict):
+        filename = att.get('filename') or 'attachment'
+        content = att.get('content', b'') or b''
+        content_type = att.get('content_type') or get_content_type(filename)
+        return filename, content, content_type
+    filename = getattr(att, 'name', None) or 'attachment'
+    content = b''
+    try:
+        if isinstance(att, (bytes, bytearray, memoryview)):
+            content = bytes(att)
+        elif hasattr(att, 'read'):
+            if hasattr(att, 'seek'):
+                try:
+                    att.seek(0)
+                except Exception:
+                    pass
+            content = att.read()
+    except Exception:
+        content = b''
+    if not isinstance(content, (bytes, bytearray)):
+        content = b''
+    content_type = get_content_type(filename)
+    return filename, content, content_type
+
+
+def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, template_name=None, candidate_ids=None, attachments=None, request=None, email_account=None, html_body=None):
     """
     Sends recruiter-to-client ATS email exclusively via direct Gmail API OAuth2 (users.messages.send)
     through the recruiter's authenticated Gmail/Google Workspace account.
@@ -263,7 +569,7 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         candidate_ids=candidate_ids or [],
         status='SENDING',
         has_attachment=bool(attachments),
-        attachment_names=", ".join([att.name for att in attachments]) if attachments else None
+        attachment_names=", ".join([_attachment_name(att) for att in attachments]) if attachments else None
     )
 
     try:
@@ -284,7 +590,11 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         else:
             pixel_url = f"http://localhost:8000/notifications/track/open/{email_log.tracking_uuid}/"
 
-        html_body = f"{body.replace(chr(10), '<br>')}<br><img src='{pixel_url}' width='1' height='1' style='display:none;' alt='' />"
+        if not html_body:
+            from html import escape as _html_escape
+            html_body = _html_escape(body or "").replace(chr(10), '<br>')
+        html_body = f"{html_body}<br><img src='{pixel_url}' width='1' height='1' style='display:none;' alt='' />"
+        plain_body = body or ""
 
         cc_list = [c.strip() for c in cc.split(',')] if cc else []
         bcc_list = [b.strip() for b in bcc.split(',')] if bcc else []
@@ -300,7 +610,7 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         if connected_account.token_expires_at and connected_account.token_expires_at <= timezone.now():
             connected_account.refresh_access_token()
 
-        msg = MIMEMultipart('alternative')
+        msg = MIMEMultipart('mixed')
         msg['Subject'] = subject
         msg['From'] = from_email
         msg['To'] = recipient_email
@@ -310,20 +620,27 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         if bcc_list:
             msg['Bcc'] = ", ".join(bcc_list)
 
-        msg.attach(MIMEText(html_body, 'html'))
+        alt_part = MIMEMultipart('alternative')
+        alt_part.attach(MIMEText(plain_body, 'plain', 'utf-8'))
+        alt_part.attach(MIMEText(html_body, 'html', 'utf-8'))
+        msg.attach(alt_part)
 
         if attachments:
             for att in attachments:
                 try:
-                    part = MIMEBase('application', 'octet-stream')
-                    att_content = att.read() if hasattr(att, 'read') else b""
+                    filename, att_content, content_type = _coerce_attachment(att)
+                    if not filename:
+                        filename = 'attachment'
+                    if not att_content:
+                        continue
+                    maintype, subtype = _split_content_type(content_type)
+                    part = MIMEBase(maintype, subtype)
                     part.set_payload(att_content)
                     encoders.encode_base64(part)
-                    filename = getattr(att, 'name', 'attachment.pdf')
-                    part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                    part.add_header('Content-Disposition', 'attachment', filename=filename)
                     msg.attach(part)
                 except Exception as att_err:
-                    logger.warning(f"Failed to attach file to Gmail API message: {att_err}")
+                    logger.warning(f"Failed to attach file to email message: {att_err}")
 
         raw_mime = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
 
