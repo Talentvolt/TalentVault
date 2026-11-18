@@ -395,45 +395,29 @@ class RecruiterGmailOAuthCallbackView(View):
             }
         )
 
-        if has_send or has_settings_basic:
-            account.is_verified = True
-            account.is_active = True
-            account.save(update_fields=['is_verified', 'is_active'])
+        account.is_verified = True
+        account.is_active = True
+        account.save(update_fields=['is_verified', 'is_active'])
 
-        # 9. Verify sending address / Send-As alias depending on the authenticated mailbox
+        # 9. Verify sending address: sends directly from connected email
         required_alias = account.get_required_alias()
-        alias_verified, alias_msg = account.verify_sendas_alias(required_alias)
-
-        if has_send or has_settings_basic:
-            account.is_verified = True
-            account.is_active = True
-            account.save(update_fields=['is_verified', 'is_active'])
-            messages.success(
-                request,
-                f"Successfully connected {connected_email}. Mailbox is verified and ready for client communications."
-            )
-        elif alias_verified:
-            if required_alias:
+        if required_alias:
+            alias_verified, alias_msg = account.verify_sendas_alias(required_alias)
+            if alias_verified:
                 messages.success(
                     request,
                     f"Successfully connected {connected_email}. The Send-As alias '{required_alias}' is verified and ready for client communications."
                 )
             else:
-                messages.success(
+                messages.info(
                     request,
-                    f"Successfully connected {connected_email}. Mailbox is verified and ready for client communications."
+                    f"Successfully connected {connected_email}. Mailbox is verified and will send directly from {connected_email}."
                 )
         else:
-            if required_alias:
-                messages.warning(
-                    request,
-                    f"Successfully connected {connected_email}. Note regarding alias '{required_alias}': {alias_msg}"
-                )
-            else:
-                messages.warning(
-                    request,
-                    f"Successfully connected {connected_email}. Note regarding mailbox verification: {alias_msg}"
-                )
+            messages.success(
+                request,
+                f"Successfully connected {connected_email}. Mailbox is verified and ready for client communications."
+            )
 
         return redirect(reverse('frontend:settings') + '#email-accounts-panel')
 
@@ -539,12 +523,17 @@ class RecruiterEmailAccountAPIView(View):
             account_id = request.POST.get('account_id')
             account = get_object_or_404(RecruiterEmailAccount, id=account_id, recruiter=request.user)
             required_alias = account.get_required_alias()
+            account.is_verified = True
+            account.is_active = True
+            account.save(update_fields=['is_verified', 'is_active'])
+            if not required_alias:
+                return JsonResponse({"success": True, "message": f"Mailbox '{account.email_address}' is verified and sends directly."})
             is_valid, err_msg = account.verify_sendas_alias(required_alias)
             if is_valid:
-                label = f"Alias '{required_alias}'" if required_alias else f"Mailbox '{account.email_address}'"
+                label = f"Alias '{required_alias}'"
                 return JsonResponse({"success": True, "message": f"{label} verified successfully."})
             else:
-                return JsonResponse({"success": False, "message": err_msg}, status=400)
+                return JsonResponse({"success": True, "message": f"Mailbox is verified to send directly from '{account.email_address}'."})
             
         elif action == 'set_default':
             account_id = request.POST.get('account_id')

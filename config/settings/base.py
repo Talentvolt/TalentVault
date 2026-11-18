@@ -441,13 +441,10 @@ SOCIALACCOUNT_PROVIDERS = {
 RECRUITER_CLIENT_ALIAS_EMAIL = os.environ.get("RECRUITER_CLIENT_ALIAS_EMAIL", "profiles@2020technologies.in")
 
 # Recruiter Mailbox Aliases Mapping
-# Maps authenticated mailboxes to their required Send-As alias.
-# Mailboxes not in this mapping (e.g. growfluencestudio@gmail.com, third-party recruiters)
-# send directly from their primary address without requiring the company alias.
+# Maps authenticated mailboxes to their optional Send-As alias if configured.
+# By default, emails are sent directly from the authenticated mailbox address.
 _raw_mailbox_aliases = os.environ.get("RECRUITER_MAILBOX_ALIASES", "")
-RECRUITER_MAILBOX_ALIASES = {
-    "nikhil@2020technologies.in": RECRUITER_CLIENT_ALIAS_EMAIL,
-}
+RECRUITER_MAILBOX_ALIASES = {}
 if _raw_mailbox_aliases:
     try:
         import json

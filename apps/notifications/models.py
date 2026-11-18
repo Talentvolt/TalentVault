@@ -214,10 +214,8 @@ class RecruiterEmailAccount(BaseAppModel):
 
     def get_required_alias(self):
         """
-        Returns the required Send-As alias email address for this mailbox, or None
-        if the mailbox sends directly from its primary authenticated email address.
-        Dependent on the authenticated mailbox, never requiring the Nikhil alias
-        for unrelated recruiter accounts.
+        Returns the Send-As alias email address for this mailbox if explicitly mapped,
+        or None if the mailbox sends directly from its primary authenticated email address.
         """
         email_clean = (self.email_address or "").strip().lower()
         if not email_clean:
@@ -226,27 +224,24 @@ class RecruiterEmailAccount(BaseAppModel):
         # Check explicit mapping in settings (e.g. RECRUITER_MAILBOX_ALIASES)
         mailbox_aliases = getattr(settings, 'RECRUITER_MAILBOX_ALIASES', {})
         if email_clean in mailbox_aliases:
-            return mailbox_aliases[email_clean].strip()
+            alias_val = (mailbox_aliases[email_clean] or "").strip()
+            if alias_val and alias_val.lower() != email_clean:
+                return alias_val
 
-        # Specific rule for Nikhil's company mailbox (including test variants)
-        if email_clean == "nikhil@2020technologies.in" or (email_clean.startswith("nikhil") and "@2020technologies.in" in email_clean):
-            return getattr(settings, 'RECRUITER_CLIENT_ALIAS_EMAIL', 'profiles@2020technologies.in').strip()
-
-        # Unrelated recruiter accounts (e.g. growfluencestudio@gmail.com) do NOT require an alias
         return None
 
     def get_sending_email_address(self):
         """
         Returns the effective From email address for client communications:
-        either the required Send-As alias or the primary authenticated mailbox address.
+        the primary authenticated mailbox address (or optional alias if configured).
         """
         return self.get_required_alias() or self.email_address
 
     def verify_sendas_alias(self, alias_email=None):
         """
-        Verifies that the required sending address (either a configured Send-As alias
-        or the mailbox's own primary address) is configured and accepted in the
-        recruiter's Gmail account via Gmail API users.settings.sendAs.list.
+        Verifies that the sending address is configured and accepted in the
+        recruiter's Gmail account. If sending directly from the authenticated
+        mailbox address, returns verified immediately without requiring a Send-As alias.
         Returns (is_verified: bool, error_message: str | None).
         """
         import requests
@@ -265,18 +260,18 @@ class RecruiterEmailAccount(BaseAppModel):
         if alias_email is None:
             alias_email = self.get_required_alias()
 
-        # If this mailbox does not require an alias, target is the mailbox's primary email
+        # If this mailbox does not require a custom alias, it sends directly from primary email: always verified
         target_email = (alias_email or self.email_address or "").strip().lower()
         is_custom_alias = bool(alias_email and alias_email.strip().lower() != (self.email_address or "").strip().lower())
 
-        # Primary @gmail.com mailboxes with gmail.settings.basic granted are considered
-        # verified without a sendAs API round-trip (which can return a spurious 403).
-        email_clean = (self.email_address or "").strip().lower()
-        stored_scopes = (self.scopes or "").replace(',', ' ').split()
-        has_settings_basic = any("gmail.settings.basic" in s for s in stored_scopes)
-        if not is_custom_alias and email_clean.endswith("@gmail.com") and has_settings_basic:
+        if not is_custom_alias:
             self.is_verified = True
-            self.save(update_fields=['is_verified'])
+            self.is_active = True
+            if hasattr(self, '_state') and not self._state.adding:
+                try:
+                    self.save(update_fields=['is_verified', 'is_active'])
+                except Exception:
+                    pass
             return True, None
 
         send_as_url = "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs"

@@ -534,11 +534,10 @@ def _coerce_attachment(att):
 
 def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, template_name=None, candidate_ids=None, attachments=None, request=None, email_account=None, html_body=None):
     """
-    Sends recruiter-to-client ATS email exclusively via direct Gmail API OAuth2 (users.messages.send)
-    through the recruiter's authenticated Gmail/Google Workspace account.
-    Enforces From: <Recruiter Name> <profiles@2020technologies.in>,
-    Reply-To: <Recruiter Work Email>, verifies alias via users.settings.sendAs.list,
-    places email in the recruiter's Gmail Sent folder, and blocks sending if alias is missing/unverified.
+    Sends recruiter-to-client ATS email directly from the recruiter's authenticated
+    mailbox (Gmail API OAuth2 or Custom SMTP).
+    Enforces From: <Recruiter Name> <connected_account.email_address>,
+    Reply-To: <Recruiter Work Email>, places email in the recruiter's Gmail Sent folder.
     Never falls back to TalentVault's shared Gmail.
     """
     connected_account = email_account
@@ -584,11 +583,10 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         elif "nikhil" in email_prefix:
             recruiter_name = "Nikhil Mittal"
 
-    required_alias = connected_account.get_required_alias()
-    sending_email = required_alias if required_alias else connected_account.email_address
+    sending_email = connected_account.email_address
     recruiter_work_email = connected_account.email_address or (sender.email if sender else sending_email)
 
-    from_email = f"{recruiter_name} <{sending_email}>"
+    from_email = f"{recruiter_name} <{connected_account.email_address}>"
     reply_to_email = recruiter_work_email
 
     email_log = EmailLog.objects.create(
@@ -606,13 +604,6 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
     )
 
     try:
-        # Verify sending address / Send-As alias via Gmail API users.settings.sendAs.list (Gmail OAuth only)
-        if is_google:
-            alias_verified, alias_error = connected_account.verify_sendas_alias(required_alias)
-            if not alias_verified:
-                logger.error(f"Gmail alias verification failed for {connected_account.email_address}: {alias_error}")
-                raise ValueError(alias_error)
-
         # Inject tracking pixel
         pixel_url = ""
         if request:
