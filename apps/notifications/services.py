@@ -258,12 +258,17 @@ def resolve_ats_template(template_id):
 
 
 def _candidate_fields(candidate):
-    name = candidate.full_name or (candidate.user.email if candidate.user else None) or "N/A"
+    user = None
+    try:
+        user = candidate.user
+    except Exception:
+        user = None
+    name = candidate.full_name or (user.email if user else None) or "N/A"
     email = ""
     phone = ""
-    if candidate.user:
-        email = getattr(candidate.user, 'email', None) or ""
-        phone = getattr(candidate.user, 'phone_number', None) or ""
+    if user:
+        email = getattr(user, 'email', None) or ""
+        phone = getattr(user, 'phone_number', None) or ""
     role_company = " / ".join([p for p in [candidate.current_designation, candidate.current_company] if p]) or "N/A"
     exp = candidate.total_experience
     experience = "N/A" if exp is None else f"{exp} yrs"
@@ -284,13 +289,44 @@ def _candidate_fields(candidate):
     }
 
 
+def _format_ctc_display(salary):
+    if salary is None or salary == "" or salary == 0:
+        return "-"
+    try:
+        if float(salary) == 0:
+            return "-"
+    except (ValueError, TypeError):
+        pass
+    from utils.salary_formatter import format_salary_lpa
+    formatted = format_salary_lpa(salary)
+    return formatted if formatted and formatted != "0 LPA" else "-"
+
+
+def _format_notice_period(candidate):
+    is_immediate = bool(getattr(candidate, 'is_immediate_joiner', False))
+    np = getattr(candidate, 'notice_period', None)
+    if np is not None and np != "":
+        try:
+            np_val = int(np)
+        except (ValueError, TypeError):
+            np_val = None
+        if np == 0 or np_val == 0 or is_immediate:
+            return "Immediate (0 Days)"
+        if np_val is not None and np_val > 0:
+            return f"{np_val} Days"
+        return f"{np} Days"
+    if is_immediate:
+        return "Immediate (0 Days)"
+    return "30 Days"
+
+
 def build_candidate_tracker_html(candidates):
     from html import escape
 
     headers = [
         "S.No", "Candidate Name", "Email ID", "Phone Number",
-        "Current Role & Company", "Total Experience", "Location",
-        "TalentVault Profile",
+        "Total Experience", "Current CTC", "Expected CTC",
+        "Notice Period", "Location", "TalentVault Profile",
     ]
     header_row = "".join(
         f"<th style='background-color:#2563EB; color:#ffffff; padding:8px; text-align:left;'>{h}</th>"
@@ -300,14 +336,19 @@ def build_candidate_tracker_html(candidates):
     for idx, c in enumerate(candidates, start=1):
         f = _candidate_fields(c)
         profile_link = f'<a href="{escape(f["profile_url"])}" target="_blank">View Profile</a>'
+        curr_ctc = _format_ctc_display(getattr(c, 'current_salary', None))
+        exp_ctc = _format_ctc_display(getattr(c, 'expected_salary', None))
+        notice = _format_notice_period(c)
         rows.append(
             "<tr>"
             f"<td>{idx}</td>"
             f"<td>{escape(f['name'])}</td>"
             f"<td>{escape(f['email'])}</td>"
             f"<td>{escape(f['phone'])}</td>"
-            f"<td>{escape(f['role_company'])}</td>"
             f"<td>{escape(f['experience'])}</td>"
+            f"<td>{escape(curr_ctc)}</td>"
+            f"<td>{escape(exp_ctc)}</td>"
+            f"<td>{escape(notice)}</td>"
             f"<td>{escape(f['location'])}</td>"
             f"<td>{profile_link}</td>"
             "</tr>"
@@ -327,9 +368,13 @@ def build_candidate_tracker_plain(candidates):
     lines = []
     for idx, c in enumerate(candidates, start=1):
         f = _candidate_fields(c)
+        curr_ctc = _format_ctc_display(getattr(c, 'current_salary', None))
+        exp_ctc = _format_ctc_display(getattr(c, 'expected_salary', None))
+        notice = _format_notice_period(c)
         lines.append(
-            f"{idx}. {f['name']} ({f['role_company']}) | Email: {f['email']} | Phone: {f['phone']} | "
-            f"Exp: {f['experience']} | Location: {f['location']} | Profile: {f['profile_url']}"
+            f"{idx}. {f['name']} | Email: {f['email']} | Phone: {f['phone']} | "
+            f"Exp: {f['experience']} | Current CTC: {curr_ctc} | Expected CTC: {exp_ctc} | "
+            f"Notice: {notice} | Location: {f['location']} | Profile: {f['profile_url']}"
         )
     return "\n".join(lines)
 
@@ -350,7 +395,6 @@ def build_candidate_tracker_xlsx(candidates, job=None):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
-    from utils.salary_formatter import format_salary_lpa
 
     job_title = getattr(job, 'title', None) or ""
     wb = Workbook()
@@ -360,7 +404,7 @@ def build_candidate_tracker_xlsx(candidates, job=None):
     headers = [
         "Job Title", "Candidate Name", "Email ID", "Phone Number",
         "Current Location", "Preferred Location", "Total Experience",
-        "Current Company", "Current CTC", "Expected CTC", "Notice Period",
+        "Current CTC", "Expected CTC", "Notice Period",
         "Skills", "Profile URL",
     ]
     ws.append(headers)
@@ -380,10 +424,7 @@ def build_candidate_tracker_xlsx(candidates, job=None):
             skills = ", ".join([s.skill_name for s in c.skills.all()])
         except Exception:
             skills = ""
-        if getattr(c, 'is_immediate_joiner', False):
-            notice = "Immediate Joiner"
-        else:
-            notice = f"{c.notice_period} days" if c.notice_period is not None else "N/A"
+        notice = _format_notice_period(c)
         total_exp = None
         try:
             total_exp = float(c.total_experience) if c.total_experience is not None else None
@@ -397,9 +438,8 @@ def build_candidate_tracker_xlsx(candidates, job=None):
             c.location or "",
             c.preferred_location or "",
             total_exp,
-            c.current_company or "",
-            format_salary_lpa(c.current_salary),
-            format_salary_lpa(c.expected_salary),
+            _format_ctc_display(getattr(c, 'current_salary', None)),
+            _format_ctc_display(getattr(c, 'expected_salary', None)),
             notice,
             skills,
             f["profile_url"],
