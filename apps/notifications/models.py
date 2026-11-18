@@ -119,6 +119,7 @@ class RecruiterEmailAccount(BaseAppModel):
     provider = models.CharField(max_length=30, choices=PROVIDER_CHOICES, default='SMTP')
     email_address = models.EmailField()
     is_verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
     
     # SMTP settings
@@ -139,6 +140,7 @@ class RecruiterEmailAccount(BaseAppModel):
         verbose_name = _('recruiter email account')
         verbose_name_plural = _('recruiter email accounts')
         ordering = ['-is_default', '-created_at']
+        unique_together = [('recruiter', 'email_address', 'provider')]
 
     def __str__(self):
         return f"{self.email_address} ({self.provider}) - {self.recruiter.email}"

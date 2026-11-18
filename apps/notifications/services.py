@@ -547,22 +547,15 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
             raise ValueError("Unauthorized or unverified recruiter email account.")
     else:
         if sender and hasattr(sender, 'email_accounts'):
-            connected_account = sender.email_accounts.filter(
-                is_verified=True, 
-                account_type='OAUTH',
-                provider__in=['GMAIL', 'GOOGLE_WORKSPACE'],
-                is_default=True
-            ).first()
+            connected_account = sender.email_accounts.filter(is_verified=True, is_default=True).first()
             if not connected_account:
                 connected_account = sender.email_accounts.filter(
-                    is_verified=True,
+                    is_verified=True, 
                     account_type='OAUTH',
                     provider__in=['GMAIL', 'GOOGLE_WORKSPACE']
                 ).first()
             if not connected_account:
-                connected_account = sender.email_accounts.filter(is_verified=True, is_default=True).first()
-                if not connected_account:
-                    connected_account = sender.email_accounts.filter(is_verified=True).first()
+                connected_account = sender.email_accounts.filter(is_verified=True).first()
 
     if not connected_account or not connected_account.is_verified:
         raise ValueError("No connected and verified email mailbox found. Please connect your Gmail or Custom SMTP account in Settings under 'My Email Accounts'.")
@@ -647,7 +640,7 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         import requests
 
         # Check and refresh token if expired
-        if connected_account.token_expires_at and connected_account.token_expires_at <= timezone.now():
+        if is_google and connected_account.token_expires_at and connected_account.token_expires_at <= timezone.now():
             connected_account.refresh_access_token()
 
         msg = MIMEMultipart('mixed')
@@ -686,22 +679,53 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
 
         if is_smtp:
             import smtplib
-            smtp_host = connected_account.smtp_host
-            smtp_port = connected_account.smtp_port or 587
-            smtp_username = connected_account.smtp_username or connected_account.email_address
+            smtp_host = (connected_account.smtp_host or "").strip()
+            if not smtp_host:
+                raise ValueError("SMTP host is empty or not configured. Please configure your SMTP server host in Settings under 'My Email Accounts'.")
+
+            try:
+                smtp_port = int(connected_account.smtp_port) if connected_account.smtp_port else 587
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid SMTP port: {connected_account.smtp_port}. Please enter a valid numeric port (e.g., 587 or 465).")
+
+            if smtp_port <= 0 or smtp_port > 65535:
+                raise ValueError(f"SMTP port {smtp_port} is out of valid range (1-65535).")
+
+            smtp_username = (connected_account.smtp_username or connected_account.email_address or "").strip()
             smtp_password = connected_account.smtp_password or ""
 
-            if connected_account.use_ssl:
-                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20)
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
-                if connected_account.use_tls:
-                    server.starttls()
+            server = None
             try:
-                server.login(smtp_username, smtp_password)
+                if connected_account.use_ssl:
+                    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20)
+                else:
+                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
+
+                # Explicit safeguard: ensure connect() is run before any command
+                if not getattr(server, 'sock', None):
+                    server.connect(smtp_host, smtp_port)
+
+                server.ehlo()
+                if not connected_account.use_ssl and connected_account.use_tls:
+                    server.starttls()
+                    server.ehlo()
+
+                if smtp_username and smtp_password:
+                    server.login(smtp_username, smtp_password)
+
                 server.sendmail(sending_email, [recipient_email] + cc_list + bcc_list, msg.as_string())
+            except smtplib.SMTPException as smtp_err:
+                logger.error(f"SMTP error sending email via {smtp_host}:{smtp_port}: {smtp_err}")
+                raise ValueError(f"Failed to send email via SMTP ({smtp_host}:{smtp_port}): {smtp_err}")
             finally:
-                server.quit()
+                if server:
+                    try:
+                        server.quit()
+                    except Exception:
+                        try:
+                            server.close()
+                        except Exception:
+                            pass
 
             email_log.status = 'SENT'
             email_log.save(update_fields=['status'])

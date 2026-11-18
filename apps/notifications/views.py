@@ -314,12 +314,13 @@ class RecruiterGmailOAuthCallbackView(View):
         # 6. Preserve existing refresh token if not re-issued
         existing_account = RecruiterEmailAccount.objects.filter(
             recruiter=recruiter,
-            email_address__iexact=connected_email
+            email_address__iexact=connected_email,
+            provider='GMAIL'
         ).first()
 
         final_refresh_token = refresh_token or (existing_account.oauth_refresh_token if existing_account else None)
 
-        is_default = not RecruiterEmailAccount.objects.filter(recruiter=recruiter).exclude(email_address__iexact=connected_email).exists()
+        is_default = not RecruiterEmailAccount.objects.filter(recruiter=recruiter).exists()
         if existing_account and existing_account.is_default:
             is_default = True
 
@@ -341,8 +342,11 @@ class RecruiterGmailOAuthCallbackView(View):
         granted_scope_raw = " ".join(granted_scopes_list)
         scopes_valid, missing_scopes = verify_recruiter_gmail_scopes(granted_scope_raw)
         
-        # Final safeguard: if gmail.settings.basic was granted (credentials or URL scope), mark verified
-        if not scopes_valid and any("gmail.settings.basic" in s for s in (list(granted_scopes_list) + request.GET.get("scope", "").split())):
+        has_send = any("gmail.send" in s or "mail.google.com" in s for s in (list(granted_scopes_list) + request.GET.get("scope", "").split()))
+        has_settings_basic = any("gmail.settings.basic" in s for s in (list(granted_scopes_list) + request.GET.get("scope", "").split()))
+
+        # Explicitly mark scopes valid whenever gmail.send or gmail.settings.basic is granted
+        if has_send or has_settings_basic:
             scopes_valid = True
 
         if not scopes_valid:
@@ -350,13 +354,15 @@ class RecruiterGmailOAuthCallbackView(View):
             account, created = RecruiterEmailAccount.objects.update_or_create(
                 recruiter=recruiter,
                 email_address=connected_email,
+                provider='GMAIL',
                 defaults={
                     'account_type': 'OAUTH',
-                    'provider': 'GMAIL',
                     'oauth_access_token': access_token,
                     'oauth_refresh_token': final_refresh_token,
                     'token_expires_at': expires_at,
+                    'scopes': granted_scope_raw,
                     'is_verified': False,
+                    'is_active': True,
                     'is_default': is_default,
                 }
             )
@@ -376,35 +382,32 @@ class RecruiterGmailOAuthCallbackView(View):
         account, created = RecruiterEmailAccount.objects.update_or_create(
             recruiter=recruiter,
             email_address=connected_email,
+            provider='GMAIL',
             defaults={
                 'account_type': 'OAUTH',
-                'provider': 'GMAIL',
                 'oauth_access_token': access_token,
                 'oauth_refresh_token': final_refresh_token,
                 'token_expires_at': expires_at,
                 'scopes': granted_scope_raw,
                 'is_verified': True,
+                'is_active': True,
                 'is_default': is_default,
             }
         )
 
-        has_settings_basic = any("gmail.settings.basic" in s for s in granted_scopes_list)
-
-        # Explicitly mark verified when gmail.settings.basic was granted so the Settings
-        # "My Email Accounts" table immediately shows "Verified" instead of "Pending Verification".
-        if has_settings_basic:
+        if has_send or has_settings_basic:
             account.is_verified = True
-            account.save(update_fields=['is_verified'])
+            account.is_active = True
+            account.save(update_fields=['is_verified', 'is_active'])
 
         # 9. Verify sending address / Send-As alias depending on the authenticated mailbox
         required_alias = account.get_required_alias()
         alias_verified, alias_msg = account.verify_sendas_alias(required_alias)
 
-        if has_settings_basic:
-            # gmail.settings.basic was granted: keep the mailbox verified even if the
-            # sendAs alias check failed, and suppress the "Pending Verification" warning.
+        if has_send or has_settings_basic:
             account.is_verified = True
-            account.save(update_fields=['is_verified'])
+            account.is_active = True
+            account.save(update_fields=['is_verified', 'is_active'])
             messages.success(
                 request,
                 f"Successfully connected {connected_email}. Mailbox is verified and ready for client communications."
@@ -456,20 +459,34 @@ class RecruiterEmailAccountAPIView(View):
             if not email_address or not host:
                 return JsonResponse({"success": False, "message": "Email address and SMTP host are required."}, status=400)
                 
-            is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
-            
-            account = RecruiterEmailAccount.objects.create(
+            email_address = email_address.strip().lower()
+            host = host.strip()
+
+            existing_account = RecruiterEmailAccount.objects.filter(
                 recruiter=request.user,
-                account_type='SMTP',
-                provider='SMTP',
                 email_address=email_address,
-                smtp_host=host,
-                smtp_port=int(port) if port else 587,
-                smtp_username=username or email_address,
-                smtp_password=password,
-                use_tls=use_tls,
-                is_verified=True,
-                is_default=is_default
+                provider='SMTP'
+            ).first()
+
+            is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
+            if existing_account and existing_account.is_default:
+                is_default = True
+            
+            account, created = RecruiterEmailAccount.objects.update_or_create(
+                recruiter=request.user,
+                email_address=email_address,
+                provider='SMTP',
+                defaults={
+                    'account_type': 'SMTP',
+                    'smtp_host': host,
+                    'smtp_port': int(port) if port else 587,
+                    'smtp_username': username or email_address,
+                    'smtp_password': password,
+                    'use_tls': use_tls,
+                    'is_verified': True,
+                    'is_active': True,
+                    'is_default': is_default
+                }
             )
             return JsonResponse({"success": True, "message": f"SMTP account {email_address} connected and verified successfully."})
             
@@ -480,19 +497,24 @@ class RecruiterEmailAccountAPIView(View):
             if not email_address:
                 return JsonResponse({"success": False, "message": "Email address is required."}, status=400)
                 
+            email_address = email_address.strip().lower()
+
             # Verify recruiter email ownership
-            if email_address.lower() != request.user.email.lower() and not request.user.is_verified:
+            if email_address != request.user.email.lower() and not request.user.is_verified:
                 return JsonResponse({"success": False, "message": "Email address ownership verification failed."}, status=400)
                 
             access_token = request.POST.get('oauth_access_token')
             refresh_token = request.POST.get('oauth_refresh_token')
             expires_at = request.POST.get('token_expires_at')
             
-            existing_account = RecruiterEmailAccount.objects.filter(recruiter=request.user, email_address=email_address).first()
+            existing_account = RecruiterEmailAccount.objects.filter(
+                recruiter=request.user,
+                email_address=email_address,
+                provider=provider
+            ).first()
             final_refresh_token = refresh_token if refresh_token else (existing_account.oauth_refresh_token if existing_account else None)
             final_access_token = access_token if access_token else (existing_account.oauth_access_token if existing_account else None)
 
-            
             is_default = not RecruiterEmailAccount.objects.filter(recruiter=request.user).exists()
             if existing_account and existing_account.is_default:
                 is_default = True
@@ -500,13 +522,14 @@ class RecruiterEmailAccountAPIView(View):
             account, created = RecruiterEmailAccount.objects.update_or_create(
                 recruiter=request.user,
                 email_address=email_address,
+                provider=provider,
                 defaults={
                     'account_type': 'OAUTH',
-                    'provider': provider,
                     'oauth_access_token': final_access_token,
                     'oauth_refresh_token': final_refresh_token,
                     'token_expires_at': expires_at,
                     'is_verified': bool(final_access_token),
+                    'is_active': True,
                     'is_default': is_default
                 }
             )
