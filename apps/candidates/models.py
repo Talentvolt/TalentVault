@@ -402,12 +402,26 @@ class CandidateProfile(BaseAppModel):
         from utils.url_helpers import normalize_external_url
         return normalize_external_url(self.portfolio_url)
 
+    @property
+    def notice_period_display(self):
+        if self.notice_period == 0 or self.is_immediate_joiner:
+            return "Immediate (0 Days)"
+        if self.notice_period is not None:
+            return f"{self.notice_period} Days"
+        return "30 Days"
+
     def save(self, *args, **kwargs):
         from utils.url_helpers import normalize_external_url
         if self.linkedin_url:
             self.linkedin_url = normalize_external_url(self.linkedin_url)
         if self.portfolio_url:
             self.portfolio_url = normalize_external_url(self.portfolio_url)
+
+        if self.notice_period is not None:
+            self.is_immediate_joiner = (self.notice_period == 0)
+        else:
+            self.notice_period = 30
+            self.is_immediate_joiner = False
 
         version_str = str(self.current_version)
         if self.resume_versions and version_str in self.resume_versions:
@@ -430,6 +444,8 @@ class CandidateProfile(BaseAppModel):
                 version_data["personal_info"]["expected_salary"] = float(self.expected_salary) / 100000.0 if self.expected_salary is not None else None
             except Exception:
                 pass
+            if self.notice_period is not None:
+                version_data["personal_info"]["notice_period"] = self.notice_period
             if self.location is not None:
                 version_data["personal_info"]["location"] = self.location
             if self.summary is not None:
@@ -444,6 +460,9 @@ class CandidateProfile(BaseAppModel):
             
             self.resume_versions[version_str]["data"] = version_data
             self.parsed_json = version_data
+        elif self.parsed_json and isinstance(self.parsed_json, dict) and "personal_info" in self.parsed_json:
+            if self.notice_period is not None:
+                self.parsed_json["personal_info"]["notice_period"] = self.notice_period
 
         super().save(*args, **kwargs)
 

@@ -238,7 +238,7 @@
                     </div>
                     <div>
                         <span class="text-[10px] text-slate-400 uppercase tracking-wide block">Notice Period</span>
-                        <span class="text-sm font-bold text-slate-900 dark:text-white block mt-0.5" id="pref-notice">{{ request.user.candidate_profile.notice_period }} Days</span>
+                        <span class="text-sm font-bold text-slate-900 dark:text-white block mt-0.5" id="pref-notice">{% if request.user.candidate_profile.notice_period is not None %}{% if request.user.candidate_profile.notice_period == 0 or request.user.candidate_profile.is_immediate_joiner %}Immediate (0 Days){% else %}{{ request.user.candidate_profile.notice_period }} Days{% endif %}{% else %}30 Days{% endif %}</span>
                     </div>
                 </div>
 
@@ -264,7 +264,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-455 uppercase mb-2">Notice Period (Days)</label>
-                        <input type="number" id="input-pref-notice" class="w-full h-12 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value="{{ request.user.candidate_profile.notice_period|default:30 }}">
+                        <input type="number" id="input-pref-notice" class="w-full h-12 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value="{% if request.user.candidate_profile.notice_period is not None %}{{ request.user.candidate_profile.notice_period }}{% else %}30{% endif %}">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-455 uppercase mb-2">LinkedIn URL</label>
@@ -492,7 +492,8 @@
         const location = document.getElementById('input-pref-location').value;
         const current_ctc = parseFloat(document.getElementById('input-pref-salary-current').value || 0);
         const expected_ctc = parseFloat(document.getElementById('input-pref-salary-expected').value || 0);
-        const notice_period = parseInt(document.getElementById('input-pref-notice').value || 30);
+        const noticeInputVal = (document.getElementById('input-pref-notice').value || '').trim();
+        const notice_period = noticeInputVal === '' ? 30 : parseInt(noticeInputVal, 10);
         const linkedin_url = document.getElementById('input-pref-linkedin').value;
         const portfolio_url = document.getElementById('input-pref-portfolio').value;
         

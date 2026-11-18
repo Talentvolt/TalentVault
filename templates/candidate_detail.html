@@ -949,7 +949,7 @@ body.candidate-saas-body {
             <div class="d-flex flex-wrap gap-4 pt-2 border-top" style="font-size: 0.8rem; color: #64748B;">
                 <span><strong>Current CTC:</strong> {{ candidate.current_salary_lpa|default:"N/A" }}</span>
                 <span><strong>Expected CTC:</strong> {{ candidate.expected_salary_lpa|default:"N/A" }}</span>
-                <span><strong>Notice Period:</strong> {{ candidate.notice_period|default:"30" }} Days</span>
+                <span><strong>Notice Period:</strong> {% if candidate.notice_period is not None %}{% if candidate.notice_period == 0 or candidate.is_immediate_joiner %}Immediate (0 Days){% else %}{{ candidate.notice_period }} Days{% endif %}{% else %}30 Days{% endif %}</span>
                 {% if candidate.uploader_name %}
                     <span><strong>Added By:</strong> {{ candidate.uploader_name }}</span>
                 {% endif %}

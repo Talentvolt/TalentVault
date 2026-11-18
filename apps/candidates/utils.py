@@ -1383,7 +1383,9 @@ def process_resume_file(file_obj, filename, overwrite=False, merge=False, merge_
             else:
                 profile.expected_salary = None
 
-            profile.notice_period = parsed_data.get('notice_period', 30)
+            np_val = parsed_data.get('notice_period')
+            profile.notice_period = 30 if np_val is None else np_val
+            profile.is_immediate_joiner = (profile.notice_period == 0)
             
             total_exp_val = info.get('total_experience', 0.0)
             if total_exp_val is not None and str(total_exp_val).strip() not in ("", "None", "null"):
@@ -2265,9 +2267,10 @@ def merge_candidate_profile_data(
                 pass
 
         new_notice = parsed_data.get('notice_period')
-        if not existing_profile.notice_period and new_notice:
+        if existing_profile.notice_period is None and new_notice is not None:
             try:
                 existing_profile.notice_period = int(new_notice)
+                existing_profile.is_immediate_joiner = (existing_profile.notice_period == 0)
             except Exception:
                 pass
 

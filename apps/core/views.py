@@ -5850,7 +5850,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                     "preferred_location": personal_info.get('preferred_location', ''),
                     "current_salary": float(profile.current_salary / 100000) if profile.current_salary else None,
                     "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else None,
-                    "notice_period": profile.notice_period or 30,
+                    "notice_period": 30 if profile.notice_period is None else profile.notice_period,
                     "highest_qualification": personal_info.get('highest_qualification', ''),
                     "college_university": personal_info.get('college_university', ''),
                     "github_url": personal_info.get('github_url', ''),
@@ -5990,7 +5990,9 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                         else:
                             profile.expected_salary = None
                             
-                        profile.notice_period = form.cleaned_data.get('notice_period') or 30
+                        notice_val = form.cleaned_data.get('notice_period')
+                        profile.notice_period = 30 if notice_val is None else notice_val
+                        profile.is_immediate_joiner = (profile.notice_period == 0)
                         profile.linkedin_url = form.cleaned_data.get('linkedin_url', '')
                         profile.portfolio_url = form.cleaned_data.get('portfolio_url', '')
                         profile.summary = form.cleaned_data.get('summary', '') or ""
@@ -6010,6 +6012,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                                 "current_designation": profile.current_designation,
                                 "total_experience": float(profile.total_experience),
                                 "relevant_experience": float(form.cleaned_data.get('relevant_experience') or 0.0),
+                                "notice_period": profile.notice_period,
                                 "highest_qualification": form.cleaned_data.get('highest_qualification', ''),
                                 "college_university": form.cleaned_data.get('college_university', ''),
                                 "linkedin_url": profile.linkedin_url,
@@ -6354,7 +6357,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                     "preferred_location": preferred_loc or '',
                     "current_salary": float(profile.current_salary / 100000) if profile.current_salary else '',
                     "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else '',
-                    "notice_period": profile.notice_period or 30,
+                    "notice_period": 30 if profile.notice_period is None else profile.notice_period,
                     "highest_qualification": education_first.degree if education_first else '',
                     "college_university": education_first.institution if education_first else '',
                     "primary_skills": ", ".join(skills_list[:len(skills_list)//2]) if skills_list else '',
@@ -6472,7 +6475,7 @@ class ResumeParserView(RecruiterRequiredMixin, TemplateView):
                     "preferred_location": preferred_loc or '',
                     "current_salary": float(profile.current_salary / 100000) if profile.current_salary else '',
                     "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else '',
-                    "notice_period": profile.notice_period or 30,
+                    "notice_period": 30 if profile.notice_period is None else profile.notice_period,
                     "highest_qualification": education_first.degree if education_first else '',
                     "college_university": education_first.institution if education_first else '',
                     "primary_skills": ", ".join(skills_list[:len(skills_list)//2]) if skills_list else '',
@@ -6811,6 +6814,15 @@ class CandidateJSONEditView(LoginRequiredMixin, View):
                 pass
         elif expected_sal is None or str(expected_sal).strip() == "":
             profile.expected_salary = None
+
+        raw_notice = info.get("notice_period")
+        if raw_notice is not None and str(raw_notice).strip() != "":
+            try:
+                np_val = int(raw_notice)
+                profile.notice_period = np_val
+                profile.is_immediate_joiner = (np_val == 0)
+            except Exception:
+                pass
             
         # Update user email / phone if provided
         new_email = info.get("email")

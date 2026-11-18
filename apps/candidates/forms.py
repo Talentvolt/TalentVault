@@ -7,6 +7,12 @@ from apps.accounts.models import User
 class CandidateProfileForm(forms.ModelForm):
     linkedin_url = forms.CharField(required=False, widget=forms.TextInput(attrs={'placeholder': 'https://linkedin.com/in/username'}))
     portfolio_url = forms.CharField(required=False, widget=forms.TextInput(attrs={'placeholder': 'https://yourportfolio.com'}))
+    notice_period = forms.IntegerField(
+        required=False,
+        min_value=0,
+        label="Notice Period (Days)",
+        widget=forms.NumberInput(attrs={'placeholder': '0 for Immediate Joiner', 'min': '0'})
+    )
 
     class Meta:
         model = CandidateProfile
@@ -19,6 +25,7 @@ class CandidateProfileForm(forms.ModelForm):
         labels = {
             'current_salary': 'Current CTC (LPA)',
             'expected_salary': 'Expected CTC (LPA)',
+            'notice_period': 'Notice Period (Days)',
         }
 
     def clean_linkedin_url(self):
@@ -31,6 +38,12 @@ class CandidateProfileForm(forms.ModelForm):
         val = self.cleaned_data.get('portfolio_url')
         return normalize_external_url(val)
 
+    def clean_notice_period(self):
+        val = self.cleaned_data.get('notice_period')
+        if val is None:
+            return 30
+        return val
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
@@ -39,6 +52,8 @@ class CandidateProfileForm(forms.ModelForm):
                 self.initial['current_salary'] = self.instance.current_salary / 100000
             if self.instance.expected_salary is not None:
                 self.initial['expected_salary'] = self.instance.expected_salary / 100000
+            if self.instance.notice_period is not None:
+                self.initial['notice_period'] = self.instance.notice_period
 
     def clean_current_salary(self):
         val = self.cleaned_data.get('current_salary')
@@ -53,6 +68,18 @@ class CandidateProfileForm(forms.ModelForm):
             # Convert from LPA input (e.g. 12.0) to raw DB value (e.g. 1200000)
             return val * 100000
         return val
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.notice_period is not None:
+            instance.is_immediate_joiner = (instance.notice_period == 0)
+        else:
+            instance.notice_period = 30
+            instance.is_immediate_joiner = False
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class ManualCandidateForm(forms.Form):
@@ -100,3 +127,9 @@ class ManualCandidateForm(forms.Form):
         if phone:
             phone = phone.strip()
         return phone
+
+    def clean_notice_period(self):
+        val = self.cleaned_data.get('notice_period')
+        if val is None:
+            return 30
+        return val
