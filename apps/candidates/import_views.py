@@ -458,6 +458,12 @@ class CandidateImportAPIView(APIView):
                     linkedin_url=profile_url[:200] if is_linkedin and profile_url else None,
                     portfolio_url=profile_url[:200] if not is_linkedin and profile_url else None,
                     source=source,
+                    # Ensure the candidate is immediately visible on /candidates/:
+                    # ACTIVE status (never a hidden/draft state) and ownership is
+                    # attributed to the authenticated recruiter when available, or
+                    # left as an unassigned "System Import" (which is still tenant
+                    # visible via the null created_by/uploaded_by branch).
+                    candidate_status='ACTIVE',
                     uploaded_by=uploaded_by,
                     created_by=uploaded_by,
                 )

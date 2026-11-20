@@ -135,7 +135,7 @@ async function handleApiRequest(request) {
   try {
     if (method === "GET") {
       const res = await fetch(url, { method: "GET", credentials: "include" });
-      return { ok: res.ok, status: res.status, statusText: res.statusText || "", data: await res.json().catch(() => null) };
+      return { ok: res.ok, status: res.status, statusText: res.statusText || "", url, data: await res.json().catch(() => null) };
     }
 
     const doPost = async () => {
@@ -154,13 +154,15 @@ async function handleApiRequest(request) {
     if (res.status === 403) {
       res = await doPost(); // refresh a stale/rotated CSRF token once and retry
     }
-    return { ok: res.ok, status: res.status, statusText: res.statusText || "", data: await res.json().catch(() => null) };
+    return { ok: res.ok, status: res.status, statusText: res.statusText || "", url, data: await res.json().catch(() => null) };
   } catch (err) {
-    // Surface the exact network failure detail instead of a generic message.
+    // Surface the exact network failure detail (and the live server URL) instead
+    // of a generic message.
     return {
       ok: false,
       status: 0,
       statusText: "",
+      url,
       error: (err && err.message) ? err.message : String(err),
       data: null,
     };

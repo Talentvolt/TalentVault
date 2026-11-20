@@ -1216,7 +1216,8 @@
         const data = resp && resp.data ? resp.data : null;
         const detail = (data && (data.error || data.detail)) || (resp && resp.error) || "";
         const http = (resp && resp.status) ? ` (HTTP ${resp.status}${resp.statusText ? " " + resp.statusText : ""})` : "";
-        setStatus("Save Error" + http + (detail ? ": " + detail : "."), "error");
+        const server = (resp && resp.url) ? ` [${resp.url}]` : ` [${DEFAULT_API_BASE_URL}]`;
+        setStatus("Save Error" + http + server + (detail ? ": " + detail : "."), "error");
       }
     } catch (err) {
       // A response DID come back -> this is NOT a network failure.
@@ -1224,7 +1225,8 @@
         const data = resp && resp.data ? resp.data : null;
         const detail = (data && (data.error || data.detail)) || (resp && resp.error) || "";
         const http = (resp && resp.status) ? ` (HTTP ${resp.status}${resp.statusText ? " " + resp.statusText : ""})` : "";
-        setStatus("Save Error" + http + (detail ? ": " + detail : "."), "error");
+        const server = (resp && resp.url) ? ` [${resp.url}]` : ` [${DEFAULT_API_BASE_URL}]`;
+        setStatus("Save Error" + http + server + (detail ? ": " + detail : "."), "error");
       } else {
         console.error("[Talent Vault] Widget save network error:", err);
         console.error("[Talent Vault] Widget save network error detail:", {
@@ -1235,7 +1237,7 @@
           online: (typeof navigator !== "undefined" && navigator.onLine),
         });
         const msg = (err && err.message) ? err.message : "Could not reach Talent Vault API.";
-        setStatus("Network Error: " + msg, "error");
+        setStatus(`Network Error: Could not reach ${DEFAULT_API_BASE_URL} — ${msg}`, "error");
       }
     } finally {
       saveEl.disabled = false;

@@ -1032,9 +1032,31 @@ function isInsideRightPanel(el) {
   return false;
 }
 
+// True when the element (or any ancestor) is LinkedIn's top-card "Open to work"
+// / "Providing services" promo box, which must never contaminate name/headline/
+// location/designation.
+function isLinkedInPromoBox(el) {
+  let node = el;
+  while (node && node !== document.body && node !== document.documentElement) {
+    try {
+      if (node.matches) {
+        if (node.matches('[data-view-name*="open-to-work" i], [data-view-name*="open_to_work" i], [data-view-name*="services" i], [id*="open-to-work" i], [id*="open_to_work" i], [class*="open-to-work" i], [class*="open_to_work" i]')) return true;
+      }
+      const label = (node.getAttribute && (node.getAttribute("aria-label") || "")) || "";
+      if (/open\s*to\s*work|providing\s*services/i.test(label)) return true;
+      if (node.children && node.children.length === 0) {
+        const t = (node.textContent || "").trim();
+        if (/^#?open\s*to\s*work$/i.test(t) || /^providing\s*services$/i.test(t) || /^#opentowork$/i.test(t)) return true;
+      }
+    } catch (e) {}
+    node = node.parentElement;
+  }
+  return false;
+}
+
 // Return the first element matching any selector that lives inside <main>.
-// Prevents a sidebar / recommendation card / right-panel from being mistaken
-// for the profile.
+// Prevents a sidebar / recommendation card / right-panel / "Open to work"
+// promo box from being mistaken for the profile.
 function firstInMain(selectors) {
   if (typeof document === "undefined") return null;
   const main = mainContainer();
@@ -1049,6 +1071,7 @@ function firstInMain(selectors) {
       if (!el) continue;
       if (main && main !== document.body && !main.contains(el)) continue;
       if (isInsideRightPanel(el)) continue;
+      if (isLinkedInPromoBox(el)) continue;
       const txt = getCleanText(el);
       if (txt) return { el, txt };
     }
@@ -1746,9 +1769,11 @@ function findLinkedInExperienceContainer() {
     if (card && card !== document.body) return card;
   }
 
-  // 3. By card container containing an Experience heading
+  // 3. By card container containing an Experience heading (never the
+  //    "Open to work" / "Providing services" promo box).
   const candidates = mainSections();
   for (const card of candidates) {
+    if (isLinkedInPromoBox(card)) continue;
     const headings = card.querySelectorAll('h1, h2, h3, h4, [role="heading"], .pvs-header__title, .title');
     for (const h of headings) {
       const txt = getCleanText(h).toLowerCase();
@@ -2193,18 +2218,26 @@ const LinkedInAdapter = {
       });
     }
 
-    // 10. Skills (ALL visible entries)
-    const skillsSec = findSection('skills', ['skills', 'competencies', 'endorsement']);
+    // 10. Skills (ALL visible entries) — handles both "Skills" and "Top skills"
+    // headings and both list-based and inline "Python • Java • C++" layouts.
+    const skillsSec = findSection('skills', ['skills', 'top skills', 'competencies', 'endorsement']);
     if (skillsSec) {
-      const items = skillsSec.querySelectorAll('li, .skill-chip, [data-view-name*="skill"]');
+      const addSkill = (raw) => {
+        // "Python (Programming Language)" -> "Python"
+        const normalized = sanitizeString(String(raw || "")).replace(/\s*\([^)]*\)\s*/g, " ").trim();
+        if (!normalized) return;
+        // A single block may list many skills separated by bullets/commas.
+        normalized.split(/\s*[•·|,;]\s*/).forEach((part) => {
+          const s = sanitizeString(part);
+          if (s && s.length < 60 && !/skill|endorse|show all|see all/i.test(s) && !base.skills.includes(s)) {
+            base.skills.push(s);
+          }
+        });
+      };
+      const items = skillsSec.querySelectorAll('li, .skill-chip, [data-view-name*="skill"], span[aria-hidden="true"]');
       items.forEach((item) => {
         const sSpan = item.querySelector('span[aria-hidden="true"]') || item;
-        const sName = getCleanText(sSpan);
-        if (sName && !sName.toLowerCase().includes("endorse") && !sName.toLowerCase().includes("skill") && sName.length < 60) {
-          if (!base.skills.includes(sName)) {
-            base.skills.push(sName);
-          }
-        }
+        addSkill(getCleanText(sSpan));
       });
     }
 
