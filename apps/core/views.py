@@ -3098,7 +3098,11 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         )
         tab_p = self.request.GET.get('tab', '').strip().lower()
         has_r_p = self.request.GET.get('has_resume')
-        if tab_p == 'without_resume' or has_r_p in ['0', 'false', 'False']:
+        # A search query always shows results under "All" — the queryset already
+        # ignores the resume tab when `q` is present, so the UI tab must match.
+        if q:
+            resolved_tab = 'all'
+        elif tab_p == 'without_resume' or has_r_p in ['0', 'false', 'False']:
             resolved_tab = 'without_resume'
         elif tab_p == 'with_resume' or has_r_p in ['1', 'true', 'True']:
             resolved_tab = 'with_resume'
@@ -3302,7 +3306,9 @@ class CandidateAutocompleteView(RecruiterRequiredMixin, View):
                 })
             return JsonResponse({'query': q, 'count': len(results), 'results': results, 'suggestions': results})
 
-        # Multi-field Candidate Directory Autocomplete Search
+        # Multi-field Candidate Directory Autocomplete Search.
+        # Deliberately NO has_resume / resume filter: autocomplete must surface
+        # every tenant-visible candidate (including resume-less extension uploads).
         candidates_qs = get_tenant_candidates_qs(user).select_related('user').prefetch_related('skills').filter(
             Q(full_name__icontains=q) |
             Q(user__first_name__icontains=q) |

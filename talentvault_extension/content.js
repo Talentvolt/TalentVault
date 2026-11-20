@@ -1995,6 +1995,55 @@ function extractLinkedInEducationFallback() {
   return out;
 }
 
+// Robust top-card location fallback: find the "City, State, Country" text line
+// in the top-card left panel (right below the headline, above "Contact info" /
+// "connections"), independent of LinkedIn's exact span classes.
+function findTopCardLocation(name, headline) {
+  if (typeof document === "undefined") return "";
+  try {
+    const main = mainContainer();
+    const scope = (main && main !== document.body) ? main : document;
+    const panel = scope.querySelector('.pv-text-details__left-panel, .pv-top-card, [data-view-name="profile-topcard"], .top-card-layout__left-panel') || scope;
+    const candidates = [];
+    panel.querySelectorAll('span, div, p, li').forEach((el) => {
+      if (el.children && el.children.length) return;
+      const txt = getCleanText(el);
+      if (txt && txt.length <= 120) candidates.push(txt);
+    });
+    const nameL = (name || "").toLowerCase().trim();
+    const headlineL = (headline || "").toLowerCase().trim();
+    for (const txt of candidates) {
+      const l = txt.toLowerCase();
+      if (l === nameL || l === headlineL) continue;
+      if (l.includes("contact info") || l.includes("connections") || l.includes("followers") || l.includes("open to work") || l.includes("providing services")) continue;
+      if (/^location$/i.test(txt)) continue;
+      if (/,/.test(txt) || /(city|state|district|india|uttar|delhi|bangalore|bengaluru|mumbai|pune|hyderabad|chennai|kolkata|jaipur|lucknow|noida|gurgaon|gurugram)/i.test(txt)) {
+        return txt;
+      }
+    }
+  } catch (e) {}
+  return "";
+}
+
+// Extract inline skills listed in the top-card headline (e.g. "C, Java, HTML,
+// CSS, MySQL & DBMS") when the dedicated #skills section was absent.
+function collectHeadlineSkills(base) {
+  if (!base.headline || (base.skills && base.skills.length)) return;
+  try {
+    const segments = base.headline.split(/\s*[|·•]\s*/).map((p) => p.trim()).filter(Boolean);
+    for (const seg of segments) {
+      const tokens = seg.split(/\s*[,&]\s*/).map((t) => sanitizeString(t)).filter(Boolean);
+      if (tokens.length < 2) continue;
+      if (!tokens.every((t) => t.length < 40)) continue;
+      tokens.forEach((t) => {
+        if (/^(at|in|and|or|the)$/i.test(t)) return;
+        if (/student|developer|engineer|manager|intern|aspiring|consultant|analyst|specialist/i.test(t)) return;
+        if (!base.skills.includes(t)) base.skills.push(t);
+      });
+    }
+  } catch (e) {}
+}
+
 const LinkedInAdapter = {
   extract(base) {
     dumpLinkedInDiagnostics();
@@ -2050,6 +2099,11 @@ const LinkedInAdapter = {
       if (txt && !txt.toLowerCase().includes("contact info") && !txt.toLowerCase().includes("connections") && !txt.toLowerCase().includes("followers")) {
         base.location = txt;
       }
+    }
+    // Robust fallback for profiles where LinkedIn changed the location span
+    // classes (or the location line sits directly under the headline).
+    if (!base.location) {
+      base.location = findTopCardLocation(base.name, base.headline);
     }
 
     // 4. Current Company (Top Card Header or Right Panel)
@@ -2244,6 +2298,10 @@ const LinkedInAdapter = {
     // 11. Skills also surface as pills/chips and "Skills: ..." lines inside
     // experience and project cards.
     collectLinkedInExtraSkills(base);
+
+    // 12. Final fallback: inline skills listed in the top-card headline (e.g.
+    // "C, Java, HTML, CSS, MySQL & DBMS") when no #skills section was present.
+    collectHeadlineSkills(base);
 
     console.log(`[Talent Vault Debug] result: experienceEntries=${base.experience.length} educationEntries=${base.education.length} projects=${base.projects.length} certs=${base.certifications.length} skills=${base.skills.length}`);
     return base;
