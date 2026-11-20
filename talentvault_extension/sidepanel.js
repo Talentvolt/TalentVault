@@ -10,7 +10,7 @@
 //   chrome.storage.local.set({ apiBaseUrl: "http://<your-local-dev-host>" });
 // The override is read from chrome.storage.local each time the panel opens.
 // ---------------------------------------------------------------------------
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_API_BASE_URL = "https://talent-vault.in";
 const API_BASE_STORAGE_KEY = "apiBaseUrl";
 
 let API_BASE_URL = DEFAULT_API_BASE_URL;
@@ -269,14 +269,16 @@ const SUPPORTED_HOSTS = [
   "naukri.com",
   "apna.com",
   "apna.co",
+  "workindia.in",
+  "indeed.com",
+  "indeed.co.in",
+  "foundit.in",
   "shine.com",
   "timesjobs.com",
-  "foundit.in",
   "cutshort.io",
   "hirist.com",
   "instahyre.com",
-  "wellfound.com",
-  "indeed.com"
+  "wellfound.com"
 ];
 
 function isSupportedSource(url) {
@@ -549,6 +551,32 @@ async function parseActivePage() {
   }
 }
 
+// Load the logged-in recruiter's jobs into the optional "Target Job" selector.
+// This is fire-and-forget and purely optional: a 401 (not logged in) or a
+// network error simply leaves the default "No specific job" option in place.
+async function loadJobs() {
+  const select = document.getElementById("jobSelect");
+  if (!select) return;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/jobs/`, { method: "GET", credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const jobs = data && (Array.isArray(data) ? data : data.results);
+    if (!Array.isArray(jobs)) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">No specific job</option>';
+    jobs.forEach((job) => {
+      const opt = document.createElement("option");
+      opt.value = String(job && (job.id || job.uuid) || "");
+      opt.textContent = (job && job.title) || (job && job.id) || "Untitled Job";
+      select.appendChild(opt);
+    });
+    if (current) select.value = current;
+  } catch (e) {
+    // Optional feature — never surface its errors to the recruiter.
+  }
+}
+
 function populateForm(data) {
   currentExtractedData = data;
 
@@ -596,6 +624,7 @@ function populateForm(data) {
 
   document.getElementById("candidateForm").classList.remove("hidden");
   hideExtractCard();
+  loadJobs();
   showAlert(`Extracted data for "${data.name || 'Candidate'}". Review and edit fields before saving.`, "success");
 }
 
@@ -1255,6 +1284,9 @@ async function handleSaveCandidate() {
     projects: projectsData,
     certifications: certificationsData,
     source: currentMode === "parsing" ? (currentExtractedData?.source || "linkedin") : "manual",
+    source_portal: currentExtractedData?.source_portal || "",
+    source_url: currentExtractedData?.source_url || strVal("fieldProfileUrl"),
+    job_id: strVal("jobSelect"),
     uploaded_by_email: strVal("recruiterEmail"),
     personal_info: {
       name: nameInput,

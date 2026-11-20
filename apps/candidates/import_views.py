@@ -10,6 +10,7 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework import status, permissions
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -221,21 +222,51 @@ def _save_attached_resume(profile, resume_payload, user):
         logger.warning("Resume attachment failed unexpectedly: %s", exc)
         return False, "Resume attachment failed."
 
+def normalize_phone(value):
+    """
+    Normalize a phone number to a digits-only (optionally leading +) string so
+    deduplication by phone works regardless of how the extension formatted it.
+    """
+    if value is None:
+        return ""
+    cleaned = re.sub(r"[^\d+]", "", str(value))
+    return cleaned
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """
+    Session auth that deliberately skips CSRF enforcement. The import endpoint
+    is a csrf_exempt public API called from a chrome-extension:// origin, whose
+    random extension ID can never be listed in CSRF_TRUSTED_ORIGINS. The
+    extension still sends a valid X-CSRFToken header and session cookies, but we
+    do not want DRF's SessionAuthentication to 403 the request purely because of
+    the untrusted Origin. TokenAuthentication remains fully CSRF-free by design.
+    """
+    def enforce_csrf(self, request):
+        return
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class CandidateImportAPIView(APIView):
     """
-    API endpoint for candidate import from TalentVault Chrome Extension (LinkedIn, Naukri, Manual).
-    Accepts normalized candidate JSON data, checks for existing duplicate candidate profiles by email,
-    phone, or profile URL, and creates/updates CandidateProfile, Experience, Education, and CandidateSkill.
+    API endpoint for candidate import from TalentVault Chrome Extension
+    (Naukri, LinkedIn, Apna, WorkIndia, Indeed, Foundit, or Manual).
+
+    Accepts normalized candidate JSON data, checks for existing duplicate
+    candidate profiles by email, phone, or profile URL, and creates/updates
+    CandidateProfile, Experience, Education, and CandidateSkill.
+
+    Authentication: the endpoint is public (AllowAny) so the extension can reach
+    it without an API key, but it ALSO resolves a logged-in recruiter when a
+    session cookie or ``Authorization: Token ...`` header is present, so the
+    upload is attributed to ``request.user`` automatically. The endpoint remains
+    csrf_exempt because the extension origin cannot be pre-registered.
     """
     permission_classes = [permissions.AllowAny]
-    # This public endpoint is called by the Chrome extension (both the packaged
-    # production build and an unpacked local build). We intentionally run NO
-    # authentication/session classes here so DRF's SessionAuthentication never
-    # triggers its CSRF check against the extension's chrome-extension:// origin
-    # (a locally loaded extension has a random ID that cannot be listed in
-    # CSRF_TRUSTED_ORIGINS). The view is also marked csrf_exempt above.
-    authentication_classes = []
+    # Resolve the logged-in recruiter from the session cookie or a DRF token when
+    # present, but never require it (anonymous imports are still allowed and are
+    # attributed via `uploaded_by_email` or left as "System Import").
+    authentication_classes = [CsrfExemptSessionAuthentication, TokenAuthentication]
 
     def get(self, request, *args, **kwargs):
         csrf_token = get_token(request)
@@ -258,6 +289,7 @@ class CandidateImportAPIView(APIView):
         headline = (info.get("current_designation") or data.get("current_designation") or data.get("headline") or "").strip()
         current_company_in = (info.get("current_company") or data.get("current_company") or "").strip()
         location = (info.get("location") or data.get("location") or "").strip()
+        preferred_location = (info.get("preferred_location") or data.get("preferred_location") or "").strip()
         summary = (data.get("summary") or data.get("about") or info.get("summary") or "").strip()
         experience_list = data.get("experience") or []
         education_list = data.get("education") or []
@@ -265,9 +297,16 @@ class CandidateImportAPIView(APIView):
         certifications_list = data.get("certifications") or []
         skills_list = data.get("skills") or []
         profile_url = (info.get("profile_url") or data.get("linkedin_url") or data.get("profile_url") or "").strip()
+        source_url = (data.get("source_url") or info.get("source_url") or "").strip()
+        source_portal = (data.get("source_portal") or info.get("source_portal") or "").strip()
         email = (info.get("email") or data.get("email") or "").strip()
-        phone = (info.get("phone") or data.get("phone") or "").strip()
+        phone = normalize_phone(info.get("phone") or data.get("phone") or "")
         source = (data.get("source") or "").strip()
+        job_id = data.get("job_id") or info.get("job_id")
+
+        # Reject a clearly malformed email before it can reach the database.
+        if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return Response({"error": "Invalid email address provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Numeric fields
         raw_total_exp = info.get("total_experience") if "total_experience" in info else data.get("total_experience")
@@ -282,7 +321,9 @@ class CandidateImportAPIView(APIView):
             is_immediate = bool(data.get("is_immediate_joiner"))
 
         if not source:
-            if "linkedin.com" in profile_url.lower():
+            if source_portal:
+                source = source_portal.lower().replace(" ", "_")
+            elif "linkedin.com" in profile_url.lower():
                 source = "linkedin"
             elif "naukri.com" in profile_url.lower():
                 source = "naukri"
@@ -359,11 +400,15 @@ class CandidateImportAPIView(APIView):
                     profile.is_immediate_joiner = is_immediate
                 if source:
                     profile.source = source
+                if preferred_location and not profile.preferred_location:
+                    profile.preferred_location = preferred_location
                 if profile_url:
                     if "linkedin" in profile_url.lower() and not profile.linkedin_url:
                         profile.linkedin_url = profile_url
                     elif not profile.portfolio_url and "linkedin" not in profile_url.lower():
                         profile.portfolio_url = profile_url
+                if source_url and not profile.source_resume_url and source_url != profile_url:
+                    profile.source_resume_url = source_url[:2000]
                 if uploaded_by and not profile.uploaded_by:
                     profile.uploaded_by = uploaded_by
                 profile.save()
@@ -404,6 +449,7 @@ class CandidateImportAPIView(APIView):
                     current_designation=first_designation[:255] if first_designation else None,
                     current_company=first_company[:255] if first_company else None,
                     location=location[:100] if location else "Not Specified",
+                    preferred_location=preferred_location[:255] if preferred_location else None,
                     total_experience=total_exp,
                     current_salary=current_sal,
                     expected_salary=expected_sal,
@@ -415,6 +461,26 @@ class CandidateImportAPIView(APIView):
                     uploaded_by=uploaded_by,
                     created_by=uploaded_by,
                 )
+
+            # Optional target-job association (recruiter selected a Job in the
+            # extension before saving). Non-fatal: an unknown id is ignored rather
+            # than failing the whole import.
+            associated_job = None
+            if job_id:
+                from apps.jobs.models import Job
+                from apps.applications.models import Application
+                associated_job = Job.objects.filter(id=job_id).first()
+                if associated_job:
+                    Application.objects.get_or_create(
+                        candidate=profile,
+                        job=associated_job,
+                        defaults={
+                            'stage': 'OPEN',
+                            'in_pipeline': True,
+                            'recruiter': uploaded_by,
+                            'screening_answers': [],
+                        }
+                    )
 
             # Create/Update Experience records
             if isinstance(experience_list, list):
@@ -546,7 +612,10 @@ class CandidateImportAPIView(APIView):
                     "current_salary": float(profile.current_salary / 100000) if profile.current_salary else 0.0,
                     "expected_salary": float(profile.expected_salary / 100000) if profile.expected_salary else 0.0,
                     "notice_period": profile.notice_period,
+                    "preferred_location": profile.preferred_location or preferred_location,
                     "profile_url": profile.linkedin_url or profile.portfolio_url or profile_url,
+                    "source_portal": profile.source or source_portal or source,
+                    "source_url": source_url or profile.linkedin_url or profile.portfolio_url,
                 },
                 "summary": profile.summary or summary,
                 "skills": [s.skill_name for s in profile.skills.all()] if profile.skills.exists() else skills_list,
@@ -607,6 +676,7 @@ class CandidateImportAPIView(APIView):
             "candidate_id": str(profile.id),
             "resume_attached": resume_attached,
             "resume_message": resume_message,
+            "job_id": str(associated_job.id) if associated_job else None,
             "candidate": {
                 "id": str(profile.id),
                 "name": profile.full_name,

@@ -12,7 +12,7 @@
     console.log(`[Talent Vault Debug] extractPageData defined=${typeof extractPageData === "function"} | preparePage defined=${typeof preparePage === "function"}`);
   } catch (e) {}
 
-  const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+  const DEFAULT_API_BASE_URL = "https://talent-vault.in";
   const IMPORT_PATH = "/api/v1/candidates/import/";
 
   const WIDGET_CSS = `
@@ -289,6 +289,20 @@
 
   // --- Personal Information Section ---
   const recruiterEmailInput = addField("recruiter-email", "Recruiter Email (your login)", "email");
+
+  // Optional target-job selector (populated lazily from the recruiter's jobs).
+  const jobField = makeEl("div", "tv-field");
+  const jobLabel = makeEl("label", "", "Target Job (optional)");
+  jobLabel.setAttribute("for", "tv-job-select");
+  jobField.appendChild(jobLabel);
+  const jobSelectInput = makeEl("select");
+  jobSelectInput.id = "tv-job-select";
+  const jobNoneOption = makeEl("option", "", "No specific job");
+  jobNoneOption.value = "";
+  jobSelectInput.appendChild(jobNoneOption);
+  jobField.appendChild(jobSelectInput);
+  formEl.appendChild(jobField);
+
   const nameInput = addField("name", "Full Name *", "text");
   const [headlineInput, companyInput] = addRow("headline", "Designation", "text", null, "company", "Company", "text", null);
   const locationInput = addField("location", "Location", "text");
@@ -845,6 +859,36 @@
     return out;
   }
 
+  // Load the logged-in recruiter's jobs into the optional "Target Job" selector
+  // via the background proxy (which carries session cookies). Fire-and-forget:
+  // a 401 / network error simply keeps "No specific job" as the only option.
+  async function loadJobs() {
+    if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) return;
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        action: "tv_api_request",
+        method: "GET",
+        path: "/api/v1/jobs/",
+      });
+      if (!resp || !resp.ok || !resp.data) return;
+      const jobs = Array.isArray(resp.data) ? resp.data : resp.data.results;
+      if (!Array.isArray(jobs)) return;
+      const current = jobSelectInput.value;
+      jobSelectInput.innerHTML = "";
+      const noneOpt = makeEl("option", "", "No specific job");
+      noneOpt.value = "";
+      jobSelectInput.appendChild(noneOpt);
+      jobs.forEach((job) => {
+        const opt = makeEl("option", "", (job && job.title) || (job && job.id) || "Untitled Job");
+        opt.value = String((job && (job.id || job.uuid)) || "");
+        jobSelectInput.appendChild(opt);
+      });
+      if (current) jobSelectInput.value = current;
+    } catch (e) {
+      // Optional feature — never surface its errors to the recruiter.
+    }
+  }
+
   function populateForm(data) {
     state.extracted = data;
     state.profileKey = currentProfileKey();
@@ -878,6 +922,7 @@
     }
 
     setMode("parsing");
+    loadJobs();
   }
 
   function currentExperiences() {
@@ -957,6 +1002,9 @@
       projects: projects,
       certifications: certs,
       source: source,
+      source_portal: (state.extracted && state.extracted.source_portal) || "",
+      source_url: (state.extracted && state.extracted.source_url) || profileUrl,
+      job_id: jobSelectInput.value || "",
       uploaded_by_email: recruiterEmailInput.value.trim(),
     };
   }
@@ -1416,6 +1464,7 @@
     isMinimized,
     inputs: {
       recruiterEmailInput,
+      jobSelectInput,
       nameInput,
       headlineInput,
       companyInput,

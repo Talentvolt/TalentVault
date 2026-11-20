@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "Talent Vault",
-    "version": "1.0.6",
-    "description": "Save LinkedIn and Naukri profiles to Talent Vault.",
+    "version": "1.0.7",
+    "description": "Save candidate profiles from Naukri, LinkedIn, Apna, WorkIndia, Indeed, Foundit and any other job portal directly into Talent Vault.",
     "permissions": [
         "activeTab",
         "scripting",
@@ -15,18 +15,20 @@
         "http://127.0.0.1:8000/*",
         "http://localhost:8000/*",
         "http://localhost/*",
-        "https://*.linkedin.com/*",
-        "https://*.naukri.com/*",
-        "https://*.apna.com/*",
-        "https://*.apna.co/*",
-        "https://*.shine.com/*",
-        "https://*.timesjobs.com/*",
-        "https://*.foundit.in/*",
-        "https://*.cutshort.io/*",
-        "https://*.hirist.com/*",
-        "https://*.instahyre.com/*",
-        "https://*.wellfound.com/*",
-        "https://*.indeed.com/*"
+        "*://*.linkedin.com/*",
+        "*://*.naukri.com/*",
+        "*://*.apna.com/*",
+        "*://*.apna.co/*",
+        "*://*.workindia.in/*",
+        "*://*.indeed.com/*",
+        "*://*.indeed.co.in/*",
+        "*://*.foundit.in/*",
+        "*://*.shine.com/*",
+        "*://*.timesjobs.com/*",
+        "*://*.cutshort.io/*",
+        "*://*.hirist.com/*",
+        "*://*.instahyre.com/*",
+        "*://*.wellfound.com/*"
     ],
     "background": {
         "service_worker": "background.js"
@@ -34,18 +36,20 @@
     "content_scripts": [
         {
             "matches": [
-                "https://*.linkedin.com/*",
-                "https://*.naukri.com/*",
-                "https://*.apna.com/*",
-                "https://*.apna.co/*",
-                "https://*.shine.com/*",
-                "https://*.timesjobs.com/*",
-                "https://*.foundit.in/*",
-                "https://*.cutshort.io/*",
-                "https://*.hirist.com/*",
-                "https://*.instahyre.com/*",
-                "https://*.wellfound.com/*",
-                "https://*.indeed.com/*"
+                "*://*.linkedin.com/*",
+                "*://*.naukri.com/*",
+                "*://*.apna.com/*",
+                "*://*.apna.co/*",
+                "*://*.workindia.in/*",
+                "*://*.indeed.com/*",
+                "*://*.indeed.co.in/*",
+                "*://*.foundit.in/*",
+                "*://*.shine.com/*",
+                "*://*.timesjobs.com/*",
+                "*://*.cutshort.io/*",
+                "*://*.hirist.com/*",
+                "*://*.instahyre.com/*",
+                "*://*.wellfound.com/*"
             ],
             "js": [
                 "content.js",

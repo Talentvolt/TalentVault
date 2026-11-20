@@ -65,7 +65,7 @@ async function triggerResumeDownload(url) {
 // through this service worker (which has host permissions) so the recruiter's
 // session cookies and CSRF token are sent correctly and never exposed to the page.
 // ---------------------------------------------------------------------------
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_API_BASE_URL = "https://talent-vault.in";
 const API_BASE_STORAGE_KEY = "apiBaseUrl";
 const IMPORT_PATH = "/api/v1/candidates/import/";
 

@@ -65,7 +65,7 @@ test("background proxies a candidate save with a valid CSRF token", async () => 
 
   const postCall = fetch.calls.find((c) => (c.opts.method || "GET") === "POST");
   assert.ok(postCall);
-  assert.equal(postCall.url, "http://127.0.0.1:8000/api/v1/candidates/import/");
+  assert.equal(postCall.url, "https://talent-vault.in/api/v1/candidates/import/");
   assert.equal(postCall.opts.headers["X-CSRFToken"], "tok123");
   assert.equal(postCall.opts.credentials, "include");
 });

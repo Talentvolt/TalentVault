@@ -503,16 +503,44 @@ async function captureNaukriResumeViaClick() {
 // ---------------------------------------------------------------------------
 // Core Extraction Coordinator
 // ---------------------------------------------------------------------------
+function detectSource(hostname) {
+  const host = (hostname || "").toLowerCase();
+  if (host.includes("linkedin.com")) return "linkedin";
+  if (host.includes("naukri.com")) return "naukri";
+  if (host.includes("apna.com") || host.includes("apna.co") || host.includes("apna.")) return "apna";
+  if (host.includes("workindia.in")) return "workindia";
+  if (host.includes("indeed.")) return "indeed";
+  if (host.includes("foundit.in") || host.includes("monster.")) return "foundit";
+  if (host.includes("shine.com")) return "shine";
+  if (host.includes("timesjobs.com")) return "timesjobs";
+  if (host.includes("cutshort.io")) return "cutshort";
+  if (host.includes("hirist.com")) return "hirist";
+  if (host.includes("instahyre.com")) return "instahyre";
+  if (host.includes("wellfound.com")) return "wellfound";
+  return "web_import";
+}
+
+const SOURCE_PORTAL_LABELS = {
+  linkedin: "LinkedIn",
+  naukri: "Naukri",
+  apna: "Apna",
+  workindia: "WorkIndia",
+  indeed: "Indeed",
+  foundit: "Foundit",
+  shine: "Shine",
+  timesjobs: "TimesJobs",
+  cutshort: "Cutshort",
+  hirist: "Hirist",
+  instahyre: "Instahyre",
+  wellfound: "Wellfound",
+  web_import: "Web Import",
+};
+
 function extractPageData() {
   const hostname = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname.toLowerCase() : "";
-  let source = "web_import";
-  if (hostname.includes("linkedin.com")) {
-    source = "linkedin";
-  } else if (hostname.includes("naukri.com")) {
-    source = "naukri";
-  } else if (hostname.includes("apna.") || hostname.includes("apna.com") || hostname.includes("apna.co")) {
-    source = "apna";
-  }
+  const source = detectSource(hostname);
+  const fullUrl = (typeof window !== "undefined" && window.location && window.location.href) ? window.location.href : "";
+  const cleanUrl = fullUrl.split("?")[0].split("#")[0];
 
   let base = {
     name: "",
@@ -535,10 +563,10 @@ function extractPageData() {
     resume_available: false,
     resume_url: "",
     resume_filename: "",
-    profile_url: (typeof window !== "undefined" && window.location && window.location.href)
-      ? window.location.href.split("?")[0].split("#")[0]
-      : "",
+    profile_url: cleanUrl,
     source: source,
+    source_portal: SOURCE_PORTAL_LABELS[source] || "Web Import",
+    source_url: fullUrl,
   };
 
   if (source === "linkedin") {
@@ -547,6 +575,12 @@ function extractPageData() {
     base = NaukriAdapter.extract(base);
   } else if (source === "apna") {
     base = ApnaAdapter.extract(base);
+  } else if (source === "workindia") {
+    base = WorkIndiaAdapter.extract(base);
+  } else if (source === "indeed") {
+    base = IndeedAdapter.extract(base);
+  } else if (source === "foundit") {
+    base = FounditAdapter.extract(base);
   } else {
     base = GenericAdapter.extract(base);
   }
@@ -3077,15 +3111,164 @@ const ApnaAdapter = {
   }
 };
 
+// Returns the first element among `selectors` (scoped to `root` when provided)
+// that yields non-empty text. Null-safe: bad selectors are skipped, missing
+// elements return null, and every text access goes through getCleanText().
+function firstTextMatch(selectors, root) {
+  if (typeof document === "undefined") return null;
+  const scope = (root && typeof root.querySelectorAll === "function") ? root : document;
+  const list = Array.isArray(selectors) ? selectors : [];
+  for (const sel of list) {
+    let els = [];
+    try { els = scope.querySelectorAll(sel); } catch (e) { continue; }
+    for (const el of els) {
+      const txt = getCleanText(el);
+      if (txt && txt.length >= 2) return { el, txt };
+    }
+  }
+  return null;
+}
+
+// Shared structured extraction used by the Indeed / WorkIndia / Foundit
+// adapters and the universal generic fallback. It only performs read-only DOM
+// inspection and never touches cookies, storage, or headers.
+function extractStructuredProfile(base, opts) {
+  const o = opts || {};
+  const main = mainContainer();
+
+  const nameHit = firstTextMatch(o.nameSelectors || ['h1', '[class*="name" i]', '[class*="title" i]'], main);
+  if (nameHit) {
+    const txt = nameHit.txt.replace(/\s+\(.+\)$/g, "").trim();
+    if (txt.length >= 2 && txt.length < 120 && !FORBIDDEN_WORDS.test(txt) && !/^(login|sign\s*in|search|home|jobs?|profile|apply|resume|job\s*search)$/i.test(txt)) {
+      base.name = txt;
+    }
+  }
+
+  const headlineHit = firstTextMatch(o.headlineSelectors || ['[class*="designation" i]', '[class*="headline" i]', '[class*="job-title" i]', '[class*="jobtitle" i]', '[class*="role" i]', '[class*="title" i]'], main);
+  if (headlineHit) {
+    const txt = headlineHit.txt;
+    if (txt && txt !== base.name && txt.length < 300 && !FORBIDDEN_WORDS.test(txt)) {
+      base.headline = txt;
+      base.current_designation = txt;
+    }
+  }
+
+  const locationHit = firstTextMatch(o.locationSelectors || ['[class*="location" i]', '[class*="city" i]', '[class*="address" i]'], main);
+  if (locationHit) {
+    const txt = locationHit.txt;
+    if (txt && txt.length < 120 && !/^location$/i.test(txt)) {
+      base.location = txt;
+    }
+  }
+
+  if (!base.summary) {
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc && metaDesc.content) base.summary = metaDesc.content.trim();
+  }
+
+  const exp = collectSectionEntries(['experience', 'work experience', 'employment', 'employment history', 'professional experience', 'work history']);
+  exp.items.forEach((item) => {
+    if (isMultiRole(item)) {
+      const companyName = extractGroupCompany(item);
+      const nested = item.querySelector('ul, ol');
+      if (nested) {
+        elementChildren(nested)
+          .filter((el) => el.tagName && el.tagName.toLowerCase() === 'li' && !/^skills?:/i.test((el.textContent || "").trim()))
+          .forEach((sub) => {
+            const entry = buildExperienceEntry(sub, companyName);
+            if (entry) base.experience.push(entry);
+          });
+      }
+    } else {
+      const entry = buildExperienceEntry(item, null);
+      if (entry) base.experience.push(entry);
+    }
+  });
+
+  const edu = collectSectionEntries(['education', 'academics', 'qualification', 'education & qualifications', 'educational qualifications']);
+  edu.items.forEach((item) => {
+    const entry = buildEducationEntry(item);
+    if (entry) base.education.push(entry);
+  });
+
+  const proj = collectSectionEntries(['projects', 'project details', 'personal projects', 'academic projects']);
+  proj.items.forEach((item) => {
+    const entry = buildProjectEntry(item);
+    if (entry) base.projects.push(entry);
+  });
+
+  const cert = collectSectionEntries(['certifications', 'certification', 'licenses & certifications', 'licenses and certifications']);
+  cert.items.forEach((item) => {
+    const entry = buildCertificationEntry(item);
+    if (entry) base.certifications.push(entry);
+  });
+
+  const skillsSec = findSection('skills', ['skills', 'key skills', 'technical skills', 'it skills', 'core competencies', 'skills & competencies']);
+  if (skillsSec) {
+    skillsSec.querySelectorAll('li, [class*="skill" i], [class*="chip" i], [class*="tag" i], span').forEach((item) => {
+      if (item.querySelector && item.querySelector('span, a, button')) return;
+      const sName = getCleanText(item);
+      if (sName && sName.length < 60 && !/skill|endorse|experience|year/i.test(sName)) {
+        if (!base.skills.includes(sName)) base.skills.push(sName);
+      }
+    });
+  }
+  if (!base.skills.length) {
+    const metaKeywords = document.querySelector('meta[name="keywords"]');
+    if (metaKeywords && metaKeywords.content) {
+      base.skills = metaKeywords.content.split(/[,;]/).map((s) => s.trim()).filter((s) => s && s.length < 60).slice(0, 30);
+    }
+  }
+
+  if (!base.current_company && base.experience.length > 0) {
+    base.current_company = base.experience[0].company_name || "";
+  }
+  if (!base.current_designation && base.experience.length > 0) {
+    base.current_designation = base.experience[0].designation || "";
+  }
+
+  return base;
+}
+
 const GenericAdapter = {
   extract(base) {
-    const main = mainContainer();
-    const h1 = main ? main.querySelector('h1') : document.querySelector('h1');
-    if (h1) base.name = getCleanText(h1);
+    return extractStructuredProfile(base, {
+      nameSelectors: ['h1', 'h2', '[class*="name" i]', '[class*="title" i]', '[class*="profile" i]'],
+      headlineSelectors: ['[class*="designation" i]', '[class*="headline" i]', '[class*="job-title" i]', '[class*="jobtitle" i]', '[class*="role" i]', '[class*="title" i]'],
+      locationSelectors: ['[class*="location" i]', '[class*="city" i]', '[class*="address" i]'],
+    });
+  }
+};
 
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) base.summary = metaDesc.content.trim();
+const IndeedAdapter = {
+  extract(base) {
+    base = extractStructuredProfile(base, {
+      nameSelectors: ['h1', '[data-testid="jobseeker-name" i]', '[class*="jobseeker-name" i]', '[class*="resume-name" i]', '[class*="name" i]', '[class*="title" i]'],
+      headlineSelectors: ['[data-testid="jobseeker-headline" i]', '[class*="headline" i]', '[class*="designation" i]', '[class*="job-title" i]', '[class*="title" i]'],
+      locationSelectors: ['[class*="location" i]', '[class*="city" i]', '[class*="address" i]'],
+    });
+    return base;
+  }
+};
 
+const WorkIndiaAdapter = {
+  extract(base) {
+    base = extractStructuredProfile(base, {
+      nameSelectors: ['h1', 'h2', '[class*="candidate-name" i]', '[class*="profile-name" i]', '[class*="name" i]', '[class*="title" i]'],
+      headlineSelectors: ['[class*="designation" i]', '[class*="job-title" i]', '[class*="role" i]', '[class*="headline" i]', '[class*="title" i]'],
+      locationSelectors: ['[class*="location" i]', '[class*="city" i]', '[class*="address" i]', '[class*="area" i]'],
+    });
+    return base;
+  }
+};
+
+const FounditAdapter = {
+  extract(base) {
+    base = extractStructuredProfile(base, {
+      nameSelectors: ['h1', 'h2', '[class*="name" i]', '[class*="candidate" i]', '[class*="title" i]'],
+      headlineSelectors: ['[class*="designation" i]', '[class*="headline" i]', '[class*="job-title" i]', '[class*="role" i]', '[class*="title" i]'],
+      locationSelectors: ['[class*="location" i]', '[class*="city" i]', '[class*="address" i]'],
+    });
     return base;
   }
 };
