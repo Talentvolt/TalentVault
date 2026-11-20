@@ -723,22 +723,41 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Submit Email to Client Form
     const emailToClientForm = document.getElementById("emailToClientForm");
+
+    function splitEmailList(raw) {
+        return (raw || "").split(/[,;]+/).map(e => e.trim()).filter(Boolean);
+    }
+
+    function validateEmailField(inputEl, label) {
+        const raw = inputEl.value.trim();
+        const emails = splitEmailList(raw);
+        const invalid = emails.filter(e => !e.includes('@'));
+        if (raw && (emails.length === 0 || invalid.length > 0)) {
+            alert(`Invalid ${label} email address(es): ${invalid.join(", ")}. Please enter valid comma/semicolon-separated email addresses.`);
+            inputEl.focus();
+            return null;
+        }
+        return emails;
+    }
+
     if (emailToClientForm) {
         emailToClientForm.addEventListener("submit", function(e) {
             e.preventDefault();
 
-            let toEmailInput = document.getElementById("clientToEmail").value.trim();
-            if (!toEmailInput) {
+            const toEmailInput = document.getElementById("clientToEmail");
+            const ccEmailInput = document.getElementById("clientCc");
+            const bccEmailInput = document.getElementById("clientBcc");
+
+            const toEmails = validateEmailField(toEmailInput, "'To'");
+            if (!toEmails) return;
+            if (toEmails.length === 0) {
                 alert("Please enter a valid recipient 'To' email address.");
-                document.getElementById("clientToEmail").focus();
+                toEmailInput.focus();
                 return;
             }
-            let toEmails = toEmailInput.split(/[,;]+/).map(e => e.trim()).filter(Boolean);
-            if (toEmails.length === 0 || toEmails.some(e => !e.includes('@'))) {
-                alert("Please enter valid comma-separated email address(es) for 'To'.");
-                document.getElementById("clientToEmail").focus();
-                return;
-            }
+
+            if (validateEmailField(ccEmailInput, "CC") === null) return;
+            if (validateEmailField(bccEmailInput, "BCC") === null) return;
 
             let checkedBoxes = document.querySelectorAll(".candidate-select-checkbox:checked");
             let candidateIds = Array.from(checkedBoxes).map(cb => cb.value);
@@ -747,13 +766,14 @@ document.addEventListener("DOMContentLoaded", function() {
                 return;
             }
 
+            const toEmail = toEmails.join(", ");
             if (!confirm(`Are you sure you want to send this email to ${toEmail} with ${candidateIds.length} candidate profile(s)?`)) {
                 return;
             }
 
             let sendBtn = document.getElementById("sendEmailBtn");
             sendBtn.disabled = true;
-            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending Email...';
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
 
             let formData = new FormData(emailToClientForm);
             candidateIds.forEach(id => formData.append("candidate_ids[]", id));
