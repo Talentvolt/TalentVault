@@ -2828,6 +2828,12 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         else:
             has_resume = None
 
+        # A live search in the directory search box must always span ALL
+        # candidates regardless of the active resume tab, so a resume-less
+        # (extension-imported) candidate is found immediately.
+        if q:
+            has_resume = None
+
         # Record Recent Search if any search term is entered
         if q or selected_tags or title_param or skills_param or boolean_query_param:
             try:
@@ -3099,7 +3105,7 @@ class CandidateSearchView(RecruiterRequiredMixin, ListView):
         elif tab_p in ['shortlisted', 'saved_for_later', 'new', 'modified', 'all']:
             resolved_tab = tab_p
         else:
-            resolved_tab = 'with_resume'
+            resolved_tab = 'all'
 
         context['current_tab'] = resolved_tab
         context['tab_counts'] = {

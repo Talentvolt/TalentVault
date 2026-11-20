@@ -536,6 +536,44 @@ const SOURCE_PORTAL_LABELS = {
   web_import: "Web Import",
 };
 
+// True when an experience entry represents a career break / transition rather
+// than an actual role (used to avoid deriving designation/company/experience
+// totals from a "Career break" entry).
+function isCareerBreakEntry(exp) {
+  if (!exp) return false;
+  const text = [exp.designation, exp.title, exp.company_name, exp.company, exp.duration, exp.dates, exp.description]
+    .filter(Boolean).join(" ").toLowerCase();
+  return /career\s*(break|transition|gap)|career\s*switch/i.test(text);
+}
+
+// Extract extra skills from skill pills/chips and "Skills: ..." lines inside
+// experience/project cards (beyond the dedicated #skills section).
+function collectLinkedInExtraSkills(base) {
+  if (typeof document === "undefined") return base;
+  try {
+    const main = mainContainer();
+    const scope = (main && main !== document.body) ? main : document;
+    const add = (raw) => {
+      const s = sanitizeString(raw);
+      if (s && s.length < 60 && !/^(skill|skills|endorse|experience|competencies)$/i.test(s) && !base.skills.includes(s)) {
+        base.skills.push(s);
+      }
+    };
+    // "Skills: Java · Spring Boot · Python" lines inside experience/project cards.
+    scope.querySelectorAll('span[aria-hidden="true"], li, p, div').forEach((el) => {
+      if (el.children && el.children.length) return;
+      const m = getCleanText(el).match(/^skills?\s*[:\-–]\s*(.+)$/i);
+      if (m) m[1].split(/\s*[·•|,;]\s*/).forEach(add);
+    });
+    // Skill pill / chip / tag elements.
+    scope.querySelectorAll('[class*="skill" i], [class*="chip" i], [class*="tag" i], [class*="pill" i]').forEach((el) => {
+      if (el.querySelector && el.querySelector('[class*="skill" i], [class*="chip" i], [class*="tag" i], [class*="pill" i]')) return;
+      add(getCleanText(el));
+    });
+  } catch (e) {}
+  return base;
+}
+
 function extractPageData() {
   const hostname = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname.toLowerCase() : "";
   const source = detectSource(hostname);
@@ -630,9 +668,11 @@ function extractPageData() {
     }
   }
 
-  // Calculate total experience if not explicitly found
+  // Calculate total experience if not explicitly found (ignoring career breaks)
   if (!base.total_experience && base.experience.length > 0) {
-    const calculatedExp = calculateTotalExperienceYears(base.experience);
+    const activeExp = base.experience.filter((e) => !isCareerBreakEntry(e));
+    const pool = activeExp.length ? activeExp : base.experience;
+    const calculatedExp = calculateTotalExperienceYears(pool);
     if (calculatedExp > 0) {
       base.total_experience = calculatedExp;
     }
@@ -1966,7 +2006,8 @@ const LinkedInAdapter = {
       const txt = headlineHit.txt;
       if (txt && txt !== base.name && !FORBIDDEN_WORDS.test(txt)) {
         base.headline = txt;
-        base.current_designation = txt;
+        // "Software Engineer | Java | Spring Boot" -> designation "Software Engineer"
+        base.current_designation = txt.split(/\s*[|·•]\s*/)[0].trim() || txt;
       }
     }
 
@@ -2089,15 +2130,19 @@ const LinkedInAdapter = {
       base.experience = fallbackExp;
     }
 
-    if (!base.current_company && base.experience.length > 0) {
-      base.current_company = base.experience[0].company_name;
+    // Derive company/designation from the first REAL role (skipping any
+    // "Career break" / "Career transition" entry). Only fall back to the first
+    // entry when every entry is a career break.
+    const firstRealExp = base.experience.find((e) => !isCareerBreakEntry(e)) || base.experience[0];
+    if (!base.current_company && firstRealExp) {
+      base.current_company = firstRealExp.company_name;
     }
-    if (!base.headline && base.experience.length > 0) {
-      base.headline = base.experience[0].designation;
-      base.current_designation = base.experience[0].designation;
+    if (!base.headline && firstRealExp) {
+      base.headline = firstRealExp.designation;
+      base.current_designation = firstRealExp.designation;
     }
-    if (!base.location && base.experience.length > 0) {
-      base.location = base.experience[0].location;
+    if (!base.location && firstRealExp) {
+      base.location = firstRealExp.location;
     }
 
     // 7. Education (ALL visible entries)
@@ -2162,6 +2207,10 @@ const LinkedInAdapter = {
         }
       });
     }
+
+    // 11. Skills also surface as pills/chips and "Skills: ..." lines inside
+    // experience and project cards.
+    collectLinkedInExtraSkills(base);
 
     console.log(`[Talent Vault Debug] result: experienceEntries=${base.experience.length} educationEntries=${base.education.length} projects=${base.projects.length} certs=${base.certifications.length} skills=${base.skills.length}`);
     return base;
