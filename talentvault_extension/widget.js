@@ -1213,14 +1213,18 @@
         }
         setStatus(msg, "success");
       } else {
-        const detail = (resp && resp.data && resp.data.error) || (resp && resp.error) || "Request failed";
-        setStatus("Save Error: " + detail, "error");
+        const data = resp && resp.data ? resp.data : null;
+        const detail = (data && (data.error || data.detail)) || (resp && resp.error) || "";
+        const http = (resp && resp.status) ? ` (HTTP ${resp.status}${resp.statusText ? " " + resp.statusText : ""})` : "";
+        setStatus("Save Error" + http + (detail ? ": " + detail : "."), "error");
       }
     } catch (err) {
       // A response DID come back -> this is NOT a network failure.
       if (resp) {
-        const detail = (resp.data && resp.data.error) || resp.error || "Request failed";
-        setStatus("Save Error: " + detail, "error");
+        const data = resp && resp.data ? resp.data : null;
+        const detail = (data && (data.error || data.detail)) || (resp && resp.error) || "";
+        const http = (resp && resp.status) ? ` (HTTP ${resp.status}${resp.statusText ? " " + resp.statusText : ""})` : "";
+        setStatus("Save Error" + http + (detail ? ": " + detail : "."), "error");
       } else {
         console.error("[Talent Vault] Widget save network error:", err);
         console.error("[Talent Vault] Widget save network error detail:", {
@@ -1230,7 +1234,8 @@
           cause: err && err.cause,
           online: (typeof navigator !== "undefined" && navigator.onLine),
         });
-        setStatus("Network Error: Could not reach Talent Vault API.", "error");
+        const msg = (err && err.message) ? err.message : "Could not reach Talent Vault API.";
+        setStatus("Network Error: " + msg, "error");
       }
     } finally {
       saveEl.disabled = false;

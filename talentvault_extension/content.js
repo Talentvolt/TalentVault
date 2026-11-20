@@ -978,8 +978,23 @@ function naukriHeaderText() {
   return (el.innerText || el.textContent || "");
 }
 
+// True when the element (or any ancestor) lives in LinkedIn's top-card right
+// panel (organization / education buttons). Used to keep the right-panel
+// organization text from contaminating name/headline/location.
+function isInsideRightPanel(el) {
+  let node = el;
+  while (node && node !== document.body && node !== document.documentElement) {
+    try {
+      if (node.matches && node.matches('.pv-text-details__right-panel, [class*="right-panel" i], [class*="right-rail" i]')) return true;
+    } catch (e) {}
+    node = node.parentElement;
+  }
+  return false;
+}
+
 // Return the first element matching any selector that lives inside <main>.
-// Prevents a sidebar / recommendation card from being mistaken for the profile.
+// Prevents a sidebar / recommendation card / right-panel from being mistaken
+// for the profile.
 function firstInMain(selectors) {
   if (typeof document === "undefined") return null;
   const main = mainContainer();
@@ -993,6 +1008,7 @@ function firstInMain(selectors) {
     for (const el of els) {
       if (!el) continue;
       if (main && main !== document.body && !main.contains(el)) continue;
+      if (isInsideRightPanel(el)) continue;
       const txt = getCleanText(el);
       if (txt) return { el, txt };
     }
@@ -1999,16 +2015,9 @@ const LinkedInAdapter = {
       }
     }
 
-    // If still missing, parse from headline (e.g. "Senior Engineer at Google" or "VP @ Acme")
-    if (!base.current_company && base.headline) {
-      const atMatch = base.headline.match(/(?:^|[\s|•·,-])(?:at|@)\s+([A-Za-z0-9&.\- ]+)/i);
-      if (atMatch) {
-        const candidateComp = cleanCompanyName(atMatch[1]);
-        if (candidateComp && !FORBIDDEN_WORDS.test(candidateComp)) {
-          base.current_company = candidateComp;
-        }
-      }
-    }
+    // Company is intentionally NOT derived from the headline. It comes only from
+    // the top-card right-panel organization button (above) or the most recent
+    // experience entry (derived later from base.experience[0].company_name).
 
     // 5. About / Summary
     const aboutSec = findSection('about', ['about', 'summary', 'overview']);

@@ -67,6 +67,7 @@ async function triggerResumeDownload(url) {
 // ---------------------------------------------------------------------------
 const DEFAULT_API_BASE_URL = "https://talent-vault.in";
 const API_BASE_STORAGE_KEY = "apiBaseUrl";
+const DEV_MODE_STORAGE_KEY = "apiDevMode";
 const IMPORT_PATH = "/api/v1/candidates/import/";
 
 if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
@@ -91,10 +92,18 @@ async function getApiBaseUrl() {
   return new Promise((resolve) => {
     try {
       if (chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get(API_BASE_STORAGE_KEY, (stored) => {
+        chrome.storage.local.get([API_BASE_STORAGE_KEY, DEV_MODE_STORAGE_KEY], (stored) => {
           const override = stored && stored[API_BASE_STORAGE_KEY];
-          if (override && typeof override === "string" && override.trim()) {
-            resolve(override.trim().replace(/\/+$/, ""));
+          const devMode = stored && stored[DEV_MODE_STORAGE_KEY];
+          const clean = (override && typeof override === "string" && override.trim())
+            ? override.trim().replace(/\/+$/, "")
+            : "";
+          // Ignore a stale localhost / 127.0.0.1 value in storage unless the
+          // recruiter explicitly enabled development mode. Production always
+          // talks to the hosted Talent Vault backend.
+          const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(clean);
+          if (clean && (!isLocal || devMode === true)) {
+            resolve(clean);
             return;
           }
           resolve(DEFAULT_API_BASE_URL);
@@ -123,26 +132,37 @@ async function handleApiRequest(request) {
   const path = request.path || IMPORT_PATH;
   const url = `${baseUrl}${path}`;
 
-  if (method === "GET") {
-    const res = await fetch(url, { method: "GET", credentials: "include" });
-    return { ok: res.ok, status: res.status, data: await res.json().catch(() => null) };
-  }
+  try {
+    if (method === "GET") {
+      const res = await fetch(url, { method: "GET", credentials: "include" });
+      return { ok: res.ok, status: res.status, statusText: res.statusText || "", data: await res.json().catch(() => null) };
+    }
 
-  const doPost = async () => {
-    const token = await fetchCsrfToken(baseUrl);
-    const headers = { "Content-Type": "application/json", "Accept": "application/json" };
-    if (token) headers["X-CSRFToken"] = token;
-    return fetch(url, {
-      method: "POST",
-      headers: headers,
-      credentials: "include",
-      body: JSON.stringify(request.body || {}),
-    });
-  };
+    const doPost = async () => {
+      const token = await fetchCsrfToken(baseUrl);
+      const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+      if (token) headers["X-CSRFToken"] = token;
+      return fetch(url, {
+        method: "POST",
+        headers: headers,
+        credentials: "include",
+        body: JSON.stringify(request.body || {}),
+      });
+    };
 
-  let res = await doPost();
-  if (res.status === 403) {
-    res = await doPost(); // refresh a stale/rotated CSRF token once and retry
+    let res = await doPost();
+    if (res.status === 403) {
+      res = await doPost(); // refresh a stale/rotated CSRF token once and retry
+    }
+    return { ok: res.ok, status: res.status, statusText: res.statusText || "", data: await res.json().catch(() => null) };
+  } catch (err) {
+    // Surface the exact network failure detail instead of a generic message.
+    return {
+      ok: false,
+      status: 0,
+      statusText: "",
+      error: (err && err.message) ? err.message : String(err),
+      data: null,
+    };
   }
-  return { ok: res.ok, status: res.status, data: await res.json().catch(() => null) };
 }
