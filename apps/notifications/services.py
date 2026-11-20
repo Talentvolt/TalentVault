@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from django.conf import settings
 from django.core.mail import EmailMessage
@@ -589,9 +590,18 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
     from_email = f"{recruiter_name} <{connected_account.email_address}>"
     reply_to_email = recruiter_work_email
 
+    # Parse comma/semicolon separated recipient strings into clean address lists
+    to_list = [e.strip() for e in re.split(r'[,;]+', str(recipient_email or "")) if e.strip()]
+    cc_list = [e.strip() for e in re.split(r'[,;]+', str(cc or "")) if e.strip()]
+    bcc_list = [e.strip() for e in re.split(r'[,;]+', str(bcc or "")) if e.strip()]
+    to_header = ", ".join(to_list) if to_list else (recipient_email or "")
+
+    # EmailField max_length is 254; avoid DB errors on very long recipient lists
+    recipient_email_for_log = (to_header or recipient_email or "")[:254]
+
     email_log = EmailLog.objects.create(
         sender=sender,
-        recipient_email=recipient_email,
+        recipient_email=recipient_email_for_log,
         cc=cc or "",
         bcc=bcc or "",
         subject=subject,
@@ -620,9 +630,6 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         html_body = f"{html_body}<br><img src='{pixel_url}' width='1' height='1' style='display:none;' alt='' />"
         plain_body = body or ""
 
-        cc_list = [c.strip() for c in cc.split(',')] if cc else []
-        bcc_list = [b.strip() for b in bcc.split(',')] if bcc else []
-
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
         from email.mime.base import MIMEBase
@@ -637,7 +644,7 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
         msg = MIMEMultipart('mixed')
         msg['Subject'] = subject
         msg['From'] = from_email
-        msg['To'] = recipient_email
+        msg['To'] = to_header
         msg['Reply-To'] = reply_to_email
         if cc_list:
             msg['Cc'] = ", ".join(cc_list)
@@ -704,7 +711,7 @@ def send_ats_email(sender, recipient_email, subject, body, cc=None, bcc=None, te
                 if smtp_username and smtp_password:
                     server.login(smtp_username, smtp_password)
 
-                server.sendmail(sending_email, [recipient_email] + cc_list + bcc_list, msg.as_string())
+                server.sendmail(sending_email, to_list + cc_list + bcc_list, msg.as_string())
             except smtplib.SMTPException as smtp_err:
                 logger.error(f"SMTP error sending email via {smtp_host}:{smtp_port}: {smtp_err}")
                 raise ValueError(f"Failed to send email via SMTP ({smtp_host}:{smtp_port}): {smtp_err}")

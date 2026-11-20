@@ -3561,18 +3561,27 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
 
         candidate_ids = _extract_candidate_ids(data)
 
-        to_email = (data.get('to_email') or '').strip()
-        cc_email = (data.get('cc') or '').strip()
-        bcc_email = (data.get('bcc') or '').strip()
+        to_email_raw = (data.get('to_email') or '').strip()
+        cc_email_raw = (data.get('cc') or '').strip()
+        bcc_email_raw = (data.get('bcc') or '').strip()
+
+        to_emails = [e.strip() for e in re.split(r'[,;]+', to_email_raw) if e.strip()]
+        cc_emails = [e.strip() for e in re.split(r'[,;]+', cc_email_raw) if e.strip()]
+        bcc_emails = [e.strip() for e in re.split(r'[,;]+', bcc_email_raw) if e.strip()]
+
+        if not to_emails or any('@' not in e for e in to_emails):
+            return JsonResponse({'success': False, 'message': 'Valid recipient "To" email address(es) are required.'}, status=400)
+
+        to_email = ", ".join(to_emails)
+        cc_email = ", ".join(cc_emails)
+        bcc_email = ", ".join(bcc_emails)
+
         subject = (data.get('subject') or f"Candidate Profiles for {job.title}").strip()
         body = (data.get('body') or '').strip()
         template_id = data.get('template_id')
         attach_resumes = str(data.get('attach_resumes', 'false')).lower() in ('true', '1', 'yes')
         attach_tracker = str(data.get('attach_tracker', 'true')).lower() in ('true', '1', 'yes')
         email_account_id = data.get('email_account_id')
-
-        if not to_email or '@' not in to_email:
-            return JsonResponse({'success': False, 'message': 'Valid recipient "To" email address is required.'}, status=400)
 
         if not candidate_ids:
             return JsonResponse({'success': False, 'message': 'Please select at least one candidate.'}, status=400)
@@ -3641,7 +3650,7 @@ class JobCandidatesEmailToClientView(RecruiterRequiredMixin, View):
             )
 
             primary_candidate = candidates.first()
-            client_name = to_email.split('@')[0].capitalize()
+            client_name = to_email.split(',')[0].strip().split('@')[0].capitalize() if to_email else "Client"
             rendered_subject = render_email_content(subject, candidate=primary_candidate, job=job, recruiter=request.user, client_name=client_name)
             rendered_body = render_email_content(body, candidate=primary_candidate, job=job, recruiter=request.user, client_name=client_name)
 

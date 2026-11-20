@@ -475,17 +475,17 @@
                     
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-slate-700">Client Email (To) *</label>
-                        <input type="email" class="form-control" id="clientToEmail" name="to_email" placeholder="client@company.com" required>
+                        <input type="text" class="form-control" id="clientToEmail" name="to_email" placeholder="client1@company.com, client2@company.com" required>
                     </div>
 
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-slate-700">CC</label>
-                            <input type="text" class="form-control" id="clientCc" name="cc" placeholder="colleague@talentvault.in">
+                            <input type="text" class="form-control" id="clientCc" name="cc" placeholder="colleague1@talentvault.in, colleague2@talentvault.in">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-slate-700">BCC</label>
-                            <input type="text" class="form-control" id="clientBcc" name="bcc" placeholder="manager@talentvault.in">
+                            <input type="text" class="form-control" id="clientBcc" name="bcc" placeholder="manager1@talentvault.in, manager2@talentvault.in">
                         </div>
                     </div>
 
@@ -727,9 +727,15 @@ document.addEventListener("DOMContentLoaded", function() {
         emailToClientForm.addEventListener("submit", function(e) {
             e.preventDefault();
 
-            let toEmail = document.getElementById("clientToEmail").value.trim();
-            if (!toEmail || !toEmail.includes("@")) {
+            let toEmailInput = document.getElementById("clientToEmail").value.trim();
+            if (!toEmailInput) {
                 alert("Please enter a valid recipient 'To' email address.");
+                document.getElementById("clientToEmail").focus();
+                return;
+            }
+            let toEmails = toEmailInput.split(/[,;]+/).map(e => e.trim()).filter(Boolean);
+            if (toEmails.length === 0 || toEmails.some(e => !e.includes('@'))) {
+                alert("Please enter valid comma-separated email address(es) for 'To'.");
                 document.getElementById("clientToEmail").focus();
                 return;
             }
