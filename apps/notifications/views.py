@@ -7,12 +7,12 @@ import logging
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.views import View
 from django.utils import timezone
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.urls import reverse
-from apps.notifications.models import EmailLog, EmailTemplate, RecruiterEmailAccount
+from apps.notifications.models import EmailLog, EmailTemplate, RecruiterEmailAccount, Notification
 from apps.notifications.services import seed_default_email_templates, render_email_content
 
 logger = logging.getLogger(__name__)
@@ -643,3 +643,97 @@ class EmailTemplateAPIView(View):
             return JsonResponse({"success": True, "message": "Template deleted successfully."})
             
         return JsonResponse({"success": False, "message": "Invalid action."}, status=400)
+
+
+class NotificationListAPIView(View):
+    """
+    API endpoint to list notifications for request.user, strictly scoped and deduplicated.
+    """
+    def get(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"success": False, "message": "Unauthorized"}, status=401)
+        
+        qs = Notification.objects.filter(recipient=request.user).order_by('-created_at')[:50]
+        
+        # Deduplicate alerts in Python by (title, message)
+        seen = set()
+        deduped = []
+        for n in qs:
+            key = (n.title.strip(), n.message.strip())
+            if key not in seen:
+                seen.add(key)
+                deduped.append(n)
+                if len(deduped) >= 20:
+                    break
+        
+        data = []
+        for n in deduped:
+            data.append({
+                "id": n.id,
+                "title": n.title,
+                "message": n.message,
+                "notification_type": n.notification_type,
+                "is_read": n.is_read,
+                "link": n.link or '#',
+                "created_at": n.created_at.strftime('%b %d, %Y %H:%M') if n.created_at else ''
+            })
+            
+        unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
+        return JsonResponse({"success": True, "notifications": data, "unread_count": unread_count})
+
+
+class MarkNotificationReadAPIView(View):
+    """
+    API endpoint to mark a specific notification as read.
+    """
+    def post(self, request, pk, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"success": False, "message": "Unauthorized"}, status=401)
+        
+        updated = Notification.objects.filter(id=pk, recipient=request.user).update(is_read=True)
+        unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
+        return JsonResponse({"success": True, "updated": bool(updated), "unread_count": unread_count})
+
+    def get(self, request, pk, *args, **kwargs):
+        return self.post(request, pk, *args, **kwargs)
+
+
+class MarkAllNotificationsReadAPIView(View):
+    """
+    API endpoint to mark all notifications for request.user as read.
+    """
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"success": False, "message": "Unauthorized"}, status=401)
+        
+        Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+        return JsonResponse({"success": True, "unread_count": 0})
+
+    def get(self, request, *args, **kwargs):
+        return self.post(request, *args, **kwargs)
+
+
+class NotificationsPanelView(View):
+    """
+    Renders the full notifications panel page for request.user.
+    """
+    def get(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        
+        qs = Notification.objects.filter(recipient=request.user).order_by('-created_at')[:50]
+        seen = set()
+        notifications = []
+        for n in qs:
+            key = (n.title.strip(), n.message.strip())
+            if key not in seen:
+                seen.add(key)
+                notifications.append(n)
+        
+        unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
+        
+        context = {
+            'notifications': notifications,
+            'unread_notifications_count': unread_count,
+        }
+        return render(request, 'notifications/notification_list.html', context)

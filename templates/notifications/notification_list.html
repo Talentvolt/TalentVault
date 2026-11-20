@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Notifications - TalentVault{% endblock %}
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 900px;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="fw-extrabold text-dark mb-1">Notifications</h2>
+            <p class="text-muted small mb-0">Stay updated with your latest candidate activity, application stages, and interview alerts.</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary btn-sm fw-bold px-3 py-2 rounded-pill" onclick="markAllNotificationsRead(event)">
+                <i class="bi bi-check2-all me-1"></i> Mark All as Read
+            </button>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            {% if notifications %}
+            <div class="list-group list-group-flush rounded-4 overflow-hidden">
+                {% for n in notifications %}
+                <div class="list-group-item p-3.5 d-flex align-items-start gap-3 border-bottom {% if not n.is_read %}bg-light-subtle fw-semibold{% endif %}" id="notification-row-{{ n.id }}">
+                    <div class="rounded-circle p-2.5 bg-primary-subtle text-primary shrink-0">
+                        <i class="bi {% if n.notification_type == 'INTERVIEW_SCHEDULED' %}bi-calendar-event{% elif n.notification_type == 'NEW_JOB' %}bi-briefcase{% else %}bi-bell-fill{% endif %} fs-5"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <h6 class="mb-0 text-dark {% if not n.is_read %}fw-bold{% endif %}">{{ n.title }}</h6>
+                            <small class="text-muted" style="font-size: 0.75rem;">{{ n.created_at|date:"M d, Y H:i" }}</small>
+                        </div>
+                        <p class="text-secondary small mb-2">{{ n.message }}</p>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if n.link and n.link != '#' %}
+                            <a href="{{ n.link }}" onclick="markReadAndNavigate(event, {{ n.id }}, '{{ n.link }}')" class="btn btn-sm btn-primary px-3 rounded-pill">
+                                View Details <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                            {% endif %}
+                            {% if not n.is_read %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="markSingleRead({{ n.id }})">
+                                Mark as Read
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-bell-slash text-muted display-4 mb-3 d-block"></i>
+                <h5 class="fw-bold text-dark">No Notifications</h5>
+                <p class="text-muted small">You're all caught up! There are no unread or recent notifications.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function markSingleRead(id) {
+    fetch(`/notifications/api/mark-read/${id}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            const row = document.getElementById(`notification-row-${id}`);
+            if (row) {
+                row.classList.remove('bg-light-subtle', 'fw-semibold');
+                const btn = row.querySelector('button[onclick^="markSingleRead"]');
+                if (btn) btn.remove();
+                const title = row.querySelector('h6');
+                if (title) title.classList.remove('fw-bold');
+            }
+            updateBadge(data.unread_count);
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -5,12 +5,20 @@ from .views import (
     EmailTemplateAPIView,
     RecruiterEmailAccountAPIView,
     RecruiterGmailOAuthStartView,
-    RecruiterGmailOAuthCallbackView
+    RecruiterGmailOAuthCallbackView,
+    NotificationsPanelView,
+    NotificationListAPIView,
+    MarkNotificationReadAPIView,
+    MarkAllNotificationsReadAPIView
 )
 
 app_name = 'notifications'
 
 urlpatterns = [
+    path('', NotificationsPanelView.as_view(), name='panel'),
+    path('api/list/', NotificationListAPIView.as_view(), name='api_list'),
+    path('api/mark-read/<int:pk>/', MarkNotificationReadAPIView.as_view(), name='api_mark_read'),
+    path('api/mark-all-read/', MarkAllNotificationsReadAPIView.as_view(), name='api_mark_all_read'),
     path('track/open/<uuid:uuid>/', TrackOpenView.as_view(), name='track_open'),
     path('track/click/<uuid:uuid>/', TrackClickView.as_view(), name='track_click'),
     path('api/templates/', EmailTemplateAPIView.as_view(), name='email_templates_api'),

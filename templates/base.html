@@ -303,12 +303,24 @@
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white d-none unread-messages-badge" style="font-size: 0.65rem;">0</span>
                 </a>
 
-                <a href="#" class="text-secondary position-relative fs-5 text-decoration-none">
-                    <i class="bi bi-bell text-secondary"></i>
-                    {% if unread_notifications_count > 0 %}
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white" style="font-size: 0.65rem;">{{ unread_notifications_count }}</span>
-                    {% endif %}
-                </a>
+                <div class="dropdown">
+                    <a href="#" class="text-secondary position-relative fs-5 text-decoration-none dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" id="notificationsDropdown" title="Notifications">
+                        <i class="bi bi-bell text-secondary fs-5"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white {% if unread_notifications_count == 0 %}d-none{% endif %} unread-badge" style="font-size: 0.65rem;">{{ unread_notifications_count }}</span>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-0 rounded-3" aria-labelledby="notificationsDropdown" style="width: 360px; max-width: 90vw;">
+                        <div class="p-3 border-bottom d-flex align-items-center justify-content-between bg-light rounded-top-3">
+                            <h6 class="fw-bold mb-0 text-dark">Notifications</h6>
+                            <button type="button" class="btn btn-link btn-sm text-primary p-0 text-decoration-none fw-semibold" onclick="markAllNotificationsRead(event)">Mark all as read</button>
+                        </div>
+                        <div class="notifications-list overflow-y-auto" style="max-height: 340px;" id="navbarNotificationList">
+                            <div class="text-center py-4 text-muted small">Loading notifications...</div>
+                        </div>
+                        <div class="p-2 border-top text-center bg-light rounded-bottom-3">
+                            <a href="{% url 'notifications:panel' %}" class="small text-decoration-none fw-bold text-primary">View all notifications</a>
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="dropdown">
                     <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark" data-bs-toggle="dropdown">
@@ -566,6 +578,140 @@
                 toastEl.classList.remove('show');
                 setTimeout(() => toastEl.remove(), 400);
             }, 4000);
+        }
+
+        // Notification Bell Dropdown & Actions
+        document.addEventListener('DOMContentLoaded', function() {
+            const notifDropdown = document.getElementById('notificationsDropdown');
+            if (notifDropdown) {
+                notifDropdown.addEventListener('show.bs.dropdown', function() {
+                    loadNavbarNotifications();
+                });
+            }
+        });
+
+        function loadNavbarNotifications() {
+            const listContainer = document.getElementById('navbarNotificationList');
+            if (!listContainer) return;
+            
+            fetch("{% url 'notifications:api_list' %}")
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.notifications.length > 0) {
+                    let html = '<div class="list-group list-group-flush">';
+                    data.notifications.forEach(n => {
+                        const unreadClass = !n.is_read ? 'bg-light-subtle fw-semibold' : '';
+                        const boldTitle = !n.is_read ? 'fw-bold' : '';
+                        const targetLink = n.link && n.link !== '#' ? n.link : '#';
+                        
+                        html += `
+                            <div class="list-group-item p-2.5 border-bottom ${unreadClass}" id="navbar-notif-${n.id}">
+                                <div class="d-flex align-items-start gap-2">
+                                    <div class="rounded-circle p-1.5 bg-primary-subtle text-primary shrink-0 mt-0.5">
+                                        <i class="bi bi-bell-fill fs-6"></i>
+                                    </div>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <div class="d-flex align-items-center justify-content-between mb-0.5">
+                                            <h6 class="mb-0 text-dark text-truncate ${boldTitle}" style="font-size: 0.82rem; max-width: 200px;">${n.title}</h6>
+                                            <small class="text-muted" style="font-size: 0.7rem;">${n.created_at}</small>
+                                        </div>
+                                        <p class="text-secondary small mb-1 text-truncate" style="font-size: 0.78rem;">${n.message}</p>
+                                        <div class="d-flex align-items-center gap-2">
+                                            ${targetLink !== '#' ? `<a href="${targetLink}" onclick="markReadAndNavigate(event, ${n.id}, '${targetLink}')" class="text-primary text-decoration-none fw-semibold" style="font-size: 0.75rem;">View <i class="bi bi-arrow-right"></i></a>` : ''}
+                                            ${!n.is_read ? `<button type="button" class="btn btn-link btn-sm text-muted p-0 text-decoration-none" onclick="markNavbarSingleRead(${n.id})" style="font-size: 0.72rem;">Mark read</button>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    listContainer.innerHTML = html;
+                } else {
+                    listContainer.innerHTML = '<div class="text-center py-4 text-muted small"><i class="bi bi-bell-slash fs-4 d-block mb-1"></i>No notifications found</div>';
+                }
+                updateBadge(data.unread_count);
+            })
+            .catch(() => {
+                listContainer.innerHTML = '<div class="text-center py-3 text-muted small">Failed to load notifications</div>';
+            });
+        }
+
+        function markNavbarSingleRead(id) {
+            fetch(`/notifications/api/mark-read/${id}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const item = document.getElementById(`navbar-notif-${id}`);
+                    if (item) {
+                        item.classList.remove('bg-light-subtle', 'fw-semibold');
+                        const btn = item.querySelector('button');
+                        if (btn) btn.remove();
+                        const title = item.querySelector('h6');
+                        if (title) title.classList.remove('fw-bold');
+                    }
+                    updateBadge(data.unread_count);
+                }
+            });
+        }
+
+        function markReadAndNavigate(event, id, link) {
+            event.preventDefault();
+            fetch(`/notifications/api/mark-read/${id}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                window.location.href = link;
+            })
+            .catch(() => {
+                window.location.href = link;
+            });
+        }
+
+        function markAllNotificationsRead(event) {
+            event.preventDefault();
+            fetch(`/notifications/api/mark-all-read/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.querySelectorAll('.list-group-item').forEach(item => {
+                        item.classList.remove('bg-light-subtle', 'fw-semibold');
+                    });
+                    document.querySelectorAll('h6').forEach(h => h.classList.remove('fw-bold'));
+                    document.querySelectorAll('button[onclick^="markSingleRead"], button[onclick^="markNavbarSingleRead"]').forEach(b => b.remove());
+                    updateBadge(0);
+                    showToast('All notifications marked as read!', 'success');
+                }
+            });
+        }
+
+        function updateBadge(count) {
+            document.querySelectorAll('.unread-badge').forEach(badge => {
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.classList.remove('d-none');
+                } else {
+                    badge.textContent = '0';
+                    badge.classList.add('d-none');
+                }
+            });
         }
     </script>
     {% include "includes/candidate_messaging_modal.html" %}
